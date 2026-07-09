@@ -4,6 +4,15 @@
 - 当前有效产品代码在 `client/`；
 - `analytics/` 是独立 Cloudflare Workers 埋点服务，用于统计、分析、查看`client/`中提交的埋点信息。
 
+## Git 维护与同步保护
+- 本项目基于 `upstream=https://github.com/FB208/OpenBidKit_Yibiao.git` 持续跟进源项目，`origin` 是用户自己的仓库；源项目更新很快，Git 操作必须保守。
+- 除非用户在当前消息中明确要求执行，否则禁止直接执行 `git pull`、`git push`、`git merge`、`git rebase`、`git reset`、删除分支、强制推送等会改变本地或远程状态的操作。
+- 每次准备拉取、合并或推送前，必须先向用户报告：当前分支、`git status`、相关 remote 地址、领先/落后提交数、拟执行命令、可能风险、失败后的回滚办法，并等待用户明确确认。
+- 同步源仓库时优先使用可检查的两步流程：先 `git fetch upstream --prune`，再根据差异决定是否 `git merge --ff-only upstream/main`；不要直接用默认 `git pull` 把拉取和合并混在一起。
+- 如果本地还没有二次开发提交，且 `main` 只落后 `upstream/main`，可以在用户确认后用 `git merge --ff-only upstream/main` 快进；一旦存在本地提交、未提交变更或冲突风险，必须先停止并说明风险。
+- 推送到 `origin` 前必须再次确认推送目标、当前分支、将推送的提交列表和远程影响；禁止未经确认执行 `git push`。
+- 出现冲突时，先列出冲突文件和冲突原因，不要自动选择 ours/theirs，不要为了构建通过删除业务逻辑。
+
 ## Client
 - 开发Client前，必须先阅读`client/开发说明.md`，保持框架风格一致性。
 - 没有 root `package.json`；客户端命令都先 `cd client`。
