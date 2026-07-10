@@ -1,9 +1,9 @@
 {
-  "name": "yibiao-client",
-  "version": "0.1.0",
+  "name": "jatoaibid",
+  "version": "1.0.0",
   "private": true,
-  "description": "易标投标工具箱独立桌面客户端",
-  "author": "mark",
+  "description": "佳图智能投标助手独立桌面客户端",
+  "author": "Jato Digital Technology Co., Ltd.",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -21,9 +21,9 @@
     "start": "electron ."
   },
   "build": {
-    "appId": "com.yibiao.openbidkit",
-    "productName": "易标投标工具箱",
-    "copyright": "Copyright © 2026 mark",
+    "appId": "com.jdt.jatoaibid",
+    "productName": "Jato AI BID",
+    "copyright": "Copyright © 2026 佳图数字科技有限公司",
     "asar": true,
     "directories": {
       "output": "release"
@@ -53,8 +53,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "FB208",
-        "repo": "OpenBidKit_Yibiao",
+        "owner": "migrant1124",
+        "repo": "OpenJatoBID",
         "releaseType": "release"
       }
     ],
@@ -76,11 +76,15 @@
       ]
     },
     "nsis": {
+      "artifactName": "Jato AI BID Setup ${version}.${ext}",
+      "shortcutName": "Jato AI BID",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
     },
     "msi": {
+      "artifactName": "Jato-AI-BID-${version}-${arch}.${ext}",
+      "shortcutName": "Jato AI BID",
       "oneClick": false,
       "perMachine": false,
       "createDesktopShortcut": true,
@@ -132,7 +136,7 @@
         }
       ]
     },
-    "artifactName": "Yibiao-${version}-${os}-${arch}.${ext}"
+    "artifactName": "Jato-AI-BID-${version}-${os}-${arch}.${ext}"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

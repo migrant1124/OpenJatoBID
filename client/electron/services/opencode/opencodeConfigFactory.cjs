@@ -26,7 +26,7 @@ function buildOpenCodeConfig({ proxyBaseUrl, contextLengthLimit, timeoutMs }) {
     provider: {
       yibiao: {
         npm: '@ai-sdk/openai-compatible',
-        name: 'Yibiao AI',
+        name: 'Jato AI BID AI',
         options: {
           baseURL: `${proxyBaseUrl}/v1`,
           apiKey: '{env:YIBIAO_OPENCODE_PROXY_TOKEN}',
@@ -34,7 +34,7 @@ function buildOpenCodeConfig({ proxyBaseUrl, contextLengthLimit, timeoutMs }) {
         },
         models: {
           default: {
-            name: 'Yibiao Current Text Model',
+            name: 'Jato AI BID Current Text Model',
             limit: {
               context: normalizeContextLimit(contextLengthLimit),
               output: normalizeOutputLimit(contextLengthLimit),

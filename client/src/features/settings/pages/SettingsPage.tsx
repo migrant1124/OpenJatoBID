@@ -5,6 +5,7 @@ import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
 import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, TextModelConfig, TextModelProfiles, TextModelProvider, UpdateChannel } from '../../../shared/types';
 import type { SettingsPageState } from '../types';
+import logoUrl from '../../../../assets/logo.png';
 
 type SettingsTab = 'general' | 'text-model' | 'image-model' | 'file-parser' | 'agent' | 'about';
 type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'error' | 'disabled';
@@ -33,17 +34,12 @@ const agentToolCheckStatusMeta: Record<AgentToolCheckResult['status'], { label: 
   error: { label: '失败', description: '命令不可用，可能影响智能体任务。' },
 };
 
-const updateChannelOptions: Array<{ value: UpdateChannel; label: string; description: string }> = [
-  { value: 'github', label: 'GitHub', description: '使用 GitHub Release 检查和下载更新' },
-  { value: 'cloudflare', label: 'Cloudflare', description: '使用 Cloudflare R2 镜像检查和下载更新' },
-];
-
 const defaultAgentModeScenarios: AgentModeScenariosConfig = {
   existing_plan_expansion_original_outline_extraction: true,
 };
 
 function normalizeUpdateChannel(value?: string): UpdateChannel {
-  return value === 'cloudflare' ? 'cloudflare' : 'github';
+  return value === 'github' ? value : 'github';
 }
 
 function normalizeAgentModeScenarios(value?: Partial<AgentModeScenariosConfig>): AgentModeScenariosConfig {
@@ -743,13 +739,6 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
     }));
   };
 
-  const updateUpdateChannel = (updateChannel: UpdateChannel) => {
-    setState((prev) => ({
-      ...prev,
-      general: { ...prev.general, update_channel: updateChannel },
-    }));
-  };
-
   const updateGpuHardwareAcceleration = (enabled: boolean) => {
     setState((prev) => ({
       ...prev,
@@ -1379,20 +1368,13 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
                 <option value="classic">经典布局</option>
               </select>
             </div>
-            <label className="settings-row">
+            <div className="settings-row">
               <div className="settings-row-copy">
-                <strong>自动更新渠道</strong>
-                <span>{updateChannelOptions.find((option) => option.value === state.general.update_channel)?.description || '选择自动检查更新和下载客户端安装包的来源'}</span>
+                <strong>自动更新来源</strong>
+                <span>使用 GitHub Releases 检查和下载客户端更新</span>
               </div>
-              <select
-                value={state.general.update_channel}
-                onChange={(event) => updateUpdateChannel(event.target.value as UpdateChannel)}
-              >
-                {updateChannelOptions.map((option) => (
-                  <option value={option.value} key={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+              <span className="settings-static-value">GitHub Releases</span>
+            </div>
             <label className="settings-row">
               <div className="settings-row-copy">
                 <strong>GPU 硬件加速</strong>
@@ -1957,29 +1939,26 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
               </button>
             </article>
             <article className="about-info-card about-links-card">
-              <span>信息与授权</span>
+              <div className="about-brand-head">
+                <img src={logoUrl} alt="Jato AI BID Logo" />
+                <div>
+                  <span>Jato AI BID</span>
+                  <strong>佳图智能投标助手</strong>
+                </div>
+              </div>
+              <p>本软件用于公司内部投标文件制作、资料复用、文档生成与导出管理。</p>
               <ul className="about-links-list">
                 <li className="about-links-item">
-                  <span className="about-links-label">GitHub 仓库</span>
-                  <a
-                    className="about-links-value is-link"
-                    href="https://github.com/FB208/OpenBidKit_Yibiao"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    FB208/OpenBidKit_Yibiao
-                  </a>
+                  <span className="about-links-label">版本号</span>
+                  <span className="about-links-value">{appVersion || '1.0.0'}</span>
                 </li>
                 <li className="about-links-item">
-                  <span className="about-links-label">使用文档</span>
-                  <a
-                    className="about-links-value is-link"
-                    href="https://wiki.agnet.top/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    wiki.agnet.top
-                  </a>
+                  <span className="about-links-label">版权所有</span>
+                  <span className="about-links-value">佳图数字科技有限公司</span>
+                </li>
+                <li className="about-links-item">
+                  <span className="about-links-label">Company</span>
+                  <span className="about-links-value">Jato Digital Technology Co., Ltd.</span>
                 </li>
                 <li className="about-links-item">
                   <span className="about-links-label">客户端授权状态</span>
@@ -1997,23 +1976,23 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
             <div className="privacy-statement-head">
               <span>Privacy</span>
               <strong>隐私声明</strong>
-              <p>本工具尽量把数据处理留在本机和你自行选择的服务商之间，只保留运行所必需的最少信息。</p>
+              <p>本软件尽量将数据处理保留在本机与使用人员自行选择的服务商之间，仅处理运行所必需的最少信息。</p>
             </div>
             <div className="privacy-list">
               <article className="privacy-item">
                 <span>01</span>
-                <strong>你的业务数据不会被我收集</strong>
+                <strong>业务数据不会被集中收集</strong>
                 <p>应用不会上传、收集或保存你配置的 API Key、导入的招标文件、解析后的文档内容、生成的方案正文、导出文件或其他业务结果。</p>
               </article>
               <article className="privacy-item">
                 <span>02</span>
                 <strong>线上 AI 请求只发送给你配置的服务商</strong>
-                <p>当你使用 OpenAI 兼容接口、MinerU 或其他线上 API 时，应用会把完成任务所需的内容发送给你自行配置的服务商。这是实现文档解析、内容生成、模型测试等功能的必要步骤；这些请求不经过我的服务器，我也不会额外留存任何请求内容或生成结果。</p>
+                <p>使用 OpenAI 兼容接口、MinerU 或其他线上 API 时，应用会把完成任务所需的内容发送给使用人员自行配置的服务商。这是实现文档解析、内容生成和模型测试等功能的必要步骤；这些请求不经过佳图数科的中转服务器，佳图数科不会额外留存请求内容或生成结果。</p>
               </article>
               <article className="privacy-item">
                 <span>03</span>
                 <strong>匿名埋点只用于了解功能使用情况</strong>
-                <p>为了判断开源项目是否有人使用、哪些功能更常用，应用会把匿名页面访问和功能使用次数上报到 Cloudflare。统计不包含文档内容、文件名、本地路径、API Key、用户输入、生成结果或任何可还原业务内容的信息。</p>
+                <p>为了了解软件使用情况和功能改进方向，应用会把匿名页面访问和功能使用次数上报到 Cloudflare。统计不包含文档内容、文件名、本地路径、API Key、用户输入、生成结果或任何可还原业务内容的信息。</p>
               </article>
             </div>
           </div>

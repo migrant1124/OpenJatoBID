@@ -207,9 +207,9 @@ function buildToolCheckStatus({ descriptor, expectedPath, resolution, smoke }) {
       return { status: 'warning', message: `命令可执行，但当前由 PowerShell ${resolution.command_type} 处理` };
     }
     if (critical) {
-      return { status: 'error', message: `命令未解析到易标集成路径：${resolution.source}` };
+      return { status: 'error', message: `命令未解析到 Jato AI BID 集成路径：${resolution.source}` };
     }
-    return { status: 'warning', message: `命令可执行，但未解析到易标集成路径：${resolution.source}` };
+    return { status: 'warning', message: `命令可执行，但未解析到 Jato AI BID 集成路径：${resolution.source}` };
   }
   return { status: 'success', message: '可用' };
 }
@@ -688,7 +688,7 @@ function compactSelfCheckError(error) {
 }
 
 function buildSelfCheckPrompt() {
-  return `请完成易标智能体自检。
+  return `请完成 Jato AI BID 智能体自检。
 
 要求：
 1. 阅读 self-check-input.txt。
@@ -852,7 +852,7 @@ function buildSelfCheckReportMarkdown(input = {}) {
   const diagnostics = result.diagnostics || result.error || {};
   const steps = Array.isArray(result.steps) ? result.steps : [];
   const lines = [
-    '# 易标智能体自检报告',
+    '# Jato AI BID 智能体自检报告',
     '',
     '## 自动诊断结论',
     '',

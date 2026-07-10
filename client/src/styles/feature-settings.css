@@ -113,6 +113,12 @@
   line-height: 1.65;
 }
 
+.settings-static-value {
+  justify-self: end;
+  color: var(--yb-text);
+  font-weight: 700;
+}
+
 .settings-row input,
 .settings-row select {
   width: 100%;
@@ -878,6 +884,31 @@
 .about-card-head {
   display: grid;
   gap: 8px;
+}
+
+.about-brand-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-brand-head img {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  object-fit: contain;
+}
+
+.about-brand-head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.about-brand-head span {
+  color: var(--yb-primary);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .about-card-head span,

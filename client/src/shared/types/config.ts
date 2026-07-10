@@ -1,6 +1,6 @@
 export type TextModelProvider = 'jinlong' | 'volcengine' | 'deepseek' | 'longcat' | 'agnes' | 'custom';
 export type AiRequestMode = 'normal' | 'stream';
-export type UpdateChannel = 'github' | 'cloudflare';
+export type UpdateChannel = 'github';
 
 export interface TextModelConfig {
   api_key: string;

@@ -103,9 +103,9 @@ async function main() {
   fs.writeFileSync(publicKeyPath, `${JSON.stringify(publicJwk, null, 2)}\n`, 'utf-8');
 
   const payload = {
-    projectName: packageJson.name || 'yibiao-client',
-    appId: packageJson.build?.appId || 'com.yibiao.openbidkit',
-    productName: packageJson.build?.productName || '易标投标工具箱',
+    projectName: packageJson.name || 'jatoaibid',
+    appId: packageJson.build?.appId || 'com.jdt.jatoaibid',
+    productName: packageJson.build?.productName || 'Jato AI BID',
     buildId: getBuildId(),
     gitCommitSha: getGitCommitSha(),
     builtAt: String(process.env.YIBIAO_BUILT_AT || '').trim() || new Date().toISOString(),

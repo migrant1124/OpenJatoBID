@@ -3,7 +3,7 @@ import { useState, type ComponentType, type ReactElement, type SVGProps } from '
 import { getAppMenuItems, getParentMenuItemBySection } from '../app/menuConfig';
 import type { AppMenuItem, SectionId } from '../shared/types/navigation';
 import { useToast } from '../shared/ui';
-import logoUrl from '../../assets/icon_256.png';
+import logoUrl from '../../assets/logo.png';
 
 interface SidebarProps {
   activeSection: SectionId;
@@ -39,7 +39,8 @@ const navigationIcons: Record<SectionId, ComponentType<SVGProps<SVGSVGElement>>>
   settings: GearIcon,
 };
 
-const USER_GUIDE_URL = 'https://wiki.agnet.top/';
+const SHOW_USER_GUIDE = false;
+const USER_GUIDE_URL = 'https://github.com/migrant1124/OpenJatoBID#使用说明';
 
 function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -74,8 +75,7 @@ function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps
           <img src={logoUrl} alt="" />
         </div>
         <div className="brand-copy">
-          <span>易标</span>
-          <strong>投标工具箱</strong>
+          <strong>Jato AI BID</strong>
         </div>
       </div>
 
@@ -116,7 +116,7 @@ function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps
       </nav>
 
       <div className="sidebar-footer">
-        {collapsed ? wrapTooltip('使用文档', renderUserGuideButton()) : renderUserGuideButton()}
+        {SHOW_USER_GUIDE && (collapsed ? wrapTooltip('使用文档', renderUserGuideButton()) : renderUserGuideButton())}
         {collapsed ? wrapTooltip('设置', renderSettingsButton(activeSection, onSectionChange)) : renderSettingsButton(activeSection, onSectionChange)}
       </div>
     </aside>

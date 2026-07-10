@@ -1334,7 +1334,7 @@ async function testOpenAICompatibleImageModel(app, config, provider) {
   const logTitle = `AI生图测试-${meta.label}`;
   const requestBody = {
     model: imageConfig.model_name,
-    prompt: '大字报，内容是“易标AI老好了”',
+    prompt: '大字报，内容是“Jato AI BID 运行正常”',
     size: normalizeOpenAICompatibleImageSize(imageConfig),
     response_format: 'url',
     ...(requestMode === 'stream' ? { stream: true } : {}),
@@ -1446,7 +1446,7 @@ async function testGoogleImageModel(app, config) {
   const requestMode = normalizeImageRequestMode(imageConfig);
   const requestId = createRequestId();
   const logTitle = 'AI生图测试-Google AI Studio';
-  const requestBody = createGoogleImageRequestBody('大字报，内容是“易标AI老好了”', normalizeGoogleImageSize(imageConfig));
+  const requestBody = createGoogleImageRequestBody('大字报，内容是“Jato AI BID 运行正常”', normalizeGoogleImageSize(imageConfig));
   const url = createGoogleImageUrl(baseUrl, imageConfig.model_name, requestMode);
   let responseData = null;
 

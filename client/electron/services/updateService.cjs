@@ -3,16 +3,14 @@ const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
 
-const GITHUB_RELEASE_API = 'https://api.github.com/repos/FB208/OpenBidKit_Yibiao/releases/latest';
-const GITHUB_RELEASE_DOWNLOAD_URL = 'https://github.com/FB208/OpenBidKit_Yibiao/releases/latest';
+const GITHUB_RELEASE_API = 'https://api.github.com/repos/migrant1124/OpenJatoBID/releases/latest';
+const GITHUB_RELEASE_DOWNLOAD_URL = 'https://github.com/migrant1124/OpenJatoBID/releases/latest';
 const GITHUB_PROVIDER_OPTIONS = {
   provider: 'github',
-  owner: 'FB208',
-  repo: 'OpenBidKit_Yibiao',
+  owner: 'migrant1124',
+  repo: 'OpenJatoBID',
   releaseType: 'release',
 };
-const CLOUDFLARE_RELEASE_BASE_URL = 'https://openbidkit-oss.agnet.top/release';
-const CLOUDFLARE_LATEST_JSON_URL = `${CLOUDFLARE_RELEASE_BASE_URL}/latest.json`;
 
 let autoUpdaterInstance = null;
 let downloadedUpdateVersion = '';
@@ -33,7 +31,7 @@ function compareVersions(a, b) {
 }
 
 function normalizeUpdateChannel(value) {
-  return value === 'cloudflare' ? 'cloudflare' : 'github';
+  return value === 'github' ? value : 'github';
 }
 
 function getUpdateChannel(configStore) {
@@ -127,31 +125,8 @@ function pickPlatformDownloadFile(files = []) {
   return null;
 }
 
-async function fetchCloudflareLatestRelease() {
-  const release = await requestJson(CLOUDFLARE_LATEST_JSON_URL, 'Cloudflare 更新源 ');
-  const files = Array.isArray(release.files)
-    ? release.files.map((file) => ({
-      name: file.name || '',
-      url: file.url || '',
-      size: Number(file.size || 0),
-      contentType: file.contentType || '',
-    }))
-    : [];
-  const downloadFile = pickPlatformDownloadFile(files);
-  return {
-    channel: 'cloudflare',
-    version: String(release.version || release.tagName || '').replace(/^v/i, ''),
-    name: release.name || release.tagName || '',
-    body: release.body || '',
-    published_at: release.generatedAt || '',
-    html_url: CLOUDFLARE_RELEASE_BASE_URL,
-    download_url: downloadFile?.url || CLOUDFLARE_RELEASE_BASE_URL,
-    files,
-  };
-}
-
-function fetchLatestRelease(channel) {
-  return channel === 'cloudflare' ? fetchCloudflareLatestRelease() : fetchGithubLatestRelease();
+function fetchLatestRelease() {
+  return fetchGithubLatestRelease();
 }
 
 async function getLatestVersion(options = {}) {
@@ -159,27 +134,12 @@ async function getLatestVersion(options = {}) {
   return fetchLatestRelease(channel);
 }
 
-async function getUpdateDownloadUrl(options = {}) {
-  const channel = getUpdateChannel(options.configStore);
-  if (channel !== 'cloudflare') {
-    return GITHUB_RELEASE_DOWNLOAD_URL;
-  }
-
-  try {
-    const release = await fetchCloudflareLatestRelease();
-    return release.download_url || CLOUDFLARE_RELEASE_BASE_URL;
-  } catch (error) {
-    console.warn('[update] Cloudflare 下载地址获取失败，回退到 GitHub Release', error);
-    return GITHUB_RELEASE_DOWNLOAD_URL;
-  }
+async function getUpdateDownloadUrl() {
+  return GITHUB_RELEASE_DOWNLOAD_URL;
 }
 
-function configureAutoUpdater(channel) {
+function configureAutoUpdater() {
   if (!autoUpdaterInstance) {
-    return;
-  }
-  if (channel === 'cloudflare') {
-    autoUpdaterInstance.setFeedURL({ provider: 'generic', url: CLOUDFLARE_RELEASE_BASE_URL });
     return;
   }
   autoUpdaterInstance.setFeedURL(GITHUB_PROVIDER_OPTIONS);
@@ -207,7 +167,7 @@ function sanitizeDownloadFileName(fileName, fallback) {
 }
 
 function getMacDmgDownloadPath(app, release, file) {
-  const fallbackName = `Yibiao-${release.version || 'update'}-mac-${getMacUpdateArch()}.dmg`;
+  const fallbackName = `Jato-AI-BID-${release.version || 'update'}-mac-${getMacUpdateArch()}.dmg`;
   const fileName = sanitizeDownloadFileName(file?.name, fallbackName);
   return path.join(app.getPath('userData'), 'updates', fileName);
 }

@@ -1,13 +1,13 @@
 @echo off
 setlocal
-title Download latest Yibiao release
+title Download latest Jato AI BID release
 
-set "PS1_FILE=%TEMP%\download_yibiao_latest.ps1"
+set "PS1_FILE=%TEMP%\download_jatoaibid_latest.ps1"
 
 > "%PS1_FILE%" echo $ErrorActionPreference = 'Stop'
 >> "%PS1_FILE%" echo $ProgressPreference = 'SilentlyContinue'
 >> "%PS1_FILE%" echo [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
->> "%PS1_FILE%" echo $repo = 'FB208/OpenBidKit_Yibiao'
+>> "%PS1_FILE%" echo $repo = 'migrant1124/OpenJatoBID'
 >> "%PS1_FILE%" echo $api = "https://api.github.com/repos/$repo/releases/latest"
 >> "%PS1_FILE%" echo $headers = @{
 >> "%PS1_FILE%" echo   'User-Agent' = 'Windows-Release-Downloader'
@@ -16,7 +16,7 @@ set "PS1_FILE=%TEMP%\download_yibiao_latest.ps1"
 >> "%PS1_FILE%" echo Write-Host 'Fetching latest release...'
 >> "%PS1_FILE%" echo $release = Invoke-RestMethod -Uri $api -Headers $headers
 >> "%PS1_FILE%" echo $tag = $release.tag_name
->> "%PS1_FILE%" echo $out = Join-Path (Get-Location) "Yibiao-$tag"
+>> "%PS1_FILE%" echo $out = Join-Path (Get-Location) "Jato-AI-BID-$tag"
 >> "%PS1_FILE%" echo New-Item -ItemType Directory -Force -Path $out ^| Out-Null
 >> "%PS1_FILE%" echo Write-Host "Latest version: $tag"
 >> "%PS1_FILE%" echo if (-not $release.assets -or $release.assets.Count -eq 0) {

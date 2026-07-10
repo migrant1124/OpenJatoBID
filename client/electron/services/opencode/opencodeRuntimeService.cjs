@@ -1091,7 +1091,7 @@ function createOpenCodeRuntimeService({ app, configStore }) {
 
   async function runTaskNow(payload = {}) {
     const taskId = payload.task_id || crypto.randomUUID();
-    const title = payload.title || '易标智能体任务';
+    const title = payload.title || 'Jato AI BID 智能体任务';
     const outputFile = payload.output_file || 'agent-result.md';
     const timeoutMs = normalizeTimeoutMs(payload.timeout_ms, DEFAULT_AGENT_IDLE_TIMEOUT_MS);
     const maxRetries = normalizeMaxRetries(payload.max_retries);
@@ -1282,7 +1282,7 @@ function createOpenCodeRuntimeService({ app, configStore }) {
     }
 
     const taskId = payload.task_id || crypto.randomUUID();
-    const title = payload.title || '易标智能体任务';
+    const title = payload.title || 'Jato AI BID 智能体任务';
     const queuedAt = nowIso();
     return new Promise((resolve, reject) => {
       const entry = {
@@ -1599,7 +1599,7 @@ function createOpenCodeRuntimeService({ app, configStore }) {
       agentTaskStarted = true;
       agentResult = await runTask({
         task_id: SELF_CHECK_TASK_ID,
-        title: '易标智能体自检',
+        title: 'Jato AI BID 智能体自检',
         output_file: SELF_CHECK_OUTPUT_FILE,
         files: [{ path: 'self-check-input.txt', content: 'YIBIAO_AGENT_SELF_CHECK_INPUT' }],
         prompt: buildSelfCheckPrompt(),

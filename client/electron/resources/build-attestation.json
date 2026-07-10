@@ -1,7 +1,7 @@
 {
-  "projectName": "yibiao-client",
-  "appId": "com.yibiao.openbidkit",
-  "productName": "易标投标工具箱",
+  "projectName": "jatoaibid",
+  "appId": "com.jdt.jatoaibid",
+  "productName": "Jato AI BID",
   "buildId": "development-build",
   "gitCommitSha": "",
   "builtAt": "",

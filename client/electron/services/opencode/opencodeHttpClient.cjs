@@ -167,7 +167,7 @@ async function createSession(server, title, options = {}) {
     signal: options.signal,
     onActivity: options.onActivity,
     stage: 'session',
-    body: { title: title || 'Yibiao Agent Task' },
+    body: { title: title || 'Jato AI BID Agent Task' },
   });
 }
 

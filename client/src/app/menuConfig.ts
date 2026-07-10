@@ -1,16 +1,22 @@
 import type { AppMenuItem, SectionId } from '../shared/types/navigation';
 
-const githubStarNotice = {
-  message: '正在开发中，在github给作者点个star，可以加速开发。',
-  actionLabel: '点此直达',
-  externalUrl: 'https://github.com/FB208/OpenBidKit_Yibiao',
+const phaseOneUnavailableNotice = {
+  message: '该功能在第一阶段暂未开放。',
 };
+
+const phaseOneHiddenSectionIds = new Set<SectionId>([
+  'business-bid',
+  'image-knowledge-base',
+  'ai-evaluation',
+  'bid-opportunity',
+  'resources',
+]);
 
 export const appMenuItems: AppMenuItem[] = [
   {
     id: 'bid-generation',
     label: '标书生成',
-    description: '技术方案与商务标编制',
+    description: '技术方案编制与已有方案扩写',
     children: [
       {
         id: 'technical-plan',
@@ -29,13 +35,13 @@ export const appMenuItems: AppMenuItem[] = [
         label: '商务标',
         description: '整理商务响应、报价口径和合同偏离材料。',
         icon: 'briefcase',
-        notice: githubStarNotice,
+        notice: phaseOneUnavailableNotice,
       },
     ],
   },
   {
     id: 'template-settings',
-    label: '模版设置',
+    label: '模板设置',
     description: '标书导出模板与排版配置',
     children: [
       {
@@ -68,7 +74,7 @@ export const appMenuItems: AppMenuItem[] = [
         label: '图片知识库',
         description: '管理图片素材、图示和视觉参考资料',
         icon: 'file',
-        notice: githubStarNotice,
+        notice: phaseOneUnavailableNotice,
       },
     ],
   },
@@ -94,7 +100,7 @@ export const appMenuItems: AppMenuItem[] = [
         label: 'AI评标',
         description: '模拟AI评标，对标书进行打分，出具评标报告',
         icon: 'tool',
-        notice: githubStarNotice,
+        notice: phaseOneUnavailableNotice,
       },
     ],
   },
@@ -102,7 +108,7 @@ export const appMenuItems: AppMenuItem[] = [
     id: 'bid-opportunity',
     label: '投标机会',
     description: '机会发现与线索跟踪',
-    notice: githubStarNotice,
+    notice: phaseOneUnavailableNotice,
   },
   {
     id: 'resources',
@@ -158,7 +164,13 @@ const developerMenuItems: AppMenuItem[] = [
 ];
 
 export function getAppMenuItems(developerMode: boolean): AppMenuItem[] {
-  return developerMode ? [...appMenuItems, ...developerMenuItems] : appMenuItems;
+  const menuItems = developerMode ? [...appMenuItems, ...developerMenuItems] : appMenuItems;
+  return menuItems
+    .filter((item) => !phaseOneHiddenSectionIds.has(item.id))
+    .map((item) => item.children ? {
+      ...item,
+      children: item.children.filter((child) => !phaseOneHiddenSectionIds.has(child.id)),
+    } : item);
 }
 
 export function getSectionOrder(developerMode: boolean): SectionId[] {
