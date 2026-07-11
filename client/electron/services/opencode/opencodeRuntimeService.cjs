@@ -38,7 +38,6 @@ const OPENCODE_EVENT_BATCH_LIMIT = 120;
 const BUSY_MESSAGE = 'Agent 正在处理其他任务，请耐心等待';
 const DEFAULT_AGENT_MAX_RETRIES = 1;
 const MAX_AGENT_MAX_RETRIES = 3;
-const ANALYTICS_ENDPOINT = 'https://analytics.agnet.top/track';
 const ANALYTICS_PROJECT_NAME = 'yibiao-client';
 
 function nowIso() {
@@ -117,29 +116,26 @@ function normalizeAnalyticsEndpointHost(value) {
   return text.replace(/^https?:\/\//i, '').split('/')[0].toLowerCase();
 }
 
-function trackAgentRuntime(app, configStore, status, meta = {}) {
+function trackAgentRuntime(app, configStore, analyticsService, status, meta = {}) {
+  if (!analyticsService?.track) return;
   const runtimeStatus = status === 'success' ? 'success' : 'failed';
   const retryCount = Math.max(0, Math.min(MAX_AGENT_MAX_RETRIES, Math.floor(Number(meta.retryCount || meta.retry_count || 0) || 0)));
   void Promise.resolve()
     .then(() => {
       const config = configStore.load();
-      return fetch(ANALYTICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectName: ANALYTICS_PROJECT_NAME,
-          event: 'agent_runtime',
-          version: typeof app?.getVersion === 'function' ? app.getVersion() : '',
-          platform: process.platform,
-          arch: process.arch,
-          client_id: config.analytics_client_id || '',
-          client_created_at: config.analytics_created_at || '',
-          agent_runtime_status: runtimeStatus,
-          agent_runtime_retry_count: retryCount,
-          ai_model_provider: config.text_model_provider || '',
-          ai_model_base_url: normalizeAnalyticsEndpointHost(config.base_url || ''),
-          ai_model_name: config.model_name || '',
-        }),
+      return analyticsService.track({
+        projectName: ANALYTICS_PROJECT_NAME,
+        event: 'agent_runtime',
+        version: typeof app?.getVersion === 'function' ? app.getVersion() : '',
+        platform: process.platform,
+        arch: process.arch,
+        client_id: config.analytics_client_id || '',
+        client_created_at: config.analytics_created_at || '',
+        agent_runtime_status: runtimeStatus,
+        agent_runtime_retry_count: retryCount,
+        ai_model_provider: config.text_model_provider || '',
+        ai_model_base_url: normalizeAnalyticsEndpointHost(config.base_url || ''),
+        ai_model_name: config.model_name || '',
       });
     })
     .catch(() => undefined);
@@ -370,7 +366,7 @@ function getMessageRole(db, cache, messageId) {
   return role;
 }
 
-function createOpenCodeRuntimeService({ app, configStore }) {
+function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
   const runtimeRoot = getAgentRuntimeDir(app);
   const serviceRuntimeRoot = path.join(runtimeRoot, 'service');
   const serviceWorkspaceDir = path.join(serviceRuntimeRoot, 'workspace');
@@ -1149,7 +1145,7 @@ function createOpenCodeRuntimeService({ app, configStore }) {
       diagnosticsPayload.retryAttempts = [...retryAttempts];
       writeTaskDiagnostics(taskId, diagnosticsPayload);
 
-      trackAgentRuntime(app, configStore, 'success', { retryCount: result.retry_count || 0 });
+      trackAgentRuntime(app, configStore, analyticsService, 'success', { retryCount: result.retry_count || 0 });
 
       const taskResult = {
         success: true,
@@ -1180,7 +1176,7 @@ function createOpenCodeRuntimeService({ app, configStore }) {
       if (isWatchdogStall(error)) {
         mustRestartAfterTask = true;
       }
-      trackAgentRuntime(app, configStore, 'failed', { retryCount: Array.isArray(error?.agentRetryAttempts) ? error.agentRetryAttempts.length : retryAttempts.length });
+      trackAgentRuntime(app, configStore, analyticsService, 'failed', { retryCount: Array.isArray(error?.agentRetryAttempts) ? error.agentRetryAttempts.length : retryAttempts.length });
       const diagnosticsPayload = collectDiagnostics({ taskId, title, outputFile });
       if (error && typeof error === 'object') {
         error.agentRetryAttempts = Array.isArray(error.agentRetryAttempts) ? error.agentRetryAttempts : [...retryAttempts];

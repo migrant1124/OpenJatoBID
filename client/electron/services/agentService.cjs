@@ -8,8 +8,8 @@ const {
   sanitizeReportFilename,
 } = require('./opencode/opencodeSelfCheckService.cjs');
 
-function createAgentService({ app, configStore, mainWindow }) {
-  const runtime = createOpenCodeRuntimeService({ app, configStore, mainWindow });
+function createAgentService({ app, configStore, mainWindow, analyticsService }) {
+  const runtime = createOpenCodeRuntimeService({ app, configStore, mainWindow, analyticsService });
 
   async function exportSelfCheckReport(result = {}) {
     const markdown = buildSelfCheckReportMarkdown(result);

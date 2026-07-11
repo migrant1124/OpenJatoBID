@@ -82,14 +82,14 @@ npm run dist:mac
 
 ### 产品识别配置
 
-| 配置 | 值 |
-| --- | --- |
-| package name | `jatoaibid` |
-| productName | `Jato AI BID` |
-| appId | `com.jdt.jatoaibid` |
-| 窗口标题 | `佳图智能投标助手` |
-| Windows 安装包 | `Jato AI BID Setup ${version}.exe` |
-| 更新仓库 | `migrant1124/OpenJatoBID` |
+| 配置           | 值                                  |
+| ------------ | ---------------------------------- |
+| package name | `jatoaibid`                        |
+| productName  | `Jato AI BID`                      |
+| appId        | `com.jdt.jatoaibid`                |
+| 窗口标题         | `佳图智能投标助手`                         |
+| Windows 安装包  | `Jato AI BID Setup ${version}.exe` |
+| 更新仓库         | `migrant1124/OpenJatoBID`          |
 
 ### 第一阶段技术边界
 
@@ -102,8 +102,6 @@ npm run dist:mac
 - Word 导出与 Mermaid 转换链路
 - OpenCode Agent 运行机制
 - analytics 数据采集与统计能力
-
-不要进行全仓库 `yibiao` 替换，也不要在品牌改造中重构技术文件生成主流程。
 
 ## 相关文档
 

@@ -242,6 +242,13 @@ const defaultConfig = {
   developer_token_stats_auto_open: false,
   analytics_client_id: '',
   analytics_created_at: '',
+  lan_management: {
+    server_address: '',
+    employee_name: '',
+    employee_phone: '',
+    management_public_key: '',
+    application_id: '',
+  },
 };
 
 function createAnalyticsClientId() {
@@ -603,6 +610,9 @@ function normalizeConfig(config) {
   const gpuHardwareAccelerationEnabled = gpuHardwareAccelerationConfigured === false
     ? defaultConfig.gpu_hardware_acceleration_enabled
     : hasGpuHardwareAccelerationEnabled ? source.gpu_hardware_acceleration_enabled : defaultConfig.gpu_hardware_acceleration_enabled;
+  const lanManagement = source.lan_management && typeof source.lan_management === 'object'
+    ? source.lan_management
+    : {};
 
   return {
     ...defaultConfig,
@@ -629,6 +639,13 @@ function normalizeConfig(config) {
     developer_token_stats_auto_open: source.developer_token_stats_auto_open === undefined ? defaultConfig.developer_token_stats_auto_open : Boolean(source.developer_token_stats_auto_open),
     analytics_client_id: source.analytics_client_id || defaultConfig.analytics_client_id,
     analytics_created_at: source.analytics_created_at || defaultConfig.analytics_created_at,
+    lan_management: {
+      server_address: String(lanManagement.server_address || ''),
+      employee_name: String(lanManagement.employee_name || ''),
+      employee_phone: String(lanManagement.employee_phone || ''),
+      management_public_key: String(lanManagement.management_public_key || ''),
+      application_id: String(lanManagement.application_id || ''),
+    },
   };
 }
 
@@ -707,6 +724,10 @@ function createConfigStore(app) {
           agent_mode_scenarios: {
             ...currentConfig.agent_mode_scenarios,
             ...(config && config.agent_mode_scenarios ? config.agent_mode_scenarios : {}),
+          },
+          lan_management: {
+            ...currentConfig.lan_management,
+            ...(config && config.lan_management ? config.lan_management : {}),
           },
           analytics_client_id: config?.analytics_client_id || currentConfig.analytics_client_id,
           analytics_created_at: config?.analytics_created_at || currentConfig.analytics_created_at,

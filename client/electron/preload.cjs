@@ -46,8 +46,20 @@ const bridge = {
   license: {
     getStatus: () => ipcRenderer.invoke('license:get-status'),
     refresh: () => ipcRenderer.invoke('license:refresh'),
-    importOfflineFile: () => ipcRenderer.invoke('license:import-offline-file'),
-    activateOfflineCode: (code) => ipcRenderer.invoke('license:activate-offline-code', code),
+    testServer: (serverAddress) => ipcRenderer.invoke('license:test-server', serverAddress),
+    submitApplication: (input) => ipcRenderer.invoke('license:submit-application', input),
+    getApplicationStatus: () => ipcRenderer.invoke('license:get-application-status'),
+    login: (input) => ipcRenderer.invoke('license:login', input),
+    verify: () => ipcRenderer.invoke('license:verify'),
+    onStatusChanged: (callback) => {
+      const listener = (_event, status) => callback(status);
+      ipcRenderer.on('license:status-changed', listener);
+      return () => ipcRenderer.removeListener('license:status-changed', listener);
+    },
+  },
+  analytics: {
+    track: (payload) => ipcRenderer.invoke('analytics:track', payload),
+    flush: () => ipcRenderer.invoke('analytics:flush'),
   },
   ai: {
     chat: (request) => ipcRenderer.invoke('ai:chat', request),

@@ -156,7 +156,7 @@ export interface AgentRuntimeActiveTask {
   idle_seconds: number;
 }
 
-export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'invalid' | 'invalidated' | 'machine_mismatch' | 'refresh_failed' | 'debug_disabled';
+export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'revoked' | 'offline_expired' | 'invalid' | 'machine_mismatch' | 'identity_mismatch' | 'debug_disabled';
 
 export interface LicenseRuntimeStatus {
   status: LicenseStatusValue | string;
@@ -176,6 +176,14 @@ export interface LicenseRuntimeStatus {
   keyId: string;
   lastCheckedAt: string;
   refreshError?: string;
+  lastVerifiedAt: string;
+  offlineValidUntil: string;
+  serverAddress: string;
+  employeeName: string;
+  employeePhone: string;
+  offline: boolean;
+  serverReachable: boolean;
+  message: string;
   config: {
     freeLicenseDays: number;
     expirePopupEnabled: boolean;
@@ -183,11 +191,20 @@ export interface LicenseRuntimeStatus {
   };
 }
 
-export interface LicenseOfflineActivationResult {
-  success: boolean;
-  canceled?: boolean;
-  message: string;
-  status: LicenseRuntimeStatus;
+export type AuthorizationApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DEVICE_LIMIT' | 'REVOKED' | 'EXPIRED';
+
+export interface AuthorizationApplicationResult {
+  id: string;
+  name: string;
+  phone: string;
+  deviceFingerprint: string;
+  clientId: string;
+  platform: string;
+  arch: string;
+  status: AuthorizationApplicationStatus;
+  submittedAt: string;
+  decidedAt: string | null;
+  runtimeStatus?: LicenseRuntimeStatus | null;
 }
 
 export interface AgentRuntimeStatus {
@@ -399,8 +416,16 @@ export interface YibiaoBridge {
   license: {
     getStatus: () => Promise<LicenseRuntimeStatus>;
     refresh: () => Promise<LicenseRuntimeStatus>;
-    importOfflineFile: () => Promise<LicenseOfflineActivationResult>;
-    activateOfflineCode: (code: string) => Promise<LicenseOfflineActivationResult>;
+    testServer: (serverAddress: string) => Promise<{ success: boolean; serverAddress: string; data: unknown }>;
+    submitApplication: (input: { name: string; phone: string; serverAddress: string }) => Promise<AuthorizationApplicationResult>;
+    getApplicationStatus: () => Promise<AuthorizationApplicationResult>;
+    login: (input: { name: string; phone: string }) => Promise<LicenseRuntimeStatus>;
+    verify: () => Promise<LicenseRuntimeStatus>;
+    onStatusChanged: (callback: (status: LicenseRuntimeStatus) => void) => () => void;
+  };
+  analytics: {
+    track: (payload: Record<string, unknown>) => Promise<{ success: boolean; eventId: string }>;
+    flush: () => Promise<{ sent: number; remaining: number }>;
   };
   ai: {
     chat: (request: ChatCompletionRequest) => Promise<string>;

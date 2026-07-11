@@ -1,4 +1,6 @@
 const { ipcMain, shell } = require('electron');
+const path = require('node:path');
+const { registerAnalyticsIpc } = require('./analyticsIpc.cjs');
 const { registerAgentIpc } = require('./agentIpc.cjs');
 const { registerAiIpc } = require('./aiIpc.cjs');
 const { registerConfigIpc } = require('./configIpc.cjs');
@@ -14,6 +16,8 @@ const { registerTechnicalPlanIpc } = require('./technicalPlanIpc.cjs');
 const { registerTemplateIpc } = require('./templateIpc.cjs');
 const { registerSystemFontIpc } = require('./systemFontIpc.cjs');
 const { createAgentService } = require('../services/agentService.cjs');
+const { createAnalyticsQueueStore } = require('../services/analyticsQueueStore.cjs');
+const { createAnalyticsService } = require('../services/analyticsService.cjs');
 const { createAiService } = require('../services/aiService.cjs');
 const { createConfigStore } = require('../services/configStore.cjs');
 const { createDeveloperExpansionReplaceTestService } = require('../services/developerExpansionReplaceTest.cjs');
@@ -196,9 +200,16 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
 function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow }) {
   const configStore = createConfigStore(app);
   const licenseService = createLicenseService({ app, configStore });
-  const aiService = createAiService({ app, configStore });
+  const analyticsService = createAnalyticsService({
+    app,
+    configStore,
+    queueStore: createAnalyticsQueueStore({
+      filePath: path.join(app.getPath('userData'), 'analytics_queue.json'),
+    }),
+  });
+  const aiService = createAiService({ app, configStore, analyticsService });
   const developerExpansionReplaceTestService = createDeveloperExpansionReplaceTestService({ aiService });
-  const agentService = createAgentService({ app, configStore, mainWindow });
+  const agentService = createAgentService({ app, configStore, mainWindow, analyticsService });
   const fileService = createFileService({ app, configStore });
   const exportService = createExportService({ configStore });
   const systemFontService = createSystemFontService();
@@ -274,7 +285,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     },
   });
   registerDeveloperIpc({ configStore, aiService, openDeveloperTokenStatsWindow, developerExpansionReplaceTestService });
-  registerLicenseIpc({ licenseService });
+  registerAnalyticsIpc({ analyticsService });
+  registerLicenseIpc({ licenseService, mainWindow });
   registerAiIpc({ aiService });
   registerAgentIpc({ agentService, mainWindow });
   registerFileIpc({ fileService });

@@ -1,4 +1,4 @@
-const NOTICE_ENDPOINT = 'https://analytics.agnet.top/notice';
+const NOTICE_ENDPOINT = 'https://raw.githubusercontent.com/migrant1124/OpenJatoBID-Notice/main/remote-notice.json';
 const PROJECT_NAME = 'yibiao-client';
 const DISMISSED_NOTICE_ID_KEY = 'remote_notice_dismissed_id';
 const LOG_PREFIX = '[remote-notice]';

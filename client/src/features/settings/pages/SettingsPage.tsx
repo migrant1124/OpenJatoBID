@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
-import { FloatingToolbar, InputWithAction, OfflineLicenseActivationDialog, useToast } from '../../../shared/ui';
+import { FloatingToolbar, InputWithAction, useToast } from '../../../shared/ui';
 import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
 import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, TextModelConfig, TextModelProfiles, TextModelProvider, UpdateChannel } from '../../../shared/types';
@@ -52,11 +52,23 @@ function normalizeAgentModeScenarios(value?: Partial<AgentModeScenariosConfig>):
 
 function getLicenseSourceLabel(status: LicenseRuntimeStatus | null) {
   if (!status) return '读取中';
-  return status.sourceTrusted ? '官方发行版' : '不可信的客户端来源';
+  if (status.status === 'active') return status.offline ? '局域网授权有效（离线）' : '局域网授权有效';
+  if (status.status === 'debug_disabled') return '开发调试模式';
+  if (status.status === 'revoked') return '授权已撤销';
+  if (status.status === 'expired') return '授权已到期';
+  if (status.status === 'offline_expired') return '等待局域网复核';
+  return '未获得局域网授权';
+}
+
+function formatLicenseExpiry(value?: string) {
+  if (!value) return '未读取';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 const textModelProviders: Array<{ value: TextModelProvider; label: string }> = [
-  { value: 'jinlong', label: '金龙中转站【推荐】' },
+  { value: 'jinlong', label: '金龙中转站' },
   { value: 'volcengine', label: '火山方舟' },
   { value: 'deepseek', label: 'DeepSeek' },
   { value: 'longcat', label: '龙猫' },
@@ -82,7 +94,7 @@ const textProviderDefaults: TextModelProfiles = {
 };
 
 const textProviderApiKeyUrls: Partial<Record<TextModelProvider, string>> = {
-  jinlong: 'https://s.markup.com.cn/jl',
+  jinlong: 'https://jlaudeapi.com/sign-up?aff=smj',
   volcengine: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
   deepseek: 'https://platform.deepseek.com/api_keys',
   longcat: 'https://longcat.chat/platform/api_keys',
@@ -154,7 +166,7 @@ function textProfileFromState(textModel: SettingsPageState['textModel']): TextMo
 }
 
 const imageProviders: Array<{ value: ImageModelProvider; label: string }> = [
-  { value: 'jinlong', label: '金龙中转站【推荐】' },
+  { value: 'jinlong', label: '金龙中转站' },
   { value: 'volcengine', label: '火山方舟' },
   { value: 'google-ai-studio', label: 'Google AI Studio' },
   { value: 'agnes', label: 'Agnes AI' },
@@ -257,7 +269,7 @@ const imageProviderDefaults: ImageModelProfiles = {
 };
 
 const imageProviderApiKeyUrls: Record<ImageModelProvider, string> = {
-  jinlong: 'https://s.markup.com.cn/jl',
+  jinlong: 'https://jlaudeapi.com/sign-up?aff=smj',
   volcengine: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
   'google-ai-studio': 'https://aistudio.google.com/api-keys',
   agnes: 'https://platform.agnes-ai.com/settings/apiKeys',
@@ -475,11 +487,14 @@ const initialState: SettingsPageState = {
 
 interface SettingsPageProps {
   onDeveloperModeChange?: (developerMode: boolean) => void;
+  onLogout?: () => void;
+  initialTab?: SettingsTab;
+  initialLicenseStatus?: LicenseRuntimeStatus | null;
 }
 
-function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
+function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general', initialLicenseStatus = null }: SettingsPageProps) {
   const [state, setState] = useState<SettingsPageState>(initialState);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [savedConfig, setSavedConfig] = useState<ClientConfig | null>(null);
   const [textModels, setTextModels] = useState<string[]>([]);
   const [imageModels, setImageModels] = useState<string[]>([]);
@@ -492,8 +507,7 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
   const [updatePercent, setUpdatePercent] = useState(0);
   const [updateVersion, setUpdateVersion] = useState('');
   const [updateError, setUpdateError] = useState('');
-  const [licenseStatus, setLicenseStatus] = useState<LicenseRuntimeStatus | null>(null);
-  const [offlineLicenseDialogOpen, setOfflineLicenseDialogOpen] = useState(false);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseRuntimeStatus | null>(initialLicenseStatus);
   const [agentSelfCheckStatus, setAgentSelfCheckStatus] = useState<AgentSelfCheckUiStatus>('untested');
   const [agentSelfCheckResult, setAgentSelfCheckResult] = useState<AgentSelfCheckResult | null>(null);
   const [exportingAgentSelfCheckReport, setExportingAgentSelfCheckReport] = useState(false);
@@ -1967,43 +1981,78 @@ function SettingsPage({ onDeveloperModeChange }: SettingsPageProps) {
                   </span>
                 </li>
               </ul>
-              <button type="button" className="about-links-activate" onClick={() => setOfflineLicenseDialogOpen(true)}>
-                离线激活授权
+            </article>
+            <article className="about-info-card about-account-card">
+              <div className="about-card-head">
+                <span>登录账号</span>
+                <strong>{licenseStatus?.employeeName || '未登录'}</strong>
+              </div>
+              <p>当前客户端会话使用的员工账号与设备授权信息。</p>
+              <ul className="about-links-list">
+                <li className="about-links-item">
+                  <span className="about-links-label">用户名</span>
+                  <span className="about-links-value">{licenseStatus?.employeeName || '未读取'}</span>
+                </li>
+                <li className="about-links-item">
+                  <span className="about-links-label">授权期限</span>
+                  <span className="about-links-value">{formatLicenseExpiry(licenseStatus?.licenseExpiresAt || licenseStatus?.expiresAt)}</span>
+                </li>
+                <li className="about-links-item">
+                  <span className="about-links-label">授权状态</span>
+                  <span className={`about-links-value ${licenseStatus?.sourceTrusted ? 'is-trusted' : 'is-untrusted'}`}>
+                    {licenseSourceLabel}
+                  </span>
+                </li>
+              </ul>
+              <button type="button" className="about-logout-button" onClick={onLogout} disabled={!onLogout}>
+                退出登录
               </button>
             </article>
           </div>
           <div className="privacy-statement">
             <div className="privacy-statement-head">
-              <span>Privacy</span>
+              <span>PRIVACY</span>
               <strong>隐私声明</strong>
-              <p>本软件尽量将数据处理保留在本机与使用人员自行选择的服务商之间，仅处理运行所必需的最少信息。</p>
+              <p>
+                本软件为佳图数科<strong>内部专属工具，仅限公司内部员工使用，禁止对外分发、外传、商用</strong>。软件尽可能将业务数据处理留存于本地设备，仅采集运营运维必需的最小范围信息，严格区分业务涉密数据与后台运维统计数据。
+              </p>
             </div>
             <div className="privacy-list">
               <article className="privacy-item">
                 <span>01</span>
-                <strong>业务数据不会被集中收集</strong>
-                <p>应用不会上传、收集或保存你配置的 API Key、导入的招标文件、解析后的文档内容、生成的方案正文、导出文件或其他业务结果。</p>
+                <strong>业务涉密数据零集中收集</strong>
+                <p>应用<strong>不会向佳图数科局域网管理端上传、集中收集或存储</strong>任何业务涉密信息，包含但不限于：</p>
+                <p>你自行配置的 API Key、本地导入的招标文件、解析后的全文文档、AI 生成的投标方案正文、本地导出文件、项目业务资料及所有业务产出结果；</p>
+                <p>全部业务文件、密钥、项目内容仅保存在员工本地设备；调用员工自行配置的第三方 AI 服务时，仅将完成当前任务所必需的内容直接发送给该服务商，不发送到佳图数科局域网管理端。</p>
               </article>
               <article className="privacy-item">
                 <span>02</span>
-                <strong>线上 AI 请求只发送给你配置的服务商</strong>
-                <p>使用 OpenAI 兼容接口、MinerU 或其他线上 API 时，应用会把完成任务所需的内容发送给使用人员自行配置的服务商。这是实现文档解析、内容生成和模型测试等功能的必要步骤；这些请求不经过佳图数科的中转服务器，佳图数科不会额外留存请求内容或生成结果。</p>
+                <strong>AI 请求直连服务商，无中间中转留存</strong>
+                <p>使用 OpenAI 兼容接口、MinerU 或其他自行配置的线上 API 时：</p>
+                <p>完成文档解析、内容生成、模型调用所需的业务内容，仅从员工本地设备直接发送至员工自行配置的大模型服务商；</p>
+                <p>API 密钥仅在员工本地设备持久化保存，调用时作为鉴权信息直接发送给员工配置的第三方服务商；项目文档、方案文本除完成当前 AI/MinerU 任务所必需的直连传输外，不经过佳图数科局域网管理端，公司管理端不会截留、缓存或留存请求原文和模型返回内容。</p>
               </article>
               <article className="privacy-item">
                 <span>03</span>
-                <strong>匿名埋点只用于了解功能使用情况</strong>
-                <p>为了了解软件使用情况和功能改进方向，应用会把匿名页面访问和功能使用次数上报到 Cloudflare。统计不包含文档内容、文件名、本地路径、API Key、用户输入、生成结果或任何可还原业务内容的信息。</p>
+                <strong>后台运维统计信息收集说明</strong>
+                <p>为保障软件稳定运维、合理管控 AI 资源消耗、优化产品功能，软件后台会采集<strong>无业务涉密属性的运维统计数据</strong>，仅用于内部运营分析，具体收集内容如下：</p>
+                <p>客户端基础统计：软件活跃使用频次、在线客户端总数量、客户端版本、操作系统平台、系统架构、局域网来源 IP 地址；</p>
+                <p>功能使用统计：页面与功能标识、非业务内容的配置项取值分布、最近事件类型和活跃/留存趋势；</p>
+                <p>AI 资源消耗统计：全局 AI 请求总次数、各类模型 Token 消耗总量、模型服务商、接口域名和模型名称；</p>
+                <p>Agent 运行统计：执行成功或失败状态、重试次数和重试后成功率；失败信息只保留不可还原业务内容的错误类别和计数；</p>
+                <p>授权状态统计：授权状态、授权到期时间和最近一次校验时间；姓名、手机号和设备指纹的用途及边界见“04 个人信息说明”；</p>
+                <p>统计范围限制：以上运维数据<strong>不附带任何文档原文、文件名、本地文件路径、API 密钥、用户输入文本、投标方案、业务产出等可还原项目信息</strong>，无法反向定位任何具体业务项目与涉密内容。</p>
+              </article>
+              <article className="privacy-item">
+                <span>04</span>
+                <strong>个人信息说明</strong>
+                <p>为方便软件使用和执行内部授权管理，软件登录使用员工真实姓名、手机号码和当前设备指纹。上述信息仅发送至佳图数科局域网管理端，用于身份识别、设备绑定、授权审批、授权校验和设备数量控制，不会发送给大模型或其他第三方，也不会附带任何投标业务内容。</p>
               </article>
             </div>
           </div>
         </section>
       )}
       </div>
-      <OfflineLicenseActivationDialog
-        open={offlineLicenseDialogOpen}
-        onOpenChange={setOfflineLicenseDialogOpen}
-        onActivated={setLicenseStatus}
-      />
       <FloatingToolbar groups={settingsToolbarGroups} label="设置保存工具条" />
     </div>
   );

@@ -1,0 +1,396 @@
+/*
+ * Ant Design v6 visual normalization layer.
+ * Imported last so legacy feature CSS keeps its layout geometry while surfaces,
+ * controls and interaction states share one restrained desktop visual language.
+ */
+
+body :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, select) {
+  color: var(--yb-text);
+  background-color: var(--yb-surface);
+  border-color: var(--yb-border);
+  border-radius: var(--yb-radius);
+  box-shadow: none;
+  transition: border-color var(--yb-duration-fast) var(--yb-ease), box-shadow var(--yb-duration-fast) var(--yb-ease);
+}
+
+body :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, select):hover:not(:disabled) {
+  border-color: var(--yb-primary-hover);
+}
+
+body :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, select):focus {
+  background-color: var(--yb-surface);
+  border-color: var(--yb-primary);
+  box-shadow: 0 0 0 2px rgba(5, 145, 255, 0.1);
+  outline: none;
+}
+
+body :is(input, textarea, select, button):disabled {
+  color: var(--yb-text-disabled);
+  cursor: not-allowed;
+}
+
+/* Ant cards use a quiet white surface, 1px split line and compact radius. */
+body :is(
+  [class$='-card'], [class*='-card '],
+  [class$='-panel'], [class*='-panel '],
+  [class$='-command-bar'], [class*='-command-bar ']
+) {
+  background-color: var(--yb-surface);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+body :is(
+  [class$='-card']:hover, [class*='-card ']:hover,
+  [class$='-panel']:hover, [class*='-panel ']:hover
+) {
+  box-shadow: var(--yb-shadow-xs);
+}
+
+/* Remove the previous glass/duotone treatment while preserving every box size. */
+body :is(
+  .workspace-database-gate,
+  .developer-expansion-replace-hero,
+  .developer-expansion-replace-metrics article,
+  .developer-secondary-hero,
+  .developer-secondary-accent-card,
+  .developer-secondary-metrics article,
+  .developer-secondary-steps article,
+  .developer-secondary-preview-list span,
+  .demo-hero-card,
+  .business-bid-demo .demo-hero-card,
+  .opportunity-hero-card,
+  .demo-step-list article,
+  .demo-table-list article,
+  .opportunity-card-list article,
+  .opportunity-radar-card,
+  .duplicate-upload-row,
+  .duplicate-empty-upload,
+  .duplicate-dimension-grid article,
+  .duplicate-analysis-tab.is-active,
+  .duplicate-analysis-content,
+  .export-template-fullscreen-dialog,
+  .export-format-heading-note,
+  .export-template-image-placeholder,
+  .template-library-card,
+  .template-library-card.is-active,
+  .knowledge-migration-card,
+  .rejection-upload-row,
+  .rejection-empty-upload,
+  .rejection-result-command-bar,
+  .rejection-check-result-tab.is-active,
+  .rejection-check-result-content,
+  .rejection-finding-group-head,
+  .rejection-finding-detail-block,
+  .resources-shelf-panel,
+  .resource-book-row,
+  .parser-card-primary,
+  .parser-card-accent,
+  .about-update-card,
+  .privacy-statement,
+  .technical-document-upload-row,
+  .technical-document-empty-upload,
+  .document-switch-tab.is-active,
+  .bid-analysis-command-bar,
+  .bid-analysis-task-pane,
+  .bid-analysis-json-table-wrap,
+  .bid-analysis-config-presets,
+  .bid-analysis-config-preset.is-active,
+  .bid-analysis-section-chip,
+  .bid-analysis-config-item.is-selected,
+  .global-facts-command-bar,
+  .global-facts-panel,
+  .content-generation-command-bar,
+  .content-outline-panel,
+  .outline-command-bar,
+  .bid-section-card.is-active,
+  .analysis-section-hint,
+  .outline-progress-panel,
+  .outline-detail-panel,
+  .secondary-menu-list-head,
+  .secondary-menu-row-icon,
+  .markdown-viewer,
+  .mermaid-preview-card,
+  .markdown-empty-state,
+  .markdown-fullscreen-dialog,
+  .markdown-editor-fullscreen-dialog,
+  .markdown-editor
+) {
+  background-image: none;
+}
+
+body :is(
+  .duplicate-upload-row,
+  .rejection-upload-row,
+  .technical-document-upload-row,
+  .secondary-menu-list-head,
+  .bid-analysis-command-bar,
+  .global-facts-command-bar,
+  .content-generation-command-bar,
+  .outline-command-bar
+) {
+  background-color: var(--yb-fill-quaternary);
+  border-color: var(--yb-border-soft);
+}
+
+body :is(
+  .duplicate-empty-upload,
+  .rejection-empty-upload,
+  .technical-document-empty-upload,
+  .markdown-empty-state,
+  .export-template-image-placeholder
+) {
+  background-color: var(--yb-fill-quaternary);
+  border-color: var(--yb-border);
+}
+
+body :is(
+  .duplicate-analysis-tab.is-active,
+  .rejection-check-result-tab.is-active,
+  .document-switch-tab.is-active,
+  .bid-analysis-config-preset.is-active,
+  .bid-analysis-config-item.is-selected,
+  .template-library-card.is-active,
+  .bid-section-card.is-active
+) {
+  color: var(--yb-primary);
+  background-color: var(--yb-primary-bg);
+  border-color: var(--yb-primary-border);
+  box-shadow: none;
+}
+
+/* Primary controls are flat Ant blue; status remains textual as well as colored. */
+body :is(
+  .primary-action,
+  .dialog-primary-action,
+  .app-toast-action.is-primary,
+  .bid-analysis-mode-pill.is-active,
+  .outline-tree-tools .outline-add-root-action,
+  .outline-tree-tools .outline-save-sort-action
+) {
+  color: #fff;
+  background: var(--yb-primary);
+  border-color: var(--yb-primary);
+  border-radius: var(--yb-radius);
+  box-shadow: none;
+}
+
+body :is(
+  .primary-action,
+  .dialog-primary-action,
+  .app-toast-action.is-primary,
+  .outline-tree-tools .outline-add-root-action,
+  .outline-tree-tools .outline-save-sort-action
+):hover:not(:disabled) {
+  color: #fff;
+  background: var(--yb-primary-hover);
+  border-color: var(--yb-primary-hover);
+  box-shadow: none;
+}
+
+.app-toast {
+  padding: 14px 16px;
+  background: var(--yb-surface-elevated);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: var(--yb-shadow);
+  backdrop-filter: none;
+}
+
+.app-toast-title { font-size: 14px; font-weight: 600; }
+.app-toast-action { border-radius: var(--yb-radius); }
+.app-toast.is-success { border-color: #b7eb8f; background: var(--yb-success-bg); }
+.app-toast.is-error { border-color: #ffccc7; background: var(--yb-error-bg); }
+
+body :is(.content-regenerate-modal, .detail-help-modal, [class$='-dialog-overlay'], [class*='-dialog-overlay ']) {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: none;
+}
+
+body :is(.detail-help-card, .content-regenerate-card, [class$='-dialog-card'], [class*='-dialog-card ']) {
+  background: var(--yb-surface-elevated);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: var(--yb-shadow-lg);
+}
+
+.detail-help-close,
+.app-toast-close {
+  border-radius: var(--yb-radius);
+}
+
+.yb-switch-track {
+  background: var(--yb-fill);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.yb-switch-control input:checked + .yb-switch-track,
+.content-generation-switch[data-state='checked'] {
+  background: var(--yb-primary);
+  border-color: var(--yb-primary);
+  box-shadow: none;
+}
+
+.yb-switch-thumb { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+
+body :is(.duplicate-file-icon, .rejection-file-icon, .technical-document-file-icon, .workspace-database-mark) {
+  background: var(--yb-primary);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+.workspace-database-mark.is-error { background: var(--yb-error); }
+
+body :is(
+  .duplicate-analysis-progress span,
+  .knowledge-progress-track span,
+  .progress-track span,
+  .content-generation-progress-track span
+) {
+  background: var(--yb-primary);
+}
+
+.content-generation-progress-track.is-planning span { background: var(--yb-success); }
+.content-generation-progress-track.is-outline-expanding span { background: var(--yb-warning); }
+.content-generation-progress-track.is-auditing span { background: var(--yb-info); }
+.content-generation-progress-track.is-illustrating span { background: var(--yb-primary-deep); }
+
+/* Tables and Markdown content follow Ant typography/split-line conventions. */
+body table { border-color: var(--yb-border-soft); }
+body th { color: var(--yb-text-soft); background: var(--yb-fill-quaternary); border-color: var(--yb-border-soft); }
+body td { border-color: var(--yb-border-soft); }
+body tbody tr:hover td { background: var(--yb-fill-quaternary); }
+
+.markdown-viewer {
+  color: var(--yb-text);
+  background-color: var(--yb-surface);
+  line-height: 1.75;
+}
+
+.markdown-viewer :is(blockquote, pre, table) {
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius);
+  box-shadow: none;
+}
+
+.markdown-viewer blockquote {
+  background: var(--yb-fill-quaternary);
+  border-left-color: var(--yb-primary-border);
+}
+
+.markdown-viewer code { font-family: var(--yb-font-mono); }
+
+/* Decorative book covers remain differentiated, but use a flat Ant palette. */
+.resource-book-cover.is-blue { background: #1677ff; }
+.resource-book-cover.is-violet { background: #722ed1; }
+.resource-book-cover.is-cyan { background: #13c2c2; }
+.resource-book-cover.is-slate { background: #597ef7; }
+
+/* Settings keeps its existing tab placement and row density, with Ant surfaces. */
+.settings-page-section {
+  background: var(--yb-surface);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+.settings-tab-shell {
+  gap: var(--yb-space-1);
+  padding: var(--yb-space-1);
+  background: var(--yb-fill-secondary);
+  border-color: transparent;
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+.settings-tab {
+  color: var(--yb-text-soft);
+  font-weight: 600;
+  border-radius: var(--yb-radius);
+}
+
+.settings-tab.is-active {
+  color: var(--yb-primary);
+  background: var(--yb-surface);
+  box-shadow: var(--yb-shadow-xs);
+}
+
+.settings-tab:hover:not(.is-active) { background: var(--yb-fill-tertiary); }
+.settings-section-title span { border-radius: var(--yb-radius-xs); }
+
+.settings-page :is(.settings-card, .parser-card, .model-provider-card, .about-update-card, .privacy-statement) {
+  background-color: var(--yb-surface);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+.secondary-menu-list,
+.secondary-menu-list-head {
+  background-color: var(--yb-surface);
+  border-color: var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+.secondary-menu-row { border-color: var(--yb-border-soft); }
+.secondary-menu-row:hover { background: var(--yb-fill-quaternary); }
+
+/* Feature modules previously used 16–28px glass-card radii. Normalize their
+   existing boxes without touching grid, padding, width, height or flow. */
+body :is(
+  [class*='duplicate-'],
+  [class*='rejection-'],
+  [class*='technical-'],
+  [class*='bid-analysis-'],
+  [class*='global-facts-'],
+  [class*='content-generation-'],
+  [class*='content-outline-'],
+  [class*='outline-'],
+  [class*='knowledge-'],
+  [class*='export-'],
+  [class*='template-'],
+  [class*='resource-'],
+  [class*='developer-'],
+  [class*='demo-'],
+  [class*='opportunity-'],
+  [class*='settings-'],
+  [class*='parser-'],
+  [class*='privacy-']
+) {
+  border-radius: var(--yb-radius-lg);
+  box-shadow: none;
+}
+
+body :is(
+  [class*='duplicate-'],
+  [class*='rejection-'],
+  [class*='technical-'],
+  [class*='bid-analysis-'],
+  [class*='global-facts-'],
+  [class*='content-generation-'],
+  [class*='content-outline-'],
+  [class*='outline-'],
+  [class*='knowledge-'],
+  [class*='export-'],
+  [class*='template-'],
+  [class*='resource-'],
+  [class*='developer-'],
+  [class*='settings-']
+) button {
+  border-radius: var(--yb-radius);
+}
+
+body :is(
+  .progress-track,
+  .duplicate-analysis-progress,
+  .knowledge-progress-track,
+  .content-generation-progress-track,
+  .yb-switch-track,
+  .yb-switch-thumb,
+  .application-status-icon
+) {
+  border-radius: 999px;
+}

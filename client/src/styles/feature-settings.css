@@ -850,7 +850,7 @@
 /* [9748-9981] about-*-/privacy-* (关于/隐私声明) */
 .about-overview {
   display: grid;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   padding: 0 36px 36px;
 }
@@ -1034,6 +1034,32 @@
   transform: none;
 }
 
+.about-logout-button {
+  width: fit-content;
+  margin-top: auto;
+  padding: 8px 18px;
+  color: #cf1322;
+  font-size: 13px;
+  font-weight: 700;
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+
+.about-logout-button:hover {
+  background: #ffccc7;
+  border-color: #ffa39e;
+  transform: translateY(-1px);
+}
+
+.about-logout-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .privacy-statement {
   display: grid;
   gap: 18px;
@@ -1079,7 +1105,8 @@
 
 .privacy-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
   gap: 14px;
 }
 
@@ -1126,7 +1153,7 @@
   }
 
   .privacy-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-row {
@@ -1144,6 +1171,10 @@
 
 /* [11182-11691] (rewritten, shared-range) settings responsive rules extracted from mixed media(860px) block */
 @media (max-width: 860px) {
+  .privacy-list {
+    grid-template-columns: 1fr;
+  }
+
   .agent-self-check-status,
   .agent-self-check-result-head {
     align-items: stretch;

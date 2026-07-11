@@ -81,4 +81,11 @@ export interface ClientConfig extends AiConfig {
   developer_token_stats_auto_open?: boolean;
   analytics_client_id?: string;
   analytics_created_at?: string;
+  lan_management?: {
+    server_address: string;
+    employee_name: string;
+    employee_phone: string;
+    management_public_key: string;
+    application_id: string;
+  };
 }

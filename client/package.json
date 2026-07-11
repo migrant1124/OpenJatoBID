@@ -8,6 +8,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev:browser": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:licensed": "cross-env YIBIAO_REQUIRE_LAN_LICENSE=1 npm run dev",
+    "dev:inspect": "concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && cross-env YIBIAO_REQUIRE_LAN_LICENSE=1 ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron --remote-debugging-port=9222 .\"",
     "build": "tsc --noEmit && vite build",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",

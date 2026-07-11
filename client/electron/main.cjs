@@ -416,6 +416,8 @@ function openDeveloperTokenStatsWindow() {
   return { success: true };
 }
 
+if (process.platform === 'win32') app.setAppUserModelId('com.jdt.jatoaibid');
+
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'light';
   registerAssetProtocol();

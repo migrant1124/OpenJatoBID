@@ -1,0 +1,62 @@
+{
+  "name": "jato-ai-bid-management",
+  "version": "1.0.0",
+  "private": true,
+  "author": "佳图数科",
+  "description": "Jato AI BID 局域网授权与运维统计管理端",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "prepare:initial-admin": "node scripts/prepare-initial-admin-credential.cjs",
+    "dev": "npm run prepare:initial-admin && concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5174 --strictPort\" \"wait-on http://127.0.0.1:5174 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5174 electron .\"",
+    "dev:browser": "vite --host 127.0.0.1 --port 5174 --strictPort",
+    "dev:inspect": "npm run prepare:initial-admin && concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5174 --strictPort\" \"wait-on http://127.0.0.1:5174 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5174 electron --remote-debugging-port=9223 .\"",
+    "build": "tsc --noEmit && vite build",
+    "test": "node --test",
+    "dist:win": "npm run prepare:initial-admin && npm run build && node scripts/build-win.cjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "41.5.0",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.jiatu.aibid.management",
+    "productName": "Jato AI BID 管理端",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "assets/icon.ico",
+      "!electron/**/*.test.cjs",
+      "electron/generated/initialAdminCredential.cjs",
+      "!initial-admin.private.json",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

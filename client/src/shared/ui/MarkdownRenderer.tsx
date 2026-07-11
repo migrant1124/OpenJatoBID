@@ -211,27 +211,27 @@ function MarkdownRenderer({
         );
       }
 
-      const props = { key, className };
+      const props = { className };
       if (tag === 'p') {
         const isFigureCaption = /^图[:：]/.test((element.textContent || '').trim());
-        return <p {...props} className={[className, isFigureCaption ? 'markdown-figure-caption' : ''].filter(Boolean).join(' ') || undefined}>{renderedChildren}</p>;
+        return <p key={key} className={[className, isFigureCaption ? 'markdown-figure-caption' : ''].filter(Boolean).join(' ') || undefined}>{renderedChildren}</p>;
       }
 
-      if (tag === 'h1') return <h1 {...props}>{renderedChildren}</h1>;
-      if (tag === 'h2') return <h2 {...props}>{renderedChildren}</h2>;
-      if (tag === 'h3') return <h3 {...props}>{renderedChildren}</h3>;
-      if (tag === 'h4') return <h4 {...props}>{renderedChildren}</h4>;
-      if (tag === 'h5') return <h5 {...props}>{renderedChildren}</h5>;
-      if (tag === 'h6') return <h6 {...props}>{renderedChildren}</h6>;
-      if (tag === 'strong') return <strong {...props}>{renderedChildren}</strong>;
-      if (tag === 'b') return <b {...props}>{renderedChildren}</b>;
-      if (tag === 'em') return <em {...props}>{renderedChildren}</em>;
-      if (tag === 'i') return <i {...props}>{renderedChildren}</i>;
-      if (tag === 'del') return <del {...props}>{renderedChildren}</del>;
-      if (tag === 's') return <s {...props}>{renderedChildren}</s>;
-      if (tag === 'ul') return <ul {...props}>{renderedChildren}</ul>;
-      if (tag === 'ol') return <ol {...props}>{renderedChildren}</ol>;
-      if (tag === 'li') return <li {...props}>{renderedChildren}</li>;
+      if (tag === 'h1') return <h1 key={key} {...props}>{renderedChildren}</h1>;
+      if (tag === 'h2') return <h2 key={key} {...props}>{renderedChildren}</h2>;
+      if (tag === 'h3') return <h3 key={key} {...props}>{renderedChildren}</h3>;
+      if (tag === 'h4') return <h4 key={key} {...props}>{renderedChildren}</h4>;
+      if (tag === 'h5') return <h5 key={key} {...props}>{renderedChildren}</h5>;
+      if (tag === 'h6') return <h6 key={key} {...props}>{renderedChildren}</h6>;
+      if (tag === 'strong') return <strong key={key} {...props}>{renderedChildren}</strong>;
+      if (tag === 'b') return <b key={key} {...props}>{renderedChildren}</b>;
+      if (tag === 'em') return <em key={key} {...props}>{renderedChildren}</em>;
+      if (tag === 'i') return <i key={key} {...props}>{renderedChildren}</i>;
+      if (tag === 'del') return <del key={key} {...props}>{renderedChildren}</del>;
+      if (tag === 's') return <s key={key} {...props}>{renderedChildren}</s>;
+      if (tag === 'ul') return <ul key={key} {...props}>{renderedChildren}</ul>;
+      if (tag === 'ol') return <ol key={key} {...props}>{renderedChildren}</ol>;
+      if (tag === 'li') return <li key={key} {...props}>{renderedChildren}</li>;
       if (tag === 'table') {
         return (
           <div key={key} className="markdown-table-scroll">
@@ -239,23 +239,23 @@ function MarkdownRenderer({
           </div>
         );
       }
-      if (tag === 'thead') return <thead {...props}>{renderedChildren}</thead>;
-      if (tag === 'tbody') return <tbody {...props}>{renderedChildren}</tbody>;
-      if (tag === 'tr') return <tr {...props}>{renderedChildren}</tr>;
-      if (tag === 'th') return <th {...props}>{renderedChildren}</th>;
-      if (tag === 'td') return <td {...props}>{renderedChildren}</td>;
-      if (tag === 'blockquote') return <blockquote {...props}>{renderedChildren}</blockquote>;
-      if (tag === 'pre') return <pre {...props}>{renderedChildren}</pre>;
-      if (tag === 'code') return <code {...props}>{renderedChildren}</code>;
-      if (tag === 'mark') return <mark {...props}>{renderedChildren}</mark>;
-      if (tag === 'small') return <small {...props}>{renderedChildren}</small>;
-      if (tag === 'sub') return <sub {...props}>{renderedChildren}</sub>;
-      if (tag === 'sup') return <sup {...props}>{renderedChildren}</sup>;
-      if (tag === 'label') return <label {...props} htmlFor={element.getAttribute('for') || undefined}>{renderedChildren}</label>;
-      if (tag === 'span') return <span {...props}>{renderedChildren}</span>;
-      if (tag === 'div') return <div {...props}>{renderedChildren}</div>;
-      if (tag === 'section') return <section {...props}>{renderedChildren}</section>;
-      if (tag === 'article') return <article {...props}>{renderedChildren}</article>;
+      if (tag === 'thead') return <thead key={key} {...props}>{renderedChildren}</thead>;
+      if (tag === 'tbody') return <tbody key={key} {...props}>{renderedChildren}</tbody>;
+      if (tag === 'tr') return <tr key={key} {...props}>{renderedChildren}</tr>;
+      if (tag === 'th') return <th key={key} {...props}>{renderedChildren}</th>;
+      if (tag === 'td') return <td key={key} {...props}>{renderedChildren}</td>;
+      if (tag === 'blockquote') return <blockquote key={key} {...props}>{renderedChildren}</blockquote>;
+      if (tag === 'pre') return <pre key={key} {...props}>{renderedChildren}</pre>;
+      if (tag === 'code') return <code key={key} {...props}>{renderedChildren}</code>;
+      if (tag === 'mark') return <mark key={key} {...props}>{renderedChildren}</mark>;
+      if (tag === 'small') return <small key={key} {...props}>{renderedChildren}</small>;
+      if (tag === 'sub') return <sub key={key} {...props}>{renderedChildren}</sub>;
+      if (tag === 'sup') return <sup key={key} {...props}>{renderedChildren}</sup>;
+      if (tag === 'label') return <label key={key} {...props} htmlFor={element.getAttribute('for') || undefined}>{renderedChildren}</label>;
+      if (tag === 'span') return <span key={key} {...props}>{renderedChildren}</span>;
+      if (tag === 'div') return <div key={key} {...props}>{renderedChildren}</div>;
+      if (tag === 'section') return <section key={key} {...props}>{renderedChildren}</section>;
+      if (tag === 'article') return <article key={key} {...props}>{renderedChildren}</article>;
 
       return <span key={key}>{renderedChildren}</span>;
     };

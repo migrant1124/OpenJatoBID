@@ -21,11 +21,12 @@ interface AppRouterProps {
   activeSection: SectionId;
   developerMode: boolean;
   onDeveloperModeChange: (developerMode: boolean) => void;
+  onLogout: () => void;
   onSectionChange: (section: SectionId) => void;
   registerLeaveGuard?: (guard: ((nextSection?: string) => Promise<boolean>) | null) => void;
 }
 
-function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onSectionChange, registerLeaveGuard }: AppRouterProps) {
+function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogout, onSectionChange, registerLeaveGuard }: AppRouterProps) {
   const activeMenuItem = getAppMenuItemById(activeSection, developerMode);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
@@ -77,7 +78,7 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onSect
     case 'developer-opencode-agent-test':
       return <OpenCodeAgentTestPage />;
     case 'settings':
-      return <SettingsPage onDeveloperModeChange={onDeveloperModeChange} />;
+      return <SettingsPage onDeveloperModeChange={onDeveloperModeChange} onLogout={onLogout} />;
     default:
       return null;
   }

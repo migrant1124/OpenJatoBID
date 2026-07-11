@@ -1,141 +1,34 @@
 const fs = require('node:fs');
 const os = require('node:os');
-const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { dialog } = require('electron');
-const { fetch } = require('undici');
+const { createLanManagementClient } = require('./lanManagementClient.cjs');
+const { normalizeLanServerAddress } = require('./lanServerAddress.cjs');
 const { getLicenseFilePath } = require('../utils/paths.cjs');
 
 const packageJson = require('../../package.json');
 
-const LICENSE_ENDPOINT = process.env.YIBIAO_LICENSE_ENDPOINT || 'https://analytics.agnet.top/license/activate';
-const PROJECT_NAME = packageJson.name || 'jatoaibid';
-const APP_ID = packageJson.build?.appId || 'com.jdt.jatoaibid';
-const PRODUCT_NAME = packageJson.build?.productName || 'Jato AI BID';
 const FINGERPRINT_VERSION = '2026-01';
 const SIGNATURE_ALGORITHM = 'ECDSA_P256_SHA256';
-const OFFLINE_LICENSE_CODE_PREFIX = 'YB-LICENSE-';
+const PROJECT_NAME = packageJson.name || 'jatoaibid';
+const APP_ID = packageJson.build?.appId || 'com.jdt.jatoaibid';
 
-const resourcesDir = path.join(__dirname, '..', 'resources');
-const publicKeyPath = path.join(resourcesDir, 'license-public-key.json');
-const buildAttestationPath = path.join(resourcesDir, 'build-attestation.json');
-
-function canonicalJson(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  }
+function serializeLicensePayload(value) {
+  if (Array.isArray(value)) return `[${value.map(serializeLicensePayload).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${serializeLicensePayload(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-function base64UrlDecode(value) {
-  const text = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
-  const padded = `${text}${'='.repeat((4 - (text.length % 4)) % 4)}`;
-  return Buffer.from(padded, 'base64');
-}
-
-function base64UrlDecodeText(value) {
-  return base64UrlDecode(value).toString('utf-8');
-}
-
-function readJsonFile(filePath) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-function writeJsonAtomic(filePath, data) {
-  let tempFile = '';
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  try {
-    tempFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tempFile, `${JSON.stringify(data, null, 2)}\n`, 'utf-8');
-    fs.renameSync(tempFile, filePath);
-  } catch (error) {
-    if (tempFile) {
-      try { fs.rmSync(tempFile, { force: true }); } catch {}
-    }
-    throw error;
-  }
-}
-
 function hashHex(value) {
-  return crypto.createHash('sha256').update(String(value || ''), 'utf-8').digest('hex');
-}
-
-function normalizeDateText(value) {
-  return String(value || '').slice(0, 10);
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function isExpired(expiresAt) {
-  const date = new Date(expiresAt);
-  return !expiresAt || Number.isNaN(date.getTime()) || date.getTime() <= Date.now();
-}
-
-function getPublicJwk() {
-  const publicJwk = readJsonFile(publicKeyPath);
-  return publicJwk && typeof publicJwk === 'object' ? publicJwk : null;
-}
-
-async function verifyPayload(publicJwk, payload, signature) {
-  if (!publicJwk || !signature) return false;
-  try {
-    const key = await crypto.webcrypto.subtle.importKey(
-      'jwk',
-      { ...publicJwk, key_ops: ['verify'], ext: true },
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['verify'],
-    );
-    return await crypto.webcrypto.subtle.verify(
-      { name: 'ECDSA', hash: 'SHA-256' },
-      key,
-      base64UrlDecode(signature),
-      Buffer.from(canonicalJson(payload), 'utf-8'),
-    );
-  } catch {
-    return false;
-  }
-}
-
-function readBuildAttestation() {
-  const attestation = readJsonFile(buildAttestationPath);
-  if (!attestation || typeof attestation !== 'object') {
-    return null;
-  }
-  return attestation;
-}
-
-async function verifyBuildAttestation(publicJwk, attestation) {
-  if (!attestation) {
-    return { trusted: false, reason: 'build_attestation_missing' };
-  }
-  const { signature, ...payload } = attestation;
-  if (payload.algorithm && payload.algorithm !== SIGNATURE_ALGORITHM) {
-    return { trusted: false, reason: 'build_signature_algorithm_mismatch' };
-  }
-  const trusted = await verifyPayload(publicJwk, payload, signature);
-  return {
-    trusted,
-    reason: trusted ? '' : 'build_signature_invalid',
-  };
+  return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 }
 
 function readWindowsMachineGuid() {
   try {
     const output = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], {
-      encoding: 'utf-8',
-      windowsHide: true,
-      timeout: 3000,
+      encoding: 'utf8', windowsHide: true, timeout: 3000,
     });
     return output.match(/MachineGuid\s+REG_\w+\s+([^\r\n]+)/i)?.[1]?.trim() || '';
   } catch {
@@ -145,10 +38,7 @@ function readWindowsMachineGuid() {
 
 function readMacMachineId() {
   try {
-    const output = execFileSync('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'], {
-      encoding: 'utf-8',
-      timeout: 3000,
-    });
+    const output = execFileSync('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'], { encoding: 'utf8', timeout: 3000 });
     return output.match(/"IOPlatformUUID"\s+=\s+"([^"]+)"/)?.[1]?.trim() || '';
   } catch {
     return '';
@@ -158,7 +48,7 @@ function readMacMachineId() {
 function readLinuxMachineId() {
   for (const filePath of ['/etc/machine-id', '/var/lib/dbus/machine-id']) {
     try {
-      const value = fs.readFileSync(filePath, 'utf-8').trim();
+      const value = fs.readFileSync(filePath, 'utf8').trim();
       if (value) return value;
     } catch {}
   }
@@ -169,16 +59,15 @@ function getOsMachineId() {
   const value = process.platform === 'win32'
     ? readWindowsMachineGuid()
     : process.platform === 'darwin'
-    ? readMacMachineId()
-    : readLinuxMachineId();
+      ? readMacMachineId()
+      : readLinuxMachineId();
   return value || `${process.platform}:${os.hostname()}`;
 }
 
 function getMacFingerprint() {
   const macs = [];
-  const interfaces = os.networkInterfaces();
-  for (const items of Object.values(interfaces)) {
-    for (const item of items || []) {
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const item of interfaces || []) {
       const mac = String(item.mac || '').toLowerCase();
       if (!mac || mac === '00:00:00:00:00:00' || item.internal) continue;
       macs.push(mac);
@@ -188,437 +77,380 @@ function getMacFingerprint() {
 }
 
 function createMachineFingerprintHash({ clientId }) {
-  const raw = PROJECT_NAME
-    + APP_ID
-    + clientId
-    + clientId
-    + getOsMachineId()
-    + getMacFingerprint()
-    + FINGERPRINT_VERSION;
-  return hashHex(raw);
+  return hashHex(`${PROJECT_NAME}${APP_ID}${clientId}${getOsMachineId()}${getMacFingerprint()}${FINGERPRINT_VERSION}`);
 }
 
-function normalizeLicenseEnvelope(value) {
-  if (!value || typeof value !== 'object') {
+function normalizeIdentity(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizePhone(value) {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
+function readJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
     return null;
   }
-  const payload = value.payload && typeof value.payload === 'object' ? value.payload : null;
-  const signature = String(value.signature || '').trim();
-  if (!payload || !signature) {
-    return null;
+}
+
+function writeJsonAtomic(filePath, value) {
+  const tempFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.mkdirSync(require('node:path').dirname(filePath), { recursive: true });
+  try {
+    fs.writeFileSync(tempFile, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    fs.renameSync(tempFile, filePath);
+  } catch (error) {
+    try { fs.rmSync(tempFile, { force: true }); } catch {}
+    throw error;
   }
+}
+
+function normalizeEnvelope(value) {
+  if (!value || typeof value !== 'object' || !value.payload || !value.signature || !value.publicKey) return null;
   return {
-    payload,
-    signature,
+    algorithm: String(value.algorithm || ''),
+    issuerId: String(value.issuerId || ''),
+    publicKey: String(value.publicKey || ''),
+    payload: value.payload,
+    signature: String(value.signature || ''),
     local: value.local && typeof value.local === 'object' ? value.local : {},
   };
 }
 
-function parseLicenseEnvelopeText(value) {
-  const rawText = String(value || '').trim();
-  if (!rawText) {
-    return null;
+function verifyEnvelopeSignature(envelope) {
+  if (envelope.algorithm !== SIGNATURE_ALGORITHM) return false;
+  try {
+    return crypto.verify(
+      'sha256',
+      Buffer.from(serializeLicensePayload(envelope.payload)),
+      envelope.publicKey,
+      Buffer.from(envelope.signature, 'base64'),
+    );
+  } catch {
+    return false;
   }
-
-  const jsonText = rawText.startsWith(OFFLINE_LICENSE_CODE_PREFIX)
-    ? base64UrlDecodeText(rawText.slice(OFFLINE_LICENSE_CODE_PREFIX.length))
-    : rawText;
-  const parsed = JSON.parse(jsonText);
-  return normalizeLicenseEnvelope(parsed?.license || parsed);
 }
 
-function isOfflineLicensePayload(payload) {
-  return payload?.activationMode === 'offline' || payload?.plan === 'offline';
-}
-
-function normalizeBuildSnapshot(build) {
-  const source = build && typeof build === 'object' ? build : {};
-  return {
-    buildId: String(source.buildId || ''),
-    gitCommitSha: String(source.gitCommitSha || ''),
-    builtAt: String(source.builtAt || ''),
-    keyId: String(source.keyId || ''),
-  };
-}
-
-function isLicenseBuildCurrent(payload, buildAttestation) {
-  const licenseBuild = normalizeBuildSnapshot(payload?.build);
-  const currentBuild = normalizeBuildSnapshot(buildAttestation);
-  return licenseBuild.buildId === currentBuild.buildId
-    && licenseBuild.gitCommitSha === currentBuild.gitCommitSha
-    && licenseBuild.builtAt === currentBuild.builtAt
-    && licenseBuild.keyId === currentBuild.keyId;
-}
-
-function createBaseStatus(partial = {}) {
-  return {
-    status: 'missing',
-    plan: 'free',
-    expiresAt: '',
-    licenseExpiresAt: '',
-    licenseStatus: 'missing',
-    activationMode: 'online',
-    sourceTrusted: false,
-    sourceTrustedText: 'false',
-    untrustedReason: partial.untrustedReason || 'license_missing',
-    machineFingerprintHash: '',
-    fingerprintVersion: FINGERPRINT_VERSION,
-    buildTrusted: false,
-    buildChanged: false,
-    buildId: '',
-    keyId: '',
-    lastCheckedAt: nowIso(),
-    config: {
-      freeLicenseDays: 30,
-      expirePopupEnabled: true,
-      expirePopupDismissible: true,
-    },
-    ...partial,
-  };
-}
-
-function createDebugDisabledStatus(partial = {}) {
-  return createBaseStatus({
-    status: 'debug_disabled',
-    plan: 'free',
-    licenseStatus: 'debug_disabled',
-    activationMode: 'debug_disabled',
-    sourceTrusted: true,
-    sourceTrustedText: 'true',
-    untrustedReason: '',
-    buildTrusted: true,
-    buildChanged: false,
-    buildId: 'local-debug',
-    keyId: 'local-debug',
-    config: {
-      freeLicenseDays: 30,
-      expirePopupEnabled: false,
-      expirePopupDismissible: true,
-    },
-    ...partial,
-  });
-}
-
-function statusFromPayload(payload, status, extra = {}) {
-  const activationMode = String(payload.activationMode || (payload.plan === 'offline' ? 'offline' : 'online'));
-  const buildTrusted = extra.buildTrusted !== undefined ? Boolean(extra.buildTrusted) : payload.sourceTrusted === true;
-  const sourceTrusted = extra.forceSourceTrusted !== undefined
-    ? Boolean(extra.forceSourceTrusted)
-    : payload.sourceTrusted === true && buildTrusted;
-  return createBaseStatus({
-    status,
-    plan: String(payload.plan || 'free'),
-    expiresAt: String(payload.expiresAt || ''),
-    licenseExpiresAt: normalizeDateText(payload.expiresAt),
-    licenseStatus: status,
-    activationMode,
-    sourceTrusted,
-    sourceTrustedText: sourceTrusted ? 'true' : 'false',
-    untrustedReason: sourceTrusted ? '' : String(extra.untrustedReason || payload.untrustedReason || 'build_signature_invalid'),
-    machineFingerprintHash: String(payload.machineFingerprintHash || ''),
-    fingerprintVersion: String(payload.fingerprintVersion || FINGERPRINT_VERSION),
-    buildTrusted,
-    buildChanged: activationMode === 'offline' ? false : Boolean(extra.buildChanged),
-    buildId: String(payload.build?.buildId || ''),
-    keyId: String(payload.keyId || payload.build?.keyId || ''),
-    config: {
-      freeLicenseDays: Number(payload.config?.freeLicenseDays || 30),
-      expirePopupEnabled: payload.config?.expirePopupEnabled !== false,
-      expirePopupDismissible: payload.config?.expirePopupDismissible !== false,
-    },
-  });
-}
-
-function createLicenseService({ app, configStore }) {
+function createLicenseService({
+  app,
+  configStore,
+  now = () => new Date(),
+  machineFingerprintFactory,
+  lanClientFactory = (options) => createLanManagementClient(options),
+  debugLicenseDisabled: explicitDebugDisabled,
+}) {
   const licenseFile = getLicenseFilePath(app);
-  const debugLicenseDisabled = !app.isPackaged;
-  let currentStatus = debugLicenseDisabled ? createDebugDisabledStatus() : createBaseStatus();
+  const debugLicenseDisabled = explicitDebugDisabled
+    ?? (!app.isPackaged && process.env.YIBIAO_REQUIRE_LAN_LICENSE !== '1');
+  let currentStatus = null;
+  let verifyPromise = null;
 
   function buildContext() {
     const config = configStore.load();
     const clientId = config.analytics_client_id || '';
-    const clientCreatedAt = config.analytics_created_at || '';
-    const machineFingerprintHash = createMachineFingerprintHash({ clientId });
+    const machineFingerprintHash = machineFingerprintFactory
+      ? machineFingerprintFactory({ clientId })
+      : createMachineFingerprintHash({ clientId });
     return {
+      config,
+      lan: config.lan_management || {},
       clientId,
-      clientCreatedAt,
       machineFingerprintHash,
+    };
+  }
+
+  function createStatus(partial = {}) {
+    const context = partial.context || buildContext();
+    const status = {
+      status: 'missing',
+      plan: 'enterprise_premium',
+      expiresAt: '',
+      licenseExpiresAt: '',
+      licenseStatus: 'missing',
+      activationMode: 'lan',
+      sourceTrusted: false,
+      sourceTrustedText: 'false',
+      untrustedReason: 'license_missing',
+      machineFingerprintHash: context.machineFingerprintHash,
       fingerprintVersion: FINGERPRINT_VERSION,
+      buildTrusted: true,
+      buildChanged: false,
+      buildId: packageJson.version || '',
+      keyId: '',
+      lastCheckedAt: now().toISOString(),
+      lastVerifiedAt: '',
+      offlineValidUntil: '',
+      serverAddress: context.lan.server_address || '',
+      employeeName: context.lan.employee_name || '',
+      employeePhone: context.lan.employee_phone || '',
+      offline: false,
+      serverReachable: false,
+      message: '',
+      config: {
+        freeLicenseDays: 30,
+        expirePopupEnabled: true,
+        expirePopupDismissible: false,
+      },
+      ...partial,
     };
+    delete status.context;
+    currentStatus = status;
+    return status;
   }
 
-  async function evaluateLocalLicense(context) {
-    if (debugLicenseDisabled) {
-      currentStatus = createDebugDisabledStatus();
-      return currentStatus;
-    }
+  function debugStatus() {
+    return createStatus({
+      status: 'debug_disabled',
+      licenseStatus: 'debug_disabled',
+      sourceTrusted: true,
+      sourceTrustedText: 'true',
+      untrustedReason: '',
+      serverReachable: true,
+      config: { freeLicenseDays: 30, expirePopupEnabled: false, expirePopupDismissible: true },
+    });
+  }
 
-    const runtimeContext = context || buildContext();
-    const publicJwk = getPublicJwk();
-    const buildAttestation = readBuildAttestation();
-    const buildTrust = await verifyBuildAttestation(publicJwk, buildAttestation);
-    const envelope = normalizeLicenseEnvelope(readJsonFile(licenseFile));
-    const buildInfo = buildAttestation || {};
-    const base = {
-      machineFingerprintHash: runtimeContext.machineFingerprintHash,
-      buildTrusted: buildTrust.trusted,
-      buildId: String(buildInfo.buildId || ''),
-      keyId: String(buildInfo.keyId || ''),
-      sourceTrusted: buildTrust.trusted,
-      sourceTrustedText: buildTrust.trusted ? 'true' : 'false',
-      untrustedReason: buildTrust.trusted ? '' : buildTrust.reason,
-    };
-
-    if (!envelope) {
-      currentStatus = createBaseStatus({ ...base, status: 'missing', licenseStatus: 'missing' });
-      return currentStatus;
-    }
-
-    if (envelope.local?.invalidated) {
-      currentStatus = statusFromPayload(envelope.payload, 'invalidated', {
-        ...base,
-        forceSourceTrusted: false,
-        untrustedReason: String(envelope.local.invalidatedReason || 'license_invalidated'),
-      });
-      return currentStatus;
-    }
-
-    const signatureValid = await verifyPayload(publicJwk, envelope.payload, envelope.signature);
-    if (!signatureValid) {
-      currentStatus = statusFromPayload(envelope.payload, 'invalid', {
-        ...base,
-        forceSourceTrusted: false,
-        untrustedReason: 'license_signature_invalid',
-      });
-      return currentStatus;
-    }
-
+  function statusFromEnvelope(envelope, context, partial = {}) {
     const payload = envelope.payload;
-    const offlineLicense = isOfflineLicensePayload(payload);
-    const buildChanged = offlineLicense ? false : !isLicenseBuildCurrent(payload, buildAttestation);
-    if (payload.clientId !== runtimeContext.clientId || (payload.machineFingerprintHash && payload.machineFingerprintHash !== runtimeContext.machineFingerprintHash)) {
-      invalidateLocalLicense(envelope, 'license_machine_mismatch');
-      currentStatus = statusFromPayload(payload, 'machine_mismatch', {
-        ...base,
-        buildChanged,
-        forceSourceTrusted: false,
-        untrustedReason: 'license_machine_mismatch',
-      });
-      return currentStatus;
-    }
-
-    if (isExpired(payload.expiresAt)) {
-      currentStatus = statusFromPayload(payload, 'expired', { ...base, buildChanged });
-      return currentStatus;
-    }
-
-    currentStatus = statusFromPayload(payload, 'active', { ...base, buildChanged });
-    return currentStatus;
+    return createStatus({
+      context,
+      status: 'active',
+      licenseStatus: 'active',
+      expiresAt: payload.expiresAt || '',
+      licenseExpiresAt: payload.expiresAt || '',
+      sourceTrusted: true,
+      sourceTrustedText: 'true',
+      untrustedReason: '',
+      keyId: envelope.issuerId,
+      lastVerifiedAt: payload.verifiedAt || '',
+      offlineValidUntil: payload.offlineValidUntil || '',
+      employeeName: payload.name || context.lan.employee_name || '',
+      employeePhone: payload.phone || context.lan.employee_phone || '',
+      ...partial,
+    });
   }
 
-  function invalidateLocalLicense(envelope, reason) {
-    try {
+  async function evaluateLocalLicense(identity) {
+    if (debugLicenseDisabled) return debugStatus();
+    const context = buildContext();
+    const envelope = normalizeEnvelope(readJson(licenseFile));
+    if (!envelope) return createStatus({ context });
+    const pinnedKey = String(context.lan.management_public_key || '');
+    if (!pinnedKey || pinnedKey !== envelope.publicKey || !verifyEnvelopeSignature(envelope)) {
+      return createStatus({ context, status: 'invalid', licenseStatus: 'invalid', untrustedReason: 'management_signature_invalid' });
+    }
+    if (envelope.payload.deviceFingerprint !== context.machineFingerprintHash) {
+      return createStatus({ context, status: 'machine_mismatch', licenseStatus: 'machine_mismatch', untrustedReason: 'device_mismatch' });
+    }
+    if (identity && (
+      normalizeIdentity(identity.name) !== normalizeIdentity(envelope.payload.name)
+      || normalizePhone(identity.phone) !== normalizePhone(envelope.payload.phone)
+    )) {
+      return createStatus({ context, status: 'identity_mismatch', licenseStatus: 'identity_mismatch', sourceTrusted: true, sourceTrustedText: 'true', untrustedReason: '' });
+    }
+    if (envelope.local.serverStatus === 'REVOKED') {
+      return createStatus({ context, status: 'revoked', licenseStatus: 'revoked', sourceTrusted: true, sourceTrustedText: 'true', untrustedReason: '' });
+    }
+    if (envelope.local.serverStatus === 'EXPIRED' || new Date(envelope.payload.expiresAt).getTime() <= now().getTime()) {
+      return createStatus({ context, status: 'expired', licenseStatus: 'expired', sourceTrusted: true, sourceTrustedText: 'true', untrustedReason: '' });
+    }
+    if (new Date(envelope.payload.offlineValidUntil).getTime() <= now().getTime()) {
+      return createStatus({
+        context,
+        status: 'offline_expired',
+        licenseStatus: 'offline_expired',
+        sourceTrusted: true,
+        sourceTrustedText: 'true',
+        untrustedReason: '',
+        lastVerifiedAt: envelope.payload.verifiedAt || '',
+        offlineValidUntil: envelope.payload.offlineValidUntil || '',
+        expiresAt: envelope.payload.expiresAt || '',
+        licenseExpiresAt: envelope.payload.expiresAt || '',
+      });
+    }
+    return statusFromEnvelope(envelope, context, { offline: true, serverReachable: false });
+  }
+
+  function saveLanConfig(context, patch) {
+    configStore.save({
+      ...context.config,
+      lan_management: { ...context.lan, ...patch },
+    });
+  }
+
+  function acceptRemoteLicense(envelopeValue, identity, serverAddress) {
+    const context = buildContext();
+    const envelope = normalizeEnvelope(envelopeValue);
+    if (!envelope || !verifyEnvelopeSignature(envelope)) {
+      return createStatus({ context, status: 'invalid', licenseStatus: 'invalid', untrustedReason: 'management_signature_invalid' });
+    }
+    const pinnedKey = String(context.lan.management_public_key || '');
+    if (pinnedKey && pinnedKey !== envelope.publicKey) {
+      return createStatus({ context, status: 'invalid', licenseStatus: 'invalid', untrustedReason: 'management_public_key_changed' });
+    }
+    if (envelope.payload.deviceFingerprint !== context.machineFingerprintHash
+      || normalizeIdentity(identity.name) !== normalizeIdentity(envelope.payload.name)
+      || normalizePhone(identity.phone) !== normalizePhone(envelope.payload.phone)) {
+      return createStatus({ context, status: 'invalid', licenseStatus: 'invalid', untrustedReason: 'license_identity_mismatch' });
+    }
+    const normalizedServer = normalizeLanServerAddress(serverAddress || context.lan.server_address).serverAddress;
+    const storedEnvelope = {
+      ...envelope,
+      local: { savedAt: now().toISOString(), lastAttemptAt: now().toISOString(), serverStatus: 'ACTIVE' },
+    };
+    writeJsonAtomic(licenseFile, storedEnvelope);
+    saveLanConfig(context, {
+      server_address: normalizedServer,
+      employee_name: normalizeIdentity(identity.name),
+      employee_phone: normalizePhone(identity.phone),
+      management_public_key: envelope.publicKey,
+    });
+    return statusFromEnvelope(storedEnvelope, buildContext(), { offline: false, serverReachable: true });
+  }
+
+  function recordServerStatus(serverStatus) {
+    const envelope = normalizeEnvelope(readJson(licenseFile));
+    if (envelope) {
       writeJsonAtomic(licenseFile, {
         ...envelope,
-        local: {
-          ...(envelope.local || {}),
-          invalidated: true,
-          invalidatedReason: reason,
-          invalidatedAt: nowIso(),
-        },
+        local: { ...envelope.local, serverStatus, lastAttemptAt: now().toISOString() },
       });
-    } catch (error) {
-      console.warn('[license] 写入授权失效状态失败', error?.message || String(error));
     }
   }
 
-  async function refreshLicense() {
-    if (debugLicenseDisabled) {
-      return evaluateLocalLicense();
-    }
+  function remoteStatus(serverStatus, partial = {}) {
+    const map = {
+      REVOKED: 'revoked',
+      EXPIRED: 'expired',
+      DEVICE_MISMATCH: 'machine_mismatch',
+      NOT_AUTHORIZED: 'missing',
+    };
+    const status = map[serverStatus] || 'invalid';
+    return createStatus({
+      status,
+      licenseStatus: status,
+      sourceTrusted: serverStatus !== 'NOT_AUTHORIZED',
+      sourceTrustedText: serverStatus !== 'NOT_AUTHORIZED' ? 'true' : 'false',
+      untrustedReason: '',
+      serverReachable: true,
+      ...partial,
+    });
+  }
 
+  async function testServer(serverAddress) {
+    const normalized = normalizeLanServerAddress(serverAddress);
+    const data = await lanClientFactory({ serverAddress: normalized.serverAddress }).health();
+    return { success: true, serverAddress: normalized.serverAddress, data };
+  }
+
+  async function submitApplication({ name, phone, serverAddress }) {
+    const normalized = normalizeLanServerAddress(serverAddress);
     const context = buildContext();
-    const localStatus = await evaluateLocalLicense(context);
-    if (localStatus.activationMode === 'offline') {
-      return localStatus;
-    }
-
-    const buildAttestation = readBuildAttestation();
-    const body = {
-      projectName: PROJECT_NAME,
-      appId: APP_ID,
-      productName: PRODUCT_NAME,
-      appVersion: app.getVersion(),
+    const input = {
+      name: normalizeIdentity(name),
+      phone: normalizePhone(phone),
+      deviceFingerprint: context.machineFingerprintHash,
+      clientId: context.clientId,
       platform: process.platform,
       arch: process.arch,
-      clientId: context.clientId,
-      clientCreatedAt: context.clientCreatedAt,
-      machineFingerprintHash: context.machineFingerprintHash,
-      fingerprintVersion: context.fingerprintVersion,
-      buildAttestation,
     };
-
-    try {
-      const response = await fetch(LICENSE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.code !== 0 || !data.license) {
-        throw new Error(data?.message || `授权刷新失败：${response.status}`);
-      }
-      const envelope = normalizeLicenseEnvelope(data.license);
-      if (!envelope) {
-        throw new Error('授权服务返回的数据格式不完整');
-      }
-      writeJsonAtomic(licenseFile, {
-        ...envelope,
-        local: {
-          refreshedAt: nowIso(),
-        },
-      });
-      return evaluateLocalLicense(context);
-    } catch (error) {
-      const localStatus = await evaluateLocalLicense(context);
-      currentStatus = {
-        ...localStatus,
-        status: localStatus.status === 'active' ? localStatus.status : 'refresh_failed',
-        licenseStatus: localStatus.status === 'active' ? localStatus.licenseStatus : 'refresh_failed',
-        refreshError: error?.message || String(error),
-        lastCheckedAt: nowIso(),
-      };
-      return currentStatus;
-    }
+    const application = await lanClientFactory({ serverAddress: normalized.serverAddress }).submitApplication(input);
+    saveLanConfig(context, {
+      server_address: normalized.serverAddress,
+      employee_name: input.name,
+      employee_phone: input.phone,
+      application_id: application.id,
+    });
+    return application;
   }
 
-  async function refreshOnStartup() {
-    const status = await evaluateLocalLicense();
-    if (status.activationMode === 'offline') {
-      return status;
-    }
-    if (status.status === 'active' && status.buildChanged) {
-      return refreshLicense();
-    }
-    if (status.status === 'active' || status.status === 'machine_mismatch' || status.status === 'invalidated') {
-      return status;
-    }
-    return refreshLicense();
-  }
-
-  async function activateOfflineLicenseEnvelope(envelope) {
-    if (debugLicenseDisabled) {
-      return {
-        success: false,
-        message: '开发调试模式不需要离线激活授权',
-        status: await evaluateLocalLicense(),
-      };
-    }
-
-    const normalizedEnvelope = normalizeLicenseEnvelope(envelope);
-    if (!normalizedEnvelope) {
-      throw new Error('离线授权数据格式不完整');
-    }
-
-    const publicJwk = getPublicJwk();
-    const signatureValid = await verifyPayload(publicJwk, normalizedEnvelope.payload, normalizedEnvelope.signature);
-    if (!signatureValid) {
-      throw new Error('离线授权签名无效');
-    }
-
+  async function getApplicationStatus() {
     const context = buildContext();
-    const payload = normalizedEnvelope.payload;
-    if (payload.clientId !== context.clientId) {
-      throw new Error('离线授权不属于当前客户端');
+    if (!context.lan.server_address || !context.lan.application_id) throw new Error('APPLICATION_NOT_CONFIGURED');
+    const application = await lanClientFactory({ serverAddress: context.lan.server_address })
+      .getApplication(context.lan.application_id);
+    let runtimeStatus = null;
+    if (application.status === 'APPROVED' && application.license) {
+      runtimeStatus = acceptRemoteLicense(application.license, {
+        name: context.lan.employee_name,
+        phone: context.lan.employee_phone,
+      }, context.lan.server_address);
     }
-    if (payload.machineFingerprintHash && payload.machineFingerprintHash !== context.machineFingerprintHash) {
-      throw new Error('离线授权不属于当前设备');
-    }
-    if (isExpired(payload.expiresAt)) {
-      throw new Error('离线授权已过期');
-    }
-
-    writeJsonAtomic(licenseFile, {
-      ...normalizedEnvelope,
-      local: {
-        activatedAt: nowIso(),
-        activationMode: 'offline',
-      },
-    });
-    const status = await evaluateLocalLicense(context);
-    return {
-      success: status.status === 'active',
-      message: status.status === 'active' ? '离线授权已激活' : '离线授权已导入，但授权状态异常',
-      status,
-    };
+    return { ...application, runtimeStatus };
   }
 
-  async function activateOfflineLicenseText(value) {
-    let envelope;
+  async function login({ name, phone }) {
+    if (debugLicenseDisabled) return debugStatus();
+    const context = buildContext();
+    const identity = { name: normalizeIdentity(name), phone: normalizePhone(phone) };
+    if (!context.lan.server_address) return evaluateLocalLicense(identity);
     try {
-      envelope = parseLicenseEnvelopeText(value);
-    } catch {
-      throw new Error('离线授权码格式无效');
+      const result = await lanClientFactory({ serverAddress: context.lan.server_address }).login({
+        ...identity,
+        deviceFingerprint: context.machineFingerprintHash,
+        clientId: context.clientId,
+      });
+      if (result.status === 'ACTIVE' && result.license) {
+        return acceptRemoteLicense(result.license, identity, context.lan.server_address);
+      }
+      if (['REVOKED', 'EXPIRED', 'DEVICE_MISMATCH'].includes(result.status)) recordServerStatus(result.status);
+      return remoteStatus(result.status);
+    } catch (error) {
+      const localStatus = await evaluateLocalLicense(identity);
+      return { ...localStatus, offline: localStatus.status === 'active', serverReachable: false, refreshError: error.message };
     }
-    return activateOfflineLicenseEnvelope(envelope);
   }
 
-  async function importOfflineLicenseFile() {
-    if (debugLicenseDisabled) {
-      return {
-        success: false,
-        message: '开发调试模式不需要离线激活授权',
-        status: await evaluateLocalLicense(),
-      };
+  async function performVerify() {
+    if (debugLicenseDisabled) return debugStatus();
+    const context = buildContext();
+    const envelope = normalizeEnvelope(readJson(licenseFile));
+    if (!envelope || !context.lan.server_address) return evaluateLocalLicense();
+    try {
+      const result = await lanClientFactory({ serverAddress: context.lan.server_address }).verify({
+        licenseId: envelope.payload.licenseId,
+        deviceFingerprint: context.machineFingerprintHash,
+      });
+      if (result.status === 'ACTIVE' && result.license) {
+        return acceptRemoteLicense(result.license, {
+          name: envelope.payload.name,
+          phone: envelope.payload.phone,
+        }, context.lan.server_address);
+      }
+      if (['REVOKED', 'EXPIRED', 'DEVICE_MISMATCH'].includes(result.status)) recordServerStatus(result.status);
+      return remoteStatus(result.status);
+    } catch (error) {
+      const localStatus = await evaluateLocalLicense();
+      return { ...localStatus, offline: localStatus.status === 'active', serverReachable: false, refreshError: error.message };
     }
+  }
 
-    const result = await dialog.showOpenDialog({
-      title: '选择离线授权文件',
-      properties: ['openFile'],
-      filters: [
-        { name: 'Jato AI BID 离线授权文件', extensions: ['json', 'license', 'txt'] },
-        { name: '所有文件', extensions: ['*'] },
-      ],
-    });
-    if (result.canceled || result.filePaths.length === 0) {
-      return {
-        success: false,
-        canceled: true,
-        message: '已取消选择',
-        status: await evaluateLocalLicense(),
-      };
-    }
-
-    const content = fs.readFileSync(result.filePaths[0], 'utf-8');
-    return activateOfflineLicenseText(content);
+  function verify() {
+    if (verifyPromise) return verifyPromise;
+    verifyPromise = performVerify().finally(() => { verifyPromise = null; });
+    return verifyPromise;
   }
 
   return {
-    getLicenseFilePath() {
-      return licenseFile;
-    },
-    getBuildAttestation() {
-      return readBuildAttestation();
-    },
-    getStatus() {
-      return evaluateLocalLicense();
-    },
-    refresh() {
-      return refreshLicense();
-    },
-    importOfflineFile() {
-      return importOfflineLicenseFile();
-    },
-    activateOfflineCode(code) {
-      return activateOfflineLicenseText(code);
-    },
-    refreshOnStartup,
-    getCurrentStatus() {
-      return currentStatus;
-    },
+    getLicenseFilePath: () => licenseFile,
+    getStatus: () => evaluateLocalLicense(),
+    getCurrentStatus: () => currentStatus,
+    getApplicationStatus,
+    login,
+    refresh: verify,
+    refreshOnStartup: verify,
+    submitApplication,
+    testServer,
+    verify,
   };
 }
 
 module.exports = {
   createLicenseService,
+  createMachineFingerprintHash,
+  serializeLicensePayload,
+  verifyEnvelopeSignature,
 };
