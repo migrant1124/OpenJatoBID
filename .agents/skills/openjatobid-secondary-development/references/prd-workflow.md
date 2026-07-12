@@ -8,6 +8,17 @@ Use this reference only to define or revise product requirements. This phase may
 
 Produce a decision-ready PRD that states what outcome is required and how acceptance will be judged. The PRD is the product source of truth; it is not an implementation diary.
 
+## Depth Selection
+
+Keep discovery and behavior specification inside the PRD workflow instead of creating separate modes by default:
+
+- For a narrow change, use the confirmed request or a compact PRD without requirement IDs.
+- For a medium or large initiative, complete discovery first, then add observable behavior, boundaries, failure states, and acceptance criteria to the PRD.
+- Add stable IDs such as `REQ-001` only when requirements must trace across plans, files, tests, or several releases.
+- Create a separate behavior-specification artifact only when the PRD would otherwise become ambiguous or several systems consume the same contract.
+
+Do not force a full discovery sequence, separate Spec, or traceability matrix onto a narrow defect, environment repair, or already-approved task.
+
 ## Intake
 
 Start from supplied context and existing artifacts. Do not repeat questions already answered in the request, screenshots, prior PRDs, or confirmed decisions.
@@ -50,6 +61,8 @@ Use the smallest structure that makes the work unambiguous. For a major initiati
 12. Open questions and assumptions to validate.
 
 For a small change, collapse sections rather than filling a large template with generic prose.
+
+When requirement IDs are justified, assign them only to independently testable product behaviors and keep them stable across revisions. Do not number headings or explanatory prose merely to create the appearance of traceability.
 
 ## Requirement Quality
 
@@ -96,5 +109,6 @@ A PRD is ready for approval only when:
 - assumptions are visible;
 - unresolved choices are either answered or marked as blockers;
 - no technical plan is masquerading as a product decision.
+- requirement IDs, when used, are unique and map to observable acceptance criteria.
 
 End the phase by summarizing confirmed decisions, open questions, and the exact PRD path. Wait for explicit approval before entering technical planning when the user requested staged delivery.

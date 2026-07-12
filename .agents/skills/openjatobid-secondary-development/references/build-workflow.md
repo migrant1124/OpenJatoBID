@@ -17,7 +17,7 @@ Use this reference for approved implementation or for diagnosis and repair of an
 Before editing:
 
 1. Re-read the newest user request and active task or acceptance criterion.
-2. Read `AGENTS.md`; read `client/开发说明.md` before touching `client/`.
+2. Read `AGENTS.md`; before touching `client/`, read root `开发说明.md`, or `client/开发说明.md` in an older checkout that still uses that location.
 3. Inspect `git status --short` and preserve unrelated user changes.
 4. Read the relevant code path, tests, configuration, and logs.
 5. Establish baseline behavior or a reproducible failure.
@@ -33,7 +33,7 @@ For each approved increment:
 2. **Change one behavior.** Implement the smallest coherent vertical slice.
 3. **Verify immediately.** Run the most focused valid check for the changed layer.
 4. **Inspect the diff.** Remove accidental formatting, generated debris, and unrelated edits.
-5. **Update execution state.** Mark the applicable task or evidence record without rewriting completed user work.
+5. **Update execution state.** Mark the applicable item in `tasks/todo.md`, the sole execution-state source, without rewriting completed user work.
 6. **Continue only if needed.** Do not expand into adjacent improvements.
 
 A task does not require a commit to count as an increment. Buildability, focused evidence, and a reviewable diff are the checkpoints.
@@ -113,6 +113,8 @@ Pause implementation and report the blocker when:
 - verification repeatedly fails for a reason outside the authorized scope.
 
 Do not call ordinary complexity or an incomplete first attempt a blocker.
+
+When approved behavior, architecture, or acceptance criteria change during implementation, route the request through `change` mode and stop before source edits until the affected decision is approved.
 
 ## Handoff
 

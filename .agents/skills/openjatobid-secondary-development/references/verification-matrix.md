@@ -17,11 +17,16 @@ For one-off local renderer debugging or acceptance checks, prefer Chrome DevTool
 
 Use Playwright for reusable E2E coverage, saved regression scripts, CI-aligned browser tests, or long multi-step flows that should be replayed. If Chrome DevTools MCP is unavailable in the current task, record that limitation and use the next smallest valid verification method.
 
+## Review Versus Verification
+
+Use `review` to compare approved intent, plan, diff, tests, and evidence without making fixes. Use `verify` to run checks and collect evidence. A review may identify missing verification; verification does not replace a requirement or code review.
+
 ## Matrix
 
 | Changed surface | Minimum focused check | Additional proof when behavior is user-visible or cross-process |
 | --- | --- | --- |
-| Skill or Markdown workflow | Current Codex `quick_validate.py`; local relative-link check | Invoke representative modes and inspect routing/output boundaries |
+| Skill or Markdown workflow | Current Codex `quick_validate.py`; local relative-link check | Invoke representative `prd`, `change`, `build`, `review`, and `verify` modes and inspect routing/output boundaries |
+| Codex custom agent TOML | Parse TOML; confirm required fields and unique agent name | Confirm reviewer is read-only and perform a representative spawn when subagents are available |
 | Client Renderer or TypeScript | `cd client; npm run build` | `npm run dev`, HTTP 200 on `127.0.0.1:5173`, Chrome DevTools MCP snapshot/console/network inspection, Electron window when Electron-specific behavior matters |
 | Client Electron Main, preload, or IPC | `node --check` for every touched `.cjs`; `cd client; npm run build` | `npm run dev`, exercise the IPC/window flow, inspect `.tmp` and app logs, use Chrome DevTools MCP for renderer-visible effects |
 | Existing Client Node test | `node --test <specific-test-file.cjs>` | Run neighboring service tests when a shared contract changed |

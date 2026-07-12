@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenJatoBID 二次开发"
-  short_description: "从 PRD、技术计划到构建、DevTools 调试与验收的项目工作流"
-  default_prompt: "使用 $openjatobid-secondary-development 按当前阶段推进 OpenJatoBID 二次开发；本地页面调试优先用 Chrome DevTools MCP，并在决策门和验证门停下。"

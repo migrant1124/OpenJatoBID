@@ -10,7 +10,7 @@
 
 ## Scope
 
-Use this reference to convert confirmed requirements into an implementation-ready plan. Planning may create or revise PRDs, ADRs, API contracts, design documents, and task files. It does not authorize product source-code changes.
+Use this reference to convert confirmed requirements into an implementation-ready plan. Planning may create or revise ADRs, API contracts, design documents, and task files. It may report a PRD gap, but it must route product-behavior changes back through `prd` or `change` instead of revising the approved PRD in place. Planning does not authorize product source-code changes.
 
 ## Preconditions
 
@@ -38,6 +38,8 @@ Keep each decision in one place:
 | Current execution state | `tasks/todo.md` |
 
 Link between artifacts; do not copy whole decision tables into every file.
+
+Treat `tasks/todo.md` as the sole execution-state source. Do not create `state.yaml`, `audit.jsonl`, or another progress ledger unless the user has approved a deterministic workflow engine that consumes it.
 
 ## Planning Steps
 
@@ -74,6 +76,7 @@ Avoid horizontal plans such as “build all types, then all services, then all U
 Each task should contain:
 
 - stable ID and concise title;
+- the exact approved requirement or acceptance criterion it satisfies;
 - objective and user-visible result;
 - in-scope files or ownership areas;
 - dependencies and prerequisites;
@@ -83,6 +86,8 @@ Each task should contain:
 - size or risk marker when useful.
 
 Do not require a Git commit per task. Commits, branches, pushes, and releases remain user-authorized operations.
+
+When the PRD uses requirement IDs, carry those IDs into the affected tasks and verification evidence. When it does not, cite the exact PRD section or confirmed acceptance criterion instead of inventing IDs during planning.
 
 ### 5. Add Decision Gates
 

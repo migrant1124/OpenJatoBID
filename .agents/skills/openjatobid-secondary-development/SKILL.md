@@ -1,13 +1,13 @@
 ---
 name: openjatobid-secondary-development
-description: Guide OpenJatoBID secondary development from PRD and technical planning through scoped implementation, browser/Electron debugging, Chrome DevTools MCP inspection, verification, and handoff. Use for project-specific requirements, plans, builds, regressions, local runtime checks, or acceptance work in this repository.
+description: Run OpenJatoBID secondary development through PRD, planning, build/debug, change control, Chrome DevTools MCP inspection, review, verification, and handoff. Use for project requirements, implementation, regressions, scope changes, runtime checks, or acceptance.
 ---
 
 # OpenJatoBID Secondary Development
 
 ## Purpose
 
-Run OpenJatoBID secondary-development work through one project-specific workflow instead of stacking generic product and engineering playbooks. Preserve explicit phase boundaries, load only the guidance needed for the current phase, and require concrete evidence before calling work complete.
+Run OpenJatoBID secondary-development work through one project-specific workflow instead of stacking generic product and engineering playbooks. Preserve explicit phase boundaries, load only the guidance needed for the current phase, keep project state in one authoritative task file, and require concrete evidence before calling work complete.
 
 ## Instruction Precedence
 
@@ -15,7 +15,7 @@ Apply instructions in this order:
 
 1. The user's current request and explicit phase boundary.
 2. The nearest applicable `AGENTS.md`.
-3. `client/开发说明.md` when work touches `client/`.
+3. The authoritative development guide when work touches `client/`: root `开发说明.md` in the current tree, or `client/开发说明.md` in an older checkout that still uses that location.
 4. Confirmed PRDs, ADRs, API contracts, design baselines, and task plans.
 5. This skill and its references.
 
@@ -44,10 +44,20 @@ Choose exactly one active mode unless the user explicitly requests the full work
 | `plan` | Converting an approved PRD into architecture and tasks | `references/planning-workflow.md` |
 | `build` | Implementing an approved task or plan | `references/build-workflow.md`, then `references/verification-matrix.md` |
 | `debug` | Diagnosing and fixing an observed failure | `references/build-workflow.md`, then `references/verification-matrix.md` |
-| `verify` | Testing, reviewing, or collecting acceptance evidence only | `references/verification-matrix.md` |
+| `change` | Assessing a scope or behavior change after planning or implementation began | `references/change-workflow.md` |
+| `review` | Reviewing requirement, plan, implementation, and evidence consistency without fixing | `references/review-workflow.md`, then `references/verification-matrix.md` when evidence must be checked |
+| `verify` | Running checks or collecting acceptance evidence only | `references/verification-matrix.md` |
 | `full` | Running PRD through delivery with explicit approval gates | Load each reference only when its phase begins |
 
 Do not force a PRD for a narrow defect, environment repair, read-only review, or already-approved task. Do not enter `build` merely because a PRD or plan was requested.
+
+For a status-only request, do not create another mode or state file. Read `tasks/todo.md` and the authoritative phase artifacts, then report the current stage, approved and pending items, blockers, residual risks, and next valid action without modifying product source.
+
+## State And Traceability
+
+Use `tasks/todo.md` as the sole execution-state source. Do not add a parallel `state.yaml`, `audit.jsonl`, progress database, or duplicate checklist unless the user explicitly approves a deterministic workflow engine that consumes it.
+
+Keep stable task IDs such as `T12` for planned work. Add requirement IDs such as `REQ-001` only when a medium or large change must trace across multiple artifacts. Do not require requirement IDs, a separate Spec, or a traceability matrix for a narrow defect, environment repair, or single-artifact edit.
 
 ## Browser Debugging Tool Choice
 
@@ -72,7 +82,7 @@ For review, explanation, status, planning, and diagnosis requests, remain read-o
 
 ### 2. Product Definition
 
-Use `prd` mode to capture user problem, target users, desired behavior, scope, exclusions, acceptance criteria, risks, and unresolved product decisions. Keep implementation structure, file lists, API shapes, and task ordering out of the PRD unless the user explicitly requests a combined artifact.
+Use `prd` mode to capture user problem, target users, desired behavior, scope, exclusions, acceptance criteria, risks, and unresolved product decisions. Treat discovery as the opening part of this mode. Add a behavior-specification section or requirement IDs only when the initiative is large enough to need cross-artifact traceability. Keep implementation structure, file lists, API shapes, and task ordering out of the PRD unless the user explicitly requests a combined artifact.
 
 Stop at the PRD approval gate. Do not write source code.
 
@@ -82,15 +92,21 @@ Use `plan` mode only after requirements are sufficiently confirmed. Inspect the 
 
 Stop at the plan approval gate. Do not write source code.
 
-### 4. Build Or Debug
+### 4. Change Control
+
+Use `change` mode when an approved requirement, plan, or in-progress build receives a material scope or behavior change. Identify the earliest affected phase, map impacted artifacts and tests, and stop at the change decision gate before editing product source. Keep routine clarifications inside the current phase when they do not alter approved behavior.
+
+### 5. Build Or Debug
 
 Use `build` or `debug` mode for the smallest approved vertical slice. Follow existing patterns, keep every edit traceable to the request, and verify after each behaviorally meaningful increment. Do not add speculative abstractions, dependencies, feature flags, security layers, or fallback paths.
 
 Do not create branches, commits, tags, pushes, merges, rebases, or resets unless the user's current request explicitly authorizes that exact Git action.
 
-### 5. Verify And Handoff
+### 6. Verify, Review, And Handoff
 
 Select checks from `references/verification-matrix.md` according to the files and behavior changed. Record commands, exit status, runtime evidence, and unresolved warnings. A green build alone is not runtime proof when the task involves Electron, IPC, browser UI, OpenCode, networking, or packaging.
+
+After the required evidence exists, use `review` mode for a read-only, findings-first comparison of the approved requirement, plan, current diff, tests, and runtime evidence. A review of pre-existing work may begin immediately, but it must report missing evidence rather than treating an unverified claim as passed. Use the `openjatobid_reviewer` custom agent for substantial final, release, cross-process, security-sensitive, or explicitly requested independent reviews when that agent is available. If it is unavailable, state that the review is not context-independent and continue in the main task without claiming otherwise.
 
 Finish with:
 
@@ -110,6 +126,7 @@ Finish with:
 - Diagnose from code, logs, process state, and reproducible behavior. Do not guess a root cause.
 - Reuse project components, services, stores, prompts, styles, and IPC patterns before adding new abstractions.
 - Do not hide errors, weaken checks, delete failing tests, or redefine success to make verification pass.
+- Keep `tasks/todo.md` authoritative for execution state; update it instead of creating a second state ledger.
 
 ## Output Locations
 
@@ -121,6 +138,8 @@ Finish with:
 | Design baseline | `docs/secondary-development/design/<topic>.md` |
 | Implementation plan | `tasks/plan.md` |
 | Task status | `tasks/todo.md` |
+| Material change record | `docs/secondary-development/changes/<topic>-change.md` only when several authoritative artifacts are affected |
+| Substantial review report | `docs/secondary-development/reviews/<topic>-review.md` |
 | Test or acceptance report | `docs/secondary-development/test-reports/<topic>-test-report.md` |
 
 Reuse an existing authoritative artifact instead of creating a competing source of truth.
@@ -131,6 +150,8 @@ Reuse an existing authoritative artifact instead of creating a competing source 
 - `$openjatobid-secondary-development plan：把已确认的 PRD 转成 ADR、任务计划和验收门。`
 - `$openjatobid-secondary-development build：只执行 tasks/plan.md 的 T12，并完成对应验证。`
 - `$openjatobid-secondary-development debug：排查 Electron 登录后白屏，先复现和定位，再修复。`
+- `$openjatobid-secondary-development change：评估新增需求会影响哪些已批准文档和任务，先不要改代码。`
+- `$openjatobid-secondary-development review：只读审查本轮实现与 PRD、计划和测试是否一致。`
 - `$openjatobid-secondary-development verify：只验证 OpenCode Agent 启动链路，不修改源码。`
 
 ## References
@@ -138,4 +159,6 @@ Reuse an existing authoritative artifact instead of creating a competing source 
 - Read `references/prd-workflow.md` only for `prd` or the PRD phase of `full`.
 - Read `references/planning-workflow.md` only for `plan` or the planning phase of `full`.
 - Read `references/build-workflow.md` only for `build`, `debug`, or the implementation phase of `full`.
+- Read `references/change-workflow.md` only for `change` or when a material mid-flow change is raised during `full`.
+- Read `references/review-workflow.md` only for `review` or the review phase of `full`.
 - Read `references/verification-matrix.md` whenever verification or acceptance evidence is required.
