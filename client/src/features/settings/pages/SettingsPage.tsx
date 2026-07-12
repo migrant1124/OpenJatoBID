@@ -3,7 +3,7 @@ import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { FloatingToolbar, InputWithAction, useToast } from '../../../shared/ui';
 import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
-import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, TextModelConfig, TextModelProfiles, TextModelProvider, UpdateChannel } from '../../../shared/types';
+import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, TextModelConfig, TextModelProfiles, TextModelProvider, UpdateChannel } from '../../../shared/types';
 import type { SettingsPageState } from '../types';
 import logoUrl from '../../../../assets/logo.png';
 
@@ -71,7 +71,6 @@ const textModelProviders: Array<{ value: TextModelProvider; label: string }> = [
   { value: 'jinlong', label: '金龙中转站' },
   { value: 'volcengine', label: '火山方舟' },
   { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'longcat', label: '龙猫' },
   { value: 'agnes', label: 'Agnes AI' },
   { value: 'custom', label: '自定义' },
 ];
@@ -84,7 +83,7 @@ const aiRequestModeOptions: Array<{ value: AiRequestMode; label: string }> = [
 const DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT = 400000;
 const DEFAULT_TEXT_CONCURRENCY_LIMIT = 10;
 
-const textProviderDefaults: TextModelProfiles = {
+const textProviderDefaults: Record<ConfiguredTextModelProvider, TextModelConfig> = {
   jinlong: { api_key: '', base_url: 'https://jlaudeapi.com/v1', model_name: 'gpt-3.5-turbo', context_length_limit: DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT, concurrency_limit: DEFAULT_TEXT_CONCURRENCY_LIMIT, request_mode: 'stream' },
   volcengine: { api_key: '', base_url: 'https://ark.cn-beijing.volces.com/api/v3', model_name: '', context_length_limit: DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT, concurrency_limit: DEFAULT_TEXT_CONCURRENCY_LIMIT, request_mode: 'stream' },
   deepseek: { api_key: '', base_url: 'https://api.deepseek.com', model_name: '', context_length_limit: DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT, concurrency_limit: DEFAULT_TEXT_CONCURRENCY_LIMIT, request_mode: 'stream' },
@@ -93,11 +92,10 @@ const textProviderDefaults: TextModelProfiles = {
   custom: { api_key: '', base_url: '', model_name: '', context_length_limit: DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT, concurrency_limit: DEFAULT_TEXT_CONCURRENCY_LIMIT, request_mode: 'stream' },
 };
 
-const textProviderApiKeyUrls: Partial<Record<TextModelProvider, string>> = {
+const textProviderApiKeyUrls: Partial<Record<ConfiguredTextModelProvider, string>> = {
   jinlong: 'https://jlaudeapi.com/sign-up?aff=smj',
   volcengine: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
   deepseek: 'https://platform.deepseek.com/api_keys',
-  longcat: 'https://longcat.chat/platform/api_keys',
   agnes: 'https://platform.agnes-ai.com/settings/apiKeys',
 };
 
@@ -134,7 +132,7 @@ function parseTextConcurrencyLimitInput(value: string): number | '' {
   return Number.isFinite(number) ? Math.max(1, Math.round(number)) : '';
 }
 
-function normalizeTextModelProfile(provider: TextModelProvider, profile?: Partial<TextModelConfig>): TextModelConfig {
+function normalizeTextModelProfile(provider: ConfiguredTextModelProvider, profile?: Partial<TextModelConfig>): TextModelConfig {
   const defaults = textProviderDefaults[provider];
   const baseUrl = provider === 'custom' ? profile?.base_url ?? defaults.base_url : defaults.base_url;
   return {
@@ -147,11 +145,20 @@ function normalizeTextModelProfile(provider: TextModelProvider, profile?: Partia
   };
 }
 
-function normalizeTextModelProfiles(profiles?: Partial<TextModelProfiles>): TextModelProfiles {
-  return textModelProviders.reduce((nextProfiles, provider) => ({
-    ...nextProfiles,
+function normalizeTextModelProfiles(
+  profiles?: Partial<Record<ConfiguredTextModelProvider, TextModelConfig>>,
+  activeProvider?: ConfiguredTextModelProvider,
+): TextModelProfiles {
+  const nextProfiles = textModelProviders.reduce((normalizedProfiles, provider) => ({
+    ...normalizedProfiles,
     [provider.value]: normalizeTextModelProfile(provider.value, profiles?.[provider.value]),
   }), {} as TextModelProfiles);
+
+  if (activeProvider === 'longcat' || profiles?.longcat) {
+    nextProfiles.longcat = normalizeTextModelProfile('longcat', profiles?.longcat);
+  }
+
+  return nextProfiles;
 }
 
 function textProfileFromState(textModel: SettingsPageState['textModel']): TextModelConfig {
@@ -550,7 +557,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         return;
       }
 
-      const textModelProfiles = normalizeTextModelProfiles(config.text_model_profiles);
+      const textModelProfiles = normalizeTextModelProfiles(config.text_model_profiles, config.text_model_provider);
       const activeTextProfile = normalizeTextModelProfile(config.text_model_provider, textModelProfiles[config.text_model_provider]);
       const imageModelProfiles = normalizeImageModelProfiles(config.image_model_profiles);
       const activeImageProfile = normalizeImageModelProfile(config.image_model.provider, config.image_model);
@@ -598,7 +605,8 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
 
   const createClientConfig = (): ClientConfig => {
     const textModelProfiles = getCurrentTextModelProfiles();
-    const activeTextProfile = textModelProfiles[state.textModel.provider];
+    const activeTextProfile = textModelProfiles[state.textModel.provider]
+      || normalizeTextModelProfile(state.textModel.provider);
     const imageModelProfiles = getCurrentImageModelProfiles();
     const activeImageProfile = imageModelProfiles[state.imageModel.provider];
 
@@ -1161,7 +1169,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         profiles: getCurrentTextModelProfiles(),
       }) !== JSON.stringify({
         provider: savedConfig.text_model_provider,
-        profiles: normalizeTextModelProfiles(savedConfig.text_model_profiles),
+        profiles: normalizeTextModelProfiles(savedConfig.text_model_profiles, savedConfig.text_model_provider),
       });
     }
 
@@ -1483,6 +1491,9 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
                 value={state.textModel.provider}
                 onChange={(event) => updateTextModelProvider(event.target.value as TextModelProvider)}
               >
+                {state.textModel.provider === 'longcat' && (
+                  <option value="longcat" disabled>龙猫（历史配置）</option>
+                )}
                 {textModelProviders.map((provider) => (
                   <option value={provider.value} key={provider.value}>{provider.label}</option>
                 ))}

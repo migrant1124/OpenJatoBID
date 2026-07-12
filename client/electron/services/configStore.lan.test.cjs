@@ -32,3 +32,46 @@ test('persists LAN management identity without replacing the existing analytics 
   });
   assert.equal(saved.analytics_client_id, initial.analytics_client_id);
 });
+
+test('does not create a LongCat profile for new configurations', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-client-config-'));
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const config = createConfigStore({ getPath: () => userData }).load();
+
+  assert.equal(config.text_model_provider, 'jinlong');
+  assert.equal(Object.hasOwn(config.text_model_profiles, 'longcat'), false);
+});
+
+test('preserves an existing LongCat provider as a legacy configuration', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-client-config-'));
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const store = createConfigStore({ getPath: () => userData });
+  const initial = store.load();
+
+  store.save({
+    ...initial,
+    text_model_provider: 'longcat',
+    text_model_profiles: {
+      ...initial.text_model_profiles,
+      longcat: {
+        api_key: 'legacy-key',
+        base_url: 'https://api.longcat.chat/openai/v1',
+        model_name: 'legacy-model',
+        context_length_limit: 128000,
+        concurrency_limit: 3,
+        request_mode: 'stream',
+      },
+    },
+    api_key: 'legacy-key',
+    base_url: 'https://api.longcat.chat/openai/v1',
+    model_name: 'legacy-model',
+    context_length_limit: 128000,
+    concurrency_limit: 3,
+    request_mode: 'stream',
+  });
+
+  const saved = store.load();
+  assert.equal(saved.text_model_provider, 'longcat');
+  assert.equal(saved.text_model_profiles.longcat.model_name, 'legacy-model');
+  assert.equal(saved.text_model_profiles.longcat.concurrency_limit, 3);
+});
