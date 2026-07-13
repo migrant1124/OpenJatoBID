@@ -11,6 +11,7 @@ const { assertSupportedMermaidSyntax } = require('../utils/mermaidPolicy.cjs');
 const { getGeneratedImagesDir, getImportedImagesDir } = require('../utils/paths.cjs');
 const { REMOTE_IMAGE_RETRY_ATTEMPTS, REMOTE_IMAGE_RETRY_DELAY_MS } = require('../utils/remoteImageRetry.cjs');
 const { renderMarkdownHtml } = require('../utils/renderMarkdownHtml.cjs');
+const { deriveResponseCompletion } = require('./contentResponseModes.cjs');
 const {
   AlignmentType,
   BorderStyle,
@@ -1004,10 +1005,37 @@ function shouldInsertSpaceAfterNumber(prefix) {
   return !/[、，。；：）)】\]》〉]$/.test(prefix);
 }
 
-function formatOutlineTitle(id, title, headingStyle) {
-  const prefix = formatOutlineNumber(id, headingStyle);
-  if (!prefix) return String(title || '');
-  return `${prefix}${shouldInsertSpaceAfterNumber(prefix) ? ' ' : ''}${title || ''}`;
+function stripLeadingOutlineNumber(title, prefixes) {
+  let value = String(title || '').trim();
+  const orderedPrefixes = [...new Set(prefixes.map((prefix) => String(prefix || '').trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+  for (const prefix of orderedPrefixes) {
+    const normalizedPrefix = String(prefix || '').trim();
+    if (value === normalizedPrefix) return '';
+    if (!value.startsWith(normalizedPrefix)) continue;
+    const remainder = value.slice(normalizedPrefix.length);
+    const hasBoundary = /^[\s、，。；：:．.)）】\]-]/.test(remainder)
+      || /[.、，。；：:．.)）】\]-]/.test(normalizedPrefix);
+    if (hasBoundary) {
+      value = remainder.replace(/^[\s、，。；：:．.)）】\]-]+/, '').trim();
+    }
+  }
+  return value;
+}
+
+function formatOutlineTitle(item, headingStyle, options = {}) {
+  const numberingPolicy = item?.numbering_policy || 'auto';
+  const autoPrefix = formatOutlineNumber(item?.id, headingStyle);
+  const sourcePrefix = String(item?.source_number || '').trim();
+  const title = stripLeadingOutlineNumber(item?.title, [sourcePrefix, autoPrefix, item?.id]);
+  if (options.omitNumbering || numberingPolicy === 'none') return title;
+
+  const prefix = numberingPolicy === 'preserve-source' ? sourcePrefix : autoPrefix;
+  if (numberingPolicy === 'preserve-source' && !prefix) {
+    throw new Error(`固定目录节点 ${item?.id || ''} 缺少源编号`);
+  }
+  if (!prefix) return title;
+  return `${prefix}${shouldInsertSpaceAfterNumber(prefix) ? ' ' : ''}${title}`.trim();
 }
 
 function getHeadingStyle(exportFormat, level) {
@@ -1739,9 +1767,9 @@ async function addMarkdownContent(children, content, context) {
 function buildOutlineHeadingParagraph(item, context, level, options = {}) {
   const style = getHeadingStyle(context.exportFormat, level);
   const nativeHeadingNumbering = usesNativeHeadingNumbering(style) && !options.manualNumbering && !options.omitNumbering;
-  const displayTitle = options.omitNumbering
-    ? String(item.title || '')
-    : (nativeHeadingNumbering ? String(item.title || '') : formatOutlineTitle(item.id, item.title, style));
+  const displayTitle = nativeHeadingNumbering
+    ? stripLeadingOutlineNumber(item.title, [item.source_number, formatOutlineNumber(item.id, style), item.id])
+    : formatOutlineTitle(item, style, { omitNumbering: options.omitNumbering });
 
   const runOptions = { bold: false };
   if (style) {
@@ -1781,7 +1809,7 @@ async function addChapterFrameRows(rows, items, context, level = 1) {
       }
       rows.push(buildChapterLeafRow(
         context.exportFormat,
-        buildOutlineHeadingParagraph(item, context, level, { compact: true, manualNumbering: true, disablePageBreakBefore: true, omitNumbering: true }),
+        buildOutlineHeadingParagraph(item, context, level, { compact: true, manualNumbering: true, disablePageBreakBefore: true }),
         bodyChildren,
         level,
       ));
@@ -2111,26 +2139,73 @@ async function buildDocxBuffer(payload, options = {}) {
   return result.buffer;
 }
 
-function createExportService({ configStore } = {}) {
+function summarizeBlockedResponses(validations) {
+  return validations.slice(0, 5).map((item) => item.node_id).filter(Boolean).join('、');
+}
+
+function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
+  if (!technicalPlanStore?.loadTechnicalPlan || !technicalPlanStore?.validateProtectedResponses) {
+    throw new Error('技术方案工作区尚未就绪，请稍后重试');
+  }
+
+  const state = technicalPlanStore.loadTechnicalPlan();
+  const outline = state?.outlineData?.outline;
+  if (!Array.isArray(outline) || !outline.length) {
+    throw new Error('没有可导出的目录内容');
+  }
+
+  technicalPlanStore.validateProtectedResponses();
+  const completion = deriveResponseCompletion(outline, { taskStatus: 'success' });
+  const hardBlocks = completion.validations.filter((item) => (
+    !item.response_complete
+    || (item.response_status !== 'missing-required-evidence' && !item.compliant)
+  ));
+  if (hardBlocks.length) {
+    const nodeIds = summarizeBlockedResponses(hardBlocks);
+    const reason = hardBlocks[0]?.reason || '目录仍有未完成响应';
+    throw new Error(`${reason}${nodeIds ? `（节点：${nodeIds}）` : ''}，请处理后再导出`);
+  }
+
+  if (completion.missing_evidence_node_ids.length && payload.acknowledgeMissingEvidence !== true) {
+    const nodeIds = completion.missing_evidence_node_ids.slice(0, 5).join('、');
+    throw new Error(`强制证明材料缺失，确认风险后方可导出${nodeIds ? `（节点：${nodeIds}）` : ''}`);
+  }
+
   return {
+    ...payload,
+    project_name: state.outlineData.project_name || payload.project_name,
+    outline,
+  };
+}
+
+function createExportService({ configStore, technicalPlanStore: initialTechnicalPlanStore, getTechnicalPlanStore } = {}) {
+  let technicalPlanStore = initialTechnicalPlanStore || null;
+  return {
+    setTechnicalPlanStore(store) {
+      technicalPlanStore = store || null;
+    },
+
     async exportWord(payload = {}, onProgress) {
-      const stats = countOutlineStats(Array.isArray(payload.outline) ? payload.outline : []);
+      const effectivePayload = payload.source === 'technical-plan'
+        ? resolveTechnicalPlanExportPayload(payload, getTechnicalPlanStore?.() || technicalPlanStore)
+        : payload;
+      const stats = countOutlineStats(Array.isArray(effectivePayload.outline) ? effectivePayload.outline : []);
       const developerLogger = createDeveloperLogger({
         app,
         config: loadDeveloperConfig(configStore),
         moduleName: 'export',
         name: 'word-export',
         meta: {
-          project_name: sanitizeFilename(payload.project_name || '投标技术文件'),
+          project_name: sanitizeFilename(effectivePayload.project_name || '投标技术文件'),
           stats,
         },
       });
       developerLogger.write('export.word.started', {
-        project_name: sanitizeFilename(payload.project_name || '投标技术文件'),
+        project_name: sanitizeFilename(effectivePayload.project_name || '投标技术文件'),
         stats,
-        content_metrics: countOutlineContentMetrics(Array.isArray(payload.outline) ? payload.outline : []),
+        content_metrics: countOutlineContentMetrics(Array.isArray(effectivePayload.outline) ? effectivePayload.outline : []),
       });
-      if (!Array.isArray(payload.outline) || !payload.outline.length) {
+      if (!Array.isArray(effectivePayload.outline) || !effectivePayload.outline.length) {
         const error = new Error('没有可导出的目录内容');
         developerLogger.write('export.word.error', { error: compactLogError(error) });
         throw error;
@@ -2140,7 +2215,7 @@ function createExportService({ configStore } = {}) {
       reportProgress(progressContext, 2, stats.mermaidCount
         ? `检测到 ${stats.mermaidCount} 张 Mermaid 图，导出时会转换为 Word 图片。`
         : '正在准备 Word 导出。');
-      const defaultFilename = `${sanitizeFilename(payload.project_name || '标书文档')}_${formatExportTimestamp()}.docx`;
+      const defaultFilename = `${sanitizeFilename(effectivePayload.project_name || '标书文档')}_${formatExportTimestamp()}.docx`;
       const defaultDir = app?.getPath ? app.getPath('downloads') : process.env.USERPROFILE || process.cwd();
       const result = await dialog.showSaveDialog({
         title: '导出 Word 文档',
@@ -2156,7 +2231,7 @@ function createExportService({ configStore } = {}) {
 
       try {
         const warnings = [];
-        const buildResult = await buildDocxResult(payload, { onProgress, warnings, developerLogger });
+        const buildResult = await buildDocxResult(effectivePayload, { onProgress, warnings, developerLogger });
         reportProgress({ onProgress, warnings: buildResult.warnings, stats: buildResult.stats }, 96, '正在写入 Word 文件。');
         developerLogger.write('export.word.write.started', {
           output_file_name: path.basename(result.filePath),
@@ -2192,4 +2267,6 @@ module.exports = {
   buildDocxBuffer,
   buildDocxResult,
   createExportService,
+  formatOutlineTitle,
+  resolveTechnicalPlanExportPayload,
 };

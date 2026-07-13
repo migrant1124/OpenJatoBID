@@ -13,11 +13,14 @@ function registerTechnicalPlanIpc({ technicalPlanStore }) {
   ipcMain.handle('technical-plan:set-workflow-kind', (_event, workflowKind) => technicalPlanStore.setWorkflowKind(workflowKind));
   ipcMain.handle('technical-plan:switch-workflow-kind', (_event, workflowKind) => technicalPlanStore.switchWorkflowKind(workflowKind));
   ipcMain.handle('technical-plan:save-bid-analysis-config', (_event, payload) => technicalPlanStore.saveBidAnalysisConfig(payload));
+  ipcMain.handle('technical-plan:confirm-response-template', (_event, payload) => technicalPlanStore.confirmResponseTemplate(payload));
   ipcMain.handle('technical-plan:save-outline-config', (_event, payload) => technicalPlanStore.saveOutlineConfig(payload));
   ipcMain.handle('technical-plan:save-outline', (_event, outlineData) => technicalPlanStore.saveOutline(outlineData));
   ipcMain.handle('technical-plan:save-global-facts', (_event, globalFacts) => technicalPlanStore.saveGlobalFacts(globalFacts));
   ipcMain.handle('technical-plan:save-content-generation-options', (_event, options) => technicalPlanStore.saveContentGenerationOptions(options));
   ipcMain.handle('technical-plan:save-chapter-content', (_event, payload) => technicalPlanStore.saveChapterContent(payload));
+  ipcMain.handle('technical-plan:save-locked-template-values', (_event, payload) => technicalPlanStore.saveLockedTemplateValues(payload));
+  ipcMain.handle('technical-plan:save-fixed-table-values', (_event, payload) => technicalPlanStore.saveFixedTableValues(payload));
   ipcMain.handle('technical-plan:clear', () => technicalPlanStore.clearTechnicalPlan());
 }
 

@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 17;
+const schemaVersion = 19;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -35,6 +35,8 @@ function createInitialSchema(db) {
       pending_tender_created_at TEXT,
       bid_analysis_mode TEXT NOT NULL DEFAULT 'key',
       bid_analysis_selected_task_ids_json TEXT,
+      selected_format_profile_id TEXT,
+      selected_format_profile_hash TEXT,
       bid_section_mode TEXT NOT NULL DEFAULT 'single',
       bid_sections_json TEXT,
       bid_section_extraction_status TEXT NOT NULL DEFAULT 'idle',
@@ -71,13 +73,32 @@ function createInitialSchema(db) {
       label TEXT NOT NULL,
       status TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
+      normalized_hash TEXT,
       error TEXT,
+      analysis_context_json TEXT,
+      diagnostic_json TEXT,
+      requires_manual_review INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_technical_plan_bid_items_order
     ON technical_plan_bid_items(sort_order);
+
+    CREATE TABLE IF NOT EXISTS technical_plan_response_templates (
+      template_id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      analysis_item_id TEXT NOT NULL,
+      profile_id TEXT NOT NULL,
+      format_node_id TEXT NOT NULL,
+      source_title TEXT NOT NULL,
+      source_location_json TEXT NOT NULL,
+      template_json TEXT NOT NULL,
+      confirmed INTEGER NOT NULL DEFAULT 0,
+      locked_hash TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS technical_plan_reference_docs (
       document_id TEXT PRIMARY KEY,
@@ -97,6 +118,8 @@ function createInitialSchema(db) {
       source_requirement_id TEXT,
       source_requirement_title TEXT,
       knowledge_item_ids_json TEXT,
+      format_constraints_json TEXT,
+      response_state_json TEXT,
       content TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -241,6 +264,40 @@ function addTechnicalPlanTenderFiles(db) {
 function addTechnicalPlanIllustrationPlan(db) {
   addColumnIfMissing(db, 'technical_plan_meta', 'content_illustration_plan_json', 'TEXT');
   removeLegacyTechnicalPlanIllustrationType(db);
+}
+
+function createTechnicalPlanResponseTemplatesSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS technical_plan_response_templates (
+      template_id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      analysis_item_id TEXT NOT NULL,
+      profile_id TEXT NOT NULL,
+      format_node_id TEXT NOT NULL,
+      source_title TEXT NOT NULL,
+      source_location_json TEXT NOT NULL,
+      template_json TEXT NOT NULL,
+      confirmed INTEGER NOT NULL DEFAULT 0,
+      locked_hash TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+}
+
+function addTechnicalPlanFormatContract(db) {
+  addColumnIfMissing(db, 'technical_plan_meta', 'selected_format_profile_id', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_meta', 'selected_format_profile_hash', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_bid_items', 'normalized_hash', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_outline_nodes', 'format_constraints_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_outline_nodes', 'response_state_json', 'TEXT');
+  createTechnicalPlanResponseTemplatesSchema(db);
+}
+
+function addTechnicalPlanBidAnalysisDiagnosticContract(db) {
+  addColumnIfMissing(db, 'technical_plan_bid_items', 'analysis_context_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_bid_items', 'diagnostic_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_bid_items', 'requires_manual_review', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function removeLegacyTechnicalPlanIllustrationType(db) {
@@ -963,6 +1020,11 @@ const schemaHealthTableGroups = [
     tables: ['export_templates'],
     repair: createExportTemplatesSchema,
   },
+  {
+    version: 18,
+    tables: ['technical_plan_response_templates'],
+    repair: createTechnicalPlanResponseTemplatesSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
@@ -1103,6 +1165,38 @@ const schemaHealthColumnGroups = [
     table: 'technical_plan_meta',
     columns: {
       content_illustration_plan_json: 'TEXT',
+    },
+  },
+  {
+    version: 18,
+    table: 'technical_plan_meta',
+    columns: {
+      selected_format_profile_id: 'TEXT',
+      selected_format_profile_hash: 'TEXT',
+    },
+  },
+  {
+    version: 18,
+    table: 'technical_plan_bid_items',
+    columns: {
+      normalized_hash: 'TEXT',
+    },
+  },
+  {
+    version: 18,
+    table: 'technical_plan_outline_nodes',
+    columns: {
+      format_constraints_json: 'TEXT',
+      response_state_json: 'TEXT',
+    },
+  },
+  {
+    version: 19,
+    table: 'technical_plan_bid_items',
+    columns: {
+      analysis_context_json: 'TEXT',
+      diagnostic_json: 'TEXT',
+      requires_manual_review: 'INTEGER NOT NULL DEFAULT 0',
     },
   },
 ];
@@ -1253,6 +1347,16 @@ const migrations = [
     version: 17,
     description: '技术方案新增全文图片编排结果',
     up: addTechnicalPlanIllustrationPlan,
+  },
+  {
+    version: 18,
+    description: '技术方案新增格式驱动目录和固定响应模板结构',
+    up: addTechnicalPlanFormatContract,
+  },
+  {
+    version: 19,
+    description: '招标解析项新增诊断数据契约',
+    up: addTechnicalPlanBidAnalysisDiagnosticContract,
   },
 ];
 

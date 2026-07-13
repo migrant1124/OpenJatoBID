@@ -1,6 +1,12 @@
 const crypto = require('node:crypto');
-const { getBidAnalysisTasks } = require('./bidAnalysisTask.cjs');
+const { getBidAnalysisTasks, isBidAnalysisTaskResultValid } = require('./bidAnalysisTask.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
+const {
+  instantiateFormatOutline,
+  mergeScoringOutlineIntoFormat,
+  selectApplicableFormatProfile,
+  validateFormatOutline,
+} = require('./outlineFormatConstraints.cjs');
 
 function formatSuggestions(suggestions) {
   if (!suggestions?.length) return '';
@@ -258,11 +264,110 @@ function formatKnowledgePatchOutlineContext(items) {
 function getMissingRequiredBidAnalysisLabels(storedPlan) {
   const bidAnalysisTasks = storedPlan?.bidAnalysisTasks || {};
   return getBidAnalysisTasks('key')
-    .filter((task) => {
-      const state = bidAnalysisTasks[task.id];
-      return state?.status !== 'success' || !String(state.content || '').trim();
-    })
+    .filter((task) => !isBidAnalysisTaskResultValid(task, bidAnalysisTasks[task.id]))
     .map((task) => task.label);
+}
+
+function loadFormatRequirements(storedPlan) {
+  const task = storedPlan?.bidAnalysisTasks?.bidDocumentFormatRequirements;
+  if (!task || !isBidAnalysisTaskResultValid(getBidAnalysisTasks('key').find((item) => item.id === 'bidDocumentFormatRequirements'), task)) {
+    throw new Error('格式要求解析结果无效，请返回 Step02 重新解析');
+  }
+  try {
+    return JSON.parse(task.content);
+  } catch (error) {
+    throw new Error(`格式要求解析结果无法读取：${error.message || String(error)}`);
+  }
+}
+
+function resolveFormatSelection(storedPlan, payload) {
+  const result = loadFormatRequirements(storedPlan);
+  const explicitProfileId = String(
+    payload?.selected_format_profile_id
+    || payload?.selectedFormatProfileId
+    || storedPlan?.selectedFormatProfileId
+    || '',
+  ).trim();
+  const explicitProfile = explicitProfileId
+    ? result.profiles.find((profile) => profile.profile_id === explicitProfileId)
+    : null;
+  const selectedSectionId = storedPlan?.tenderFile?.selectedSectionId;
+  const selectedSectionTitle = storedPlan?.tenderFile?.selectedSectionTitle;
+  const profileScope = explicitProfile?.applicable_scope || {};
+  const currentScope = {
+    document_type: 'technical',
+    ...(selectedSectionId || profileScope.section_id ? { section_id: selectedSectionId || profileScope.section_id } : {}),
+    ...(selectedSectionTitle || profileScope.section_title ? { section_title: selectedSectionTitle || profileScope.section_title } : {}),
+    package_ids: profileScope.package_ids || [],
+    package_names: profileScope.package_names || [],
+  };
+  const profile = selectApplicableFormatProfile(result, currentScope, explicitProfileId || undefined);
+  return {
+    result,
+    profile,
+    normalizedHash: String(storedPlan?.bidAnalysisTasks?.bidDocumentFormatRequirements?.normalized_hash || ''),
+  };
+}
+
+function flattenFormatMappingTargets(items, level = 1, result = []) {
+  for (const item of items || []) {
+    if (item.format_node_id) {
+      result.push({
+        format_node_id: item.format_node_id,
+        title: item.title,
+        description: item.description || '',
+        allow_ai_children: item.allow_ai_children === true,
+        level,
+      });
+    }
+    flattenFormatMappingTargets(item.children || [], level + 1, result);
+  }
+  return result;
+}
+
+async function assignScoringTargets(aiService, scoringOutline, formatOutline, log) {
+  const scoringRoots = scoringOutline?.outline || [];
+  const targets = flattenFormatMappingTargets(formatOutline?.outline || []);
+  if (!scoringRoots.length || !targets.length) return scoringOutline;
+  const allowedTargetIds = new Set(targets.map((target) => target.format_node_id));
+  const requiredIds = scoringRoots.map((item) => String(item.source_requirement_id || '').trim()).filter(Boolean);
+  const normalizeMappings = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.mappings)) {
+      throw new Error('评分项格式映射必须包含 mappings 数组');
+    }
+    const mappings = value.mappings.map((mapping, index) => {
+      const requirementId = String(mapping?.requirement_id || '').trim();
+      const targetId = String(mapping?.target_format_node_id || '').trim();
+      if (!requiredIds.includes(requirementId)) throw new Error(`第 ${index + 1} 个映射引用未知评分项`);
+      if (!allowedTargetIds.has(targetId)) throw new Error(`第 ${index + 1} 个映射引用未知格式节点`);
+      return { requirement_id: requirementId, target_format_node_id: targetId };
+    });
+    if (mappings.length !== requiredIds.length || new Set(mappings.map((item) => item.requirement_id)).size !== requiredIds.length) {
+      throw new Error('每个技术评分大类必须且只能映射一次');
+    }
+    return { mappings };
+  };
+  log('正在把技术评分大类映射到固定格式节点。', 82);
+  const mappingResult = await collectJson(aiService, {
+    messages: [
+      { role: 'system', content: '你是投标技术文件目录映射助手。只能从给定 target_format_node_id 中选择，不得新增、删除、改名或重排任何固定节点。' },
+      { role: 'user', content: `固定格式节点：\n${JSON.stringify(targets, null, 2)}` },
+      { role: 'user', content: `技术评分目录：\n${JSON.stringify(scoringRoots, null, 2)}` },
+      { role: 'user', content: '请为每个一级技术评分目录选择语义最匹配的固定格式节点。只输出 {"mappings":[{"requirement_id":"...","target_format_node_id":"..."}]}。' },
+    ],
+    temperature: 0.1,
+    normalizer: normalizeMappings,
+    progressCallback: (message) => log(message, 82),
+    progressLabel: '评分项格式映射',
+    failureMessage: '技术评分项无法可靠映射到固定格式节点',
+  });
+  const byRequirementId = new Map(mappingResult.mappings.map((item) => [item.requirement_id, item.target_format_node_id]));
+  return {
+    outline: scoringRoots.map((item) => ({
+      ...item,
+      target_format_node_id: byRequirementId.get(String(item.source_requirement_id || '').trim()),
+    })),
+  };
 }
 
 function normalizeReferenceDocumentIds(payload) {
@@ -2948,10 +3053,16 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   const requirements = storedPlan.techRequirements || '';
   const missingRequiredBidAnalysisLabels = getMissingRequiredBidAnalysisLabels(storedPlan);
   if (missingRequiredBidAnalysisLabels.length) {
-    throw new Error(`请先完成关键招标文件解析项：${missingRequiredBidAnalysisLabels.join('、')}`);
+    throw new Error(`请先完成 7 个关键招标文件解析项：${missingRequiredBidAnalysisLabels.join('、')}`);
   }
+  const formatSelection = resolveFormatSelection(storedPlan, payload);
+  const usesExplicitFormat = formatSelection.profile.format_strength !== 'none';
   const isExpansionWorkflow = storedPlan.workflowKind === 'existing-plan-expansion';
-  const outlineExpansionMode = isExpansionWorkflow ? normalizeOutlineExpansionMode(payload, storedPlan) : 'ai-complement';
+  let outlineExpansionMode = isExpansionWorkflow ? normalizeOutlineExpansionMode(payload, storedPlan) : 'ai-complement';
+  if (usesExplicitFormat && outlineExpansionMode === 'original-only') {
+    outlineExpansionMode = 'ai-complement';
+    log('当前投标范围存在明确技术文件格式，已有方案目录不能覆盖固定骨架，已切换为格式优先扩写。', 6);
+  }
   const baseTaskPayload = {
     ...payload,
     overview,
@@ -2962,6 +3073,8 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   let technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineMode: 'aligned',
     outlineExpansionMode,
+    selectedFormatProfileId: formatSelection.profile.profile_id,
+    selectedFormatProfileHash: formatSelection.normalizedHash || undefined,
     referenceKnowledgeDocumentIds,
     outlineGenerationTask: updateTask({ status: 'running', progress: 5, logs }),
   });
@@ -2979,9 +3092,11 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     if (!String(originalPlanMarkdown || '').trim()) {
       throw new Error('请先上传原方案，再生成目录');
     }
-    oldOutline = isOriginalOutlineAgentModeEnabled(aiService)
-      ? await extractOriginalOutlineWithAgent(agentService, workspaceStore, baseTaskPayload, originalPlanMarkdown, log)
-      : await extractOriginalOutline(aiService, workspaceStore, originalPlanMarkdown, log);
+    if (!usesExplicitFormat) {
+      oldOutline = isOriginalOutlineAgentModeEnabled(aiService)
+        ? await extractOriginalOutlineWithAgent(agentService, workspaceStore, baseTaskPayload, originalPlanMarkdown, log)
+        : await extractOriginalOutline(aiService, workspaceStore, originalPlanMarkdown, log);
+    }
   }
 
   technicalPlan = workspaceStore.updateTechnicalPlan({
@@ -3001,7 +3116,20 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
 
   let outline;
   let groups = [];
-  if (isExpansionWorkflow) {
+  if (usesExplicitFormat) {
+    log(`已选择格式方案“${formatSelection.profile.document_title}”，先复制固定骨架，再映射技术评分项。`, 8);
+    const alignedResult = await alignedWorkflow(aiService, agentService, taskPayload, log);
+    let scoringOutline = alignedResult.outline;
+    groups = alignedResult.groups || [];
+    const knowledgeItems = loadOutlineKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, log);
+    scoringOutline = await enhanceOutlineWithKnowledgeAdditions(aiService, taskPayload, scoringOutline, knowledgeItems, log);
+    const formatOutline = instantiateFormatOutline(formatSelection.profile);
+    const targetedScoringOutline = await assignScoringTargets(aiService, scoringOutline, formatOutline, log);
+    const requirementIds = groups.map((group) => String(group.requirement_id || '').trim()).filter(Boolean);
+    outline = mergeScoringOutlineIntoFormat(formatOutline, targetedScoringOutline, requirementIds);
+    validateFormatOutline(outline, formatSelection.profile, { requireScoreCoverage: requirementIds });
+    log('固定格式门禁与技术评分覆盖门禁均已通过。', 99);
+  } else if (isExpansionWorkflow) {
     if (outlineExpansionMode === 'original-only') {
       log('已选择仅使用原方案目录，跳过AI补充和知识库补目录。', 96);
       technicalPlan = workspaceStore.updateTechnicalPlan({
@@ -3023,20 +3151,22 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     groups = alignedResult.groups || [];
   }
 
-  const knowledgeItems = loadOutlineKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, log);
-  outline = await enhanceOutlineWithKnowledgeAdditions(aiService, taskPayload, outline, knowledgeItems, log);
-  const finalResult = await runFinalOutlineGate({
-    aiService,
-    agentService,
-    payload: taskPayload,
-    outline,
-    groups,
-    originalOutline: oldOutline,
-    workflowKind: isExpansionWorkflow ? 'existing-plan-expansion' : 'technical-plan',
-    outlineExpansionMode,
-    log,
-  });
-  outline = finalResult.outline;
+  if (!usesExplicitFormat) {
+    const knowledgeItems = loadOutlineKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, log);
+    outline = await enhanceOutlineWithKnowledgeAdditions(aiService, taskPayload, outline, knowledgeItems, log);
+    const finalResult = await runFinalOutlineGate({
+      aiService,
+      agentService,
+      payload: taskPayload,
+      outline,
+      groups,
+      originalOutline: oldOutline,
+      workflowKind: isExpansionWorkflow ? 'existing-plan-expansion' : 'technical-plan',
+      outlineExpansionMode,
+      log,
+    });
+    outline = finalResult.outline;
+  }
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...outline, project_overview: overview },
     contentGenerationTask: undefined,

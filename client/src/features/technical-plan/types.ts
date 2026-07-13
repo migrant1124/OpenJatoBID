@@ -1,4 +1,9 @@
-import type { OutlineData, OutlineExpansionMode, OutlineMode } from '../../shared/types';
+import type {
+  OutlineData,
+  OutlineExpansionMode,
+  OutlineMode,
+  ResponseTemplateRecord,
+} from '../../shared/types/outline';
 
 export type TechnicalPlanStep = 'document-analysis' | 'bid-analysis' | 'outline-generation' | 'global-facts' | 'content-edit' | 'expand';
 export type TechnicalPlanWorkflowKind = 'technical-plan' | 'existing-plan-expansion';
@@ -105,10 +110,39 @@ export interface BidAnalysisTaskState {
   label: string;
   status: BidAnalysisTaskStatus;
   content: string;
+  normalized_hash?: string;
   error?: string;
+  analysis_context?: BidAnalysisTaskAnalysisContext;
+  diagnostic?: BidAnalysisTaskDiagnostic;
+  requires_manual_review?: boolean;
 }
 
 export type BidAnalysisTasks = Record<string, BidAnalysisTaskState>;
+
+export interface BidAnalysisTaskAnalysisContext {
+  run_id?: string;
+  document_id?: string;
+  document_version?: string;
+  prompt_version?: string;
+  anchor_catalog_hash?: string;
+}
+
+export interface BidAnalysisTaskDiagnostic extends BidAnalysisTaskAnalysisContext {
+  error_code: string;
+  error_path?: string;
+  message?: string;
+  requires_manual_review?: boolean;
+}
+
+export interface BidAnalysisTaskDefinition {
+  id: string;
+  label: string;
+  description: string;
+  required: boolean;
+  output: 'markdown' | 'json';
+  group: 'key' | 'optional';
+  schema_version?: number;
+}
 
 export interface GlobalFactGroupState {
   id: string;
@@ -267,6 +301,7 @@ export interface TechnicalPlanState {
   techRequirements: string;
   bidAnalysisMode: BidAnalysisMode;
   bidAnalysisSelectedTaskIds: string[];
+  bidAnalysisTaskDefinitions: BidAnalysisTaskDefinition[];
   bidAnalysisTasks: BidAnalysisTasks;
   bidAnalysisProgress: number;
   bidSectionMode: BidSectionMode;
@@ -276,6 +311,9 @@ export interface TechnicalPlanState {
   outlineMode: OutlineMode;
   outlineExpansionMode: OutlineExpansionMode;
   referenceKnowledgeDocumentIds: string[];
+  responseTemplates: ResponseTemplateRecord[];
+  selectedFormatProfileId?: string;
+  selectedFormatProfileHash?: string;
   bidSectionExtractionTask?: BackgroundTaskState;
   bidAnalysisTask?: BackgroundTaskState;
   outlineGenerationTask?: BackgroundTaskState;

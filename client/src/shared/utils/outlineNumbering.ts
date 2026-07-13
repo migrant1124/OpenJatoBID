@@ -79,6 +79,13 @@ export function outlineNumberParts(id: string): number[] {
 
 type HeadingNumberingConfig = Pick<HeadingStyleConfig, 'numbering_format' | 'numbering_template'>;
 
+interface OutlineDisplayItem {
+  id: string;
+  title: string;
+  numbering_policy?: 'auto' | 'preserve-source' | 'none';
+  source_number?: string;
+}
+
 /**
  * 根据 outline id 和标题编号配置生成编号前缀。
  */
@@ -111,6 +118,50 @@ export function formatOutlineNumber(id: string, heading: HeadingNumberingConfig 
     .replace(/\{roman\}/g, numberToRoman(lastPart))
     .replace(/\{ROMAN\}/g, numberToRoman(lastPart, true))
     .trim();
+}
+
+/**
+ * 去掉标题开头重复保存的招标源编号，编号本身由展示层单独拼接。
+ */
+export function stripRepeatedSourceNumber(title: string, sourceNumber: string | null | undefined): string {
+  const value = String(title || '').trim();
+  const prefix = String(sourceNumber || '').trim();
+  if (!prefix || !value.startsWith(prefix)) return value;
+
+  const remainder = value.slice(prefix.length);
+  const hasNumberBoundary = !remainder
+    || /^[\s\u3000、，,。.．:：;；)）\]】>》〉\-—]/.test(remainder)
+    || /[0-9０-９]/.test(prefix)
+    || /[、，,。.．:：;；)）\]】>》〉]$/.test(prefix);
+  if (!hasNumberBoundary) return value;
+
+  return remainder.replace(/^[\s\u3000、，,。.．:：;；)）\]】>》〉\-—]+/, '').trim();
+}
+
+/**
+ * 解析目录编辑器中的展示编号：自动编号来自内部 id，源编号策略直接使用 source_number。
+ */
+export function formatOutlineDisplayNumber(
+  item: Pick<OutlineDisplayItem, 'id' | 'numbering_policy' | 'source_number'>,
+  heading: HeadingNumberingConfig | null | undefined,
+): string {
+  if (item.numbering_policy === 'none') return '';
+  if (item.numbering_policy === 'preserve-source') return String(item.source_number || '').trim();
+  return formatOutlineNumber(item.id, heading) || String(item.id || '').trim();
+}
+
+/**
+ * 按节点编号策略生成目录编辑器预览标题。
+ */
+export function formatOutlineDisplayTitle(
+  item: OutlineDisplayItem,
+  heading: HeadingNumberingConfig | null | undefined,
+): string {
+  const prefix = formatOutlineDisplayNumber(item, heading);
+  const title = stripRepeatedSourceNumber(item.title, item.source_number);
+  if (!prefix) return title;
+  if (!title) return prefix;
+  return `${prefix}${shouldInsertSpaceAfterNumber(prefix) ? ' ' : ''}${title}`;
 }
 
 function shouldInsertSpaceAfterNumber(prefix: string): boolean {

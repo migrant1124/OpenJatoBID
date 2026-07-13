@@ -713,7 +713,11 @@ async function parseOrRepairJsonResponseWithConfig(app, config, request, content
         analyticsService,
       );
       return normalizeJsonPayload(request, parseJsonContent(repairedContent));
-    } catch {
+    } catch (repairError) {
+      if (request.includeValidationErrorDetail) {
+        const detail = formatJsonIssues(repairError)[0];
+        throw new Error(detail ? `${failureMessage}：${detail}` : failureMessage);
+      }
       throw new Error(failureMessage);
     }
   }
@@ -745,6 +749,14 @@ async function collectJsonResponseWithConfig(app, config, request, analyticsServ
     } catch (error) {
       lastError = error;
       const issues = formatJsonIssues(error);
+
+      if (request.repair_invalid_json === false) {
+        if (request.includeValidationErrorDetail) {
+          const detail = issues[0];
+          throw new Error(detail ? `${failureMessage}：${detail}` : failureMessage);
+        }
+        throw new Error(failureMessage);
+      }
 
       try {
         const repairedContent = await repairJsonResponse(

@@ -4,7 +4,7 @@
 -- 1. 本文件用于开源开发者阅读、评审和排查问题，展示 workspace/yibiao.sqlite 的目标完整表结构。
 -- 2. 用户运行客户端时不需要手动执行本文件。
 -- 3. 客户端运行时建表和升级以 Electron Main 侧 migration 代码为准。
--- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17 目标结构。
+-- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17、格式驱动目录与固定响应模板 v18 目标结构。
 -- 5. 每次表结构调整后，需要同步更新本文件和 runtime migration 版本。
 -- 6. 本文件不保存历史版本，每次更新都写入最新目标完整结构。
 
@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 17;
+PRAGMA user_version = 18;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS technical_plan_meta (
   bid_analysis_mode TEXT NOT NULL DEFAULT 'key',
   -- v10 招标解析项选择配置，JSON 数组，关键项由运行时代码强制并入。
   bid_analysis_selected_task_ids_json TEXT,
+  -- v18 当前选中的技术格式 profile 及其规范化 Hash。
+  selected_format_profile_id TEXT,
+  selected_format_profile_hash TEXT,
   -- v14 投标范围模式：single / multiple；多标段 AI 提取结果保存在 bid_sections_json。
   bid_section_mode TEXT NOT NULL DEFAULT 'single',
   bid_sections_json TEXT,
@@ -104,13 +107,35 @@ CREATE TABLE IF NOT EXISTS technical_plan_bid_items (
   label TEXT NOT NULL,
   status TEXT NOT NULL,
   content TEXT NOT NULL DEFAULT '',
+  -- v18 规范化结果 Hash；格式任务覆盖完整 result + templates。
+  normalized_hash TEXT,
   error TEXT,
+  -- v19 招标解析诊断契约；只保存 run/doc/catalog/hash 等元数据，不保存招标正文。
+  analysis_context_json TEXT,
+  diagnostic_json TEXT,
+  requires_manual_review INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_technical_plan_bid_items_order
 ON technical_plan_bid_items(sort_order);
+
+-- v18 从格式解析结果拆出的固定响应模板注册表。
+CREATE TABLE IF NOT EXISTS technical_plan_response_templates (
+  template_id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  analysis_item_id TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  format_node_id TEXT NOT NULL,
+  source_title TEXT NOT NULL,
+  source_location_json TEXT NOT NULL,
+  template_json TEXT NOT NULL,
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  locked_hash TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 
 -- 技术方案选中的参考知识库文档。
 CREATE TABLE IF NOT EXISTS technical_plan_reference_docs (
@@ -133,6 +158,9 @@ CREATE TABLE IF NOT EXISTS technical_plan_outline_nodes (
   source_requirement_id TEXT,
   source_requirement_title TEXT,
   knowledge_item_ids_json TEXT,
+  -- v18 格式节点不可变约束与当前响应状态 JSON。
+  format_constraints_json TEXT,
+  response_state_json TEXT,
   content TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,

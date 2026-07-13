@@ -300,6 +300,7 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [exportProgress, setExportProgress] = useState<ExportProgressState>(initialExportProgress);
+  const [missingEvidenceRiskOpen, setMissingEvidenceRiskOpen] = useState(false);
   const [previewFullscreenOpen, setPreviewFullscreenOpen] = useState(false);
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
 
@@ -486,7 +487,7 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
     showToast(`已应用主题预设：${preset?.label || '未命名预设'}，保存后生效`, 'success');
   }, [showToast]);
 
-  const handleExportTest = useCallback(async () => {
+  const handleExportTest = useCallback(async (acknowledgeMissingEvidence = false) => {
     let unsubscribe: (() => void) | undefined;
 
     try {
@@ -528,10 +529,10 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
       });
 
       const result = await window.yibiao?.export.exportWord({
+        source: 'technical-plan',
         requestId,
-        project_name: outlineData?.project_name,
-        outline,
         export_format: config,
+        acknowledgeMissingEvidence,
       });
       if (result?.canceled) {
         setExportProgress(initialExportProgress);
@@ -551,6 +552,11 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
       showToast(result?.message || 'Word 已导出', result?.warnings?.length ? 'info' : 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : '导出测试失败';
+      if (!acknowledgeMissingEvidence && message.includes('强制证明材料缺失，确认风险后方可导出')) {
+        setExportProgress(initialExportProgress);
+        setMissingEvidenceRiskOpen(true);
+        return;
+      }
       setExportProgress((prev) => ({
         ...prev,
         open: true,
@@ -1274,6 +1280,31 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
           <TemplatePreview config={config} previewStyle={previewStyle} />
         </div>
       </div>
+      <Dialog.Root open={missingEvidenceRiskOpen} onOpenChange={setMissingEvidenceRiskOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-regenerate-card workflow-switch-card">
+            <div className="content-regenerate-card-head">
+              <span className="section-kicker">导出风险确认</span>
+              <Dialog.Title>强制证明材料缺失</Dialog.Title>
+              <Dialog.Description>当前技术方案存在未匹配到的强制证明材料。继续导出不会消除该风险。</Dialog.Description>
+            </div>
+            <div className="content-regenerate-actions">
+              <Dialog.Close className="secondary-action" type="button">返回处理</Dialog.Close>
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() => {
+                  setMissingEvidenceRiskOpen(false);
+                  void handleExportTest(true);
+                }}
+              >
+                知悉风险并继续导出
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <Dialog.Root
         open={exportProgress.open}
         onOpenChange={(open) => {

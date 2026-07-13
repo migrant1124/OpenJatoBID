@@ -1,13 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useMemo, useState } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
-import { bidAnalysisTasks, getBidAnalysisTasks } from '../services/bidAnalysisWorkflow';
+import { areRequiredBidAnalysisTasksReady, getBidAnalysisTasks, isBidAnalysisTaskResultValid } from '../services/bidAnalysisWorkflow';
 import { MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
+import type { ResponseTemplateRecord } from '../../../shared/types/outline';
 import BidSectionSelectorDialog from '../components/BidSectionSelectorDialog';
-import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
+import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
 
 interface BidAnalysisPageProps {
   hasTenderFile: boolean;
+  hasFormatDependentWork: boolean;
   mode: BidAnalysisMode;
   selectedTaskIds: string[];
   bidSectionMode: BidSectionMode;
@@ -16,6 +18,8 @@ interface BidAnalysisPageProps {
   bidSectionExtractionStatus: BidSectionExtractionStatus;
   bidSectionExtractionError?: string;
   selectedSectionTitle?: string;
+  taskDefinitions: BidAnalysisTaskDefinition[];
+  responseTemplates: ResponseTemplateRecord[];
   tasks: BidAnalysisTasks;
   task?: BackgroundTaskState;
   progress: number;
@@ -36,28 +40,29 @@ const modeOptions: Array<{ id: 'key' | 'full'; title: string; badge: string }> =
   },
 ];
 
-const allBidAnalysisTaskIds = bidAnalysisTasks.map((task) => task.id);
-const requiredBidAnalysisTaskIds = getBidAnalysisTasks('key').map((task) => task.id);
-const requiredBidAnalysisTaskIdSet = new Set(requiredBidAnalysisTaskIds);
-
-function normalizeSelectedTaskIds(taskIds: string[]) {
+function normalizeSelectedTaskIds(definitions: readonly BidAnalysisTaskDefinition[], taskIds: string[]) {
+  const allBidAnalysisTaskIds = definitions.map((task) => task.id);
+  const requiredBidAnalysisTaskIdSet = new Set(definitions.filter((task) => task.required).map((task) => task.id));
   const requestedIds = new Set(taskIds);
   return allBidAnalysisTaskIds.filter((taskId) => requiredBidAnalysisTaskIdSet.has(taskId) || requestedIds.has(taskId));
 }
 
-function getSelectedTaskIdsForMode(mode: BidAnalysisMode, taskIds: string[]) {
+function getSelectedTaskIdsForMode(definitions: readonly BidAnalysisTaskDefinition[], mode: BidAnalysisMode, taskIds: string[]) {
+  const allBidAnalysisTaskIds = definitions.map((task) => task.id);
+  const requiredBidAnalysisTaskIds = definitions.filter((task) => task.required).map((task) => task.id);
   if (mode === 'full') {
     return allBidAnalysisTaskIds;
   }
   if (mode === 'custom') {
-    return normalizeSelectedTaskIds(taskIds);
+    return normalizeSelectedTaskIds(definitions, taskIds);
   }
   return requiredBidAnalysisTaskIds;
 }
 
-function getModeForSelection(taskIds: string[]): BidAnalysisMode {
-  const selectedIds = normalizeSelectedTaskIds(taskIds);
-  if (selectedIds.length === allBidAnalysisTaskIds.length) {
+function getModeForSelection(definitions: readonly BidAnalysisTaskDefinition[], taskIds: string[]): BidAnalysisMode {
+  const requiredBidAnalysisTaskIdSet = new Set(definitions.filter((task) => task.required).map((task) => task.id));
+  const selectedIds = normalizeSelectedTaskIds(definitions, taskIds);
+  if (selectedIds.length === definitions.length) {
     return 'full';
   }
   if (selectedIds.some((taskId) => !requiredBidAnalysisTaskIdSet.has(taskId))) {
@@ -71,14 +76,6 @@ function getModeLabel(mode: BidAnalysisMode) {
   if (mode === 'custom') return '自定义解析';
   return '只解析关键项';
 }
-
-const taskGroups = [
-  { title: '关键项', ids: ['projectOverview', 'techRequirements', 'projectInfo', 'partAInfo', 'deliveryAndServiceRequirements'] },
-  { title: '采购与响应', ids: ['procurementList', 'responseFileRequirements'] },
-  { title: '投标流程', ids: ['keyInfo', 'marginInfo', 'openBid'] },
-  { title: '评审要求', ids: ['qualificationReview', 'complianceCheck', 'evaluationBid', 'businessScoring'] },
-  { title: '主体与合同', ids: ['agentInfo', 'discardedBids', 'signingProcess', 'terminationCondition'] },
-];
 
 const statusLabel: Record<BidAnalysisTaskState['status'], string> = {
   idle: '待解析',
@@ -172,11 +169,10 @@ function JsonResultTable({ content }: { content: string }) {
 
   if (!data) {
     return (
-      <MarkdownFullscreenViewer className="markdown-viewer bid-analysis-output" title="JSON 内容全屏预览">
-        <MarkdownRenderer>
-          {`\`\`\`json\n${content}\n\`\`\``}
-        </MarkdownRenderer>
-      </MarkdownFullscreenViewer>
+      <div className="markdown-empty-state bid-analysis-empty">
+        <strong>解析结果格式无效</strong>
+        <p>该 JSON 结果未通过格式校验，请重新解析此项。</p>
+      </div>
     );
   }
 
@@ -196,8 +192,104 @@ function JsonResultTable({ content }: { content: string }) {
   );
 }
 
+function asJsonRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function formatApplicableScope(value: unknown) {
+  const scope = asJsonRecord(value);
+  if (!scope) return '全局';
+  const labels = [scope.section_title, ...(Array.isArray(scope.package_names) ? scope.package_names : [])]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  return labels.length ? labels.join(' / ') : '全局';
+}
+
+function FormatOutlineTree({ nodes }: { nodes: unknown[] }) {
+  if (!nodes.length) return <p>当前范围没有明确固定目录，Step03 将按技术评分回退。</p>;
+  return (
+    <ul className="bid-analysis-structured-tree">
+      {nodes.map((value, index) => {
+        const node = asJsonRecord(value);
+        if (!node) return null;
+        const children = Array.isArray(node.children) ? node.children : [];
+        return (
+          <li key={String(node.format_node_id || `${node.source_title || 'node'}-${index}`)}>
+            <div>
+              <strong>{[node.source_number, node.source_title].filter(Boolean).join(' ')}</strong>
+              <span>{String(node.response_mode || 'freeform-markdown')}</span>
+              {node.title_locked === true && <em>标题锁定</em>}
+              {node.required_in_outline === true && <em>必须保留</em>}
+            </div>
+            {asJsonRecord(node.source) && (
+              <small>
+                {String(asJsonRecord(node.source)?.source_file_name || asJsonRecord(node.source)?.source_file_id || '来源')}
+                {' · 行 '}{String(asJsonRecord(node.source)?.markdown_line_start || '?')}-{String(asJsonRecord(node.source)?.markdown_line_end || '?')}
+              </small>
+            )}
+            {children.length > 0 && <FormatOutlineTree nodes={children} />}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function FormatRequirementsResult({
+  content,
+  templates,
+  onReviewTemplate,
+}: {
+  content: string;
+  templates: ResponseTemplateRecord[];
+  onReviewTemplate: (template: ResponseTemplateRecord) => void;
+}) {
+  const data = tryParseJsonObject(content);
+  if (!data || !Array.isArray(data.profiles)) return <JsonResultTable content={content} />;
+  return (
+    <div className="bid-analysis-structured-result">
+      <div className="bid-analysis-structured-summary">
+        <strong>{data.has_explicit_technical_format === true ? '已识别明确技术文件格式' : '未发现明确技术文件格式'}</strong>
+        <span>{data.profiles.length} 个适用 profile</span>
+      </div>
+      {data.profiles.map((value, index) => {
+        const profile = asJsonRecord(value);
+        if (!profile) return null;
+        return (
+          <section key={String(profile.profile_id || index)} className="bid-analysis-structured-card">
+            <header>
+              <strong>{String(profile.document_title || `格式 Profile ${index + 1}`)}</strong>
+              <span>{formatApplicableScope(profile.applicable_scope)}</span>
+              <em>{String(profile.format_strength || '')}</em>
+            </header>
+            <FormatOutlineTree nodes={Array.isArray(profile.outline) ? profile.outline : []} />
+          </section>
+        );
+      })}
+      <section className="bid-analysis-structured-card">
+        <header><strong>固定响应模板</strong><span>{templates.length} 项</span></header>
+        {templates.length ? (
+          <ul className="bid-analysis-template-list">
+            {templates.map((template) => (
+              <li key={template.template_id}>
+                <strong>{template.source_title}</strong>
+                <span>{template.kind === 'locked-commitment' ? '固定承诺函' : '固定表格'}</span>
+                <em>{template.confirmed ? '已锁定' : '待核对'}</em>
+                <button type="button" className="secondary-action" onClick={() => onReviewTemplate(template)}>
+                  {template.confirmed ? '重新核对' : '核对并锁定'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : <p>当前格式没有固定承诺函或固定表格。</p>}
+      </section>
+    </div>
+  );
+}
+
 function BidAnalysisPage({
   hasTenderFile,
+  hasFormatDependentWork,
   mode,
   selectedTaskIds,
   bidSectionMode,
@@ -206,6 +298,8 @@ function BidAnalysisPage({
   bidSectionExtractionStatus,
   bidSectionExtractionError,
   selectedSectionTitle,
+  responseTemplates,
+  taskDefinitions,
   tasks,
   task,
   progress,
@@ -217,11 +311,19 @@ function BidAnalysisPage({
   const [fullRerunSeenRunning, setFullRerunSeenRunning] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState('projectOverview');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [draftSelectedTaskIds, setDraftSelectedTaskIds] = useState<string[]>(() => getSelectedTaskIdsForMode(mode, selectedTaskIds));
+  const [draftSelectedTaskIds, setDraftSelectedTaskIds] = useState<string[]>(() => getSelectedTaskIdsForMode(taskDefinitions, mode, selectedTaskIds));
   const [draftBidSectionMode, setDraftBidSectionMode] = useState<BidSectionMode>(bidSectionMode);
   const [sectionSelectorOpen, setSectionSelectorOpen] = useState(false);
   const [selectingSection, setSelectingSection] = useState(false);
   const [pendingAnalysisAfterSection, setPendingAnalysisAfterSection] = useState<{ taskIds?: string[]; nextTaskIds: string[] } | null>(null);
+  const [pendingFormatReset, setPendingFormatReset] = useState<{
+    taskIds?: string[];
+    nextTaskIds: string[];
+    options: { skipCheck?: boolean; overrideMode?: BidSectionMode };
+  } | null>(null);
+  const [reviewingTemplate, setReviewingTemplate] = useState<ResponseTemplateRecord | null>(null);
+  const [templateDraft, setTemplateDraft] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [sectionModeWarning, setSectionModeWarning] = useState<{
     type: 'single-suspected-multiple' | 'multiple-not-detected';
     taskIds?: string[];
@@ -229,27 +331,49 @@ function BidAnalysisPage({
   } | null>(null);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
   const { showToast } = useToast();
-  const effectiveSelectedTaskIds = useMemo(() => getSelectedTaskIdsForMode(mode, selectedTaskIds), [mode, selectedTaskIds]);
+  const bidAnalysisTasks = taskDefinitions;
+  const allBidAnalysisTaskIds = useMemo(() => taskDefinitions.map((definition) => definition.id), [taskDefinitions]);
+  const requiredBidAnalysisTaskIds = useMemo(
+    () => taskDefinitions.filter((definition) => definition.required).map((definition) => definition.id),
+    [taskDefinitions],
+  );
+  const requiredBidAnalysisTaskIdSet = useMemo(() => new Set(requiredBidAnalysisTaskIds), [requiredBidAnalysisTaskIds]);
+  const taskGroups = useMemo(() => [
+    { title: '关键项', group: 'key' as const },
+    { title: '其他项', group: 'optional' as const },
+  ], []);
+  const effectiveSelectedTaskIds = useMemo(
+    () => getSelectedTaskIdsForMode(taskDefinitions, mode, selectedTaskIds),
+    [mode, selectedTaskIds, taskDefinitions],
+  );
   const selectedTasks = useMemo(() => {
     const selectedIdSet = new Set(effectiveSelectedTaskIds);
     return bidAnalysisTasks.filter((task) => selectedIdSet.has(task.id));
   }, [effectiveSelectedTaskIds]);
-  const requiredTasks = useMemo(() => getBidAnalysisTasks('key'), []);
+  const requiredTasks = useMemo(() => getBidAnalysisTasks(taskDefinitions, 'key'), [taskDefinitions]);
   const visibleSelectedTaskId = selectedTasks.some((task) => task.id === selectedTaskId)
     ? selectedTaskId
     : selectedTasks[0]?.id || 'projectOverview';
   const activeTask = selectedTasks.find((task) => task.id === visibleSelectedTaskId) || selectedTasks[0];
   const activeTaskState = activeTask ? tasks[activeTask.id] : undefined;
-  const activeTaskStatus = activeTaskState?.status || 'idle';
+  const activeTaskStatus = activeTaskState?.status === 'success' && activeTask && !isBidAnalysisTaskResultValid(activeTask, activeTaskState)
+    ? 'error'
+    : activeTaskState?.status || 'idle';
   const activeTaskContent = activeTaskState?.content || '';
-  const failedTaskCount = selectedTasks.filter((task) => tasks[task.id]?.status === 'error').length;
+  const failedTaskCount = selectedTasks.filter((definition) => {
+    const state = tasks[definition.id];
+    return state?.status === 'error' || (state?.status === 'success' && !isBidAnalysisTaskResultValid(definition, state));
+  }).length;
   const doneCount = selectedTasks.filter((task) => {
     const status = tasks[task.id]?.status;
     return status === 'success' || status === 'error';
   }).length;
   const sectionTaskRunning = bidSectionExtractionTask?.status === 'running' || bidSectionExtractionTask?.status === 'pausing';
   const taskRunning = running || fullRerunLocked || sectionTaskRunning || task?.status === 'running';
-  const requiredDone = requiredTasks.every((task) => tasks[task.id]?.status === 'success' && String(tasks[task.id]?.content || '').trim());
+  const requiredDone = areRequiredBidAnalysisTasksReady(taskDefinitions, tasks);
+  const missingRequiredLabels = requiredTasks
+    .filter((definition) => !isBidAnalysisTaskResultValid(definition, tasks[definition.id]))
+    .map((definition) => definition.label);
   const isPromptCacheOptimizing = taskRunning
     && selectedTasks.length > 1
     && selectedTasks.some((task) => task.id === 'projectOverview')
@@ -259,14 +383,14 @@ function BidAnalysisPage({
     ? '正在优化提示词缓存'
     : requiredDone && taskRunning
       ? '关键项已解析完成，等待当前解析任务结束后进入下一步。'
-      : requiredDone ? '招标文件解析任务已结束，可以进入下一步。' : '等待项目概述、技术评分、项目信息、甲方信息和交货服务要求解析成功。';
+      : requiredDone ? '招标文件解析任务已结束，可以进入下一步。' : `等待 7 个关键项解析成功${missingRequiredLabels.length ? `：${missingRequiredLabels.join('、')}` : ''}。`;
   const bidSectionConfigLabel = bidSectionMode === 'multiple'
     ? selectedSectionTitle ? `多标段 · ${selectedSectionTitle}` : '多标段 · 待选择'
     : '单标段';
   const configLabel = `${bidSectionConfigLabel} · ${getModeLabel(mode)}`;
 
   const syncProgressForSelection = (nextTaskIds: string[]) => {
-    const selectedIdSet = new Set(normalizeSelectedTaskIds(nextTaskIds));
+    const selectedIdSet = new Set(normalizeSelectedTaskIds(taskDefinitions, nextTaskIds));
     const nextTasks = bidAnalysisTasks.filter((task) => selectedIdSet.has(task.id));
     const nextDoneCount = nextTasks.filter((task) => {
       const status = tasks[task.id]?.status;
@@ -328,8 +452,8 @@ function BidAnalysisPage({
   };
 
   const saveConfig = async (nextTaskIds = draftSelectedTaskIds, closeDialog = true, nextBidSectionMode = draftBidSectionMode) => {
-    const normalizedTaskIds = normalizeSelectedTaskIds(nextTaskIds);
-    const nextMode = getModeForSelection(normalizedTaskIds);
+    const normalizedTaskIds = normalizeSelectedTaskIds(taskDefinitions, nextTaskIds);
+    const nextMode = getModeForSelection(taskDefinitions, normalizedTaskIds);
     const saved = await window.yibiao?.technicalPlan.saveBidAnalysisConfig({ mode: nextMode, selectedTaskIds: normalizedTaskIds, bidSectionMode: nextBidSectionMode });
     if (saved) {
       onConfigSaved(saved);
@@ -348,11 +472,13 @@ function BidAnalysisPage({
       return;
     }
 
-    const normalizedTaskIds = normalizeSelectedTaskIds(nextTaskIds);
+    const normalizedTaskIds = normalizeSelectedTaskIds(taskDefinitions, nextTaskIds);
     const nextSelectedIdSet = new Set(normalizedTaskIds);
     const nextSelectedTasks = bidAnalysisTasks.filter((task) => nextSelectedIdSet.has(task.id));
     const retryTask = taskIds?.length === 1 ? nextSelectedTasks.find((task) => task.id === taskIds[0]) : undefined;
-    const forceRerun = !taskIds?.length && nextSelectedTasks.length > 0 && nextSelectedTasks.every((task) => tasks[task.id]?.status === 'success');
+    const forceRerun = !taskIds?.length
+      && nextSelectedTasks.length > 0
+      && nextSelectedTasks.every((definition) => isBidAnalysisTaskResultValid(definition, tasks[definition.id]));
 
     try {
       setRunning(true);
@@ -382,14 +508,25 @@ function BidAnalysisPage({
     }
   };
 
-  const startAnalysis = async (taskIds?: string[], nextTaskIds = draftSelectedTaskIds, options: { skipCheck?: boolean; overrideMode?: BidSectionMode } = {}) => {
+  const startAnalysis = async (
+    taskIds?: string[],
+    nextTaskIds = draftSelectedTaskIds,
+    options: { skipCheck?: boolean; overrideMode?: BidSectionMode; formatResetConfirmed?: boolean } = {},
+  ) => {
     if (!hasTenderFile) {
       showToast('请先上传招标文件', 'info');
       return;
     }
 
     const nextBidSectionMode = options.overrideMode || draftBidSectionMode;
-    const normalizedTaskIds = normalizeSelectedTaskIds(nextTaskIds);
+    const normalizedTaskIds = normalizeSelectedTaskIds(taskDefinitions, nextTaskIds);
+    const includesFormatAnalysis = taskIds?.length
+      ? taskIds.includes('bidDocumentFormatRequirements')
+      : normalizedTaskIds.includes('bidDocumentFormatRequirements');
+    if (hasFormatDependentWork && includesFormatAnalysis && !options.formatResetConfirmed) {
+      setPendingFormatReset({ taskIds, nextTaskIds: normalizedTaskIds, options });
+      return;
+    }
 
     if (!options.skipCheck) {
       try {
@@ -501,7 +638,7 @@ function BidAnalysisPage({
     }
 
     setDraftSelectedTaskIds((prev) => {
-      const selectedSet = new Set(normalizeSelectedTaskIds(prev));
+      const selectedSet = new Set(normalizeSelectedTaskIds(taskDefinitions, prev));
       if (selectedSet.has(taskId)) {
         selectedSet.delete(taskId);
       } else {
@@ -535,8 +672,32 @@ function BidAnalysisPage({
     showToast('解析结果已复制', 'success');
   };
 
-  const renderConfigTask = (definition: typeof bidAnalysisTasks[number]) => {
-    const selected = normalizeSelectedTaskIds(draftSelectedTaskIds).includes(definition.id);
+  const openTemplateReview = (template: ResponseTemplateRecord) => {
+    setReviewingTemplate(template);
+    setTemplateDraft(JSON.stringify(template.template, null, 2));
+  };
+
+  const confirmTemplate = async () => {
+    if (!reviewingTemplate) return;
+    try {
+      setSavingTemplate(true);
+      const parsed = JSON.parse(templateDraft) as ResponseTemplateRecord['template'];
+      const saved = await window.yibiao?.technicalPlan.confirmResponseTemplate({
+        templateId: reviewingTemplate.template_id,
+        template: parsed,
+      });
+      if (saved) onConfigSaved(saved);
+      setReviewingTemplate(null);
+      showToast('固定模板已由 Main 校验并锁定', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '固定模板核对失败', 'error');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const renderConfigTask = (definition: BidAnalysisTaskDefinition) => {
+    const selected = normalizeSelectedTaskIds(taskDefinitions, draftSelectedTaskIds).includes(definition.id);
     const required = definition.required;
 
     return (
@@ -555,8 +716,8 @@ function BidAnalysisPage({
     );
   };
 
-  const draftMode = getModeForSelection(draftSelectedTaskIds);
-  const draftSelectedCount = normalizeSelectedTaskIds(draftSelectedTaskIds).length;
+  const draftMode = getModeForSelection(taskDefinitions, draftSelectedTaskIds);
+  const draftSelectedCount = normalizeSelectedTaskIds(taskDefinitions, draftSelectedTaskIds).length;
   const hasExtractedBidSections = bidSectionExtractionStatus === 'success' && bidSections.length >= 2;
   const bidSectionActionLabel = sectionTaskRunning
     ? '识别中...'
@@ -619,7 +780,7 @@ function BidAnalysisPage({
           </div>
           <div className="bid-analysis-task-list">
             {taskGroups.map((group) => {
-              const groupTasks = selectedTasks.filter((task) => group.ids.includes(task.id));
+              const groupTasks = selectedTasks.filter((task) => task.group === group.group);
               if (!groupTasks.length) {
                 return null;
               }
@@ -628,8 +789,11 @@ function BidAnalysisPage({
                 <div className="bid-analysis-task-group" key={group.title}>
                   <span>{group.title}</span>
                   {groupTasks.map((task) => {
-                    const status = tasks[task.id]?.status || 'idle';
-                    const content = tasks[task.id]?.content || '';
+                    const taskState = tasks[task.id];
+                    const status = taskState?.status === 'success' && !isBidAnalysisTaskResultValid(task, taskState)
+                      ? 'error'
+                      : taskState?.status || 'idle';
+                    const content = taskState?.content || '';
 
                     return (
                       <button
@@ -668,7 +832,9 @@ function BidAnalysisPage({
 
           {activeTaskContent ? (
             activeTask?.output === 'json' ? (
-              <JsonResultTable content={activeTaskContent} />
+              activeTask.id === 'bidDocumentFormatRequirements'
+                ? <FormatRequirementsResult content={activeTaskContent} templates={responseTemplates} onReviewTemplate={openTemplateReview} />
+                : <JsonResultTable content={activeTaskContent} />
             ) : (
               <MarkdownFullscreenViewer className="markdown-viewer bid-analysis-output" title={`${activeTask?.label || '解析结果'}全屏预览`}>
                 <MarkdownRenderer>
@@ -840,6 +1006,58 @@ function BidAnalysisPage({
                   <button type="button" className="primary-action" onClick={() => continueFromSectionModeWarning('multiple')}>继续 AI 识别</button>
                 </>
               )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(pendingFormatReset)} onOpenChange={(open) => { if (!open) setPendingFormatReset(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-regenerate-card">
+            <Dialog.Title className="content-regenerate-title">确认补充或重做格式解析</Dialog.Title>
+            <Dialog.Description className="content-regenerate-description">
+              当前工作区已有目录或正文。只有新的完整格式分析结果与原 Hash 不同时，系统才会清理旧目录、全局事实和正文；相同结果会原样保留。是否继续？
+            </Dialog.Description>
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" onClick={() => setPendingFormatReset(null)}>取消</button>
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => {
+                  const pending = pendingFormatReset;
+                  setPendingFormatReset(null);
+                  if (pending) {
+                    void startAnalysis(pending.taskIds, pending.nextTaskIds, { ...pending.options, formatResetConfirmed: true });
+                  }
+                }}
+              >继续解析</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(reviewingTemplate)} onOpenChange={(open) => { if (!open && !savingTemplate) setReviewingTemplate(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-regenerate-card bid-analysis-template-review-card">
+            <Dialog.Title className="content-regenerate-title">核对并锁定：{reviewingTemplate?.source_title}</Dialog.Title>
+            <Dialog.Description className="content-regenerate-description">
+              只修正文档转 Markdown 造成的原文、标点、槽位或表格结构错误。确认后 Main 将重新校验模板并计算锁定 Hash；不要改写招标文件固定内容。
+            </Dialog.Description>
+            <textarea
+              className="bid-analysis-template-review-editor"
+              value={templateDraft}
+              onChange={(event) => setTemplateDraft(event.target.value)}
+              spellCheck={false}
+              disabled={savingTemplate}
+              aria-label="固定模板结构"
+            />
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" onClick={() => setReviewingTemplate(null)} disabled={savingTemplate}>取消</button>
+              <button type="button" className="primary-action" onClick={() => { void confirmTemplate(); }} disabled={savingTemplate}>
+                {savingTemplate ? '锁定中...' : '确认并锁定'}
+              </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

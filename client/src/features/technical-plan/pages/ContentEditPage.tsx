@@ -1,12 +1,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import * as Switch from '@radix-ui/react-switch';
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { MarkdownEditor, MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
 import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem } from '../../../shared/types';
+import type { ComplianceRisk, FixedMarkdownTableTemplate, LockedCommitmentTemplate, ResponseStatus, ResponseTemplateRecord } from '../../../shared/types/outline';
 import { countReadableWords } from '../../../shared/utils/wordCount';
-import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, TechnicalPlanWorkflowKind } from '../types';
+import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, TechnicalPlanState, TechnicalPlanWorkflowKind } from '../types';
 import type { ExportFormatConfig } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
 import { buildExportFormatCssVars } from '../../../shared/utils/exportFormatCss';
@@ -20,9 +21,11 @@ interface ContentEditPageProps {
   task?: BackgroundTaskState;
   contentGenerationOptions?: ContentGenerationOptions;
   contentIllustrationPlan?: ContentIllustrationPlanState;
+  responseTemplates?: ResponseTemplateRecord[];
   sections: ContentGenerationSections;
   onContentGenerationOptionsChange: (options: ContentGenerationOptions) => Promise<void> | void;
   onContentSaved: (item: OutlineItem, content: string) => Promise<void> | void;
+  onControlledStateSaved: (state: TechnicalPlanState) => void;
 }
 
 type TreeStatus = ContentGenerationSectionStatus | 'partial' | 'planning';
@@ -92,6 +95,38 @@ const imageGenerationExamples: Record<'ai' | 'html', { src: string; alt: string 
   ai: { src: aiImageExampleUrl, alt: 'AI 生图示例' },
   html: { src: htmlImageExampleUrl, alt: 'HTML 生图示例' },
 };
+
+const responseStatusLabels: Record<ResponseStatus, string> = {
+  pending: '待响应',
+  'responded-substantive': '已实质响应',
+  'responded-none': '已无内容响应',
+  'needs-manual-input': '待人工填写',
+  'missing-required-evidence': '缺少必要材料',
+};
+
+const complianceRiskLabels: Record<ComplianceRisk, string> = {
+  none: '无风险',
+  warning: '待核对',
+  high: '高风险',
+  'potential-rejection': '可能废标',
+};
+
+function normalizeRepeatableRows(
+  template: FixedMarkdownTableTemplate,
+  storedRows: Record<string, Array<Record<string, string>>>,
+) {
+  const normalized: Record<string, Array<Record<string, string>>> = {};
+
+  template.body.forEach((item) => {
+    if (item.kind !== 'repeatable-region') return;
+    const rows = (storedRows[item.region_id] || []).map((row) => ({ ...row }));
+    const boundedRows = typeof item.max_rows === 'number' ? rows.slice(0, item.max_rows) : rows;
+    while (boundedRows.length < item.min_rows) boundedRows.push({});
+    normalized[item.region_id] = boundedRows;
+  });
+
+  return normalized;
+}
 
 // 渲染生图示例入口使用的帮助图标。
 function ImageExampleIcon() {
@@ -291,9 +326,11 @@ function ContentEditPage({
   task,
   contentGenerationOptions,
   contentIllustrationPlan,
+  responseTemplates = [],
   sections,
   onContentGenerationOptionsChange,
   onContentSaved,
+  onControlledStateSaved,
 }: ContentEditPageProps) {
   const { showToast } = useToast();
   const isExpansionWorkflow = workflowKind === 'existing-plan-expansion';
@@ -316,10 +353,26 @@ function ContentEditPage({
   const [pausePending, setPausePending] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [developerMode, setDeveloperMode] = useState(false);
+  const [lockedSlotValues, setLockedSlotValues] = useState<Record<string, string>>({});
+  const [fixedCellValues, setFixedCellValues] = useState<Record<string, string>>({});
+  const [fixedRepeatableRows, setFixedRepeatableRows] = useState<Record<string, Array<Record<string, string>>>>({});
+  const [controlledSaving, setControlledSaving] = useState(false);
   const firstLeafId = leaves[0]?.id || '';
   const selectedItem = outlineData?.outline && selectedItemId ? findItem(outlineData.outline, selectedItemId) : null;
   const selectedIsLeaf = Boolean(selectedItem && !selectedItem.children?.length);
   const selectedContent = selectedItem && selectedIsLeaf ? getLeafContent(selectedItem, sections) : '';
+  const selectedResponseMode = selectedItem?.response_mode || 'freeform-markdown';
+  const selectedTemplate = selectedItem?.template_id
+    ? responseTemplates.find((template) => template.template_id === selectedItem.template_id)
+    : undefined;
+  const controlledDraftKey = JSON.stringify([
+    selectedItem?.id,
+    selectedItem?.template_values,
+    selectedTemplate?.template_id,
+    selectedTemplate?.confirmed,
+    selectedTemplate?.template,
+  ]);
+  const selectedCanEditMarkdown = selectedResponseMode === 'freeform-markdown' || selectedResponseMode === 'evidence-markdown';
   const exportFormatPreviewStyle = useMemo<CSSProperties>(() => buildExportFormatCssVars(exportFormat), [exportFormat]);
   const running = task?.status === 'running';
   const pausing = task?.status === 'pausing' || pausePending;
@@ -582,6 +635,19 @@ function ContentEditPage({
     setIsPreviewing(false);
     setDraftContent('');
   }, [editingItemId, selectedItem]);
+
+  useEffect(() => {
+    const templateValues = selectedItem?.template_values;
+    setLockedSlotValues(templateValues && 'slot_values' in templateValues ? { ...templateValues.slot_values } : {});
+    setFixedCellValues(templateValues && 'cell_values' in templateValues ? { ...templateValues.cell_values } : {});
+
+    if (selectedTemplate?.template.kind === 'fixed-markdown-table') {
+      const storedRows = templateValues && 'repeatable_rows' in templateValues ? templateValues.repeatable_rows : {};
+      setFixedRepeatableRows(normalizeRepeatableRows(selectedTemplate.template, storedRows));
+    } else {
+      setFixedRepeatableRows({});
+    }
+  }, [controlledDraftKey]);
 
   const openGenerationDialog = async () => {
     if (!outlineData?.outline?.length) {
@@ -894,6 +960,11 @@ function ContentEditPage({
       return;
     }
 
+    if ((requirementItem.response_mode || 'freeform-markdown') !== 'freeform-markdown') {
+      showToast('当前小节采用受控响应，不允许 AI 重新生成', 'info');
+      return;
+    }
+
     try {
       const config = await window.yibiao?.config.load();
       const nextImageModelStatus = config?.image_model?.status || 'untested';
@@ -950,6 +1021,11 @@ function ContentEditPage({
       return;
     }
 
+    if (!selectedCanEditMarkdown) {
+      showToast('当前小节采用受控响应，请使用专用表单填写', 'info');
+      return;
+    }
+
     setEditingItemId(selectedItem.id);
     setIsPreviewing(false);
     setDraftContent(selectedContent);
@@ -975,6 +1051,11 @@ function ContentEditPage({
       return;
     }
 
+    if (!selectedCanEditMarkdown) {
+      showToast('当前小节不允许保存自由 Markdown 正文', 'info');
+      return;
+    }
+
     try {
       await onContentSaved(selectedItem, draftContent);
       setEditingItemId(null);
@@ -985,10 +1066,254 @@ function ContentEditPage({
     }
   };
 
+  const saveLockedTemplateValues = async () => {
+    if (!selectedItem || selectedResponseMode !== 'locked-commitment') {
+      showToast('当前小节不是锁定承诺响应', 'info');
+      return;
+    }
+    if (!selectedTemplate || selectedTemplate.template.kind !== 'locked-commitment') {
+      showToast('未找到可用的锁定承诺模板', 'error');
+      return;
+    }
+    if (!selectedTemplate.confirmed) {
+      showToast('模板尚未确认，请先在招标解析结果中确认', 'info');
+      return;
+    }
+    if (taskBlocksGeneration || controlledSaving) return;
+
+    const api = window.yibiao?.technicalPlan;
+    if (!api) {
+      showToast('当前客户端不支持保存受控响应', 'error');
+      return;
+    }
+
+    try {
+      setControlledSaving(true);
+      const saved = await api.saveLockedTemplateValues({
+        nodeId: selectedItem.id,
+        templateId: selectedTemplate.template_id,
+        slotValues: lockedSlotValues,
+      });
+      onControlledStateSaved(saved);
+      showToast('承诺填写内容已保存', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '承诺填写内容保存失败', 'error');
+    } finally {
+      setControlledSaving(false);
+    }
+  };
+
+  const saveFixedTableValues = async () => {
+    if (!selectedItem || selectedResponseMode !== 'fixed-markdown-table') {
+      showToast('当前小节不是固定表格响应', 'info');
+      return;
+    }
+    if (!selectedTemplate || selectedTemplate.template.kind !== 'fixed-markdown-table') {
+      showToast('未找到可用的固定表格模板', 'error');
+      return;
+    }
+    if (!selectedTemplate.confirmed) {
+      showToast('模板尚未确认，请先在招标解析结果中确认', 'info');
+      return;
+    }
+    if (taskBlocksGeneration || controlledSaving) return;
+
+    const api = window.yibiao?.technicalPlan;
+    if (!api) {
+      showToast('当前客户端不支持保存受控响应', 'error');
+      return;
+    }
+
+    try {
+      setControlledSaving(true);
+      const saved = await api.saveFixedTableValues({
+        nodeId: selectedItem.id,
+        templateId: selectedTemplate.template_id,
+        cellValues: fixedCellValues,
+        repeatableRows: normalizeRepeatableRows(selectedTemplate.template, fixedRepeatableRows),
+      });
+      onControlledStateSaved(saved);
+      showToast('固定表格填写内容已保存', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '固定表格填写内容保存失败', 'error');
+    } finally {
+      setControlledSaving(false);
+    }
+  };
+
+  const updateRepeatableCell = (regionId: string, rowIndex: number, slotId: string, value: string) => {
+    setFixedRepeatableRows((current) => ({
+      ...current,
+      [regionId]: (current[regionId] || []).map((row, index) => index === rowIndex ? { ...row, [slotId]: value } : row),
+    }));
+  };
+
+  const addRepeatableRow = (regionId: string, maxRows?: number) => {
+    setFixedRepeatableRows((current) => {
+      const rows = current[regionId] || [];
+      if (typeof maxRows === 'number' && rows.length >= maxRows) return current;
+      return { ...current, [regionId]: [...rows, {}] };
+    });
+  };
+
+  const removeRepeatableRow = (regionId: string, rowIndex: number, minRows: number) => {
+    setFixedRepeatableRows((current) => {
+      const rows = current[regionId] || [];
+      if (rows.length <= minRows) return current;
+      return { ...current, [regionId]: rows.filter((_, index) => index !== rowIndex) };
+    });
+  };
+
+  const renderResponseMeta = (item: OutlineItem) => (
+    <div className="controlled-response-meta">
+      <span>响应状态：<strong>{responseStatusLabels[item.response_status || 'pending']}</strong></span>
+      <span className={`is-risk-${item.compliance_risk || 'none'}`}>合规风险：<strong>{complianceRiskLabels[item.compliance_risk || 'none']}</strong></span>
+      {item.compliance_message ? <p>{item.compliance_message}</p> : null}
+    </div>
+  );
+
+  const renderTemplateUnavailable = () => (
+    <div className="controlled-response-notice is-warning">
+      <strong>{selectedTemplate ? '响应模板待人工确认' : '未找到响应模板'}</strong>
+      <p>{selectedTemplate ? '确认前不能填写或保存，请回到招标解析结果核对原文。' : '请返回招标解析重新生成并确认模板。'}</p>
+    </div>
+  );
+
+  const renderLockedCommitment = (template: LockedCommitmentTemplate) => {
+    const editable = Boolean(selectedTemplate?.confirmed) && !taskBlocksGeneration;
+    return (
+      <div className="controlled-response-panel">
+        {selectedItem ? renderResponseMeta(selectedItem) : null}
+        {!selectedTemplate?.confirmed ? renderTemplateUnavailable() : null}
+        <section className="locked-commitment-preview" aria-label="锁定承诺正文预览">
+          {template.segments.map((segment, index) => segment.type === 'locked' ? (
+            <span className="locked-segment" key={`locked-${index}`}>{segment.text}</span>
+          ) : (
+            <span className={`locked-slot-preview${lockedSlotValues[segment.slot_id]?.trim() ? '' : ' is-missing'}`} key={segment.slot_id}>
+              {lockedSlotValues[segment.slot_id]?.trim() || `[待人工填写：${segment.label}]`}
+            </span>
+          ))}
+        </section>
+        <div className="controlled-response-form">
+          {template.segments.filter((segment) => segment.type === 'slot').map((segment) => segment.type === 'slot' ? (
+            <label key={segment.slot_id}>
+              <span>{segment.label}{segment.required ? '（必填）' : ''}</span>
+              <input
+                value={lockedSlotValues[segment.slot_id] || ''}
+                onChange={(event) => setLockedSlotValues((current) => ({ ...current, [segment.slot_id]: event.target.value }))}
+                placeholder={segment.required ? '待人工填写' : '可选填写'}
+                disabled={!editable || controlledSaving}
+              />
+              {segment.required && !lockedSlotValues[segment.slot_id]?.trim() ? <small>待人工填写 / 待核对</small> : null}
+            </label>
+          ) : null)}
+        </div>
+        <div className="controlled-response-actions">
+          <button type="button" className="primary-action" onClick={() => void saveLockedTemplateValues()} disabled={!editable || controlledSaving}>
+            {controlledSaving ? '保存中...' : '保存填写内容'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFixedTable = (template: FixedMarkdownTableTemplate) => {
+    const editable = Boolean(selectedTemplate?.confirmed) && !taskBlocksGeneration;
+    return (
+      <div className="controlled-response-panel fixed-response-panel">
+        {selectedItem ? renderResponseMeta(selectedItem) : null}
+        {!selectedTemplate?.confirmed ? renderTemplateUnavailable() : null}
+        {template.table_title ? <h3>{template.table_title}</h3> : null}
+        <div className="fixed-response-table-wrap">
+          <table className="fixed-response-table">
+            <thead><tr>{template.headers.map((header, index) => <th key={`${header}-${index}`}>{header}</th>)}</tr></thead>
+            <tbody>
+              {template.body.map((item) => item.kind === 'row' ? (
+                <tr key={item.row.row_id}>
+                  {item.row.cells.map((cell, index) => cell.kind === 'locked' ? (
+                    <td key={`${item.row.row_id}-${index}`}><span className="fixed-cell-value">{cell.text || ''}</span></td>
+                  ) : (
+                    <td key={cell.slot_id || `${item.row.row_id}-${index}`}>
+                      <input
+                        value={cell.slot_id ? fixedCellValues[cell.slot_id] || '' : ''}
+                        onChange={(event) => cell.slot_id && setFixedCellValues((current) => ({ ...current, [cell.slot_id!]: event.target.value }))}
+                        placeholder={cell.required ? '待人工填写' : cell.label || '请填写'}
+                        disabled={!editable || controlledSaving || !cell.slot_id}
+                      />
+                      {cell.required && cell.slot_id && !fixedCellValues[cell.slot_id]?.trim() ? <small>待核对</small> : null}
+                    </td>
+                  ))}
+                </tr>
+              ) : (
+                <Fragment key={item.region_id}>
+                  <tr className="repeatable-region-head">
+                    <td colSpan={Math.max(1, template.headers.length)}>
+                      <span>可重复行（{item.min_rows}–{item.max_rows ?? '不限'} 行）</span>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => addRepeatableRow(item.region_id, item.max_rows)}
+                        disabled={!editable || controlledSaving || (typeof item.max_rows === 'number' && (fixedRepeatableRows[item.region_id]?.length || 0) >= item.max_rows)}
+                      >添加一行</button>
+                    </td>
+                  </tr>
+                  {(fixedRepeatableRows[item.region_id] || []).map((row, rowIndex) => (
+                    <Fragment key={`${item.region_id}-${rowIndex}`}>
+                      <tr>
+                        {item.row_template.cells.map((cell, cellIndex) => cell.kind === 'locked' ? (
+                          <td key={`${item.region_id}-${rowIndex}-${cellIndex}`}><span className="fixed-cell-value">{cell.text || ''}</span></td>
+                        ) : (
+                          <td key={`${item.region_id}-${rowIndex}-${cell.slot_id || cellIndex}`}>
+                            <div className="repeatable-cell-editor">
+                              <input
+                                value={cell.slot_id ? row[cell.slot_id] || '' : ''}
+                                onChange={(event) => cell.slot_id && updateRepeatableCell(item.region_id, rowIndex, cell.slot_id, event.target.value)}
+                                placeholder={cell.required ? '待人工填写' : cell.label || '请填写'}
+                                disabled={!editable || controlledSaving || !cell.slot_id}
+                              />
+                              {cell.required && cell.slot_id && !row[cell.slot_id]?.trim() ? <small>待核对</small> : null}
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="repeatable-row-actions">
+                        <td colSpan={Math.max(1, template.headers.length)}>
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => removeRepeatableRow(item.region_id, rowIndex, item.min_rows)}
+                            disabled={!editable || controlledSaving || (fixedRepeatableRows[item.region_id]?.length || 0) <= item.min_rows}
+                          >删除本行</button>
+                        </td>
+                      </tr>
+                    </Fragment>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {template.fixed_notes.length ? (
+          <section className="fixed-response-notes">
+            <strong>固定说明</strong>
+            {template.fixed_notes.map((note, index) => <p key={`${note}-${index}`}>{note}</p>)}
+          </section>
+        ) : null}
+        <div className="controlled-response-actions">
+          <button type="button" className="primary-action" onClick={() => void saveFixedTableValues()} disabled={!editable || controlledSaving}>
+            {controlledSaving ? '保存中...' : '保存表格填写'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderTree = (items: OutlineItem[], level = 0): ReactNode => items.map((item) => {
     const meta = outlineMeta.get(item.id);
     const status = meta?.status || 'idle';
     const isLeaf = !item.children?.length;
+    const canRegenerate = isLeaf && (item.response_mode || 'freeform-markdown') === 'freeform-markdown';
+    const itemStatusLabel = item.response_status ? responseStatusLabels[item.response_status] : statusLabels[status];
     const leafCount = meta?.leafCount || 0;
     const words = meta?.words || 0;
 
@@ -1002,9 +1327,9 @@ function ContentEditPage({
           <span className="content-outline-dot" aria-hidden="true" />
           <span className="content-outline-text">
             <strong>{formatOutlineTitle(item.id, item.title, exportFormat.headings[Math.min(item.id.split('.').length - 1, 5)])}</strong>
-            <small>{isLeaf ? `${statusLabels[status]} · ${words} 字` : `${statusLabels[status]} · ${leafCount} 个小节 · ${words} 字`}</small>
+            <small>{isLeaf ? `${itemStatusLabel} · ${words} 字` : `${itemStatusLabel} · ${leafCount} 个小节 · ${words} 字`}</small>
           </span>
-          {isLeaf && (status === 'success' || status === 'error') ? (
+          {canRegenerate && (status === 'success' || status === 'error') ? (
             <Popover.Root
               open={confirmRegenerateItem?.id === item.id}
               onOpenChange={(open) => setConfirmRegenerateItem(open ? item : null)}
@@ -1015,7 +1340,7 @@ function ContentEditPage({
                   onClick={(event) => {
                     event.stopPropagation();
                   }}
-                >{statusLabels[status]}</em>
+                >{itemStatusLabel}</em>
               </Popover.Trigger>
               <Popover.Portal>
                 <Popover.Content className="content-regenerate-popover" side="top" align="end" sideOffset={8}>
@@ -1039,7 +1364,7 @@ function ContentEditPage({
               </Popover.Portal>
             </Popover.Root>
           ) : (
-            <em>{statusLabels[status]}</em>
+            <em>{itemStatusLabel}</em>
           )}
         </button>
         {item.children?.length ? renderTree(item.children, level + 1) : null}
@@ -1148,7 +1473,12 @@ function ContentEditPage({
               <p>{selectedItem?.description || '选择左侧目录项查看生成正文。'}</p>
             </div>
             <div className="content-reader-actions">
-              <span className={`content-status-badge is-${selectedStatus}`}>{statusLabels[selectedStatus]}</span>
+              <span className={`content-status-badge is-${selectedStatus}`}>
+                {selectedItem?.response_status ? responseStatusLabels[selectedItem.response_status] : statusLabels[selectedStatus]}
+              </span>
+              {selectedItem?.compliance_risk && selectedItem.compliance_risk !== 'none' ? (
+                <span className={`content-risk-badge is-${selectedItem.compliance_risk}`}>{complianceRiskLabels[selectedItem.compliance_risk]}</span>
+              ) : null}
               {editing ? (
                 <>
                   <button type="button" className={isPreviewing ? 'secondary-action' : 'primary-action'} onClick={togglePreview}>
@@ -1157,13 +1487,36 @@ function ContentEditPage({
                   <button type="button" className="primary-action" onClick={saveEditingContent} disabled={taskBlocksGeneration}>保存</button>
                   <button type="button" className="secondary-action" onClick={cancelEditingContent}>取消</button>
                 </>
-              ) : (
-                <button type="button" className="secondary-action" onClick={startEditingContent} disabled={!selectedItem || !selectedIsLeaf || taskBlocksGeneration}>编辑</button>
-              )}
+              ) : selectedCanEditMarkdown ? (
+                <button type="button" className="secondary-action" onClick={startEditingContent} disabled={!selectedItem || !selectedIsLeaf || taskBlocksGeneration}>
+                  {selectedResponseMode === 'evidence-markdown' ? '手工编辑' : '编辑'}
+                </button>
+              ) : null}
             </div>
           </div>
 
-          {selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
+          {selectedItem && selectedResponseMode === 'locked-commitment' ? (
+            selectedTemplate?.template.kind === 'locked-commitment'
+              ? renderLockedCommitment(selectedTemplate.template)
+              : <div className="controlled-response-panel">{renderResponseMeta(selectedItem)}{renderTemplateUnavailable()}</div>
+          ) : selectedItem && selectedResponseMode === 'fixed-markdown-table' ? (
+            selectedTemplate?.template.kind === 'fixed-markdown-table'
+              ? renderFixedTable(selectedTemplate.template)
+              : <div className="controlled-response-panel">{renderResponseMeta(selectedItem)}{renderTemplateUnavailable()}</div>
+          ) : selectedItem && selectedResponseMode === 'explicit-none' ? (
+            <div className="controlled-response-panel explicit-none-response">
+              {renderResponseMeta(selectedItem)}
+              <strong>固定响应</strong>
+              <p>{selectedItem.empty_response_text || selectedContent || '无'}</p>
+              <small>该内容由招标文件响应规则固定，不开放编辑或 AI 改写。</small>
+            </div>
+          ) : selectedItem && selectedResponseMode === 'container' ? (
+            <div className="controlled-response-panel container-response">
+              {renderResponseMeta(selectedItem)}
+              <strong>{selectedItem.title}</strong>
+              <p>该节点仅作为目录容器，不生成或编辑正文。</p>
+            </div>
+          ) : selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
             <MarkdownEditor
               value={draftContent}
               onChange={setDraftContent}
@@ -1178,6 +1531,24 @@ function ContentEditPage({
                 <p className="content-editor-empty">暂无预览内容</p>
               )}
             </MarkdownFullscreenViewer>
+          ) : selectedItem && selectedIsLeaf && selectedResponseMode === 'evidence-markdown' ? (
+            <div className="controlled-response-panel evidence-response-panel">
+              {renderResponseMeta(selectedItem)}
+              <section className="evidence-index">
+                <strong>材料索引</strong>
+                {selectedItem.knowledge_item_ids?.length ? (
+                  <ul>{selectedItem.knowledge_item_ids.map((id) => <li key={id}>{id}</li>)}</ul>
+                ) : (
+                  <p className="is-missing">待人工填写 / 待核对：尚未关联支撑材料。</p>
+                )}
+                {selectedItem.mapped_requirement_ids?.length ? <small>对应需求：{selectedItem.mapped_requirement_ids.join('、')}</small> : null}
+              </section>
+              {selectedContent.trim() ? (
+                <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
+                  <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />
+                </MarkdownFullscreenViewer>
+              ) : <p className="content-editor-empty">待人工填写材料说明。</p>}
+            </div>
           ) : selectedItem && selectedIsLeaf && selectedContent.trim() ? (
             <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
               <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />

@@ -69,14 +69,20 @@ const workspaceDatabaseChannels = [
   'technical-plan:check-bid-sections',
   'technical-plan:select-bid-section',
   'technical-plan:read-tender-markdown',
+  'technical-plan:read-tender-source-markdown',
   'technical-plan:read-original-plan-markdown',
   'technical-plan:update-step',
   'technical-plan:set-workflow-kind',
+  'technical-plan:switch-workflow-kind',
+  'technical-plan:save-bid-analysis-config',
   'technical-plan:save-outline-config',
   'technical-plan:save-outline',
   'technical-plan:save-global-facts',
   'technical-plan:save-content-generation-options',
   'technical-plan:save-chapter-content',
+  'technical-plan:confirm-response-template',
+  'technical-plan:save-locked-template-values',
+  'technical-plan:save-fixed-table-values',
   'technical-plan:clear',
   'duplicate-check:load-state',
   'duplicate-check:save-files',
@@ -175,7 +181,7 @@ function registerWorkspaceDatabaseStatusIpc({ mainWindow }) {
   };
 }
 
-function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, updateStatus }) {
+function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, updateStatus }) {
   const sqliteDatabase = createSqliteDatabase(app, { onStatus: updateStatus });
   const knowledgeBaseStore = createKnowledgeBaseStore({ app, db: sqliteDatabase.db });
   const knowledgeBaseService = createKnowledgeBaseService({ app, aiService, configStore, knowledgeBaseStore });
@@ -193,6 +199,7 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   registerRejectionCheckIpc({ rejectionCheckStore });
   registerTemplateIpc({ templateStore });
   registerTaskIpc({ taskService });
+  exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
   return { sqliteDatabase };
 }
@@ -312,7 +319,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     databaseStatus.updateStatus({ phase: 'checking', ready: false, message: '正在检查本地数据库' });
     setTimeout(() => {
       try {
-        registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, updateStatus: databaseStatus.updateStatus });
+        registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, updateStatus: databaseStatus.updateStatus });
       } catch (error) {
         databaseStatus.updateStatus({
           phase: 'error',

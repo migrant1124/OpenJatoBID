@@ -393,11 +393,24 @@ function mapOutlineContent(items, contentById) {
   }));
 }
 
+function collectIllustrationWritableIds(items, target = new Set()) {
+  for (const item of items || []) {
+    const children = Array.isArray(item?.children) ? item.children : [];
+    if (!children.length && (item?.response_mode || 'freeform-markdown') === 'freeform-markdown') {
+      target.add(String(item.id || ''));
+    }
+    collectIllustrationWritableIds(children, target);
+  }
+  return target;
+}
+
 // 清除旧生成块，确保重新编排时只参考纯正文。
 function stripGeneratedIllustrationsFromDocument(outlineData, sections) {
   const nextSections = { ...(sections || {}) };
   const contentById = new Map();
+  const writableIds = collectIllustrationWritableIds(outlineData?.outline || []);
   for (const [itemId, section] of Object.entries(nextSections)) {
+    if (!writableIds.has(itemId)) continue;
     const content = stripGeneratedIllustrations(section?.content || '');
     nextSections[itemId] = { ...section, content };
     contentById.set(itemId, content);
@@ -412,7 +425,9 @@ function stripGeneratedIllustrationsFromDocument(outlineData, sections) {
 function applyGeneratedIllustrationsToDocument(plan, outlineData, sections) {
   const nextSections = { ...(sections || {}) };
   const contentById = new Map();
+  const writableIds = collectIllustrationWritableIds(outlineData?.outline || []);
   for (const [itemId, section] of Object.entries(nextSections)) {
+    if (!writableIds.has(itemId)) continue;
     const content = stripGeneratedIllustrations(section?.content || '');
     nextSections[itemId] = { ...section, content };
     contentById.set(itemId, content);
@@ -425,6 +440,9 @@ function applyGeneratedIllustrationsToDocument(plan, outlineData, sections) {
     const targetId = planItem.kind === 'html' && planItem.placement === 'before'
       ? planItem.section_ids[0]
       : planItem.section_ids[planItem.section_ids.length - 1];
+    if (!writableIds.has(targetId)) {
+      throw new Error(`配图计划引用了不可写入的受控响应节点：${targetId}`);
+    }
     const current = String(nextSections[targetId]?.content || '').trim();
     const content = planItem.placement === 'before' ? `${block}\n\n${current}`.trim() : `${current}\n\n${block}`.trim();
     nextSections[targetId] = { ...nextSections[targetId], content, status: 'success', error: undefined, updated_at: new Date().toISOString() };

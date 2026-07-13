@@ -7,10 +7,10 @@ import GlobalFactsPage from './GlobalFactsPage';
 import ContentEditPage from './ContentEditPage';
 import { TemplatePreview } from '../../export-format/pages/ExportFormatPage';
 import { useTechnicalPlanWorkflow } from '../hooks/useTechnicalPlanWorkflow';
-import { getBidAnalysisTasks } from '../services/bidAnalysisWorkflow';
+import { areRequiredBidAnalysisTasksReady } from '../services/bidAnalysisWorkflow';
 import { trackPageView } from '../../../shared/analytics/analytics';
 import { FloatingToolbar, ToolbarArrowLeftIcon, ToolbarArrowRightIcon, ToolbarDocumentIcon, useToast } from '../../../shared/ui';
-import type { BackgroundTaskState, BidAnalysisTasks, ContentGenerationOptions, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../types';
+import type { BackgroundTaskState, ContentGenerationOptions, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../types';
 import type { OutlineData, OutlineItem, WordExportProgressEvent } from '../../../shared/types';
 import type { ExportFormatConfig, ExportTemplateRecord } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
@@ -63,6 +63,7 @@ const resetState = {
   techRequirements: '',
   bidAnalysisMode: 'key' as const,
   bidAnalysisSelectedTaskIds: [] as string[],
+  bidAnalysisTaskDefinitions: [],
   bidAnalysisTasks: {},
   bidAnalysisProgress: 0,
   bidSectionMode: 'single' as const,
@@ -72,6 +73,7 @@ const resetState = {
   outlineMode: 'aligned' as const,
   outlineExpansionMode: 'ai-complement' as const,
   referenceKnowledgeDocumentIds: [] as string[],
+  responseTemplates: [],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
   outlineGenerationTask: undefined,
@@ -121,7 +123,6 @@ const initialExportProgress: ExportProgressState = {
 };
 
 const MAX_UI_TASK_LOGS = 80;
-const requiredBidAnalysisTasks = getBidAnalysisTasks('key');
 
 function hasOwnField<T extends object>(value: T, field: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(value, field);
@@ -133,13 +134,6 @@ function trimTaskLogs(task?: BackgroundTaskState): BackgroundTaskState | undefin
   }
 
   return { ...task, logs: task.logs.slice(-MAX_UI_TASK_LOGS) };
-}
-
-function areRequiredBidAnalysisTasksReady(tasks: BidAnalysisTasks) {
-  return requiredBidAnalysisTasks.every((task) => {
-    const state = tasks[task.id];
-    return state?.status === 'success' && state.content.trim();
-  });
 }
 
 function workflowKindFromSection(section?: string): TechnicalPlanWorkflowKind | null {
@@ -189,6 +183,13 @@ function updateOutlineItemContent(items: OutlineItem[], itemId: string, content:
   });
 }
 
+function collectMissingEvidenceItems(items: OutlineItem[]): OutlineItem[] {
+  return items.flatMap((item) => [
+    ...(item.response_status === 'missing-required-evidence' ? [item] : []),
+    ...collectMissingEvidenceItems(item.children || []),
+  ]);
+}
+
 function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }: TechnicalPlanHomeProps) {
   const { hydrated, state, setState } = useTechnicalPlanWorkflow();
   const { showToast } = useToast();
@@ -201,6 +202,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   const [exportTemplatesLoading, setExportTemplatesLoading] = useState(false);
   const [exportTemplateSearch, setExportTemplateSearch] = useState('');
   const [selectedExportTemplateId, setSelectedExportTemplateId] = useState('');
+  const [missingEvidenceRiskExportFormat, setMissingEvidenceRiskExportFormat] = useState<ExportFormatConfig | null>(null);
   const [sortLeaveDialogOpen, setSortLeaveDialogOpen] = useState(false);
   const [savingSortBeforeLeave, setSavingSortBeforeLeave] = useState(false);
   const [workflowSwitchRequest, setWorkflowSwitchRequest] = useState<WorkflowSwitchRequest | null>(null);
@@ -211,7 +213,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   const skippedWorkflowSwitchPromptRef = useRef<TechnicalPlanWorkflowKind | null>(null);
   const lastExecutedWorkflowSwitchRef = useRef<TechnicalPlanWorkflowKind | null>(null);
   const activeIndex = steps.indexOf(state.step);
-  const requiredBidAnalysisReady = areRequiredBidAnalysisTasksReady(state.bidAnalysisTasks);
+  const requiredBidAnalysisReady = areRequiredBidAnalysisTasksReady(state.bidAnalysisTaskDefinitions, state.bidAnalysisTasks);
   const isBidSectionExtractionRunning = state.bidSectionExtractionTask?.status === 'running' || state.bidSectionExtractionTask?.status === 'pausing';
   const isBidAnalysisTaskRunning = state.bidAnalysisTask?.status === 'running' || state.bidAnalysisTask?.status === 'pausing';
   const selectedBidSectionValid = state.bidSectionMode !== 'multiple'
@@ -231,6 +233,10 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   }, [exportTemplateSearch, exportTemplates]);
   const selectedExportTemplate = filteredExportTemplates.find((template) => template.template_id === selectedExportTemplateId) || filteredExportTemplates[0] || null;
   const exportTemplatePreviewStyle = useMemo(() => buildExportFormatCssVars(selectedExportTemplate?.config || exportFormat), [exportFormat, selectedExportTemplate]);
+  const missingEvidenceItems = useMemo(
+    () => collectMissingEvidenceItems(state.outlineData?.outline || []),
+    [state.outlineData?.outline],
+  );
   const requiresOriginalPlan = workflowKind === 'existing-plan-expansion';
   const isNextDisabled = activeIndex >= steps.length - 1
     || (state.step === 'document-analysis' && (!state.tenderFile || (requiresOriginalPlan && !state.originalPlanFile)))
@@ -250,7 +256,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               : state.step === 'bid-analysis' && isBidAnalysisTaskRunning
                 ? '招标文件解析任务仍在运行，请等待当前任务结束'
                 : state.step === 'bid-analysis' && !requiredBidAnalysisReady
-                  ? '招标文件解析完成后才能进入目录生成'
+                  ? '请先完成 7 个关键招标文件解析项'
                   : state.step === 'outline-generation' && !state.outlineData
                     ? '目录生成完成后才能进入全局事实设定'
                     : state.step === 'global-facts' && !globalFactsReady
@@ -491,6 +497,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisTask: hasOwnField(technicalPlan, 'bidAnalysisTask') ? trimTaskLogs(technicalPlan.bidAnalysisTask) : prev.bidAnalysisTask,
             bidAnalysisTasks: hasOwnField(technicalPlan, 'bidAnalysisTasks') ? (technicalPlan.bidAnalysisTasks || {}) : prev.bidAnalysisTasks,
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
+            responseTemplates: Array.isArray(technicalPlan.responseTemplates) ? technicalPlan.responseTemplates : prev.responseTemplates,
+            selectedFormatProfileId: hasOwnField(technicalPlan, 'selectedFormatProfileId') ? technicalPlan.selectedFormatProfileId : prev.selectedFormatProfileId,
+            selectedFormatProfileHash: hasOwnField(technicalPlan, 'selectedFormatProfileHash') ? technicalPlan.selectedFormatProfileHash : prev.selectedFormatProfileHash,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
             outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
@@ -522,6 +531,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               ...(event.bidItem ? { [event.bidItem.id]: event.bidItem } : {}),
             },
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
+            responseTemplates: Array.isArray(technicalPlan.responseTemplates) ? technicalPlan.responseTemplates : prev.responseTemplates,
+            selectedFormatProfileId: hasOwnField(technicalPlan, 'selectedFormatProfileId') ? technicalPlan.selectedFormatProfileId : prev.selectedFormatProfileId,
+            selectedFormatProfileHash: hasOwnField(technicalPlan, 'selectedFormatProfileHash') ? technicalPlan.selectedFormatProfileHash : prev.selectedFormatProfileHash,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
             outlineGenerationTask: outlineDataReset ? undefined : prev.outlineGenerationTask,
@@ -681,7 +693,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
     await loadExportTemplates();
   };
 
-  const runExportWord = async (latestExportFormat: ExportFormatConfig) => {
+  const runExportWord = async (latestExportFormat: ExportFormatConfig, acknowledgeMissingEvidence = false) => {
     if (!state.outlineData?.outline?.length) {
       showToast('请先生成目录', 'info');
       return;
@@ -721,9 +733,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
 
       const result = await window.yibiao?.export.exportWord({
         requestId,
-        project_name: state.outlineData.project_name,
-        outline: state.outlineData.outline,
+        source: 'technical-plan',
         export_format: latestExportFormat,
+        acknowledgeMissingEvidence,
       });
       if (result?.canceled) {
         setExportProgress(initialExportProgress);
@@ -742,6 +754,11 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
       showToast(result?.message || 'Word 已导出', result?.warnings?.length ? 'info' : 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : '导出 Word 失败';
+      if (!acknowledgeMissingEvidence && message.includes('强制证明材料缺失，确认风险后方可导出')) {
+        setExportProgress(initialExportProgress);
+        setMissingEvidenceRiskExportFormat(latestExportFormat);
+        return;
+      }
       setExportProgress((prev) => ({
         ...prev,
         open: true,
@@ -775,6 +792,13 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
 
     setExportTemplateDialogOpen(false);
     await runExportWord(selectedExportTemplate.config);
+  };
+
+  const confirmMissingEvidenceRiskExport = async () => {
+    const latestExportFormat = missingEvidenceRiskExportFormat;
+    if (!latestExportFormat) return;
+    setMissingEvidenceRiskExportFormat(null);
+    await runExportWord(latestExportFormat, true);
   };
 
   const createExportTemplate = () => {
@@ -944,6 +968,12 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
       {state.step === 'bid-analysis' && (
         <BidAnalysisPage
           hasTenderFile={Boolean(state.tenderFile)}
+          hasFormatDependentWork={Boolean(
+            state.outlineData
+            || state.globalFacts.length
+            || Object.keys(state.contentGenerationSections || {}).length
+            || Object.keys(state.contentGenerationPlans || {}).length
+          )}
           mode={state.bidAnalysisMode}
           selectedTaskIds={state.bidAnalysisSelectedTaskIds}
           bidSectionMode={state.bidSectionMode}
@@ -952,6 +982,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           bidSectionExtractionStatus={state.bidSectionExtractionStatus}
           bidSectionExtractionError={state.bidSectionExtractionError}
           selectedSectionTitle={state.tenderFile?.selectedSectionTitle}
+          taskDefinitions={state.bidAnalysisTaskDefinitions}
+          responseTemplates={state.responseTemplates}
           tasks={state.bidAnalysisTasks}
           task={state.bidAnalysisTask}
           progress={state.bidAnalysisProgress}
@@ -965,13 +997,15 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           projectOverview={state.projectOverview}
           techRequirements={state.techRequirements}
           outlineExpansionMode={state.outlineExpansionMode || 'ai-complement'}
+          formatRequirementsContent={state.bidAnalysisTasks.bidDocumentFormatRequirements?.content || ''}
+          selectedFormatProfileId={state.selectedFormatProfileId}
           referenceKnowledgeDocumentIds={state.referenceKnowledgeDocumentIds}
           outlineData={state.outlineData}
           task={state.outlineGenerationTask}
           contentTaskStatus={state.contentGenerationTask?.status}
-          onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode }) => {
-            setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds }));
-            window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode }).then((saved) => {
+          onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode, selectedFormatProfileId }) => {
+            setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds, selectedFormatProfileId }));
+            window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode, selectedFormatProfileId }).then((saved) => {
               setState((prev) => ({ ...prev, ...saved }));
             }).catch((error) => {
               showToast(error instanceof Error ? error.message : '保存目录配置失败', 'error');
@@ -998,9 +1032,11 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           task={state.contentGenerationTask}
           contentGenerationOptions={state.contentGenerationOptions}
           contentIllustrationPlan={state.contentIllustrationPlan}
+          responseTemplates={state.responseTemplates}
           sections={state.contentGenerationSections}
           onContentGenerationOptionsChange={saveContentGenerationOptions}
           onContentSaved={saveChapterContent}
+          onControlledStateSaved={(saved) => setState((prev) => ({ ...prev, ...saved }))}
         />
       )}
       {state.step === 'expand' && (
@@ -1135,6 +1171,38 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               <button type="button" className="secondary-action" onClick={createExportTemplate} disabled={isExporting}>新建模板</button>
               <Dialog.Close className="secondary-action" type="button" disabled={isExporting}>取消</Dialog.Close>
               <button type="button" className="primary-action" onClick={() => { void confirmExportTemplate(); }} disabled={exportTemplatesLoading || !selectedExportTemplate || isExporting}>继续导出</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={Boolean(missingEvidenceRiskExportFormat)}
+        onOpenChange={(open) => !open && !isExporting && setMissingEvidenceRiskExportFormat(null)}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-regenerate-card workflow-switch-card">
+            <div className="content-regenerate-card-head">
+              <span className="section-kicker">导出风险确认</span>
+              <Dialog.Title>强制证明材料缺失</Dialog.Title>
+              <Dialog.Description>
+                以下章节没有匹配到招标文件要求的强制证明材料。继续导出不会消除风险或改变章节状态。
+              </Dialog.Description>
+            </div>
+            <div className="workflow-switch-summary">
+              {missingEvidenceItems.length ? missingEvidenceItems.map((item) => (
+                <span key={item.id}>
+                  {item.source_number ? `${item.source_number} ` : ''}{item.source_title || item.title}
+                  {item.compliance_message ? `：${item.compliance_message}` : ''}
+                </span>
+              )) : <span>权威工作区检测到强制证明材料缺失，请返回正文检查对应章节。</span>}
+            </div>
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" onClick={() => setMissingEvidenceRiskExportFormat(null)} disabled={isExporting}>返回处理</button>
+              <button type="button" className="primary-action" onClick={() => { void confirmMissingEvidenceRiskExport(); }} disabled={isExporting}>
+                知悉风险并继续导出
+              </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

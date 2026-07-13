@@ -1,8 +1,9 @@
-# OpenJatobid 第二轮二开实施计划
+# OpenJatobid 二次开发实施计划
 
-> 依据：`docs/secondary-development/prd/openjatobid-phase2-ui-lan-management-prd.md`（v0.5 批准稿）  
-> 状态：管理员认证修订计划已批准并完成 T32—T36/CP7；下一阶段为 T30 实体双机验收。  
-> 范围：保留已完成的客户端 UI、局域网授权与统计成果，只重做独立 Windows 管理端的管理员认证、首次设置和交付验证。
+> 历史依据：`docs/secondary-development/prd/openjatobid-phase2-ui-lan-management-prd.md`（v0.5 批准稿）
+> 历史状态：管理员认证修订计划已批准并完成 T32—T36/CP7；T30/CP6 实体双机验收仍未关闭。
+> 当前增量：T47—T61“招标解析、格式驱动目录与受控写作”计划已于 2026-07-13 通过 CP8；真实文件回归后批准 T65，以来源锚点修复格式解析并合并采购与报价任务。
+> 历史范围：保留已完成的客户端 UI、局域网授权与统计成果，只重做独立 Windows 管理端的管理员认证、首次设置和交付验证。
 
 ## 1. 目标与完成标准
 
@@ -671,3 +672,454 @@ flowchart LR
 
 - 目标：为第三轮改动形成可复核证据。
 - 验证：两端构建、CJS 语法检查、浏览器页面检查、Electron 授权门禁检查及图标截图。
+
+## 12. 招标解析、格式驱动目录与受控写作增量计划
+
+### 12.1 需求基线与阶段边界
+
+- 冻结需求：`D:\download\OpenJatoBID_招标解析_格式驱动目录与写作改造_最终需求.md`
+- SHA-256：`386F8FD5CD1A83A3BC1601061CA0C663186D6B9D2558904D879CC7ED5ABA365D`
+- 子系统：仅 `client/`。
+- 当前模式：Build。CP8 已于 2026-07-13 批准；后续实测修订 T65 已获批准，完成后仍由四个真实样本约束 T61/CP11。
+- 架构决策：`docs/secondary-development/adr/format-driven-technical-plan.md`。
+- 数据/IPC 契约：`docs/secondary-development/api/technical-plan-format-contract-v1.md`。
+- UI 基线：`docs/secondary-development/design/format-driven-technical-plan-ui.md`。
+
+本计划不修改依赖、`package-lock.json`、管理端、Analytics、发布工作流、自动更新或 Word/OOXML 编辑能力。
+
+### 12.2 当前代码基线
+
+1. Main 与 Renderer 各维护 18 项/5 必选的解析清单和 Prompt，已经发生实际漂移。
+2. JSON 解析结果只做非空判断；现有 `aiService` 已有可复用的 JSON 解析、normalizer、validator 和修复链路。
+3. `technical_plan_bid_items.content` 可继续保存规范化 JSON；v17 目录表没有格式约束、模板或响应状态。
+4. 生产目录任务只读取项目概述和技术评分，完整树会被 Main 与 Renderer 按位置重编号。
+5. 目录 UI 和 Store 对所有节点开放改名、删除、排序和加子节点，Agent 与知识库补目录也可改写整棵树。
+6. Step05 的所有叶子节点进入同一自由 Markdown 生成及后处理链；固定正文和表格没有任何绕过保护。
+7. 技术方案导出信任 Renderer payload，并只根据 `item.id` 编号。
+8. 当前分支为 `opt/jiexihemulu`；工作树已有用户修改 `client/doc/1.2.0.md`，本轮不触碰。
+
+### 12.3 审批口径
+
+批准 CP8 即同时批准 ADR 中的七项口径：
+
+1. SQLite v18 使用解析项 `normalized_hash`、`format_constraints_json`、`response_state_json` 和模板表；
+2. 格式任务读取全部原始招标文件以输出多 profile；“采购与报价”读取当前投标范围工作副本；
+3. profile 不唯一时用户选择，禁止猜测；
+4. 已有方案扩写也服从格式优先；
+5. 未确认模板可进入 Step03，但阻止对应写作和导出；
+6. 缺少强制证明材料可在明确确认风险后导出，其他完整性错误硬阻断；
+7. 证明材料 v1 只生成 Markdown 索引和知识条目引用，不嵌入附件。
+
+若任一口径需要改变，应先修订 ADR、契约和本计划，再进入 Build。
+
+### 12.4 Phase A：解析层
+
+#### T47 冻结运行时契约并完成 SQLite v18 基础 — L / 高风险
+
+- 需求：第 5—8、14—15 节；为 Phase A—D 提供唯一持久化契约。
+- 目标：旧 v17 工作区无损升级，新结构能保存 profile 选择、节点约束、响应状态和固定模板。
+- 主要范围：
+  - `client/electron/services/sqliteDatabase.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/shared/types/outline.ts`
+  - `client/src/features/technical-plan/types.ts`
+  - `client/src/shared/types/ipc.ts`
+  - `sql/workspace_schema.sql`
+- 实现边界：
+  - 新增 v18 migration、节点两个 JSON 字段、模板表、profile ID/Hash；
+  - `technical_plan_bid_items` 增加 `normalized_hash`，格式任务 Hash 覆盖完整 result + templates；
+  - 旧节点按 `auto + freeform-markdown + 无锁` 计算默认值；
+  - 非空损坏 JSON 失败关闭；
+  - Main 保存时不得因 Renderer 漏字段清空既有约束；
+  - 不新增第三方依赖。
+- 验证：
+  - 纯 normalizer/序列化测试；
+  - Electron native smoke 构造 v17 数据库并升级；
+  - 检查升级备份、重复打开幂等和 schema 文件一致性；
+  - `node --check` 相关 CJS；`npm run build`。
+- 验收：旧目录标题、正文、任务状态无损；新字段可往返；旧节点不被误判为模板。
+
+#### T48 建立 Main 单一任务目录与 18/7 完成门禁 — M
+
+- 需求：第 2.1、4.2、12.1、13.1、15.1 节。
+- 目标：Main、Store、Renderer、UI 和完成判断严格使用同一套 18 项/7 必选定义。
+- 主要范围：
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/features/technical-plan/services/bidAnalysisWorkflow.ts`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/features/technical-plan/pages/TechnicalPlanHome.tsx`
+  - `client/src/features/developer/pages/DeveloperTestPage.tsx`
+- 实现边界：
+  - `loadTechnicalPlan()` 返回只读任务元数据；
+  - Renderer 删除生产任务和 Prompt 副本；
+  - 关键项顺序为项目概述、技术评分要求、格式要求、采购与报价、项目信息、甲方信息、交货和服务要求；
+  - `bidDocumentFormatRequirements` 只改 UI 名称，不改代码 ID；`quotationRequirements` 从活跃目录移除；
+  - 所有 JSON 项统一进入 `requestJson` / `parseJsonResponseContent`；
+  - 非法 JSON 不得通过 Renderer 代码块降级为成功；
+  - 保留现有任务组、中断恢复、预热后并发和单项重试能力。
+- 验证：任务总数、顺序、必选集合、Main/Renderer 门禁、失败恢复和单项重试的纯逻辑测试；CJS 检查与构建。
+- 验收：7 项未成功且合法前，任何入口都不能进入新目录生成。
+
+#### T49 格式要求纵向切片 — XL / 高风险
+
+- 需求：第 2.2—2.8、3、4.2、5、8—9、12.1、15.1 节。
+- 目标：从全部原始招标文件产生可追溯的多 profile、固定目录节点和模板注册表，并在 Step02 可视化。
+- 主要范围：
+  - 新增 `client/electron/services/bidAnalysisResultSchemas.cjs`
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/features/technical-plan/types.ts`
+- 实现边界：
+  - 读取全部原始招标 Markdown，不使用已裁剪工作副本代替多 profile 输入；
+  - Main 先将普通 Markdown 内容与 HTML 表格 `<tr>` 行生成为稳定来源锚点；第一阶段模型只返回锚点 ID，Main 再确定性回填源文件、1-based 行区间和原始片段；
+  - 第一阶段提取 profile、递归树、响应模式和模板描述；只有固定承诺函或固定表格存在时，才用对应锚点原文启动小上下文第二阶段模板编译；
+  - Main 复核 locked segments、表头、固定单元格和固定说明均由锚点原文支持；
+  - normalizer 生成稳定 profile/node/template ID；
+  - 强制“如有/其他”必留和必响应；
+  - 无明确格式返回合法 `none` profile；
+  - 模板与格式结果同事务落盘；
+  - Step02 显示 profile、递归树、来源和模板“待核对”状态；确认/重确认操作在 T55 随模板服务落地；
+  - 相同完整分析 Hash 保留已确认模板和下游；模板正文、slot 或表结构变化会改变 Hash、重置确认并按 ADR 清理。
+- 验证：strict、fixed-roots、none、多包、未知/跨文件锚点、普通 Markdown 锚点、单物理行 HTML 表格的 `<tr>` 锚点、确定性来源回填、非法 response mode、空模板、如有/其他、仅固定模板触发第二阶段、固定内容不受锚点支持时拒绝、模板注册去重与未确认状态、固定正文标点/slot/表结构变化导致 Hash 变化和确认重置测试；Electron Store smoke；UI 运行检查。
+- 验收：结构不合法或来源不可追溯时该项为 error；合法结果可完整恢复。
+
+#### T50 采购与报价纵向切片与技术正文隔离 — M
+
+- 需求：第 2.9、6、13.1、15.1、16 节。
+- 目标：用一个必选 Markdown 项合并采购清单和报价要求，同时证明其中的价格信息不会默认进入技术目录、全局事实或正文 Prompt。
+- 主要范围：
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - 目录/正文上下文构建函数的隔离测试
+- 实现边界：
+  - `procurementList` 改为必选关键项，UI 名称为“采购与报价”，继续输出 Markdown；
+  - 覆盖采购清单、规格数量、交付验收，以及报价方式、范围、限价、税务、发票、价格组成、精度/舍入、公式、表单、平台、一致性、优先级、无效报价、异常低价、结算和外部依赖；
+  - `quotationRequirements` 从活跃目录删除；旧 SQLite 行隐藏保留，不迁移、不映射成采购结果。
+- 验证：任务元数据、采购与报价提示词、历史报价行隐藏、缺失采购项补跑，以及“采购与报价内容不进入技术 Prompt”的回归测试；CJS 检查、构建和 UI 展示。
+- 验收：“采购与报价”为合法 Markdown 结果；除固定格式节点自身明确要求外，不影响技术正文。
+
+#### T51 旧工作区补跑、步骤恢复与解析失效闭环 — L / 数据风险
+
+- 需求：第 14 节。
+- 目标：保留旧成功结果，只补跑当前 7 个关键项中的实际缺失项；旧工作区不会停留在一个可绕过 7 项门禁的后续页面。
+- 主要范围：
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/electron/services/taskService.cjs`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/features/technical-plan/pages/TechnicalPlanHome.tsx`
+- 实现边界：
+  - 旧 `responseFileRequirements` 不冒充新格式结果，也不破坏性删除；
+  - 旧 `quotationRequirements` 不冒充“采购与报价”结果，也不破坏性删除；
+  - 仅旧 5 项成功时，默认 task IDs 只包含“格式要求”和“采购与报价”；其他工作区按实际缺失项补跑；
+  - 旧工作区从 Step03/05 回到 Step02；
+  - 补充格式解析可能清空旧目录/正文前明确确认；
+  - 格式 Hash 变化事务性失效下游，相同结果保留；
+  - 保留中断恢复的可重试 error 行为。
+- 验证：构造旧 5 项、旧后续步骤、旧目录正文、无效历史 JSON、失败重试和异常关闭 fixtures；Electron smoke。
+- 验收：旧结果不丢、缺失项不漏跑、后续状态不与新格式结果并存。
+
+#### CP8A Phase A 验收门
+
+- T47—T51 的纯逻辑测试、Electron smoke、CJS 检查、`npm run build` 和 Step02 真实窗口检查全部通过。
+- 本门只要求固定模板已注册并以“待核对”只读展示；确认、重确认、locked Hash 和专用 IPC 属于 T55/CP10，不在 CP8A 提前宣称完成。
+- 在 Phase B 完成前，本切片不得作为可发布功能，因为生产 Step03 仍可能是评分驱动。
+- 四个真实样本尚未提供时，只能记录 fixtures 通过，不能勾选四样本验收。
+
+### 12.5 Phase B：格式驱动目录
+
+#### T52 profile 解析与格式优先目录纵向切片 — XL / 高风险
+
+- 需求：第 2.2—2.4、4.3、7、11、13.2、15.2、16 节。
+- 目标：唯一/人工选定 profile 驱动固定骨架；只有 `none` 才走评分回退。
+- 主要范围：
+  - 新增 `client/electron/services/outlineFormatConstraints.cjs`
+  - `client/electron/services/outlineGenerationTask.cjs`
+  - `client/electron/services/globalFactsTask.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/features/technical-plan/pages/OutlineEditPage.tsx`
+- 实现边界：
+  - 无明确格式时自动选择唯一全局 technical/none profile；显式格式按 ID 优先与 specificity 匹配，零个或最高分并列多个时要求用户选择；
+  - 格式 profile 只允许 technical，商务/报价/资格 profile 在 Schema 门禁失败；
+  - 复制完整 strict/fixed-roots 骨架，保留“如有/其他”；
+  - `format_node_id` 稳定，内部 ID 仍可重排；
+  - 评分项映射到固定节点，只有 `allow_ai_children` 处可新增子目录；
+  - 默认不读取“采购与报价”结果；
+  - `globalFactsTask.cjs` 可读取选中格式 profile 中的项目名、标段、包号和招标人等固定字段，但不注入具体报价；
+  - 已有方案扩写也服从格式优先。
+- 验证：无明确格式全局回退、strict、fixed-roots、显式 scope 的 none、唯一/多/零匹配、通配与 specificity、非法非技术 profile、国网式完整骨架、南网式多 profile、四川烟草式固定根可展开 fixtures。
+- 验收：明确格式不会被评分大类替代，也不会混入其他标包或采购报价目录。
+
+#### T53 格式门禁、评分门禁与受控修复 — L / 高风险
+
+- 需求：第 4.3、15.2 节。
+- 目标：任何 AI、Agent、知识库或已有方案修复都不能破坏固定骨架。
+- 主要范围：
+  - `client/electron/services/outlineFormatConstraints.cjs`
+  - `client/electron/services/outlineGenerationTask.cjs`
+  - `client/electron/services/contentGenerationTask.cjs` 的补目录入口
+- 执行顺序：
+  1. 复制骨架；
+  2. 应用评分映射与允许的子目录；
+  3. 格式门禁；
+  4. 评分覆盖门禁；
+  5. 必要时应用受控 Agent patch；
+  6. 再执行两道门禁；
+  7. 通过后才保存。
+- 验证：Agent 删除、改名、重排、换层级、改源编号、向禁用节点加子目录均被拒绝；合法可变区 patch 成功；评分覆盖不足不落盘。
+- 验收：不存在“修复后绕过门禁”路径。
+
+#### T54 目录 Store 锁定、编辑器状态与编号预览 — L
+
+- 需求：第 7、11、12.2 节。
+- 目标：UI 可见并禁止非法操作，直接 IPC 绕过同样失败；预览按三类编号策略一致显示。
+- 主要范围：
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/features/technical-plan/pages/OutlineEditPage.tsx`
+  - `client/src/shared/utils/outlineNumbering.ts`
+  - `client/src/styles/feature-technical-plan.css`
+- 实现边界：
+  - Main 依据数据库约束比较保存前后树，不信任 Renderer 回传锁字段；
+  - 拒绝删除必留、改锁定标题/顺序/层级/源编号和非法子节点；
+  - 未锁定节点保留现有操作；
+  - 内部 ID 改变后正文映射仍正确；
+  - `preserve-source` 只显示源编号一次，`none` 不显示。
+- 验证：纯 Store 绕过测试、Renderer 行为测试、ID 映射测试、固定视口运行检查。
+- 验收：锁定节点在 UI 和 Main 两层都不可破坏。
+
+#### CP9 Phase B 验收门
+
+- Phase A—B 自动化、构建和真实 Electron Step02→Step03 运行链路通过。
+- 目录生成后的固定骨架、评分覆盖、编号和编辑门禁均有可复核证据。
+
+### 12.6 Phase C：受控写作
+
+#### T55 固定模板服务与承诺函纵向切片 — XL / 高风险
+
+- 需求：第 8、12.3、13.3—13.4、15.4 节。
+- 目标：固定承诺函只允许核对原文和填写 slot，完整 Markdown 始终由 Main 确定性生成。
+- 主要范围：
+  - 新增 `client/electron/services/fixedMarkdownTemplateService.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/electron/ipc/technicalPlanIpc.cjs`
+  - `client/electron/preload.cjs`
+  - `client/src/shared/types/ipc.ts`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/features/technical-plan/pages/ContentEditPage.tsx`
+- 实现边界：
+  - Main 确认模板、计算 locked Hash、保存模板版本；
+  - 专用 `saveLockedTemplateValues` 只接收 slot；
+  - 未确认或缺必填 slot 为 `needs-manual-input`；
+  - 普通保存和任何完整 Markdown 回写均拒绝；
+  - UI 固定正文只读、slot 表单可写，无扩写/改写/润色入口。
+- 验证：标点、条款顺序、固定片段、Hash、未知 slot、缺必填 slot、Renderer 伪造全文和重复保存测试。
+- 验收：只有 slot 值能改变，导出的固定正文与确认基线逐字一致。
+
+#### T56 固定 Markdown 表格纵向切片 — XL / 高风险
+
+- 需求：第 9、12.3、15.3 节。
+- 目标：固定表头、列、说明和锁定单元格不变，只编辑允许区域。
+- 主要范围：T55 的模板服务、Store、IPC/preload/type 与 `ContentEditPage.tsx`。
+- 实现边界：
+  - 专用 `saveFixedTableValues`；
+  - repeatable region 才能增删行并遵守行数；
+  - Main 根据结构化值渲染 Markdown；
+  - 无偏差仍保留完整表格；
+  - 不允许切换自由 Markdown。
+- 验证：列数、列顺序、固定单元格、说明、未知 slot、非法重复行、多个重复区的确定插入位置、固定尾行/尾注前插入、零行、最大行数、空响应和普通保存绕过测试。
+- 验收：全局“不要表格”和其他后处理不能把固定表格改为正文。
+
+#### T57 response_mode 调度、证明材料和明确无内容 — XL
+
+- 需求：第 4.5、10、15.3 节。
+- 目标：正文任务先分流，再只把自由正文送入现有 AI 流程。
+- 主要范围：
+  - `client/electron/services/contentGenerationTask.cjs`
+  - `client/electron/services/fixedMarkdownTemplateService.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - 知识库服务的既有读取接口
+  - `client/src/features/technical-plan/pages/ContentEditPage.tsx`
+- 实现边界：
+  - 分区 freeform、commitment、table、evidence、explicit-none、container；
+  - commitment/table 的 Agent 分支只返回专用契约中的 slot、cell 和 repeatable row 值，并交给模板服务渲染；
+  - 证明材料 Agent workspace 只提供所选知识库索引/内容，返回已知 ID；
+  - 证明材料 Agent 与自由正文批量生成串行分阶段执行，不和大批量正文争抢运行资源；
+  - Main 丢弃未知 ID 并确定性生成材料索引；
+  - 无材料写“无。”并设置 `missing-required-evidence` 与风险；
+  - `explicit-none` 确定性写入；
+  - 执行成功与合规待处理分开统计并恢复。
+- 验证：未知知识 ID、无材料、强制/非强制风险、container、explicit-none、暂停恢复和两个工作流测试。
+- 验收：不虚构证明材料，待处理节点不会被静默当成合规完成。
+
+#### T58 受保护节点的全链路绕过封堵与缓存失效 — L / 高风险
+
+- 需求：第 8.5、14.3、15.3—15.4 节。
+- 目标：固定节点不进入任何普通生成或后处理，所有内部写入路径都经过 Store 约束。
+- 主要范围：
+  - `client/electron/services/contentGenerationTask.cjs`
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/electron/services/taskService.cjs`
+  - 配图计划/生成上下文入口
+- 必查路径：
+  - 全量与单小节重新生成；
+  - 原方案恢复、替换与扩写；
+  - 最低字数补写和补目录；
+  - 普通/Agent 一致性修复；
+  - 表格清理；
+  - 全文图片编排与回写；
+  - `updateTechnicalPlan({ outlineData, contentGenerationSections })`。
+- 验证：逐路径证明固定承诺函和固定表格未被选中、未被写回；模板/profile/response mode 变化按规则失效。
+- 验收：不存在 IPC-only、UI-only 或任务内部的锁定绕过。
+
+#### CP10 Phase C 验收门
+
+- 六种 response mode 均有自动化证据和真实 Electron 页面证据。
+- 两个技术方案入口均能启动、恢复、保存和显示合规状态。
+
+### 12.7 Phase D：导出、回归与审查
+
+#### T59 权威导出、编号和风险确认 — L / 高风险
+
+- 需求：第 11、13.5、15.3—15.4 节。
+- 目标：技术方案导出回读 Store，重新渲染/校验模板，并按编号策略复用现有 DOCX 链路。
+- 主要范围：
+  - `client/electron/services/exportService.cjs`
+  - `client/electron/ipc/index.cjs`
+  - `client/electron/ipc/exportIpc.cjs`
+  - `client/src/features/technical-plan/pages/TechnicalPlanHome.tsx`
+  - `client/src/shared/types/ipc.ts`
+- 实现边界：
+  - `source = technical-plan` 时忽略 Renderer 替代 outline，回读 Store；
+  - 硬阻断模板/slot/结构/待人工问题；
+  - 仅缺证据允许 Radix 风险确认；
+  - `auto/preserve-source/none` 与 Renderer 预览一致；
+  - 通用导出预览保持原路径。
+- 验证：伪造 Renderer payload、Hash 变化、固定表损坏、缺 slot、缺证据确认；解压 DOCX 检查 `word/document.xml` 的标题与固定原文。
+- 验收：源编号只出现一次，固定正文逐字一致，旧 Markdown → Word 能力无回归。
+
+#### T60 自动化、迁移与真实运行验收 — L
+
+- 需求：第 16、18 节。
+- 目标：形成可重复的纯逻辑、SQLite/Electron、构建和 UI 证据。
+- 命令基线：
+
+  ```powershell
+  cd client
+  npm ci
+  node --test electron\services\bidAnalysisResultSchemas.test.cjs electron\services\outlineFormatConstraints.test.cjs electron\services\fixedMarkdownTemplateService.test.cjs electron\services\contentGenerationTask.responseModes.test.cjs
+  node --check electron\services\bidAnalysisResultSchemas.cjs
+  node --check electron\services\outlineFormatConstraints.cjs
+  node --check electron\services\bidAnalysisTask.cjs
+  node --check electron\services\outlineGenerationTask.cjs
+  node --check electron\services\globalFactsTask.cjs
+  node --check electron\services\contentGenerationTask.cjs
+  node --check electron\services\fixedMarkdownTemplateService.cjs
+  node --check electron\services\technicalPlanStore.cjs
+  node --check electron\services\taskService.cjs
+  node --check electron\services\exportService.cjs
+  node --check electron\ipc\index.cjs
+  node --check electron\ipc\exportIpc.cjs
+  node --check electron\ipc\technicalPlanIpc.cjs
+  node --check electron\preload.cjs
+  npm run build
+  .\node_modules\.bin\electron.cmd scripts\technical-plan-format-smoke.cjs
+  npm run dev:inspect
+  ```
+
+- 运行证据：Vite 200、Electron 进程/窗口、Step02—Step05 操作、IPC、Store 状态、日志和 DOCX 输出共同证明，不以单一 build 代替。
+- 报告：`docs/secondary-development/test-reports/format-driven-technical-plan-test-report.md`。
+- 验收：所有已具备输入的自动化与运行检查无未解释失败。
+
+#### T61 四样本验收与独立 Review — L / 外部输入门
+
+- 需求：第 16、18 节。
+- 样本：建行珠海、国网湖北、南网超高压、四川烟草。
+- 前置：用户提供四个实际样本文件；当前仓库和 `D:\download` 未找到这些文件。
+- Verify：
+  - 按冻结矩阵完成真实 AI 解析、profile、目录、固定模板、采购与报价隔离、正文和导出人工回归；
+  - 将文件标识、命令、运行证据、失败和残余风险写入 T60 测试报告。
+- Review：
+  - 使用只读 `openjatobid_reviewer` 或独立 Reviewer 对需求、ADR、契约、计划、diff、测试与运行证据做 findings-first 审查；
+  - 必查数据迁移、锁定绕过、Agent 越权、“采购与报价”价格信息泄露和导出前校验。
+- 验收：四样本全部达到冻结预期；无新增 P0/P1；P2 有明确处理结论。
+
+#### T65 实测修订：来源锚点、采购与报价合并及配置布局 — L / 高风险
+
+- 触发：真实招标 Markdown 中存在整张 HTML 表格位于单个物理行的情况，模型返回的可见文本摘录无法在带 HTML 标签的原文中唯一定位，既有行号二次校验与无源修复均不能解决。
+- 目标：让“格式要求”不再依赖模型反推原文行号和摘录；删除重复的独立报价任务，并修复 7 个关键项下配置 Dialog 的分组叠字。
+- 主要范围：
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/electron/services/bidAnalysisResultSchemas.cjs`
+  - 来源锚点辅助服务及相关纯逻辑测试
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/styles/feature-technical-plan.css`
+- 实现边界：
+  - 活跃任务 18 项、关键项 7 项；`procurementList` 为“采购与报价”必选 Markdown 项，`quotationRequirements` 退役为隐藏历史行；
+  - `bidDocumentFormatRequirements` 代码 ID 不变，UI 名称为“格式要求”；
+  - 普通 Markdown 内容和 HTML `<tr>` 生成稳定锚点，模型返回锚点 ID，Main 确定性回填持久化来源；
+  - 仅固定承诺函/固定表格使用锚点原文执行小上下文第二阶段模板编译；不以缺少原文的通用修复请求改写来源；
+  - 配置 Dialog 由内容自然撑高关键项分组，“其他项”位于关键项网格之后，超出时在 Dialog 内滚动；
+  - 不迁移或删除历史 SQLite 行，不修改依赖、管理端、Analytics、打包与发布流程。
+- 验证：来源锚点及单行 HTML 表格/同一行 HTML 段落 fixture、标题层级保留、连续锚点约束、任务目录/历史行回归、固定模板二阶段触发条件、canonical evidence 固定内容覆盖、承诺函 slot 与留空位一一对应、表格逐格 slot 绑定及 rowspan/colspan 展开、CJS 检查、Renderer 构建与配置 Dialog 运行检查。未执行的检查不得写为已通过。
+- 验收：格式结果来源由 Main 可重复定位；固定模板只由锚定原文编译；7 个关键项与“其他项”无叠字；旧工作区不会把历史报价行误判为当前关键项完成。
+
+#### T67 现场回归：格式来源职责收敛 — M / 高风险
+
+- 触发：真实模型在正确提取目录编号 `2.10` 和标题后，将编号拼成不存在的 `source-anchor-2.10`；同一原始响应还把分散规则来源聚合到一个引用，并漏选固定表格中的一行。逐类放宽错误会在下一道确定性校验继续失败。
+- 根因：当前第一阶段同时要求模型理解业务结构并复写长上下文中的不透明锚点 ID，模型身份字段被错误当作业务输出；`upstream-main` 原“响应文件要求”只让模型提取业务语义，不存在这类身份耦合。
+- 实现边界：
+  - 普通目录节点以 `source_number + source_title` 为业务定位键，Main 从全部真实锚点中选择唯一目录行；模型锚点只用于无编号或同名候选消歧；
+  - `result.sources` 只作为规则来源集合，Main 按源文件与真实锚点顺序拆成连续来源记录；未知锚点继续失败；
+  - 固定模板仍严格使用模型选择的真实来源范围，只允许补齐同一 HTML 表格内部被跳过的 `<tr>` 行，不跨表格、不补普通正文；
+  - 不恢复旧 Markdown 任务，不改变 Step03/Step05、Store、导出和模板确认契约，不打包。
+- 验证：现场伪锚点、目录来源缺省、分散规则来源、HTML 表格漏行、未知汇总来源和跨正文模板来源回归；最新现场原始响应离线重放必须进入第二阶段；CJS 检查、相关测试和客户端构建。
+- 验收：最新现场响应不再在第一阶段确定性来源校验失败；无法唯一定位的目录、未知模板来源和跨正文模板来源仍阻断。
+
+#### CP11 最终验收门
+
+- T47—T61 与 T65—T67 全部完成；
+- `cd client; npm run build` 退出 0；
+- 相关 CJS、纯逻辑测试、Electron smoke、真实窗口、DOCX 和四样本证据齐全；
+- 独立 Review 通过；
+- 未执行未经授权的 Git 同步、提交、推送、发布或部署。
+
+### 12.8 依赖顺序
+
+```text
+CP8（本计划审批）
+  → T47 → T48 → T49 → T50 → T51 → CP8A
+  → T52 → T53 → T54 → CP9
+  → T55 → T56 → T57 → T58 → CP10
+  → T59 → T60
+  → T65 → T66 → T67
+  → 四样本到位 → T61 → CP11
+```
+
+原计划首个可执行任务为 T47；当前现场修订已推进至 T67。T49 与 T50 在原计划中可于 T48 后按共享契约并行，但同一文件有重叠时应顺序落地，避免冲突。四样本缺失不阻止 T65—T67，但仍阻止 T61/CP11。
+
+### 12.9 风险与回滚
+
+| 风险 | 处理与回滚 |
+| --- | --- |
+| v18 migration 破坏旧工作区 | 沿用升级前数据库备份；Electron smoke 先验证 v17 fixture；失败不得继续打开写入。 |
+| 格式结果变化清空已有正文 | 启动前明确提示；同 Hash 不清；清理在事务中完成。 |
+| Renderer 或后台任务绕过锁定 | 门禁放在 Store 写入缝，不只放 UI/IPC。 |
+| Agent 修改完整固定树或正文 | 只接受受控 patch/结构化值；Main 应用并复检。 |
+| 固定表格被表格清理改写 | 特殊模式在进入通用目标集合前过滤。 |
+| “采购与报价”中的价格信息泄露到技术标 | 上下文构建 allowlist + 回归测试证明未注入。 |
+| profile 误选 | 唯一才自动；零/多匹配阻断并要求用户选择。 |
+| 四样本缺失 | fixtures 只用于开发；T61 保持未完成，不宣称 E2E 通过。 |
+
+### 12.10 非目标
+
+- Agent 直接编辑 Word；
+- DOCX OOXML 模板复制、修改或视觉复刻；
+- 把 Word 标题样式当业务目录；
+- 自动虚构业绩、合同、发票、证书、人员或评价；
+- 自动删除“如有”或“其他”；
+- 把“采购与报价”默认写入技术正文；
+- 让 Agent 返回固定承诺函完整正文；
+- 嵌入或复制知识库原附件；
+- 新增依赖、测试框架、发布流程或管理端能力。

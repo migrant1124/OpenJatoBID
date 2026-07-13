@@ -250,11 +250,30 @@ function formatBidAnalysisFactForPrompt(storedPlan, itemId, label) {
   return content ? `## ${label}\n${content}` : '';
 }
 
+function formatSelectedFormatProfileForPrompt(storedPlan) {
+  const task = storedPlan?.bidAnalysisTasks?.bidDocumentFormatRequirements;
+  if (task?.status !== 'success' || !storedPlan?.selectedFormatProfileId) return '';
+  try {
+    const result = JSON.parse(task.content || '{}');
+    const profile = Array.isArray(result.profiles)
+      ? result.profiles.find((item) => item?.profile_id === storedPlan.selectedFormatProfileId)
+      : null;
+    if (!profile) return '';
+    return `## 当前技术文件格式范围\n${JSON.stringify({
+      document_title: profile.document_title,
+      applicable_scope: profile.applicable_scope,
+    }, null, 2)}`;
+  } catch {
+    return '';
+  }
+}
+
 function formatBidAnalysisFactsForPrompt(storedPlan) {
   return [
     formatBidAnalysisFactForPrompt(storedPlan, 'projectInfo', '项目信息'),
     formatBidAnalysisFactForPrompt(storedPlan, 'partAInfo', '甲方信息'),
     formatBidAnalysisFactForPrompt(storedPlan, 'deliveryAndServiceRequirements', '交货和服务要求'),
+    formatSelectedFormatProfileForPrompt(storedPlan),
   ].filter(Boolean).join('\n\n') || '未提供 Step02 关键解析结果。';
 }
 
@@ -883,6 +902,7 @@ async function runGlobalFactsTask({ aiService, workspaceStore, knowledgeBaseServ
 }
 
 module.exports = {
+  formatBidAnalysisFactsForPrompt,
   mergeGlobalFactPatches,
   normalizeGlobalFactsPatchResponse,
   normalizeGlobalFactsResponse,

@@ -247,7 +247,16 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     }
 
     if (task.type === 'bid-analysis') {
-      copyPatchFields(patch, state, ['bidAnalysisMode', 'bidAnalysisProgress', 'projectOverview', 'techRequirements', 'bidAnalysisTasks']);
+      copyPatchFields(patch, state, [
+        'bidAnalysisMode',
+        'bidAnalysisProgress',
+        'projectOverview',
+        'techRequirements',
+        'bidAnalysisTasks',
+        'responseTemplates',
+        'selectedFormatProfileId',
+        'selectedFormatProfileHash',
+      ]);
       if (state.outlineData === null) {
         copyPatchFields(patch, state, [
           'outlineData',
@@ -274,6 +283,9 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         'bidAnalysisTask',
         'bidAnalysisTasks',
         'bidAnalysisProgress',
+        'responseTemplates',
+        'selectedFormatProfileId',
+        'selectedFormatProfileHash',
         'projectOverview',
         'techRequirements',
         'outlineData',

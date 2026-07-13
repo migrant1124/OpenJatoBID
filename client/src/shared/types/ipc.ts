@@ -5,7 +5,7 @@ import type { KnowledgeAnalysisSnapshot, KnowledgeBaseEvent, KnowledgeBaseIndex,
 import type { RejectionCheckWorkspaceState, RejectionDocumentRole } from '../../features/rejection-check/types';
 import type { BidAnalysisMode, BidAnalysisTaskState, BidSectionMode, ContentGenerationOptions, ContentGenerationPlanState, ContentGenerationRuntimeState, ContentGenerationSectionState, DetectedBidSection, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../../features/technical-plan/types';
 import type { ExportFormatConfig, ExportTemplateRecord } from './exportFormat';
-import type { OutlineData, OutlineExpansionMode } from './outline';
+import type { FixedMarkdownTableTemplate, LockedCommitmentTemplate, OutlineData, OutlineExpansionMode } from './outline';
 
 export interface TaskEvent<TState = unknown, TRejectionCheckState = unknown, TDuplicateCheckState = unknown> {
   task: unknown;
@@ -34,6 +34,16 @@ export interface WordExportResult {
   path?: string;
   message?: string;
   warnings?: string[];
+}
+
+export interface WordExportPayload {
+  requestId?: string;
+  source?: 'technical-plan';
+  project_name?: string;
+  outline?: OutlineData['outline'];
+  base_dir?: string;
+  export_format?: ExportFormatConfig;
+  acknowledgeMissingEvidence?: boolean;
 }
 
 export interface DeveloperTextTokenStats {
@@ -496,11 +506,14 @@ export interface YibiaoBridge {
     setWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     switchWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     saveBidAnalysisConfig: (payload: { mode: BidAnalysisMode; selectedTaskIds: string[]; bidSectionMode?: BidSectionMode }) => Promise<TechnicalPlanState>;
-    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode }) => Promise<TechnicalPlanState>;
+    confirmResponseTemplate: (payload: { templateId: string; template: LockedCommitmentTemplate | FixedMarkdownTableTemplate }) => Promise<TechnicalPlanState>;
+    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode; selectedFormatProfileId?: string }) => Promise<TechnicalPlanState>;
     saveOutline: (payload: SaveOutlineRequest) => Promise<TechnicalPlanState>;
     saveGlobalFacts: (globalFacts: GlobalFactGroupState[]) => Promise<TechnicalPlanState>;
     saveContentGenerationOptions: (options: ContentGenerationOptions) => Promise<TechnicalPlanState>;
     saveChapterContent: (payload: { nodeId: string; content: string }) => Promise<TechnicalPlanState>;
+    saveLockedTemplateValues: (payload: { nodeId: string; templateId: string; slotValues: Record<string, string> }) => Promise<TechnicalPlanState>;
+    saveFixedTableValues: (payload: { nodeId: string; templateId: string; cellValues: Record<string, string>; repeatableRows: Record<string, Array<Record<string, string>>> }) => Promise<TechnicalPlanState>;
     clear: () => Promise<{ success: boolean; message?: string; state: TechnicalPlanState }>;
   };
   duplicateCheck: {
@@ -540,7 +553,7 @@ export interface YibiaoBridge {
     onTaskEvent: <TState = unknown, TRejectionCheckState = unknown, TDuplicateCheckState = unknown>(callback: (event: TaskEvent<TState, TRejectionCheckState, TDuplicateCheckState>) => void) => () => void;
   };
   export: {
-    exportWord: (payload: unknown) => Promise<WordExportResult>;
+    exportWord: (payload: WordExportPayload) => Promise<WordExportResult>;
     openFile: (filePath: string) => Promise<{ success: boolean }>;
     onWordExportProgress: (callback: (event: WordExportProgressEvent) => void) => () => void;
   };

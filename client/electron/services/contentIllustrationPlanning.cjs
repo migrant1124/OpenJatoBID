@@ -56,14 +56,18 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
       const children = Array.isArray(item?.children) ? item.children : [];
       const isLeaf = children.length === 0;
       const content = isLeaf ? resolveSectionContent(item, sections) : '';
-      const eligible = Boolean(isLeaf && content && sections?.[id]?.status !== 'error');
+      const responseMode = item?.response_mode || 'freeform-markdown';
+      const eligible = Boolean(isLeaf
+        && responseMode === 'freeform-markdown'
+        && content
+        && sections?.[id]?.status !== 'error');
       const order = eligibleSectionIds.length;
 
       markdownLines.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${id} ${title}`.trim());
       markdownLines.push('');
-      if (isLeaf) {
+      if (eligible) {
         markdownLines.push(`<!-- yibiao-section-start id="${id}" -->`);
-        if (content) markdownLines.push(content);
+        markdownLines.push(content);
         markdownLines.push(`<!-- yibiao-section-end id="${id}" -->`);
         markdownLines.push('');
       }
