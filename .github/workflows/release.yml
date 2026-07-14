@@ -207,4 +207,5 @@ jobs:
           TAG_NAME: ${{ inputs.tag_name || github.ref_name }}
           RELEASE_ASSETS_DIR: release-assets
           GITHUB_RELEASE_JSON: github-release.json
+          NODE_OPTIONS: --tls-max-v1.2
         run: node .github/scripts/publish-r2-release.mjs
