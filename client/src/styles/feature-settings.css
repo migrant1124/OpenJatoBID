@@ -136,22 +136,24 @@
 }
 
 .font-picker-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   font-family: inherit;
 }
 
 .font-picker {
   position: relative;
   width: 100%;
+  min-width: 0;
 }
 
 .font-picker-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  left: 0;
-  z-index: 80;
+  z-index: 1000;
   display: grid;
-  max-height: 280px;
+  box-sizing: border-box;
+  width: var(--radix-popover-trigger-width);
+  max-height: min(280px, var(--radix-popover-content-available-height));
   overflow: auto;
   padding: 6px;
   background: #ffffff;

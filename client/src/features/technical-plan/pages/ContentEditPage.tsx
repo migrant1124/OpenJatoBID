@@ -1043,7 +1043,9 @@ function ContentEditPage({
     const canRegenerate = isLeaf
       && item.manual_input_required !== true
       && (item.response_mode || 'freeform-markdown') === 'freeform-markdown';
-    const itemStatusLabel = item.response_status ? responseStatusLabels[item.response_status] : statusLabels[status];
+    const itemStatusLabel = isLeaf && item.response_status
+      ? responseStatusLabels[item.response_status]
+      : status === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[status];
     const leafCount = meta?.leafCount || 0;
     const words = meta?.words || 0;
 
@@ -1204,7 +1206,9 @@ function ContentEditPage({
             </div>
             <div className="content-reader-actions">
               <span className={`content-status-badge is-${selectedStatus}`}>
-                {selectedItem?.response_status ? responseStatusLabels[selectedItem.response_status] : statusLabels[selectedStatus]}
+                {selectedIsLeaf && selectedItem?.response_status
+                  ? responseStatusLabels[selectedItem.response_status]
+                  : selectedStatus === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[selectedStatus]}
               </span>
               {selectedItem?.manual_input_required ? <span className="content-status-badge">人工填写</span> : null}
               {selectedItem?.compliance_risk && selectedItem.compliance_risk !== 'none' ? (

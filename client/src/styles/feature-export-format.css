@@ -674,6 +674,7 @@
 
 .export-format-heading-grid label {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 4px;
 }
@@ -693,6 +694,13 @@
   border-radius: 14px;
   outline: none;
   font-size: 14px;
+}
+
+.export-format-heading-grid select,
+.export-format-heading-grid input:not([type='color']) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .export-format-heading-grid select:focus,

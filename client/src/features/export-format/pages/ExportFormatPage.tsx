@@ -1,4 +1,5 @@
 ﻿import * as Dialog from '@radix-ui/react-dialog';
+import * as Popover from '@radix-ui/react-popover';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { trackPageView } from '../../../shared/analytics/analytics';
 import { FloatingToolbar, useToast } from '../../../shared/ui';
@@ -182,33 +183,44 @@ function FontPicker({ value, options, onChange }: FontPickerProps) {
   };
 
   return (
-    <div className="font-picker" onBlur={(event) => {
-      const nextFocus = event.relatedTarget;
-      if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
-        setOpen(false);
-        setSearchDirty(false);
-      }
+    <Popover.Root open={open} onOpenChange={(nextOpen) => {
+      setOpen(nextOpen);
+      if (!nextOpen) setSearchDirty(false);
     }}>
-      <input
-        className="font-picker-input"
-        type="text"
-        value={value}
-        onFocus={() => {
-          setOpen(true);
-          setSearchDirty(false);
-        }}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(true);
-          setSearchDirty(true);
-        }}
-        placeholder="输入或选择字体"
-        spellCheck={false}
-        role="combobox"
-        aria-expanded={open}
-      />
-      {open && (
-        <div className="font-picker-menu" role="listbox">
+      <div className="font-picker">
+        <Popover.Anchor asChild>
+          <input
+            className="font-picker-input"
+            type="text"
+            value={value}
+            onFocus={() => {
+              setOpen(true);
+              setSearchDirty(false);
+            }}
+            onClick={() => setOpen(true)}
+            onChange={(event) => {
+              onChange(event.target.value);
+              setOpen(true);
+              setSearchDirty(true);
+            }}
+            placeholder="输入或选择字体"
+            spellCheck={false}
+            role="combobox"
+            aria-expanded={open}
+          />
+        </Popover.Anchor>
+      </div>
+      <Popover.Portal>
+        <Popover.Content
+          className="font-picker-menu"
+          side="bottom"
+          align="start"
+          sideOffset={6}
+          collisionPadding={12}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          role="listbox"
+        >
           <div className="font-picker-summary">
             {searchDirty ? `匹配 ${filteredOptions.length} 个字体` : `共 ${options.length} 个字体，输入可搜索`}
           </div>
@@ -227,9 +239,9 @@ function FontPicker({ value, options, onChange }: FontPickerProps) {
               {font}
             </button>
           )) : <div className="font-picker-empty">没有匹配字体</div>}
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
