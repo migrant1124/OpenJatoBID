@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
@@ -73,6 +75,41 @@ function cacheControlFromFileName(fileName) {
     return 'no-cache';
   }
   return 'public, max-age=3600';
+}
+
+function runCommand(file, args, env = {}) {
+  return new Promise((resolve, reject) => {
+    const child = execFile(file, args, {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(new Error(`${file} ${args.join(' ')} failed with exit code ${code}: ${stderr || stdout}`));
+    });
+  });
+}
+
+function createAwsCliEnv({ accessKeyId, secretAccessKey }) {
+  return {
+    AWS_ACCESS_KEY_ID: accessKeyId,
+    AWS_SECRET_ACCESS_KEY: secretAccessKey,
+    AWS_DEFAULT_REGION: 'auto',
+    AWS_EC2_METADATA_DISABLED: 'true',
+  };
+}
+
+function createR2EndpointUrl(accountId) {
+  return `https://${accountId}.r2.cloudflarestorage.com`;
 }
 
 async function listAssetFiles(assetsDir) {
@@ -168,6 +205,40 @@ async function putJsonObject(client, bucket, key, value) {
   console.log(`Uploaded R2 object: ${key}`);
 }
 
+async function putObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key, filePath, fileName }) {
+  await runCommand('aws', [
+    's3api',
+    'put-object',
+    '--endpoint-url', createR2EndpointUrl(accountId),
+    '--bucket', bucket,
+    '--key', key,
+    '--body', filePath,
+    '--content-type', contentTypeFromFileName(fileName),
+    '--cache-control', cacheControlFromFileName(fileName),
+    '--no-cli-pager',
+  ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
+  console.log(`Uploaded R2 object: ${key}`);
+}
+
+async function putJsonObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key, value }) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'r2-release-'));
+  const tempPath = path.join(tempDir, 'latest.json');
+  try {
+    await fs.writeFile(tempPath, JSON.stringify(value, null, 2), 'utf-8');
+    await putObjectWithAwsCli({
+      accountId,
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+      key,
+      filePath: tempPath,
+      fileName: path.basename(key),
+    });
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function putObjectWithApi({ accountId, apiToken, bucket, key, filePath, fileName }) {
   const body = await fs.readFile(filePath);
   const response = await fetch(
@@ -219,6 +290,30 @@ async function listR2Objects(client, bucket, prefix) {
     }));
     objects.push(...(result.Contents || []));
     continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return objects;
+}
+
+async function listR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, prefix }) {
+  const objects = [];
+  let continuationToken = '';
+  do {
+    const args = [
+      's3api',
+      'list-objects-v2',
+      '--endpoint-url', createR2EndpointUrl(accountId),
+      '--bucket', bucket,
+      '--prefix', prefix ? `${prefix}/` : '',
+      '--output', 'json',
+      '--no-cli-pager',
+    ];
+    if (continuationToken) {
+      args.push('--continuation-token', continuationToken);
+    }
+    const output = await runCommand('aws', args, createAwsCliEnv({ accessKeyId, secretAccessKey }));
+    const result = JSON.parse(output || '{}');
+    objects.push(...(result.Contents || []));
+    continuationToken = result.IsTruncated ? result.NextContinuationToken || '' : '';
   } while (continuationToken);
   return objects;
 }
@@ -347,6 +442,20 @@ async function deleteR2Objects(client, bucket, keys) {
   }
 }
 
+async function deleteR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, keys }) {
+  for (const key of keys) {
+    await runCommand('aws', [
+      's3api',
+      'delete-object',
+      '--endpoint-url', createR2EndpointUrl(accountId),
+      '--bucket', bucket,
+      '--key', key,
+      '--no-cli-pager',
+    ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
+    console.log(`Deleted old R2 object: ${key}`);
+  }
+}
+
 async function deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys }) {
   for (const key of keys) {
     const response = await fetch(
@@ -401,13 +510,12 @@ async function main() {
   } else {
     const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
     const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
-    client = createR2Client({ accountId, accessKeyId, secretAccessKey });
     for (const filePath of assetFiles) {
       const fileName = path.basename(filePath);
-      await putObject(client, bucket, joinKey(prefix, fileName), filePath, fileName);
+      await putObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key: joinKey(prefix, fileName), filePath, fileName });
     }
-    await putJsonObject(client, bucket, joinKey(prefix, 'latest.json'), latestJson);
-    objects = await listR2Objects(client, bucket, prefix);
+    await putJsonObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key: joinKey(prefix, 'latest.json'), value: latestJson });
+    objects = await listR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, prefix });
   }
   const { keptVersions, deletedKeys } = chooseObjectsToDelete(objects, prefix);
   console.log(`Keeping release versions: ${keptVersions.join(', ') || '(none)'}.`);
@@ -416,7 +524,9 @@ async function main() {
     if (cloudflareApiToken) {
       await deleteR2ObjectsWithApi({ accountId, apiToken: cloudflareApiToken, bucket, keys: deletedKeys });
     } else {
-      await deleteR2Objects(client, bucket, deletedKeys);
+      const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
+      const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
+      await deleteR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, keys: deletedKeys });
     }
   } else {
     console.log('No old R2 release objects to delete.');

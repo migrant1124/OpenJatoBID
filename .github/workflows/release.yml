@@ -183,7 +183,10 @@ jobs:
           node-version: 22
 
       - name: Install R2 publish tooling
-        run: npm install --no-save --package-lock=false @aws-sdk/client-s3
+        run: |
+          npm install --no-save --package-lock=false @aws-sdk/client-s3
+          python -m pip install --user awscli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Download GitHub Release assets
         env:
