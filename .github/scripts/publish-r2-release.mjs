@@ -23,6 +23,10 @@ function optionalEnv(name, fallback = '') {
   return String(process.env[name] || fallback).trim();
 }
 
+function getCloudflareApiToken() {
+  return optionalEnv('CLOUDFLARE_API_TOKEN') || optionalEnv('JATOBID_BUILD_CLOUDFLARE_API_TOKEN');
+}
+
 function normalizePrefix(value) {
   return String(value || DEFAULT_RELEASE_PREFIX)
     .trim()
@@ -44,6 +48,13 @@ function createPublicUrl(publicBaseUrl, key) {
     .map((segment) => encodeURIComponent(segment))
     .join('/');
   return `${publicBaseUrl}/${encodedKey}`;
+}
+
+function encodeR2ObjectKey(key) {
+  return String(key)
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 }
 
 function contentTypeFromFileName(fileName) {
@@ -158,6 +169,46 @@ async function putJsonObject(client, bucket, key, value) {
   console.log(`Uploaded R2 object: ${key}`);
 }
 
+async function putObjectWithApi({ accountId, apiToken, bucket, key, filePath, fileName }) {
+  const body = await fs.readFile(filePath);
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': contentTypeFromFileName(fileName),
+        'Content-Length': String(body.length),
+      },
+      body,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Cloudflare R2 API upload failed for ${key}: ${response.status} ${await response.text()}`);
+  }
+  console.log(`Uploaded R2 object: ${key}`);
+}
+
+async function putJsonObjectWithApi({ accountId, apiToken, bucket, key, value }) {
+  const body = Buffer.from(JSON.stringify(value, null, 2), 'utf-8');
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': String(body.length),
+      },
+      body,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Cloudflare R2 API upload failed for ${key}: ${response.status} ${await response.text()}`);
+  }
+  console.log(`Uploaded R2 object: ${key}`);
+}
+
 async function listR2Objects(client, bucket, prefix) {
   const objects = [];
   let continuationToken;
@@ -171,6 +222,29 @@ async function listR2Objects(client, bucket, prefix) {
     continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
   } while (continuationToken);
   return objects;
+}
+
+async function listR2ObjectsWithApi({ accountId, apiToken, bucket, prefix }) {
+  const objects = [];
+  let cursor = '';
+  do {
+    const url = new URL(`https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects`);
+    if (prefix) url.searchParams.set('prefix', `${prefix}/`);
+    if (cursor) url.searchParams.set('cursor', cursor);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (!response.ok) {
+      throw new Error(`Cloudflare R2 API list failed: ${response.status} ${await response.text()}`);
+    }
+    const data = await response.json();
+    const result = data.result || {};
+    objects.push(...(result.objects || result.items || []));
+    cursor = result.cursor || result.nextCursor || '';
+  } while (cursor);
+  return objects.map((object) => ({
+    Key: object.key || object.name || object.Key || '',
+    LastModified: object.uploaded || object.LastModified,
+    Size: object.size || object.Size,
+  }));
 }
 
 function extractVersionFromKey(key, prefix) {
@@ -274,35 +348,63 @@ async function deleteR2Objects(client, bucket, keys) {
   }
 }
 
+async function deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys }) {
+  for (const key of keys) {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${apiToken}` } },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Cloudflare R2 API delete failed for ${key}: ${response.status} ${await response.text()}`);
+    }
+    console.log(`Deleted old R2 object: ${key}`);
+  }
+}
+
 async function main() {
   const accountId = requireEnv('R2_ACCOUNT_ID');
-  const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
-  const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
   const bucket = requireEnv('R2_BUCKET');
   const publicBaseUrl = normalizePublicBaseUrl(requireEnv('R2_PUBLIC_BASE_URL'));
   const tagName = requireEnv('TAG_NAME');
   const assetsDir = requireEnv('RELEASE_ASSETS_DIR');
   const releaseJsonPath = requireEnv('GITHUB_RELEASE_JSON');
   const prefix = normalizePrefix(optionalEnv('R2_RELEASE_PREFIX', DEFAULT_RELEASE_PREFIX));
+  const cloudflareApiToken = getCloudflareApiToken();
 
   const assetFiles = await listAssetFiles(assetsDir);
   const githubRelease = await readGithubRelease(releaseJsonPath, tagName);
   const latestJson = await buildLatestJson({ assetFiles, githubRelease, publicBaseUrl, prefix, tagName });
-  const client = createR2Client({ accountId, accessKeyId, secretAccessKey });
 
   console.log(`Publishing ${assetFiles.length} release assets to R2 bucket ${bucket}/${prefix}.`);
-  for (const filePath of assetFiles) {
-    const fileName = path.basename(filePath);
-    await putObject(client, bucket, joinKey(prefix, fileName), filePath, fileName);
+  let objects;
+  let client;
+  if (cloudflareApiToken) {
+    for (const filePath of assetFiles) {
+      const fileName = path.basename(filePath);
+      await putObjectWithApi({ accountId, apiToken: cloudflareApiToken, bucket, key: joinKey(prefix, fileName), filePath, fileName });
+    }
+    await putJsonObjectWithApi({ accountId, apiToken: cloudflareApiToken, bucket, key: joinKey(prefix, 'latest.json'), value: latestJson });
+    objects = await listR2ObjectsWithApi({ accountId, apiToken: cloudflareApiToken, bucket, prefix });
+  } else {
+    const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
+    const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
+    client = createR2Client({ accountId, accessKeyId, secretAccessKey });
+    for (const filePath of assetFiles) {
+      const fileName = path.basename(filePath);
+      await putObject(client, bucket, joinKey(prefix, fileName), filePath, fileName);
+    }
+    await putJsonObject(client, bucket, joinKey(prefix, 'latest.json'), latestJson);
+    objects = await listR2Objects(client, bucket, prefix);
   }
-  await putJsonObject(client, bucket, joinKey(prefix, 'latest.json'), latestJson);
-
-  const objects = await listR2Objects(client, bucket, prefix);
   const { keptVersions, deletedKeys } = chooseObjectsToDelete(objects, prefix);
   console.log(`Keeping release versions: ${keptVersions.join(', ') || '(none)'}.`);
 
   if (deletedKeys.length > 0) {
-    await deleteR2Objects(client, bucket, deletedKeys);
+    if (cloudflareApiToken) {
+      await deleteR2ObjectsWithApi({ accountId, apiToken: cloudflareApiToken, bucket, keys: deletedKeys });
+    } else {
+      await deleteR2Objects(client, bucket, deletedKeys);
+    }
   } else {
     console.log('No old R2 release objects to delete.');
   }

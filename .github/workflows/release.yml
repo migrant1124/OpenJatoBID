@@ -200,6 +200,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.JATOBID_BUILD_CLOUDFLARE_API_TOKEN }}
           R2_BUCKET: ${{ vars.R2_BUCKET || 'openbidkit' }}
           R2_RELEASE_PREFIX: ${{ vars.R2_RELEASE_PREFIX || 'release' }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
