@@ -4,7 +4,7 @@
   ],
   "ext": true,
   "kty": "EC",
-  "x": "vwSDllPVcbySOUjT4cGJUbHu9xRc3tO4t4WhvExrRE8",
-  "y": "l2Fl4YdMrllrg2svMhbka2Kc655gawd3odKL3LsbzqM",
-  "crv": "P-256"
+  "crv": "P-256",
+  "x": "8Kx2d8hrFm3CxLHXJb1xi5TlMK-di8WQGWeAjO_ZACI",
+  "y": "bscLvKNKFQ_d-Ne_LEXMSL4XwFSyA0XZ4YbH_ncG2YM"
 }

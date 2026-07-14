@@ -2,15 +2,12 @@ const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
+const { shell } = require('electron');
+const { getLicenseFilePath } = require('../utils/paths.cjs');
 
-const GITHUB_RELEASE_API = 'https://api.github.com/repos/migrant1124/OpenJatoBID/releases/latest';
-const GITHUB_RELEASE_DOWNLOAD_URL = 'https://github.com/migrant1124/OpenJatoBID/releases/latest';
-const GITHUB_PROVIDER_OPTIONS = {
-  provider: 'github',
-  owner: 'migrant1124',
-  repo: 'OpenJatoBID',
-  releaseType: 'release',
-};
+const UPDATE_RELEASE_API = 'https://bidupdat.migrant1124.workers.dev/updates/latest';
+const UPDATE_RELEASE_DOWNLOAD_URL = 'https://bidupdat.migrant1124.workers.dev/updates/latest';
+const LICENSE_HEADER = 'X-Jato-License';
 
 let autoUpdaterInstance = null;
 let downloadedUpdateVersion = '';
@@ -74,8 +71,97 @@ function requestJson(url, label, headers = {}) {
   });
 }
 
-async function fetchGithubLatestRelease() {
-  const release = await requestJson(GITHUB_RELEASE_API, 'GitHub API ');
+function postJson(url, label, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      reject(new Error(`${label}地址无效`));
+      return;
+    }
+
+    const payload = JSON.stringify(body || {});
+    const request = https.request(parsedUrl, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'yibiao-client',
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers,
+      },
+    }, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        response.resume();
+        postJson(new URL(response.headers.location, parsedUrl).toString(), label, body, headers).then(resolve, reject);
+        return;
+      }
+
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`${label}请求失败：${response.statusCode}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          reject(new Error(`解析${label}响应失败`));
+        }
+      });
+    });
+    request.on('error', (error) => reject(error));
+    request.setTimeout(10000, () => {
+      request.destroy();
+      reject(new Error('请求超时'));
+    });
+    request.write(payload);
+    request.end();
+  });
+}
+
+function base64UrlEncodeText(value) {
+  return Buffer.from(String(value || ''), 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function readUpdateLicense(app) {
+  if (!app) {
+    return null;
+  }
+  try {
+    const licensePath = getLicenseFilePath(app);
+    if (!fs.existsSync(licensePath)) {
+      return null;
+    }
+    const license = JSON.parse(fs.readFileSync(licensePath, 'utf8'));
+    return license && typeof license === 'object' ? license : null;
+  } catch {
+    return null;
+  }
+}
+
+function getUpdateLicenseHeader(app) {
+  const license = readUpdateLicense(app);
+  if (!license) {
+    throw new Error('请先完成软件授权后再检查更新');
+  }
+  return base64UrlEncodeText(JSON.stringify(license));
+}
+
+async function fetchAuthorizedLatestRelease(options = {}) {
+  const license = readUpdateLicense(options.app);
+  if (!license) {
+    throw new Error('请先完成软件授权后再检查更新');
+  }
+
+  const result = await postJson(UPDATE_RELEASE_API, '更新服务 ', { license });
+  const release = result?.release || {};
   const files = Array.isArray(release.assets)
     ? release.assets.map((asset) => ({
       name: asset.name || '',
@@ -83,16 +169,23 @@ async function fetchGithubLatestRelease() {
       size: Number(asset.size || 0),
       digest: asset.digest || '',
     }))
+    : Array.isArray(release.files)
+      ? release.files.map((file) => ({
+        name: file.name || '',
+        url: file.url || '',
+        size: Number(file.size || 0),
+        digest: file.digest || '',
+      }))
     : [];
   const downloadFile = pickPlatformDownloadFile(files);
   return {
-    channel: 'github',
-    version: release.tag_name?.replace(/^v/, '') || '',
+    channel: 'authorized',
+    version: String(release.version || release.tagName || '').replace(/^v/, ''),
     name: release.name || '',
     body: release.body || '',
-    published_at: release.published_at || '',
-    html_url: release.html_url || GITHUB_RELEASE_DOWNLOAD_URL,
-    download_url: downloadFile?.url || GITHUB_RELEASE_DOWNLOAD_URL,
+    published_at: release.published_at || release.generatedAt || '',
+    html_url: release.html_url || release.githubReleaseUrl || UPDATE_RELEASE_DOWNLOAD_URL,
+    download_url: downloadFile?.url || UPDATE_RELEASE_DOWNLOAD_URL,
     files,
   };
 }
@@ -125,24 +218,20 @@ function pickPlatformDownloadFile(files = []) {
   return null;
 }
 
-function fetchLatestRelease() {
-  return fetchGithubLatestRelease();
+function fetchLatestRelease(_channel, options = {}) {
+  return fetchAuthorizedLatestRelease(options);
 }
 
 async function getLatestVersion(options = {}) {
   const channel = getUpdateChannel(options.configStore);
-  return fetchLatestRelease(channel);
+  return fetchLatestRelease(channel, options);
 }
 
 async function getUpdateDownloadUrl() {
-  return GITHUB_RELEASE_DOWNLOAD_URL;
+  return UPDATE_RELEASE_DOWNLOAD_URL;
 }
 
 function configureAutoUpdater() {
-  if (!autoUpdaterInstance) {
-    return;
-  }
-  autoUpdaterInstance.setFeedURL(GITHUB_PROVIDER_OPTIONS);
 }
 
 function formatErrorMessage(error) {
@@ -172,6 +261,15 @@ function getMacDmgDownloadPath(app, release, file) {
   return path.join(app.getPath('userData'), 'updates', fileName);
 }
 
+function getUpdateDownloadPath(app, release, file) {
+  if (process.platform === 'darwin') {
+    return getMacDmgDownloadPath(app, release, file);
+  }
+  const fallbackName = `Jato-AI-BID-${release.version || 'update'}-win-x64.exe`;
+  const fileName = sanitizeDownloadFileName(file?.name, fallbackName);
+  return path.join(app.getPath('userData'), 'updates', fileName);
+}
+
 function isDownloadedFileReady(filePath, expectedSize = 0) {
   if (!filePath) {
     return false;
@@ -191,7 +289,7 @@ function requestModuleForUrl(url) {
 }
 
 function downloadFile(url, destinationPath, options = {}, redirectCount = 0) {
-  const { expectedSize = 0, onProgress } = options;
+  const { expectedSize = 0, onProgress, headers = {} } = options;
   return new Promise((resolve, reject) => {
     let parsedUrl;
     try {
@@ -214,7 +312,7 @@ function downloadFile(url, destinationPath, options = {}, redirectCount = 0) {
 
     let request;
     try {
-      request = requestModuleForUrl(parsedUrl).get(parsedUrl, { headers: { 'User-Agent': 'yibiao-client' } }, (response) => {
+      request = requestModuleForUrl(parsedUrl).get(parsedUrl, { headers: { 'User-Agent': 'yibiao-client', ...headers } }, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           response.resume();
           if (redirectCount >= 5) {
@@ -325,80 +423,62 @@ async function runMacDmgUpdateCheck(options, release, channel) {
   }
 }
 
+async function runDirectUpdateCheck(options, release, channel) {
+  const { app, mainWindow, onProgress, onDownloaded, onError } = options;
+  const download = pickPlatformDownloadFile(release.files);
+  if (!download) {
+    const message = '未找到适用于当前系统的更新包';
+    onError?.(message);
+    return { enabled: true, updateAvailable: true, version: release.version, failed: true, message, channel };
+  }
+
+  const destinationPath = getUpdateDownloadPath(app, release, download);
+  const expectedSize = Number(download.size || 0);
+
+  try {
+    if (isDownloadedFileReady(destinationPath, expectedSize)) {
+      downloadedUpdateVersion = release.version;
+      downloadedUpdateChannel = channel;
+      downloadedUpdateFilePath = destinationPath;
+      onDownloaded?.(release.version);
+      return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
+    }
+
+    setProgressBar(mainWindow, 0);
+    await downloadFile(download.url, destinationPath, {
+      expectedSize,
+      headers: { [LICENSE_HEADER]: getUpdateLicenseHeader(app) },
+      onProgress: (percent) => {
+        setProgressBar(mainWindow, Math.max(0, Math.min(1, percent / 100)));
+        onProgress?.(percent);
+      },
+    });
+
+    downloadedUpdateVersion = release.version;
+    downloadedUpdateChannel = channel;
+    downloadedUpdateFilePath = destinationPath;
+    setProgressBar(mainWindow, -1);
+    onDownloaded?.(release.version);
+    return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
+  } catch (error) {
+    const message = formatErrorMessage(error);
+    setProgressBar(mainWindow, -1);
+    onError?.(message);
+    return { enabled: true, updateAvailable: true, version: release.version, failed: true, message, channel };
+  }
+}
+
 async function runUpdateCheck(options = {}) {
   const { app, mainWindow, onProgress, onDownloaded, onError } = options;
   const channel = getUpdateChannel(options.configStore);
-  const release = await fetchLatestRelease(channel);
+  const release = await fetchLatestRelease(channel, options);
   if (!release.version || compareVersions(release.version, app.getVersion()) <= 0) {
     return { enabled: true, updateAvailable: false, channel };
   }
   if (process.platform === 'darwin') {
     return runMacDmgUpdateCheck(options, release, channel);
   }
-  configureAutoUpdater(channel);
-  if (!autoUpdaterInstance) {
-    return { enabled: true, updateAvailable: false, failed: true, message: '自动更新未初始化', channel };
-  }
-
-  let downloadedVersion = release.version;
-  let downloadedNotified = false;
-  let errorNotified = false;
-  const notifyError = (message) => {
-    if (errorNotified) {
-      return;
-    }
-    errorNotified = true;
-    onError?.(message);
-  };
-
-  const handleProgress = (progress) => {
-    const percent = Number(progress?.percent || 0);
-    setProgressBar(mainWindow, Math.max(0, Math.min(1, percent / 100)));
-    onProgress?.(percent);
-  };
-
-  const handleDownloaded = (info) => {
-    downloadedVersion = info?.version || release.version;
-    downloadedUpdateVersion = downloadedVersion;
-    downloadedUpdateChannel = channel;
-    downloadedNotified = true;
-    setProgressBar(mainWindow, -1);
-    onDownloaded?.(downloadedVersion);
-  };
-
-  const handleError = (error) => {
-    setProgressBar(mainWindow, -1);
-    notifyError(formatErrorMessage(error));
-  };
-
-  autoUpdaterInstance.on('download-progress', handleProgress);
-  autoUpdaterInstance.on('update-downloaded', handleDownloaded);
-  autoUpdaterInstance.on('error', handleError);
-
-  try {
-    const result = await autoUpdaterInstance.checkForUpdates();
-    if (!result) {
-      throw new Error('未找到可下载的更新包');
-    }
-
-    await autoUpdaterInstance.downloadUpdate();
-    downloadedUpdateVersion = downloadedVersion;
-    downloadedUpdateChannel = channel;
-    setProgressBar(mainWindow, -1);
-    if (!downloadedNotified) {
-      onDownloaded?.(downloadedVersion);
-    }
-    return { enabled: true, updateAvailable: true, version: downloadedVersion, downloaded: true, channel };
-  } catch (error) {
-    const message = formatErrorMessage(error);
-    notifyError(message);
-    return { enabled: true, updateAvailable: true, version: release.version, failed: true, message, channel };
-  } finally {
-    autoUpdaterInstance.removeListener('download-progress', handleProgress);
-    autoUpdaterInstance.removeListener('update-downloaded', handleDownloaded);
-    autoUpdaterInstance.removeListener('error', handleError);
-    setProgressBar(mainWindow, -1);
-  }
+  return runDirectUpdateCheck(options, release, channel);
 }
 
 async function checkAndDownloadUpdate(options = {}) {
@@ -407,11 +487,8 @@ async function checkAndDownloadUpdate(options = {}) {
   if (!app?.isPackaged) {
     return getDisabledResult();
   }
-  if (process.platform !== 'darwin' && !autoUpdaterInstance) {
-    return { enabled: true, updateAvailable: false, failed: true, message: '自动更新未初始化', channel };
-  }
   if (downloadedUpdateVersion && downloadedUpdateChannel === channel) {
-    if (process.platform !== 'darwin' || isDownloadedFileReady(downloadedUpdateFilePath)) {
+    if (isDownloadedFileReady(downloadedUpdateFilePath)) {
       return { enabled: true, updateAvailable: true, version: downloadedUpdateVersion, downloaded: true, channel };
     }
     downloadedUpdateVersion = '';
@@ -439,12 +516,7 @@ function triggerUpdateDownload(options) {
 }
 
 async function quitAndInstall(options = {}) {
-  if (process.platform === 'darwin') {
-    if (!isDownloadedFileReady(downloadedUpdateFilePath)) {
-      return { success: false, message: '更新安装包尚未下载完成，请先检查更新' };
-    }
-
-    const { shell } = require('electron');
+  if (isDownloadedFileReady(downloadedUpdateFilePath)) {
     const openError = await shell.openPath(downloadedUpdateFilePath);
     if (openError) {
       return { success: false, message: `打开更新安装包失败：${openError}` };
@@ -459,42 +531,13 @@ async function quitAndInstall(options = {}) {
     return { success: true };
   }
 
-  if (autoUpdaterInstance && downloadedUpdateVersion) {
-    autoUpdaterInstance.quitAndInstall(false, true);
-    return { success: true };
-  }
-
   return { success: false, message: '更新包尚未下载完成，请先检查更新' };
 }
 
 function setupAutoUpdate({ app, mainWindow }) {
-  if (!app.isPackaged) {
-    return;
-  }
-  if (process.platform === 'darwin') {
-    return;
-  }
-
-  const { autoUpdater } = require('electron-updater');
-  autoUpdaterInstance = autoUpdater;
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-  configureAutoUpdater('github');
-
-  autoUpdater.on('download-progress', (progress) => {
-    const percent = Number(progress?.percent || 0);
-    setProgressBar(mainWindow, Math.max(0, Math.min(1, percent / 100)));
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    downloadedUpdateVersion = info?.version || downloadedUpdateVersion;
+  if (app?.isPackaged) {
     setProgressBar(mainWindow, -1);
-  });
-
-  autoUpdater.on('error', (error) => {
-    setProgressBar(mainWindow, -1);
-    console.warn('自动更新检查失败', error);
-  });
+  }
 }
 
 module.exports = {

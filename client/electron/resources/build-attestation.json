@@ -3,9 +3,9 @@
   "appId": "com.jdt.jatoaibid",
   "productName": "Jato AI BID",
   "buildId": "development-build",
-  "gitCommitSha": "",
-  "builtAt": "",
-  "keyId": "development-build-key",
+  "gitCommitSha": "78ab2af4cdf3b01a808108a6538eb1fef08d3016",
+  "builtAt": "2026-07-14T12:54:17.697Z",
+  "keyId": "jatobid-build-key-2026-07",
   "algorithm": "ECDSA_P256_SHA256",
   "signature": ""
 }

@@ -45,6 +45,8 @@
 | `GET/POST /api/license-config` | KV | `ADMIN_TOKEN` | 授权配置后台管理 |
 | `GET /resources` | `RESOURCE_DB` + AE | 无 | 客户端资源列表，点击量为 D1 累计 + AE 今天 |
 | `GET/POST/DELETE /api/resources` | `RESOURCE_DB` + R2 + AE | `ADMIN_TOKEN` | 资源管理 |
+| `POST /updates/latest` | R2 + 管理端授权公钥 | 本地许可证 | 授权用户获取最新安装包清单 |
+| `GET /updates/download` | R2 + 管理端授权公钥 | 本地许可证 Header | 授权用户下载安装包 |
 
 旧 `/api/summary` 已删除。
 
@@ -105,10 +107,11 @@ Worker 运行时还需要在 Cloudflare 后台配置 Secret：
 | `GITHUB_API_TOKEN` | 可选，降低 GitHub API 限流概率 |
 | `LICENSE_PRIVATE_KEY_JWK` | ECDSA P-256 私钥 JWK，用于签发客户端 license |
 | `LICENSE_KEY_ID` | 可选，授权签名 key id，默认 `official-build-key-2026-01` |
+| `JATOBID_UPDATE_LICENSE_PUBLIC_KEY` | 局域网管理端授权公钥 PEM，用于校验客户端本地许可证后放行更新下载 |
 
 不要在 `wrangler.jsonc` 增加 `secrets.required`。
 
-授权密钥使用 ECDSA P-256 JWK。可在本地用 Node 生成一次密钥对，把私钥 JSON 配置到 GitHub Actions Secret `YIBIAO_LICENSE_PRIVATE_KEY_JWK` 和 Worker Secret `LICENSE_PRIVATE_KEY_JWK`：
+授权密钥使用 ECDSA P-256 JWK，用于 Worker 签发旧版云端 license；构建证明密钥是独立用途，不复用该密钥。构建证明私钥配置在 GitHub Actions Secret `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`，Worker 更新下载授权使用局域网管理端公钥 `JATOBID_UPDATE_LICENSE_PUBLIC_KEY`：
 
 ```powershell
 node -e "const { webcrypto } = require('node:crypto'); (async () => { const key = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']); console.log(JSON.stringify(await webcrypto.subtle.exportKey('jwk', key.privateKey))); })();"

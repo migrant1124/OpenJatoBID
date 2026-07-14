@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "agnet-analytics-api",
+  "name": "bidupdat",
   "main": "src/index.js",
   "compatibility_date": "2026-05-14",
   "workers_dev": true,
@@ -9,16 +9,16 @@
     "head_sampling_rate": 1
   },
   "keep_vars": true,
-  "routes": [
-    {
-      "pattern": "analytics.agnet.top",
-      "custom_domain": true
-    }
-  ],
   "analytics_engine_datasets": [
     {
       "binding": "ANALYTICS",
       "dataset": "agnet_analytics"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "RELEASE_BUCKET",
+      "bucket_name": "jatoaibid"
     }
   ],
   "triggers": {

@@ -91,9 +91,9 @@ function getBuildId() {
 }
 
 async function main() {
-  const privateJwk = parseJwkEnv('YIBIAO_LICENSE_PRIVATE_KEY_JWK');
+  const privateJwk = parseJwkEnv('JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK');
   const publicJwk = publicJwkFromPrivate(privateJwk)
-    || parseJwkEnv('YIBIAO_LICENSE_PUBLIC_KEY_JWK')
+    || parseJwkEnv('JATOBID_BUILD_ATTESTATION_PUBLIC_KEY_JWK')
     || readJsonFile(publicKeyPath);
   if (!publicJwk) {
     throw new Error('license public key is missing');
@@ -109,7 +109,7 @@ async function main() {
     buildId: getBuildId(),
     gitCommitSha: getGitCommitSha(),
     builtAt: String(process.env.YIBIAO_BUILT_AT || '').trim() || new Date().toISOString(),
-    keyId: String(process.env.YIBIAO_LICENSE_KEY_ID || '').trim() || 'official-build-key-2026-01',
+    keyId: String(process.env.JATOBID_BUILD_ATTESTATION_KEY_ID || '').trim() || 'jatobid-build-key-2026-07',
     algorithm: 'ECDSA_P256_SHA256',
   };
   const signature = await signPayload(payload, privateJwk);

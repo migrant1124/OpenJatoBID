@@ -398,8 +398,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     }
   });
 
-  ipcMain.handle('app:get-latest-version', () => getLatestVersion({ configStore }));
-  ipcMain.handle('app:get-update-download-url', () => getUpdateDownloadUrl({ configStore }));
+  ipcMain.handle('app:get-latest-version', () => getLatestVersion({ app, configStore }));
+  ipcMain.handle('app:get-update-download-url', () => getUpdateDownloadUrl({ app, configStore }));
   ipcMain.handle('app:quit-and-install', async () => {
     await closeServicesBeforeExit();
     return quitAndInstall({ app });

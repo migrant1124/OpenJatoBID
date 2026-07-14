@@ -13,6 +13,7 @@ import { handleRetention } from './routes/retention.js';
 import { handleAdminResources, handlePublicResources, handleResourceImage } from './routes/resources.js';
 import { handleTrack } from './routes/track.js';
 import { handleTraffic } from './routes/traffic.js';
+import { handleUpdateDownload, handleUpdateLatest } from './routes/updates.js';
 import { rollupYesterdayCronStage } from './services/analyticsStatsStore.js';
 
 const routes = new Map([
@@ -38,6 +39,8 @@ const routes = new Map([
   ['/api/model-usage', handleModelUsage],
   ['/api/agent-runtime', handleAgentRuntime],
   ['/api/github-repo-stats', handleGitHubRepoStats],
+  ['/updates/latest', handleUpdateLatest],
+  ['/updates/download', handleUpdateDownload],
 ]);
 
 export default {
