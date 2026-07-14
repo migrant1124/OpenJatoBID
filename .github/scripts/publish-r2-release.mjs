@@ -360,6 +360,19 @@ async function deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys }) {
   }
 }
 
+async function verifyR2ApiWrite({ accountId, apiToken, bucket, prefix }) {
+  const key = joinKey(prefix, `__publish-check-${Date.now()}.json`);
+  await putJsonObjectWithApi({
+    accountId,
+    apiToken,
+    bucket,
+    key,
+    value: { ok: true, checkedAt: new Date().toISOString() },
+  });
+  await deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys: [key] });
+  console.log('Verified Cloudflare R2 API write access.');
+}
+
 async function main() {
   const accountId = requireEnv('R2_ACCOUNT_ID');
   const bucket = requireEnv('R2_BUCKET');
@@ -378,6 +391,7 @@ async function main() {
   let objects;
   let client;
   if (cloudflareApiToken) {
+    await verifyR2ApiWrite({ accountId, apiToken: cloudflareApiToken, bucket, prefix });
     for (const filePath of assetFiles) {
       const fileName = path.basename(filePath);
       await putObjectWithApi({ accountId, apiToken: cloudflareApiToken, bucket, key: joinKey(prefix, fileName), filePath, fileName });
