@@ -1269,6 +1269,7 @@ function createOutlineNodeMap(items) {
 function isAiExpandableResponseParent(item, level) {
   return level >= 1
     && level <= 3
+    && item?.manual_input_required !== true
     && (item?.response_mode || 'freeform-markdown') === 'freeform-markdown'
     && item?.allow_ai_children === true;
 }
@@ -1655,121 +1656,6 @@ function parseAgentJsonContent(content) {
   }
 
   throw new Error(`Agent 未返回可解析的 JSON：${lastError?.message || '内容为空'}`);
-}
-
-function requireAgentStringMap(value, label) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${label} 必须是对象`);
-  }
-  const normalized = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (!key || typeof item !== 'string') throw new Error(`${label}.${key || '未知字段'} 必须是字符串`);
-    normalized[key] = item;
-  }
-  return normalized;
-}
-
-function normalizeControlledTemplateAgentOutput(mode, value, templateId = '', knownKnowledgeIds = new Set()) {
-  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
-  if (!raw) throw new Error('受控响应 Agent 结果必须是 JSON 对象');
-  const allowedKeys = mode === 'locked-commitment'
-    ? new Set(['template_id', 'slot_values', 'knowledge_item_ids', 'missing_slots'])
-    : new Set(['template_id', 'cell_values', 'repeatable_rows', 'knowledge_item_ids', 'missing_fields']);
-  for (const key of Object.keys(raw)) {
-    if (!allowedKeys.has(key)) {
-      throw new Error(`受控响应 Agent 不得返回字段：${key}`);
-    }
-  }
-  if (String(raw.template_id || '').trim() !== templateId) throw new Error('受控响应 Agent 返回的 template_id 与当前模板不一致');
-  if (!Array.isArray(raw.knowledge_item_ids) || raw.knowledge_item_ids.some((id) => typeof id !== 'string')) {
-    throw new Error('knowledge_item_ids 必须是字符串数组');
-  }
-  const knowledgeItemIds = [...new Set(raw.knowledge_item_ids.map((id) => id.trim()).filter((id) => id && knownKnowledgeIds.has(id)))];
-  if (mode === 'locked-commitment') {
-    if (!Object.hasOwn(raw, 'slot_values')) throw new Error('固定承诺函 Agent 结果缺少 slot_values');
-    if (!Array.isArray(raw.missing_slots) || raw.missing_slots.some((id) => typeof id !== 'string')) throw new Error('missing_slots 必须是字符串数组');
-    return { slotValues: requireAgentStringMap(raw.slot_values, 'slot_values'), knowledgeItemIds };
-  }
-  if (!Object.hasOwn(raw, 'cell_values') || !Object.hasOwn(raw, 'repeatable_rows')) {
-    throw new Error('固定表格 Agent 结果必须包含 cell_values 和 repeatable_rows');
-  }
-  if (!Array.isArray(raw.missing_fields) || raw.missing_fields.some((id) => typeof id !== 'string')) throw new Error('missing_fields 必须是字符串数组');
-  const repeatableRows = raw.repeatable_rows;
-  if (!repeatableRows || typeof repeatableRows !== 'object' || Array.isArray(repeatableRows)) {
-    throw new Error('repeatable_rows 必须是对象');
-  }
-  const normalizedRows = {};
-  for (const [regionId, rows] of Object.entries(repeatableRows)) {
-    if (!Array.isArray(rows)) throw new Error(`repeatable_rows.${regionId} 必须是数组`);
-    normalizedRows[regionId] = rows.map((row, index) => requireAgentStringMap(row, `repeatable_rows.${regionId}[${index}]`));
-  }
-  return {
-    cellValues: requireAgentStringMap(raw.cell_values, 'cell_values'),
-    repeatableRows: normalizedRows,
-    knowledgeItemIds,
-  };
-}
-
-function buildControlledTemplateWritableSchema(responseTemplate) {
-  const template = responseTemplate?.template || {};
-  if (responseTemplate?.kind === 'locked-commitment') {
-    return {
-      kind: 'locked-commitment',
-      slots: (template.segments || [])
-        .filter((segment) => segment?.type === 'slot')
-        .map(({ slot_id, label, value_source, required }) => ({ slot_id, label, value_source, required: Boolean(required) })),
-    };
-  }
-  return {
-    kind: 'fixed-markdown-table',
-    table_title: template.table_title || '',
-    headers: Array.isArray(template.headers) ? template.headers : [],
-    cells: (template.body || [])
-      .filter((entry) => entry?.kind === 'row')
-      .flatMap((entry) => (entry.row?.cells || []).map((cell, column_index) => ({ cell, column_index })))
-      .filter(({ cell }) => cell?.kind === 'slot')
-      .map(({ cell, column_index }) => ({
-        slot_id: cell.slot_id,
-        label: cell.label,
-        value_source: cell.value_source,
-        required: Boolean(cell.required),
-        column_index,
-      })),
-    repeatable_regions: (template.body || [])
-      .filter((entry) => entry?.kind === 'repeatable-region')
-      .map((entry) => ({
-        region_id: entry.region_id,
-        min_rows: entry.min_rows,
-        max_rows: entry.max_rows,
-        slots: (entry.row_template?.cells || [])
-          .map((cell, column_index) => ({ cell, column_index }))
-          .filter(({ cell }) => cell?.kind === 'slot')
-          .map(({ cell, column_index }) => ({
-            slot_id: cell.slot_id,
-            label: cell.label,
-            value_source: cell.value_source,
-            required: Boolean(cell.required),
-            column_index,
-          })),
-      })),
-  };
-}
-
-function buildControlledTemplateAgentPrompt(item, responseTemplate) {
-  const mode = responseTemplate.kind;
-  const outputShape = mode === 'locked-commitment'
-    ? `{"template_id":"${responseTemplate.template_id}","slot_values":{"允许的slot_id":"从上下文提取的值"},"knowledge_item_ids":[],"missing_slots":[]}`
-    : `{"template_id":"${responseTemplate.template_id}","cell_values":{"允许的slot_id":"从上下文提取的值"},"repeatable_rows":{"允许的region_id":[{"允许的slot_id":"从上下文提取的值"}]},"knowledge_item_ids":[],"missing_fields":[]}`;
-  return `你只负责从 controlled-response-context.json 中提取固定响应模板允许填写的结构化字段。
-
-节点：${item.id} ${item.title || ''}
-响应模式：${mode}
-
-要求：
-1. 读取上下文中的 writable_schema，严格使用其中已有的 slot_id 和 region_id；不得新增字段。上下文不会提供锁定正文，禁止尝试补写。
-2. 只能依据项目概述、全局事实和知识条目填写；无法确认的值保留为空字符串或空数组，不得虚构。
-3. 只返回一个 JSON 对象，格式必须是：${outputShape}
-4. 严禁返回 content、markdown、完整正文、完整承诺函或完整 Markdown 表格；锁定文本由程序确定性渲染。`;
 }
 
 function findOutlineItemById(items, targetId) {
@@ -2438,7 +2324,8 @@ function collectLeafContexts(items, parents = []) {
 
 function collectFreeformLeafContexts(items) {
   return collectLeafContexts(items)
-    .filter(({ item }) => (item.response_mode || 'freeform-markdown') === 'freeform-markdown');
+    .filter(({ item }) => item.manual_input_required !== true
+      && (item.response_mode || 'freeform-markdown') === 'freeform-markdown');
 }
 
 function normalizeReferenceDocumentIds(storedPlan) {
@@ -3187,18 +3074,15 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     throw new Error('当前目录没有可生成正文的小节');
   }
   partitionOutlineResponseTargets(outlineData.outline);
-  const explicitNoneTargets = allLeafContexts.filter(({ item }) => (item.response_mode || 'freeform-markdown') === 'explicit-none');
-  const evidenceTargets = allLeafContexts.filter(({ item }) => item.response_mode === 'evidence-markdown');
-  const controlledTemplateTargets = allLeafContexts.filter(({ item }) => (
-    item.response_mode === 'locked-commitment' || item.response_mode === 'fixed-markdown-table'
-  ));
+  const explicitNoneTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
+    && (item.response_mode || 'freeform-markdown') === 'explicit-none');
+  const evidenceTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
+    && item.response_mode === 'evidence-markdown');
   let leaves = collectFreeformLeafContexts(outlineData.outline);
   if (targetItemId) {
-    const controlledTarget = controlledTemplateTargets.find(({ item }) => item.id === targetItemId);
-    if (controlledTarget) {
-      throw new Error(controlledTarget.item.response_mode === 'locked-commitment'
-        ? '该章节是固定承诺函，只能填写预留字段，不能重新生成、扩写或改写'
-        : '该章节是固定表格，只能填写允许单元格和数据行，不能重新生成、扩写或改写');
+    const manualTarget = allLeafContexts.find(({ item }) => item.id === targetItemId && item.manual_input_required === true);
+    if (manualTarget) {
+      throw new Error('该章节必须人工填写，不能重新生成、扩写或由 AI 改写');
     }
   }
   const regenerateRequirement = resume ? contentRuntime.regenerate_requirement : String(payload.requirement || '').trim();
@@ -3736,95 +3620,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     });
   }
 
-  function adoptControlledResponseState(saved) {
-    if (saved?.outlineData) outlineData = saved.outlineData;
-    if (saved?.contentGenerationSections) sections = saved.contentGenerationSections;
-    leaves = collectFreeformLeafContexts(outlineData.outline);
-    storedContentPlans = pruneContentGenerationPlans(storedContentPlans, leaves);
-    const leafIds = new Set(leaves.map(({ item }) => item.id));
-    tasksToRun = tasksToRun.filter(({ item }) => leafIds.has(item.id));
-    refreshRunLimits(tasksToRun);
-  }
-
-  async function runControlledTemplateResponses() {
-    if (targetItemId || !controlledTemplateTargets.length) return;
-    const templatesById = new Map(
-      (Array.isArray(storedPlan.responseTemplates) ? storedPlan.responseTemplates : [])
-        .map((template) => [template.template_id, template]),
-    );
-    const controlledKnowledgeItems = evidenceKnowledgePayload();
-    const knownKnowledgeIds = new Set(controlledKnowledgeItems.map((item) => String(item.id || '').trim()).filter(Boolean));
-    const contextPayload = {
-      project_overview: projectOverview,
-      global_facts: globalFactsText,
-      knowledge_items: controlledKnowledgeItems,
-    };
-
-    for (const { item: initialItem } of controlledTemplateTargets) {
-      const item = findOutlineItemById(outlineData.outline, initialItem.id) || initialItem;
-      if (item.response_status === 'responded-substantive') continue;
-      const responseTemplate = templatesById.get(item.template_id);
-      if (!responseTemplate?.confirmed || !responseTemplate.locked_hash) {
-        logs = [...logs, `受控响应“${item.title || item.id}”的固定模板尚未确认，保留待人工填写状态。`];
-        continue;
-      }
-
-      const outputFile = `controlled-response-${String(item.id || 'node').replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`;
-      try {
-        const result = await runContentAgentTask({
-          title: `受控响应字段提取-${item.title || item.id}`,
-          prompt: buildControlledTemplateAgentPrompt(item, responseTemplate),
-          outputFile,
-          files: [{
-            path: 'controlled-response-context.json',
-            content: JSON.stringify({
-              node: { id: item.id, title: item.title || '', description: item.description || '' },
-              writable_schema: buildControlledTemplateWritableSchema(responseTemplate),
-              ...contextPayload,
-            }, null, 2),
-          }],
-          eventPrefix: `content.controlled.${item.id}`,
-          activityLabel: '提取受控响应字段',
-          validateOutput: async (agentResult) => normalizeControlledTemplateAgentOutput(
-            responseTemplate.kind,
-            parseAgentJsonContent(agentResult?.output_content || ''),
-            responseTemplate.template_id,
-            knownKnowledgeIds,
-          ),
-        });
-        const values = normalizeControlledTemplateAgentOutput(
-          responseTemplate.kind,
-          parseAgentJsonContent(result.outputContent),
-          responseTemplate.template_id,
-          knownKnowledgeIds,
-        );
-        const saved = responseTemplate.kind === 'locked-commitment'
-          ? workspaceStore.saveLockedTemplateValues({
-            nodeId: item.id,
-            templateId: responseTemplate.template_id,
-            slotValues: values.slotValues,
-          }, { allowDuringContentTask: true, knowledgeItemIds: values.knowledgeItemIds })
-          : workspaceStore.saveFixedTableValues({
-            nodeId: item.id,
-            templateId: responseTemplate.template_id,
-            cellValues: values.cellValues,
-            repeatableRows: values.repeatableRows,
-          }, { allowDuringContentTask: true, knowledgeItemIds: values.knowledgeItemIds });
-        adoptControlledResponseState(saved);
-        touchedItemIds.add(item.id);
-        const savedItem = findOutlineItemById(outlineData.outline, item.id);
-        logs = [...logs, savedItem?.response_status === 'needs-manual-input'
-          ? `受控响应“${item.title || item.id}”已回写结构化字段，仍有必填项需人工补充。`
-          : `受控响应“${item.title || item.id}”已通过固定模板确定性渲染。`];
-        updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, saved);
-      } catch (error) {
-        if (isPauseRequested() || isPauseLikeError(error)) throw error;
-        logs = [...logs, `受控响应“${item.title || item.id}”字段提取失败，保留待人工填写状态：${error.message || String(error)}。`];
-        writeDeveloperLog(`content.controlled.${item.id}.failed`, { error: error.message || String(error) });
-      }
-    }
-  }
-
   async function runSpecialResponseModes() {
     const explicitTargetsForRun = explicitNoneTargets.filter(({ item }) => !targetItemId || item.id === targetItemId);
     for (const { item } of explicitTargetsForRun) {
@@ -3862,8 +3657,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         ? `证明材料节点“${item.title}”未匹配到材料，已保留“无”并标记高风险。`
         : `证明材料节点“${item.title}”已生成材料索引。`);
     }
-
-    await runControlledTemplateResponses();
   }
 
   async function waitForPromptCacheWarmupBeforeFanout(message) {

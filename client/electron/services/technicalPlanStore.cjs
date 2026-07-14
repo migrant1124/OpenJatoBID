@@ -15,13 +15,6 @@ const {
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { clearMermaidCache } = require('../utils/mermaidCache.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
-const {
-  confirmTemplate: confirmFixedTemplate,
-  renderLockedCommitment,
-  renderFixedMarkdownTable,
-  validateRenderedLockedContent,
-  validateRenderedFixedTable,
-} = require('./fixedMarkdownTemplateService.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
 const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
@@ -47,9 +40,9 @@ const outlineResponseStatuses = new Set([
 ]);
 const outlineComplianceRisks = new Set(['none', 'warning', 'high', 'potential-rejection']);
 const missingEvidenceRisks = new Set(['high', 'potential-rejection']);
-const responseTemplateKinds = new Set(['locked-commitment', 'fixed-markdown-table']);
 
 const outlineFormatConstraintFields = [
+  'manual_input_required',
   'format_node_id',
   'source_number',
   'source_title',
@@ -61,7 +54,6 @@ const outlineFormatConstraintFields = [
   'level_locked',
   'response_mode',
   'allow_ai_children',
-  'template_id',
   'empty_response_text',
   'missing_evidence_risk',
   'mapped_requirement_ids',
@@ -76,6 +68,7 @@ const outlineResponseStateFields = [
 ];
 
 const defaultOutlineFormatConstraints = Object.freeze({
+  manual_input_required: false,
   numbering_policy: 'auto',
   required_in_outline: false,
   response_required: true,
@@ -118,9 +111,6 @@ const initialState = {
   contentGenerationPlans: {},
   contentIllustrationPlan: undefined,
   contentGenerationRuntime: undefined,
-  responseTemplates: [],
-  selectedFormatProfileId: undefined,
-  selectedFormatProfileHash: undefined,
   outlineData: null,
 };
 
@@ -294,19 +284,23 @@ function normalizeStringArray(value, fallback, label) {
 
 function normalizeOutlineFormatConstraints(value) {
   const source = parseStrictJsonObject(value, '目录格式约束') || {};
+  const storedResponseMode = normalizeEnumField(source, 'response_mode', outlineResponseModes, defaultOutlineFormatConstraints.response_mode, '目录格式约束');
+  const legacyManualMode = storedResponseMode === 'locked-commitment' || storedResponseMode === 'fixed-markdown-table';
+  const manualInputRequired = legacyManualMode || normalizeBooleanField(source, 'manual_input_required', defaultOutlineFormatConstraints.manual_input_required, '目录格式约束');
   const normalized = {
+    manual_input_required: manualInputRequired,
     numbering_policy: normalizeEnumField(source, 'numbering_policy', outlineNumberingPolicies, defaultOutlineFormatConstraints.numbering_policy, '目录格式约束'),
     required_in_outline: normalizeBooleanField(source, 'required_in_outline', defaultOutlineFormatConstraints.required_in_outline, '目录格式约束'),
     response_required: normalizeBooleanField(source, 'response_required', defaultOutlineFormatConstraints.response_required, '目录格式约束'),
     title_locked: normalizeBooleanField(source, 'title_locked', defaultOutlineFormatConstraints.title_locked, '目录格式约束'),
     order_locked: normalizeBooleanField(source, 'order_locked', defaultOutlineFormatConstraints.order_locked, '目录格式约束'),
     level_locked: normalizeBooleanField(source, 'level_locked', defaultOutlineFormatConstraints.level_locked, '目录格式约束'),
-    response_mode: normalizeEnumField(source, 'response_mode', outlineResponseModes, defaultOutlineFormatConstraints.response_mode, '目录格式约束'),
+    response_mode: manualInputRequired ? 'freeform-markdown' : storedResponseMode,
     allow_ai_children: normalizeBooleanField(source, 'allow_ai_children', defaultOutlineFormatConstraints.allow_ai_children, '目录格式约束'),
     mapped_requirement_ids: normalizeStringArray(source.mapped_requirement_ids, defaultOutlineFormatConstraints.mapped_requirement_ids, '目录格式约束.mapped_requirement_ids'),
   };
 
-  for (const field of ['format_node_id', 'source_number', 'source_title', 'template_id', 'empty_response_text']) {
+  for (const field of ['format_node_id', 'source_number', 'source_title', 'empty_response_text']) {
     const fieldValue = normalizeOptionalString(source, field, '目录格式约束');
     if (fieldValue !== undefined) normalized[field] = fieldValue;
   }
@@ -354,41 +348,10 @@ function applyOutlinePersistenceFields(item, formatConstraints, responseState) {
     ...item,
     ...formatConstraints,
     ...responseState,
+    ...(formatConstraints.manual_input_required === true && !String(item?.content || '').trim()
+      ? { response_status: 'needs-manual-input' }
+      : {}),
     knowledge_item_ids: [...responseState.knowledge_item_ids],
-  };
-}
-
-function normalizeResponseTemplateRecord(value, timestamp = now()) {
-  const source = parseStrictJsonObject(value, '固定响应模板');
-  if (!source) throw new Error('固定响应模板不能为空');
-  const kind = normalizeEnumField(source, 'kind', responseTemplateKinds, undefined, '固定响应模板');
-  if (!kind) throw new Error('固定响应模板.kind 不能为空');
-  const sourceLocation = parseStrictJsonObject(source.source_location, '固定响应模板.source_location');
-  const template = parseStrictJsonObject(source.template, '固定响应模板.template');
-  if (!sourceLocation || !template) {
-    throw new Error('固定响应模板缺少 source_location 或 template');
-  }
-  if (hasOwn(source, 'confirmed') && typeof source.confirmed !== 'boolean') {
-    throw new Error('固定响应模板.confirmed 必须是布尔值');
-  }
-  const analysisItemId = normalizeRequiredString(source.analysis_item_id, '固定响应模板.analysis_item_id');
-  if (analysisItemId !== 'bidDocumentFormatRequirements') {
-    throw new Error('固定响应模板.analysis_item_id 包含不支持的值');
-  }
-  const lockedHash = normalizeOptionalString(source, 'locked_hash', '固定响应模板');
-  return {
-    template_id: normalizeRequiredString(source.template_id, '固定响应模板.template_id'),
-    kind,
-    analysis_item_id: analysisItemId,
-    profile_id: normalizeRequiredString(source.profile_id, '固定响应模板.profile_id'),
-    format_node_id: normalizeRequiredString(source.format_node_id, '固定响应模板.format_node_id'),
-    source_title: normalizeRequiredString(source.source_title, '固定响应模板.source_title'),
-    source_location: sourceLocation,
-    template,
-    confirmed: source.confirmed === true,
-    ...(lockedHash ? { locked_hash: lockedHash } : {}),
-    created_at: normalizeOptionalString(source, 'created_at', '固定响应模板') || timestamp,
-    updated_at: normalizeOptionalString(source, 'updated_at', '固定响应模板') || timestamp,
   };
 }
 
@@ -1176,76 +1139,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     }
   }
 
-  function loadResponseTemplates() {
-    return db.prepare('SELECT * FROM technical_plan_response_templates ORDER BY created_at ASC, template_id ASC').all().map((row) => {
-      if (![0, 1].includes(Number(row.confirmed))) {
-        throw new Error(`固定响应模板 ${row.template_id} 的 confirmed 状态已损坏`);
-      }
-      const sourceLocation = parseStrictJsonObject(row.source_location_json, `固定响应模板 ${row.template_id} 的来源`);
-      const template = parseStrictJsonObject(row.template_json, `固定响应模板 ${row.template_id} 的内容`);
-      if (!sourceLocation || !template) {
-        throw new Error(`固定响应模板 ${row.template_id} 已损坏：来源或模板为空`);
-      }
-      return normalizeResponseTemplateRecord({
-        template_id: row.template_id,
-        kind: row.kind,
-        analysis_item_id: row.analysis_item_id,
-        profile_id: row.profile_id,
-        format_node_id: row.format_node_id,
-        source_title: row.source_title,
-        source_location: sourceLocation,
-        template,
-        confirmed: fromDbBool(row.confirmed),
-        locked_hash: row.locked_hash || undefined,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      });
-    });
-  }
-
-  function saveResponseTemplates(responseTemplates) {
-    if (!Array.isArray(responseTemplates)) {
-      throw new Error('固定响应模板必须是数组');
-    }
-    const timestamp = now();
-    const normalized = responseTemplates.map((item) => normalizeResponseTemplateRecord(item, timestamp));
-    const seen = new Set();
-    for (const item of normalized) {
-      if (seen.has(item.template_id)) {
-        throw new Error(`固定响应模板 ID 重复：${item.template_id}`);
-      }
-      seen.add(item.template_id);
-    }
-
-    db.prepare('DELETE FROM technical_plan_response_templates').run();
-    if (!normalized.length) return;
-    const insert = db.prepare(`
-      INSERT INTO technical_plan_response_templates (
-        template_id, kind, analysis_item_id, profile_id, format_node_id, source_title,
-        source_location_json, template_json, confirmed, locked_hash, created_at, updated_at
-      ) VALUES (
-        @template_id, @kind, @analysis_item_id, @profile_id, @format_node_id, @source_title,
-        @source_location_json, @template_json, @confirmed, @locked_hash, @created_at, @updated_at
-      )
-    `);
-    for (const item of normalized) {
-      insert.run({
-        template_id: item.template_id,
-        kind: item.kind,
-        analysis_item_id: item.analysis_item_id,
-        profile_id: item.profile_id,
-        format_node_id: item.format_node_id,
-        source_title: item.source_title,
-        source_location_json: JSON.stringify(item.source_location),
-        template_json: JSON.stringify(item.template),
-        confirmed: toDbBool(item.confirmed),
-        locked_hash: item.locked_hash || null,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-      });
-    }
-  }
-
   function upsertDerivedBidItem(itemId, content, mode) {
     const label = getBidItemLabel(itemId);
     const value = String(content || '');
@@ -1432,7 +1325,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         ...(hasFields(row.format_constraints_patch) ? row.format_constraints_patch : {}),
       });
       if (existingRow) {
-        for (const field of outlineFormatConstraintFields.filter((name) => name !== 'mapped_requirement_ids')) {
+        for (const field of outlineFormatConstraintFields.filter((name) => !['mapped_requirement_ids', 'manual_input_required'].includes(name))) {
           if (JSON.stringify(existingFormatConstraints[field] ?? null) !== JSON.stringify(formatConstraints[field] ?? null)) {
             throw new Error(`目录格式约束不能通过通用工作区写入修改：${row.title}.${field}`);
           }
@@ -1974,8 +1867,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'bidSectionExtractionError')) metaUpdates.bid_section_extraction_error = partial.bidSectionExtractionError ? String(partial.bidSectionExtractionError) : null;
     if (hasOwn(partial, 'outlineMode') && isValidOutlineMode(partial.outlineMode)) metaUpdates.outline_mode = partial.outlineMode;
     if (hasOwn(partial, 'outlineExpansionMode') && isValidOutlineExpansionMode(partial.outlineExpansionMode)) metaUpdates.outline_expansion_mode = partial.outlineExpansionMode;
-    if (hasOwn(partial, 'selectedFormatProfileId')) metaUpdates.selected_format_profile_id = partial.selectedFormatProfileId ? String(partial.selectedFormatProfileId) : null;
-    if (hasOwn(partial, 'selectedFormatProfileHash')) metaUpdates.selected_format_profile_hash = partial.selectedFormatProfileHash ? String(partial.selectedFormatProfileHash) : null;
     if (hasOwn(partial, 'contentGenerationOptions')) metaUpdates.content_generation_options_json = jsonOrNull(partial.contentGenerationOptions);
     if (hasOwn(partial, 'contentGenerationRuntime')) metaUpdates.content_generation_runtime_json = jsonOrNull(partial.contentGenerationRuntime);
     if (hasOwn(partial, 'contentIllustrationPlan')) metaUpdates.content_illustration_plan_json = jsonOrNull(partial.contentIllustrationPlan);
@@ -1984,8 +1875,16 @@ function createTechnicalPlanStore({ app, db, fileService }) {
 
     const nextBidMode = isValidBidMode(partial.bidAnalysisMode) ? partial.bidAnalysisMode : meta.bid_analysis_mode;
     if (hasOwn(partial, 'referenceKnowledgeDocumentIds')) replaceReferenceDocumentIds(partial.referenceKnowledgeDocumentIds);
-    if (hasOwn(partial, 'bidAnalysisTasks')) saveBidItems(partial.bidAnalysisTasks, nextBidMode);
-    if (hasOwn(partial, 'responseTemplates')) saveResponseTemplates(partial.responseTemplates);
+    if (hasOwn(partial, 'bidAnalysisTasks')) {
+      const incomingFormatTask = partial.bidAnalysisTasks?.responseFileRequirements;
+      if (incomingFormatTask?.status === 'success') {
+        const existingFormatTask = db.prepare('SELECT content FROM technical_plan_bid_items WHERE item_id = ?').get('responseFileRequirements');
+        if (String(existingFormatTask?.content || '') !== String(incomingFormatTask.content || '')) {
+          clearDownstreamFromFormatAnalysisChange();
+        }
+      }
+      saveBidItems(partial.bidAnalysisTasks, nextBidMode);
+    }
     if (hasOwn(partial, 'projectOverview')) upsertDerivedBidItem('projectOverview', partial.projectOverview, nextBidMode);
     if (hasOwn(partial, 'techRequirements')) upsertDerivedBidItem('techRequirements', partial.techRequirements, nextBidMode);
     if (hasOwn(partial, 'globalFacts')) {
@@ -2075,9 +1974,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       bidSectionExtractionError: bidSectionExtractionTask?.error || meta.bid_section_extraction_error || undefined,
       outlineMode: isValidOutlineMode(meta.outline_mode) ? meta.outline_mode : 'aligned',
       outlineExpansionMode: isValidOutlineExpansionMode(meta.outline_expansion_mode) ? meta.outline_expansion_mode : 'ai-complement',
-      selectedFormatProfileId: meta.selected_format_profile_id || undefined,
-      selectedFormatProfileHash: meta.selected_format_profile_hash || undefined,
-      responseTemplates: loadResponseTemplates(),
       referenceKnowledgeDocumentIds: loadReferenceDocumentIds(),
       ...tasks,
       globalFacts: loadGlobalFacts(),
@@ -2102,15 +1998,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       clearTechnicalPlanMermaidCache();
     }
     return technicalPlan;
-  }
-
-  function assertControlledResponseWriteAllowed(options = {}) {
-    if (options.allowDuringContentTask === true) {
-      const task = db.prepare("SELECT status FROM technical_plan_tasks WHERE type = 'content-generation' LIMIT 1").get();
-      if (task?.status === 'running') return;
-      throw new Error('正文任务内部受控写入只允许在任务运行阶段执行');
-    }
-    assertContentEditingAllowed();
   }
 
   function assertFormatConstrainedOutlineMutation(outlineData) {
@@ -2274,39 +2161,12 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return loadTechnicalPlan();
   }
 
-  function saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode, selectedFormatProfileId, selectedFormatProfileHash } = {}) {
-    const partial = {
+  function saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode } = {}) {
+    return updateTechnicalPlan({
       outlineMode: 'aligned',
       outlineExpansionMode: isValidOutlineExpansionMode(outlineExpansionMode) ? outlineExpansionMode : 'ai-complement',
       referenceKnowledgeDocumentIds,
-    };
-    if (selectedFormatProfileId !== undefined) partial.selectedFormatProfileId = selectedFormatProfileId;
-    if (selectedFormatProfileHash !== undefined) partial.selectedFormatProfileHash = selectedFormatProfileHash;
-    if (selectedFormatProfileId !== undefined) {
-      const meta = ensureMetaRow();
-      const previousProfileId = String(meta.selected_format_profile_id || '').trim();
-      const nextProfileId = String(selectedFormatProfileId || '').trim();
-      const hasDownstream = Boolean(db.prepare('SELECT 1 FROM technical_plan_outline_nodes LIMIT 1').get());
-      if (previousProfileId !== nextProfileId && (previousProfileId || hasDownstream)) {
-        const transaction = db.transaction(() => {
-          assertNoTechnicalPlanTaskRunning();
-          clearDownstreamFromFormatAnalysisChange();
-          db.prepare(`
-            UPDATE technical_plan_response_templates
-            SET confirmed = 0, locked_hash = NULL, updated_at = ?
-          `).run(now());
-          applyPartial({
-            ...partial,
-            step: 'outline-generation',
-            selectedFormatProfileId: nextProfileId || undefined,
-            selectedFormatProfileHash: selectedFormatProfileHash || undefined,
-          });
-        });
-        transaction();
-        return loadTechnicalPlan();
-      }
-    }
-    return updateTechnicalPlan(partial);
+    });
   }
 
   function resetTenderWorkingCopyToOriginal() {
@@ -2349,50 +2209,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         selected_section_id: null,
         selected_section_title: null,
       });
-    });
-    transaction();
-    return loadTechnicalPlan();
-  }
-
-  function saveStructuredBidAnalysisResult({ task, normalizedHash, responseTemplates } = {}) {
-    const itemId = String(task?.id || '').trim();
-    const nextHash = String(normalizedHash || task?.normalized_hash || '').trim();
-    if (!itemId || !nextHash) {
-      throw new Error('结构化招标解析结果缺少任务 ID 或规范化 Hash');
-    }
-    if (itemId === 'bidDocumentFormatRequirements' && !Array.isArray(responseTemplates)) {
-      throw new Error('投标文件格式解析结果缺少固定响应模板数组');
-    }
-
-    const transaction = db.transaction(() => {
-      const existing = db.prepare('SELECT normalized_hash FROM technical_plan_bid_items WHERE item_id = ?').get(itemId);
-      const hashChanged = itemId === 'bidDocumentFormatRequirements' && existing?.normalized_hash !== nextHash;
-      if (hashChanged) {
-        clearDownstreamFromFormatAnalysisChange();
-        saveResponseTemplates(responseTemplates.map((template) => ({
-          ...template,
-          confirmed: false,
-          locked_hash: undefined,
-        })));
-      } else if (itemId === 'bidDocumentFormatRequirements') {
-        const storedById = new Map(loadResponseTemplates().map((template) => [template.template_id, template]));
-        saveResponseTemplates(responseTemplates.map((template) => storedById.get(template.template_id) || {
-          ...template,
-          confirmed: false,
-          locked_hash: undefined,
-        }));
-      }
-
-      const meta = ensureMetaRow();
-      saveBidItems({
-        [itemId]: {
-          ...task,
-          id: itemId,
-          status: 'success',
-          normalized_hash: nextHash,
-          error: undefined,
-        },
-      }, meta.bid_analysis_mode);
     });
     transaction();
     return loadTechnicalPlan();
@@ -2468,146 +2284,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return updateTechnicalPlan({ contentGenerationOptions, contentIllustrationPlan: undefined });
   }
 
-  function getResponseTemplate(templateId) {
-    const normalizedTemplateId = String(templateId || '').trim();
-    if (!normalizedTemplateId) throw new Error('固定响应模板 ID 不能为空');
-    const template = loadResponseTemplates().find((item) => item.template_id === normalizedTemplateId);
-    if (!template) throw new Error('未找到固定响应模板，请重新解析招标文件');
-    return template;
-  }
-
-  function resetNodesReferencingTemplate(templateId) {
-    const rows = db.prepare(`
-      SELECT node_id, content, knowledge_item_ids_json, format_constraints_json, response_state_json
-      FROM technical_plan_outline_nodes
-    `).all();
-    const affectedNodeIds = [];
-    for (const row of rows) {
-      const legacyKnowledgeItemIds = normalizeStringArray(
-        safeJsonParse(row.knowledge_item_ids_json, []),
-        [],
-        `目录节点 ${row.node_id}.knowledge_item_ids_json`,
-      );
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      normalizeOutlineResponseState(row.response_state_json, {
-        content: row.content,
-        knowledgeItemIds: legacyKnowledgeItemIds,
-      });
-      if (constraints.template_id === templateId) affectedNodeIds.push(row.node_id);
-    }
-    if (!affectedNodeIds.length) return;
-
-    const resetNode = db.prepare(`
-      UPDATE technical_plan_outline_nodes
-      SET content = '', knowledge_item_ids_json = NULL, response_state_json = @response_state_json, updated_at = @updated_at
-      WHERE node_id = @node_id
-    `);
-    const deleteSection = db.prepare('DELETE FROM technical_plan_content_sections WHERE node_id = ?');
-    const deletePlan = db.prepare('DELETE FROM technical_plan_content_plans WHERE node_id = ?');
-    const timestamp = now();
-    const responseStateJson = JSON.stringify({
-      knowledge_item_ids: [],
-      response_status: 'needs-manual-input',
-      compliance_risk: 'none',
-    });
-    for (const nodeId of affectedNodeIds) {
-      resetNode.run({ node_id: nodeId, response_state_json: responseStateJson, updated_at: timestamp });
-      deleteSection.run(nodeId);
-      deletePlan.run(nodeId);
-    }
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
-    clearTechnicalPlanMermaidCache();
-    updateMeta({
-      content_generation_runtime_json: null,
-      content_illustration_plan_json: null,
-    });
-  }
-
-  function confirmResponseTemplate({ templateId, template } = {}) {
-    const transaction = db.transaction(() => {
-      assertContentEditingAllowed();
-      const stored = getResponseTemplate(templateId);
-      const confirmed = confirmFixedTemplate(stored, template);
-      const hasSubstantiveChange = stored.locked_hash !== confirmed.locked_hash;
-      db.prepare(`
-        UPDATE technical_plan_response_templates
-        SET template_json = @template_json, confirmed = 1, locked_hash = @locked_hash, updated_at = @updated_at
-        WHERE template_id = @template_id
-      `).run({
-        template_id: confirmed.template_id,
-        template_json: JSON.stringify(confirmed.template),
-        locked_hash: confirmed.locked_hash,
-        updated_at: now(),
-      });
-      if (hasSubstantiveChange) resetNodesReferencingTemplate(confirmed.template_id);
-    });
-    transaction();
-    return loadTechnicalPlan();
-  }
-
-  function loadControlledResponseNode(nodeId, templateId, expectedMode) {
-    const normalizedNodeId = String(nodeId || '').trim();
-    const normalizedTemplateId = String(templateId || '').trim();
-    const row = db.prepare(`
-      SELECT node_id, title, content, knowledge_item_ids_json, format_constraints_json, response_state_json
-      FROM technical_plan_outline_nodes
-      WHERE node_id = ?
-    `).get(normalizedNodeId);
-    if (!row) throw new Error('当前目录中未找到该章节');
-    const legacyKnowledgeItemIds = normalizeStringArray(
-      safeJsonParse(row.knowledge_item_ids_json, []),
-      [],
-      `目录节点 ${row.node_id}.knowledge_item_ids_json`,
-    );
-    const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-    const responseState = normalizeOutlineResponseState(row.response_state_json, {
-      content: row.content,
-      knowledgeItemIds: legacyKnowledgeItemIds,
-    });
-    if (constraints.response_mode !== expectedMode || constraints.template_id !== normalizedTemplateId) {
-      throw new Error('章节响应模式或固定模板与当前目录约束不一致');
-    }
-    const responseTemplate = getResponseTemplate(normalizedTemplateId);
-    if (responseTemplate.kind !== expectedMode) {
-      throw new Error('固定响应模板类型与当前章节不一致');
-    }
-    return { row, constraints, responseState, responseTemplate };
-  }
-
-  function persistControlledResponse(nodeId, rendered, templateValues, knowledgeItemIds = []) {
-    const timestamp = now();
-    const normalizedKnowledgeItemIds = normalizeStringArray(knowledgeItemIds, [], '受控响应 knowledge_item_ids');
-    const responseState = {
-      template_values: templateValues,
-      knowledge_item_ids: normalizedKnowledgeItemIds,
-      response_status: rendered.response_status,
-      compliance_risk: rendered.compliance_risk,
-      ...(rendered.compliance_message ? { compliance_message: rendered.compliance_message } : {}),
-    };
-    db.prepare(`
-      UPDATE technical_plan_outline_nodes
-      SET content = @content, knowledge_item_ids_json = @knowledge_item_ids_json, response_state_json = @response_state_json, updated_at = @updated_at
-      WHERE node_id = @node_id
-    `).run({
-      node_id: nodeId,
-      content: rendered.content,
-      knowledge_item_ids_json: normalizedKnowledgeItemIds.length ? JSON.stringify(normalizedKnowledgeItemIds) : null,
-      response_state_json: JSON.stringify(responseState),
-      updated_at: timestamp,
-    });
-    db.prepare(`
-      INSERT INTO technical_plan_content_sections (node_id, status, error, updated_at)
-      VALUES (@node_id, @status, NULL, @updated_at)
-      ON CONFLICT(node_id) DO UPDATE SET status = excluded.status, error = NULL, updated_at = excluded.updated_at
-    `).run({
-      node_id: nodeId,
-      status: rendered.content.trim() ? 'success' : 'idle',
-      updated_at: timestamp,
-    });
-    db.prepare('DELETE FROM technical_plan_content_plans WHERE node_id = ?').run(nodeId);
-    updateMeta({ content_illustration_plan_json: null });
-  }
-
   function saveChapterContent({ nodeId, content }) {
     const transaction = db.transaction(() => {
       assertContentEditingAllowed();
@@ -2634,7 +2310,11 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       const nextContent = String(content || '');
       const nextResponseState = normalizeOutlineResponseState({
         ...responseState,
-        response_status: nextContent.trim() ? 'responded-substantive' : 'pending',
+        response_status: nextContent.trim()
+          ? 'responded-substantive'
+          : constraints.manual_input_required === true
+            ? 'needs-manual-input'
+            : 'pending',
         compliance_risk: constraints.response_mode === 'freeform-markdown' ? 'none' : responseState.compliance_risk,
         ...(constraints.response_mode === 'freeform-markdown' ? { compliance_message: undefined } : {}),
       }, {
@@ -2655,80 +2335,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     });
     transaction();
     return loadTechnicalPlan();
-  }
-
-  function saveLockedTemplateValues({ nodeId, templateId, slotValues } = {}, options = {}) {
-    const transaction = db.transaction(() => {
-      assertControlledResponseWriteAllowed(options);
-      const { responseTemplate } = loadControlledResponseNode(nodeId, templateId, 'locked-commitment');
-      const rendered = renderLockedCommitment(responseTemplate, slotValues);
-      const knowledgeItemIds = options.allowDuringContentTask === true ? options.knowledgeItemIds : [];
-      persistControlledResponse(nodeId, rendered, {
-        template_id: responseTemplate.template_id,
-        slot_values: rendered.slot_values,
-        knowledge_item_ids: normalizeStringArray(knowledgeItemIds, [], '受控响应 knowledge_item_ids'),
-        missing_slots: rendered.missing_slots,
-      }, knowledgeItemIds);
-    });
-    transaction();
-    return loadTechnicalPlan();
-  }
-
-  function saveFixedTableValues({ nodeId, templateId, cellValues, repeatableRows } = {}, options = {}) {
-    const transaction = db.transaction(() => {
-      assertControlledResponseWriteAllowed(options);
-      const { responseTemplate } = loadControlledResponseNode(nodeId, templateId, 'fixed-markdown-table');
-      const rendered = renderFixedMarkdownTable(responseTemplate, { cellValues, repeatableRows });
-      const knowledgeItemIds = options.allowDuringContentTask === true ? options.knowledgeItemIds : [];
-      persistControlledResponse(nodeId, rendered, {
-        template_id: responseTemplate.template_id,
-        cell_values: rendered.cell_values,
-        repeatable_rows: rendered.repeatable_rows,
-        knowledge_item_ids: normalizeStringArray(knowledgeItemIds, [], '受控响应 knowledge_item_ids'),
-        missing_fields: rendered.missing_fields,
-      }, knowledgeItemIds);
-    });
-    transaction();
-    return loadTechnicalPlan();
-  }
-
-  function validateProtectedResponses() {
-    const templates = new Map(loadResponseTemplates().map((template) => [template.template_id, template]));
-    const checkedNodeIds = [];
-    const rows = db.prepare(`
-      SELECT node_id, content, knowledge_item_ids_json, format_constraints_json, response_state_json
-      FROM technical_plan_outline_nodes
-    `).all();
-    for (const row of rows) {
-      const legacyKnowledgeItemIds = normalizeStringArray(
-        safeJsonParse(row.knowledge_item_ids_json, []),
-        [],
-        `目录节点 ${row.node_id}.knowledge_item_ids_json`,
-      );
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      const responseState = normalizeOutlineResponseState(row.response_state_json, {
-        content: row.content,
-        knowledgeItemIds: legacyKnowledgeItemIds,
-      });
-      if (!['locked-commitment', 'fixed-markdown-table'].includes(constraints.response_mode)) continue;
-      if (!constraints.template_id) throw new Error(`受控章节 ${row.node_id} 缺少固定响应模板 ID`);
-      const template = templates.get(constraints.template_id);
-      if (!template) throw new Error(`受控章节 ${row.node_id} 引用的固定响应模板不存在`);
-      const values = responseState.template_values;
-      if (!isPlainObject(values) || values.template_id !== constraints.template_id) {
-        throw new Error(`受控章节 ${row.node_id} 缺少与当前模板匹配的填写值`);
-      }
-      if (constraints.response_mode === 'locked-commitment') {
-        validateRenderedLockedContent(template, row.content || '', values.slot_values);
-      } else {
-        validateRenderedFixedTable(template, row.content || '', {
-          cellValues: values.cell_values,
-          repeatableRows: values.repeatable_rows,
-        });
-      }
-      checkedNodeIds.push(row.node_id);
-    }
-    return { valid: true, checkedNodeIds };
   }
 
   async function importTenderDocument() {
@@ -2947,8 +2553,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     setWorkflowKind,
     switchWorkflowKind,
     saveBidAnalysisConfig,
-    saveStructuredBidAnalysisResult,
-    confirmResponseTemplate,
     saveOutlineConfig,
     saveOutline,
     saveGlobalFacts,
@@ -2956,9 +2560,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveIllustrationPng,
     saveContentGenerationOptions,
     saveChapterContent,
-    saveLockedTemplateValues,
-    saveFixedTableValues,
-    validateProtectedResponses,
   };
 }
 
@@ -2967,5 +2568,6 @@ module.exports = {
   __test__: {
     bidItemFromRow,
     normalizeBidAnalysisItemContract,
+    normalizeOutlineFormatConstraints,
   },
 };

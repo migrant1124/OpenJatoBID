@@ -1,13 +1,6 @@
 const crypto = require('node:crypto');
-const { getBidAnalysisTasks, isBidAnalysisTaskResultValid } = require('./bidAnalysisTask.cjs');
+const { getBidAnalysisTasks, getResponseFileFormatStatus, isBidAnalysisTaskResultValid } = require('./bidAnalysisTask.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
-const {
-  instantiateFormatOutline,
-  mergeScoringOutlineIntoFormat,
-  selectApplicableFormatProfile,
-  validateFormatOutline,
-} = require('./outlineFormatConstraints.cjs');
-
 function formatSuggestions(suggestions) {
   if (!suggestions?.length) return '';
   return `\n\n本轮修正建议：\n${suggestions.map((item, index) => `${index + 1}. ${item}`).join('\n')}`;
@@ -268,106 +261,61 @@ function getMissingRequiredBidAnalysisLabels(storedPlan) {
     .map((task) => task.label);
 }
 
-function loadFormatRequirements(storedPlan) {
-  const task = storedPlan?.bidAnalysisTasks?.bidDocumentFormatRequirements;
-  if (!task || !isBidAnalysisTaskResultValid(getBidAnalysisTasks('key').find((item) => item.id === 'bidDocumentFormatRequirements'), task)) {
+function loadFormatRequirementsMarkdown(storedPlan) {
+  const definition = getBidAnalysisTasks('key').find((item) => item.id === 'responseFileRequirements');
+  const task = storedPlan?.bidAnalysisTasks?.responseFileRequirements;
+  if (!definition || !task || !isBidAnalysisTaskResultValid(definition, task)) {
     throw new Error('格式要求解析结果无效，请返回 Step02 重新解析');
   }
-  try {
-    return JSON.parse(task.content);
-  } catch (error) {
-    throw new Error(`格式要求解析结果无法读取：${error.message || String(error)}`);
-  }
-}
-
-function resolveFormatSelection(storedPlan, payload) {
-  const result = loadFormatRequirements(storedPlan);
-  const explicitProfileId = String(
-    payload?.selected_format_profile_id
-    || payload?.selectedFormatProfileId
-    || storedPlan?.selectedFormatProfileId
-    || '',
-  ).trim();
-  const explicitProfile = explicitProfileId
-    ? result.profiles.find((profile) => profile.profile_id === explicitProfileId)
-    : null;
-  const selectedSectionId = storedPlan?.tenderFile?.selectedSectionId;
-  const selectedSectionTitle = storedPlan?.tenderFile?.selectedSectionTitle;
-  const profileScope = explicitProfile?.applicable_scope || {};
-  const currentScope = {
-    document_type: 'technical',
-    ...(selectedSectionId || profileScope.section_id ? { section_id: selectedSectionId || profileScope.section_id } : {}),
-    ...(selectedSectionTitle || profileScope.section_title ? { section_title: selectedSectionTitle || profileScope.section_title } : {}),
-    package_ids: profileScope.package_ids || [],
-    package_names: profileScope.package_names || [],
-  };
-  const profile = selectApplicableFormatProfile(result, currentScope, explicitProfileId || undefined);
   return {
-    result,
-    profile,
-    normalizedHash: String(storedPlan?.bidAnalysisTasks?.bidDocumentFormatRequirements?.normalized_hash || ''),
+    content: String(task.content || '').trim(),
+    status: getResponseFileFormatStatus(task.content),
   };
 }
 
-function flattenFormatMappingTargets(items, level = 1, result = []) {
-  for (const item of items || []) {
-    if (item.format_node_id) {
-      result.push({
-        format_node_id: item.format_node_id,
-        title: item.title,
-        description: item.description || '',
-        allow_ai_children: item.allow_ai_children === true,
-        level,
-      });
+function extractMarkdownHeadingOutline(markdown) {
+  const headings = [];
+  let fenced = false;
+  for (const rawLine of String(markdown || '').replace(/\r\n?/gu, '\n').split('\n')) {
+    const line = rawLine.trim();
+    if (/^```/u.test(line)) {
+      fenced = !fenced;
+      continue;
     }
-    flattenFormatMappingTargets(item.children || [], level + 1, result);
+    if (fenced) continue;
+    const atx = /^(#{1,6})\s+(.+?)\s*#*$/u.exec(line);
+    if (atx) {
+      headings.push(`${atx[1]} ${atx[2].trim()}`);
+      continue;
+    }
+    const html = /^<h([1-6])(?:\s[^>]*)?>(.*?)<\/h\1>$/iu.exec(line);
+    if (html) {
+      const title = html[2].replace(/<[^>]+>/gu, '').trim();
+      if (title) headings.push(`${'#'.repeat(Number(html[1]))} ${title}`);
+    }
   }
-  return result;
+  return headings;
 }
 
-async function assignScoringTargets(aiService, scoringOutline, formatOutline, log) {
-  const scoringRoots = scoringOutline?.outline || [];
-  const targets = flattenFormatMappingTargets(formatOutline?.outline || []);
-  if (!scoringRoots.length || !targets.length) return scoringOutline;
-  const allowedTargetIds = new Set(targets.map((target) => target.format_node_id));
-  const requiredIds = scoringRoots.map((item) => String(item.source_requirement_id || '').trim()).filter(Boolean);
-  const normalizeMappings = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.mappings)) {
-      throw new Error('评分项格式映射必须包含 mappings 数组');
+function loadReferenceDocumentOutlineContext(knowledgeBaseService, documentIds) {
+  if (!documentIds.length) return '';
+  if (!knowledgeBaseService?.readMarkdown) {
+    throw new Error('知识库文档读取服务尚未初始化');
+  }
+  const sections = documentIds.map((documentId, index) => {
+    const headings = extractMarkdownHeadingOutline(knowledgeBaseService.readMarkdown(documentId));
+    if (!headings.length && knowledgeBaseService?.readItems) {
+      const items = knowledgeBaseService.readItems(documentId) || [];
+      headings.push(...items.map((item) => String(item?.title || '').trim()).filter(Boolean).map((title) => `# ${title}`));
     }
-    const mappings = value.mappings.map((mapping, index) => {
-      const requirementId = String(mapping?.requirement_id || '').trim();
-      const targetId = String(mapping?.target_format_node_id || '').trim();
-      if (!requiredIds.includes(requirementId)) throw new Error(`第 ${index + 1} 个映射引用未知评分项`);
-      if (!allowedTargetIds.has(targetId)) throw new Error(`第 ${index + 1} 个映射引用未知格式节点`);
-      return { requirement_id: requirementId, target_format_node_id: targetId };
-    });
-    if (mappings.length !== requiredIds.length || new Set(mappings.map((item) => item.requirement_id)).size !== requiredIds.length) {
-      throw new Error('每个技术评分大类必须且只能映射一次');
-    }
-    return { mappings };
-  };
-  log('正在把技术评分大类映射到固定格式节点。', 82);
-  const mappingResult = await collectJson(aiService, {
-    messages: [
-      { role: 'system', content: '你是投标技术文件目录映射助手。只能从给定 target_format_node_id 中选择，不得新增、删除、改名或重排任何固定节点。' },
-      { role: 'user', content: `固定格式节点：\n${JSON.stringify(targets, null, 2)}` },
-      { role: 'user', content: `技术评分目录：\n${JSON.stringify(scoringRoots, null, 2)}` },
-      { role: 'user', content: '请为每个一级技术评分目录选择语义最匹配的固定格式节点。只输出 {"mappings":[{"requirement_id":"...","target_format_node_id":"..."}]}。' },
-    ],
-    temperature: 0.1,
-    normalizer: normalizeMappings,
-    progressCallback: (message) => log(message, 82),
-    progressLabel: '评分项格式映射',
-    failureMessage: '技术评分项无法可靠映射到固定格式节点',
-  });
-  const byRequirementId = new Map(mappingResult.mappings.map((item) => [item.requirement_id, item.target_format_node_id]));
-  return {
-    outline: scoringRoots.map((item) => ({
-      ...item,
-      target_format_node_id: byRequirementId.get(String(item.source_requirement_id || '').trim()),
-    })),
-  };
+    return headings.length
+      ? `<reference_document index="${index + 1}">\n${headings.join('\n')}\n</reference_document>`
+      : '';
+  }).filter(Boolean);
+  if (!sections.length) {
+    throw new Error('所选知识库文档没有可用于生成目录的标题结构，请重新选择');
+  }
+  return sections.join('\n\n');
 }
 
 function normalizeReferenceDocumentIds(payload) {
@@ -1499,6 +1447,12 @@ function normalizeOutlineItem(item, path = 'outline[]', allowedKnowledgeIds) {
   if (raw.content !== undefined && raw.content !== null) {
     normalized.content = String(raw.content);
   }
+  if (raw.manual_input_required !== undefined && raw.manual_input_required !== null) {
+    if (typeof raw.manual_input_required !== 'boolean') {
+      throw new Error(`${path}.manual_input_required 必须是布尔值`);
+    }
+    normalized.manual_input_required = raw.manual_input_required;
+  }
   const knowledgeItemIds = normalizeKnowledgeItemIds(raw.knowledge_item_ids, allowedKnowledgeIds);
   if (knowledgeItemIds.length) {
     normalized.knowledge_item_ids = knowledgeItemIds;
@@ -2473,6 +2427,160 @@ async function collectJson(aiService, options) {
   return aiService.collectJsonResponse ? aiService.collectJsonResponse(options) : aiService.requestJson(options);
 }
 
+function validateManualInputNodes(items, path = 'outline') {
+  (items || []).forEach((item, index) => {
+    const itemPath = `${path}[${index}]`;
+    const children = Array.isArray(item.children) ? item.children : [];
+    if (item.manual_input_required === true && children.length) {
+      throw new Error(`${itemPath}: 人工填写节点必须是叶子节点`);
+    }
+    validateManualInputNodes(children, `${itemPath}.children`);
+  });
+}
+
+function normalizeSourceOutlineResponse(payload) {
+  const normalized = normalizeOutlineResponse(payload);
+  validateManualInputNodes(normalized.outline);
+  return normalized;
+}
+
+function validateSourceOutline(payload, sourceContent) {
+  if (!payload.outline.length) throw new Error('一级目录来源不能为空');
+  const normalizedSource = String(sourceContent || '').replace(/\s+/gu, ' ');
+  function validateSourceTitles(items, path) {
+    (items || []).forEach((item, index) => {
+      const title = String(item.title || '').trim();
+      if (!title || !normalizedSource.includes(title.replace(/\s+/gu, ' '))) {
+        throw new Error(`${path}[${index}]: 目录标题必须来自输入来源原文`);
+      }
+      validateSourceTitles(item.children, `${path}[${index}].children`);
+    });
+  }
+  payload.outline.forEach((item, index) => {
+    if (item.source_requirement_id) {
+      throw new Error(`outline[${index}]: 一级目录不能绑定技术评分项`);
+    }
+  });
+  validateSourceTitles(payload.outline, 'outline');
+  validateManualInputNodes(payload.outline);
+}
+
+async function generateSourceOutline(aiService, { sourceKind, sourceContent }, log) {
+  const sourceLabel = sourceKind === 'format' ? '格式要求' : '所选知识库文档目录';
+  return collectJson(aiService, {
+    messages: [
+      {
+        role: 'system',
+        content: '你是投标技术文件目录提取助手。只返回 JSON，不得补充输入来源中不存在的一级目录。',
+      },
+      {
+        role: 'user',
+        content: `请从下列${sourceLabel}提取技术文件目录骨架。一级目录必须严格来自输入来源，保持原顺序；来源中的下级目录也应按原层级保留。固定表格、固定格式承诺函或明确要求人工填写的节点必须保留目录，并设置 manual_input_required=true，且不得为其生成子节点。不要加入技术评分项。\n\n输出格式：{"outline":[{"id":"1","title":"一级目录","description":"编制说明","children":[{"id":"1.1","title":"下级目录","description":"编制说明","manual_input_required":true}]}]}\n\n${sourceLabel}：\n${sourceContent}`,
+      },
+    ],
+    normalizer: normalizeSourceOutlineResponse,
+    validator: (value) => validateSourceOutline(value, sourceContent),
+    progressCallback: (message) => log(message, 20),
+    progressLabel: sourceKind === 'format' ? '格式目录骨架' : '知识库目录骨架',
+    failureMessage: `${sourceLabel}目录骨架格式无效`,
+  });
+}
+
+function findSourceNodeInOrder(finalNodes, sourceNode, startIndex) {
+  for (let index = startIndex; index < finalNodes.length; index += 1) {
+    if (String(finalNodes[index]?.title || '').trim() === String(sourceNode?.title || '').trim()) return index;
+  }
+  return -1;
+}
+
+function validateSourceChildrenPreserved(sourceNodes, finalNodes, path) {
+  let cursor = 0;
+  for (let index = 0; index < sourceNodes.length; index += 1) {
+    const sourceNode = sourceNodes[index];
+    const foundIndex = findSourceNodeInOrder(finalNodes, sourceNode, cursor);
+    if (foundIndex < 0) {
+      throw new Error(`${path}: 来源目录“${sourceNode.title}”缺失或顺序被改变`);
+    }
+    const finalNode = finalNodes[foundIndex];
+    if (sourceNode.manual_input_required === true && finalNode.manual_input_required !== true) {
+      throw new Error(`${path}: 人工填写节点“${sourceNode.title}”的标记不得移除`);
+    }
+    validateSourceChildrenPreserved(
+      Array.isArray(sourceNode.children) ? sourceNode.children : [],
+      Array.isArray(finalNode.children) ? finalNode.children : [],
+      `${path} > ${sourceNode.title}`,
+    );
+    cursor = foundIndex + 1;
+  }
+}
+
+function validateSourceDrivenOutline(payload, sourceOutline, groups) {
+  if (!Array.isArray(payload?.outline) || !payload.outline.length) {
+    throw new Error('最终目录不能为空');
+  }
+  validateManualInputNodes(payload.outline);
+  const sourceRoots = sourceOutline.outline || [];
+  if (payload.outline.length !== sourceRoots.length) {
+    throw new Error('一级目录数量必须与目录来源完全一致');
+  }
+  payload.outline.forEach((item, index) => {
+    const sourceRoot = sourceRoots[index];
+    if (String(item.title || '').trim() !== String(sourceRoot.title || '').trim()) {
+      throw new Error(`一级目录必须保持来源顺序和标题：${sourceRoot.title}`);
+    }
+    if (item.source_requirement_id) {
+      throw new Error('技术评分项不能创建或占用一级目录');
+    }
+    if (sourceRoot.manual_input_required === true && item.manual_input_required !== true) {
+      throw new Error(`人工填写节点“${sourceRoot.title}”的标记不得移除`);
+    }
+    validateSourceChildrenPreserved(
+      Array.isArray(sourceRoot.children) ? sourceRoot.children : [],
+      Array.isArray(item.children) ? item.children : [],
+      `一级目录 ${sourceRoot.title}`,
+    );
+  });
+
+  const requirementLevels = new Map();
+  function visit(items, level) {
+    (items || []).forEach((item) => {
+      const requirementId = String(item.source_requirement_id || '').trim();
+      if (requirementId) {
+        if (!requirementLevels.has(requirementId)) requirementLevels.set(requirementId, []);
+        requirementLevels.get(requirementId).push(level);
+      }
+      visit(item.children, level + 1);
+    });
+  }
+  visit(payload.outline, 1);
+  for (const group of groups || []) {
+    const requirementId = String(group.requirement_id || '').trim();
+    const levels = requirementLevels.get(requirementId) || [];
+    if (!levels.length) throw new Error(`技术评分项未映射到目录：${group.title || requirementId}`);
+    if (levels.some((level) => level < 2)) throw new Error('技术评分项不能创建或占用一级目录');
+  }
+}
+
+async function generateSourceDrivenOutline(aiService, context, log) {
+  return collectJson(aiService, {
+    messages: [
+      {
+        role: 'system',
+        content: '你是投标技术文件目录编排助手。一级目录已冻结，只能在一级目录内部补充二级及以下目录。只返回 JSON。',
+      },
+      {
+        role: 'user',
+        content: `请在“冻结目录来源骨架”内部补充技术评分项和必要的下级目录。\n\n强制规则：\n1. 一级目录的数量、顺序和标题必须与冻结骨架完全一致，不得新增、删除、改名或移动。\n2. 技术评分项只能映射到二级及以下节点，使用 source_requirement_id；每个 requirement_id 必须至少映射一次。\n3. 冻结骨架已有的下级目录必须保留顺序；可以在非人工节点内部补充目录。\n4. manual_input_required=true 的节点必须保留且保持叶子节点，不得生成正文或子目录。\n5. 原方案和参考知识库只能用于补充二级及以下目录。\n\n冻结目录来源骨架：\n${JSON.stringify(context.sourceOutline, null, 2)}\n\n技术评分项：\n${JSON.stringify(context.groups, null, 2)}\n\n技术要求：\n${context.requirements || '未提供'}\n\n原方案目录（仅补充下级）：\n${formatOldOutlineForPrompt(context.oldOutline) || '未提供'}\n\n参考知识库目录（仅补充下级）：\n${context.referenceOutlineContext || '未提供'}`,
+      },
+    ],
+    normalizer: normalizeSourceOutlineResponse,
+    validator: (value) => validateSourceDrivenOutline(value, context.sourceOutline, context.groups),
+    progressCallback: (message) => log(message, 90),
+    progressLabel: '目录下级补充',
+    failureMessage: '目录下级补充结果格式无效',
+  });
+}
+
 async function extractOriginalOutlineOnce(aiService, originalPlanMarkdown, log) {
   return collectJson(aiService, {
     messages: buildExpandOutlineMessages(originalPlanMarkdown),
@@ -3055,14 +3163,17 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   if (missingRequiredBidAnalysisLabels.length) {
     throw new Error(`请先完成 7 个关键招标文件解析项：${missingRequiredBidAnalysisLabels.join('、')}`);
   }
-  const formatSelection = resolveFormatSelection(storedPlan, payload);
-  const usesExplicitFormat = formatSelection.profile.format_strength !== 'none';
+  const formatRequirements = loadFormatRequirementsMarkdown(storedPlan);
   const isExpansionWorkflow = storedPlan.workflowKind === 'existing-plan-expansion';
-  let outlineExpansionMode = isExpansionWorkflow ? normalizeOutlineExpansionMode(payload, storedPlan) : 'ai-complement';
-  if (usesExplicitFormat && outlineExpansionMode === 'original-only') {
-    outlineExpansionMode = 'ai-complement';
-    log('当前投标范围存在明确技术文件格式，已有方案目录不能覆盖固定骨架，已切换为格式优先扩写。', 6);
+  const outlineExpansionMode = isExpansionWorkflow ? normalizeOutlineExpansionMode(payload, storedPlan) : 'ai-complement';
+  if (formatRequirements.status === 'unspecified' && referenceKnowledgeDocumentIds.length === 0) {
+    throw new Error('招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。');
   }
+  const referenceOutlineContext = referenceKnowledgeDocumentIds.length
+    ? loadReferenceDocumentOutlineContext(knowledgeBaseService, referenceKnowledgeDocumentIds)
+    : '';
+  const sourceKind = formatRequirements.status === 'explicit' ? 'format' : 'knowledge';
+  const sourceContent = sourceKind === 'format' ? formatRequirements.content : referenceOutlineContext;
   const baseTaskPayload = {
     ...payload,
     overview,
@@ -3073,8 +3184,6 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   let technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineMode: 'aligned',
     outlineExpansionMode,
-    selectedFormatProfileId: formatSelection.profile.profile_id,
-    selectedFormatProfileHash: formatSelection.normalizedHash || undefined,
     referenceKnowledgeDocumentIds,
     outlineGenerationTask: updateTask({ status: 'running', progress: 5, logs }),
   });
@@ -3092,11 +3201,9 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     if (!String(originalPlanMarkdown || '').trim()) {
       throw new Error('请先上传原方案，再生成目录');
     }
-    if (!usesExplicitFormat) {
-      oldOutline = isOriginalOutlineAgentModeEnabled(aiService)
-        ? await extractOriginalOutlineWithAgent(agentService, workspaceStore, baseTaskPayload, originalPlanMarkdown, log)
-        : await extractOriginalOutline(aiService, workspaceStore, originalPlanMarkdown, log);
-    }
+    oldOutline = isOriginalOutlineAgentModeEnabled(aiService)
+      ? await extractOriginalOutlineWithAgent(agentService, workspaceStore, baseTaskPayload, originalPlanMarkdown, log)
+      : await extractOriginalOutline(aiService, workspaceStore, originalPlanMarkdown, log);
   }
 
   technicalPlan = workspaceStore.updateTechnicalPlan({
@@ -3114,59 +3221,20 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     oldOutline: formatOldOutlineForPrompt(oldOutline),
   };
 
-  let outline;
-  let groups = [];
-  if (usesExplicitFormat) {
-    log(`已选择格式方案“${formatSelection.profile.document_title}”，先复制固定骨架，再映射技术评分项。`, 8);
-    const alignedResult = await alignedWorkflow(aiService, agentService, taskPayload, log);
-    let scoringOutline = alignedResult.outline;
-    groups = alignedResult.groups || [];
-    const knowledgeItems = loadOutlineKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, log);
-    scoringOutline = await enhanceOutlineWithKnowledgeAdditions(aiService, taskPayload, scoringOutline, knowledgeItems, log);
-    const formatOutline = instantiateFormatOutline(formatSelection.profile);
-    const targetedScoringOutline = await assignScoringTargets(aiService, scoringOutline, formatOutline, log);
-    const requirementIds = groups.map((group) => String(group.requirement_id || '').trim()).filter(Boolean);
-    outline = mergeScoringOutlineIntoFormat(formatOutline, targetedScoringOutline, requirementIds);
-    validateFormatOutline(outline, formatSelection.profile, { requireScoreCoverage: requirementIds });
-    log('固定格式门禁与技术评分覆盖门禁均已通过。', 99);
-  } else if (isExpansionWorkflow) {
-    if (outlineExpansionMode === 'original-only') {
-      log('已选择仅使用原方案目录，跳过AI补充和知识库补目录。', 96);
-      technicalPlan = workspaceStore.updateTechnicalPlan({
-        outlineData: { ...oldOutline, project_overview: overview },
-        contentGenerationTask: undefined,
-        contentGenerationSections: {},
-        contentGenerationPlans: {},
-        contentGenerationRuntime: undefined,
-        outlineGenerationTask: updateTask({ status: 'success', progress: 100, logs: [...logs, '目录生成完成。'] }),
-      });
-      updateTask({ status: 'success', progress: 100, logs: [...logs, '目录生成完成。'] }, technicalPlan);
-      return;
-    } else {
-      outline = await expansionComplementWorkflow(aiService, taskPayload, oldOutline, log);
-    }
-  } else {
-    const alignedResult = await alignedWorkflow(aiService, agentService, taskPayload, log);
-    outline = alignedResult.outline;
-    groups = alignedResult.groups || [];
-  }
-
-  if (!usesExplicitFormat) {
-    const knowledgeItems = loadOutlineKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, log);
-    outline = await enhanceOutlineWithKnowledgeAdditions(aiService, taskPayload, outline, knowledgeItems, log);
-    const finalResult = await runFinalOutlineGate({
-      aiService,
-      agentService,
-      payload: taskPayload,
-      outline,
-      groups,
-      originalOutline: oldOutline,
-      workflowKind: isExpansionWorkflow ? 'existing-plan-expansion' : 'technical-plan',
-      outlineExpansionMode,
-      log,
-    });
-    outline = finalResult.outline;
-  }
+  log(sourceKind === 'format' ? '正在按格式要求提取一级目录和固定节点。' : '正在按所选知识库文档提取一级目录。', 10);
+  const sourceOutline = await generateSourceOutline(aiService, { sourceKind, sourceContent }, log);
+  log('目录来源骨架已固定，开始提取技术评分项。', 28);
+  const groups = await extractRequirementGroups(aiService, taskPayload, undefined, log);
+  log('技术评分项已提取，开始在一级目录内部补充下级目录。', 52);
+  const outline = await generateSourceDrivenOutline(aiService, {
+    sourceOutline,
+    groups,
+    requirements,
+    oldOutline,
+    referenceOutlineContext: sourceKind === 'format' ? referenceOutlineContext : '',
+  }, log);
+  validateSourceDrivenOutline(outline, sourceOutline, groups);
+  log('一级目录来源与技术评分下级映射校验通过。', 99);
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...outline, project_overview: overview },
     contentGenerationTask: undefined,

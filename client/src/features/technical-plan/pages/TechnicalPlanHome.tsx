@@ -73,7 +73,6 @@ const resetState = {
   outlineMode: 'aligned' as const,
   outlineExpansionMode: 'ai-complement' as const,
   referenceKnowledgeDocumentIds: [] as string[],
-  responseTemplates: [],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
   outlineGenerationTask: undefined,
@@ -497,9 +496,6 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisTask: hasOwnField(technicalPlan, 'bidAnalysisTask') ? trimTaskLogs(technicalPlan.bidAnalysisTask) : prev.bidAnalysisTask,
             bidAnalysisTasks: hasOwnField(technicalPlan, 'bidAnalysisTasks') ? (technicalPlan.bidAnalysisTasks || {}) : prev.bidAnalysisTasks,
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
-            responseTemplates: Array.isArray(technicalPlan.responseTemplates) ? technicalPlan.responseTemplates : prev.responseTemplates,
-            selectedFormatProfileId: hasOwnField(technicalPlan, 'selectedFormatProfileId') ? technicalPlan.selectedFormatProfileId : prev.selectedFormatProfileId,
-            selectedFormatProfileHash: hasOwnField(technicalPlan, 'selectedFormatProfileHash') ? technicalPlan.selectedFormatProfileHash : prev.selectedFormatProfileHash,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
             outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
@@ -531,9 +527,6 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               ...(event.bidItem ? { [event.bidItem.id]: event.bidItem } : {}),
             },
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
-            responseTemplates: Array.isArray(technicalPlan.responseTemplates) ? technicalPlan.responseTemplates : prev.responseTemplates,
-            selectedFormatProfileId: hasOwnField(technicalPlan, 'selectedFormatProfileId') ? technicalPlan.selectedFormatProfileId : prev.selectedFormatProfileId,
-            selectedFormatProfileHash: hasOwnField(technicalPlan, 'selectedFormatProfileHash') ? technicalPlan.selectedFormatProfileHash : prev.selectedFormatProfileHash,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
             outlineGenerationTask: outlineDataReset ? undefined : prev.outlineGenerationTask,
@@ -968,12 +961,6 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
       {state.step === 'bid-analysis' && (
         <BidAnalysisPage
           hasTenderFile={Boolean(state.tenderFile)}
-          hasFormatDependentWork={Boolean(
-            state.outlineData
-            || state.globalFacts.length
-            || Object.keys(state.contentGenerationSections || {}).length
-            || Object.keys(state.contentGenerationPlans || {}).length
-          )}
           mode={state.bidAnalysisMode}
           selectedTaskIds={state.bidAnalysisSelectedTaskIds}
           bidSectionMode={state.bidSectionMode}
@@ -983,7 +970,6 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           bidSectionExtractionError={state.bidSectionExtractionError}
           selectedSectionTitle={state.tenderFile?.selectedSectionTitle}
           taskDefinitions={state.bidAnalysisTaskDefinitions}
-          responseTemplates={state.responseTemplates}
           tasks={state.bidAnalysisTasks}
           task={state.bidAnalysisTask}
           progress={state.bidAnalysisProgress}
@@ -997,15 +983,14 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           projectOverview={state.projectOverview}
           techRequirements={state.techRequirements}
           outlineExpansionMode={state.outlineExpansionMode || 'ai-complement'}
-          formatRequirementsContent={state.bidAnalysisTasks.bidDocumentFormatRequirements?.content || ''}
-          selectedFormatProfileId={state.selectedFormatProfileId}
+          formatRequirementsContent={state.bidAnalysisTasks.responseFileRequirements?.content || ''}
           referenceKnowledgeDocumentIds={state.referenceKnowledgeDocumentIds}
           outlineData={state.outlineData}
           task={state.outlineGenerationTask}
           contentTaskStatus={state.contentGenerationTask?.status}
-          onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode, selectedFormatProfileId }) => {
-            setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds, selectedFormatProfileId }));
-            window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode, selectedFormatProfileId }).then((saved) => {
+          onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode }) => {
+            setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds }));
+            window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode }).then((saved) => {
               setState((prev) => ({ ...prev, ...saved }));
             }).catch((error) => {
               showToast(error instanceof Error ? error.message : '保存目录配置失败', 'error');
@@ -1032,11 +1017,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           task={state.contentGenerationTask}
           contentGenerationOptions={state.contentGenerationOptions}
           contentIllustrationPlan={state.contentIllustrationPlan}
-          responseTemplates={state.responseTemplates}
           sections={state.contentGenerationSections}
           onContentGenerationOptionsChange={saveContentGenerationOptions}
           onContentSaved={saveChapterContent}
-          onControlledStateSaved={(saved) => setState((prev) => ({ ...prev, ...saved }))}
         />
       )}
       {state.step === 'expand' && (

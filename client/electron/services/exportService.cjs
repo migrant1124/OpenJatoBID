@@ -2144,7 +2144,7 @@ function summarizeBlockedResponses(validations) {
 }
 
 function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
-  if (!technicalPlanStore?.loadTechnicalPlan || !technicalPlanStore?.validateProtectedResponses) {
+  if (!technicalPlanStore?.loadTechnicalPlan) {
     throw new Error('技术方案工作区尚未就绪，请稍后重试');
   }
 
@@ -2154,7 +2154,6 @@ function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
     throw new Error('没有可导出的目录内容');
   }
 
-  technicalPlanStore.validateProtectedResponses();
   const completion = deriveResponseCompletion(outline, { taskStatus: 'success' });
   const hardBlocks = completion.validations.filter((item) => (
     !item.response_complete

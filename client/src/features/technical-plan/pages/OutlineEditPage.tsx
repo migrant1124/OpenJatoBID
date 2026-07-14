@@ -20,12 +20,11 @@ interface OutlineEditPageProps {
   techRequirements: string;
   outlineExpansionMode: OutlineExpansionMode;
   formatRequirementsContent: string;
-  selectedFormatProfileId?: string;
   referenceKnowledgeDocumentIds: string[];
   outlineData: OutlineData | null;
   task?: BackgroundTaskState;
   contentTaskStatus?: BackgroundTaskState['status'];
-  onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode; selectedFormatProfileId?: string }) => void;
+  onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode }) => void;
   onOutlineSaved: (request: SaveOutlineRequest) => Promise<void>;
   onSortGuardChange?: (guard: OutlineSortGuard | null) => void;
 }
@@ -55,19 +54,19 @@ interface DropTargetState {
 
 const emptyKnowledgeIndex: KnowledgeBaseIndex = { folders: [], documents: [] };
 const outlineExpansionModeLabels: Record<OutlineExpansionMode, string> = {
-  'original-only': '仅使用原方案目录',
-  'ai-complement': 'AI基于原方案补充',
+  'original-only': '仅参考原方案下级目录',
+  'ai-complement': 'AI补充下级目录',
 };
 const outlineExpansionModeOptions: Array<{ value: OutlineExpansionMode; title: string; description: string }> = [
   {
     value: 'original-only',
     title: outlineExpansionModeLabels['original-only'],
-    description: '提取并补漏原方案目录后直接作为新目录；知识库不参与目录补充，但会用于后续全局事实和正文生成。',
+    description: '一级目录仍按格式要求或所选知识库生成；原方案只用于补充二级及以下目录。',
   },
   {
     value: 'ai-complement',
     title: outlineExpansionModeLabels['ai-complement'],
-    description: '保留原方案一级目录，在其基础上补充招标评分项缺口，并可继续使用知识库增强。',
+    description: '一级目录仍按格式要求或所选知识库生成，并由 AI 综合评分项和原方案补充二级及以下目录。',
   },
 ];
 
@@ -217,7 +216,8 @@ function isOutlinePositionLocked(item: OutlineItem) {
 
 function getOutlineConstraintLabels(item: OutlineItem) {
   const hasFormatConstraints = Boolean(
-    item.format_node_id
+    item.manual_input_required
+    || item.format_node_id
     || item.required_in_outline
     || item.title_locked
     || item.order_locked
@@ -229,6 +229,7 @@ function getOutlineConstraintLabels(item: OutlineItem) {
   if (!hasFormatConstraints) return [];
 
   const labels: string[] = [];
+  if (item.manual_input_required) labels.push('人工填写');
   if (item.format_node_id) labels.push('固定目录');
   if (item.required_in_outline) labels.push('不可删除');
   if (item.title_locked) labels.push('标题锁定');
@@ -265,7 +266,6 @@ function OutlineEditPage({
   techRequirements,
   outlineExpansionMode,
   formatRequirementsContent,
-  selectedFormatProfileId,
   referenceKnowledgeDocumentIds,
   outlineData,
   task,
@@ -279,11 +279,11 @@ function OutlineEditPage({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editManualInputRequired, setEditManualInputRequired] = useState(false);
   const [startingOutline, setStartingOutline] = useState(false);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [draftOutlineExpansionMode, setDraftOutlineExpansionMode] = useState<OutlineExpansionMode>(outlineExpansionMode);
-  const [draftFormatProfileId, setDraftFormatProfileId] = useState(selectedFormatProfileId || '');
   const [draftKnowledgeDocumentIds, setDraftKnowledgeDocumentIds] = useState<string[]>(referenceKnowledgeDocumentIds);
   const [developerMode, setDeveloperMode] = useState(false);
   const [draftForceOutlineAgentRepair, setDraftForceOutlineAgentRepair] = useState(false);
@@ -303,21 +303,10 @@ function OutlineEditPage({
   const logListRef = useRef<HTMLDivElement | null>(null);
   const sortIdMapRef = useRef<Record<string, string>>({});
   const { showToast } = useToast();
-  const formatProfiles = useMemo(() => {
-    try {
-      const parsed = JSON.parse(formatRequirementsContent || '{}');
-      return Array.isArray(parsed?.profiles) ? parsed.profiles.filter((profile: unknown) => (
-        profile && typeof profile === 'object' && typeof (profile as { profile_id?: unknown }).profile_id === 'string'
-      )) as Array<{
-        profile_id: string;
-        document_title?: string;
-        format_strength?: string;
-        applicable_scope?: { section_title?: string; package_names?: string[] };
-      }> : [];
-    } catch {
-      return [];
-    }
-  }, [formatRequirementsContent]);
+  const formatStatusLine = formatRequirementsContent.replace(/^\uFEFF/u, '').trimStart().split(/\r?\n/u, 1)[0].trim();
+  const hasExplicitFormat = formatStatusLine === '【技术文件目录状态】：明确';
+  const hasUnspecifiedFormat = formatStatusLine === '【技术文件目录状态】：未明确';
+  const missingRequiredKnowledge = hasUnspecifiedFormat && draftKnowledgeDocumentIds.length === 0;
   const activeOutlineData = sorting ? draftOutlineData : outlineData;
   const selectedItem = activeOutlineData && selectedItemId ? findOutlineItem(activeOutlineData.outline, selectedItemId) : null;
   const taskRunning = task?.status === 'running';
@@ -405,12 +394,11 @@ function OutlineEditPage({
     }
 
     setDraftOutlineExpansionMode(isExpansionWorkflow ? outlineExpansionMode : 'ai-complement');
-    setDraftFormatProfileId(selectedFormatProfileId || '');
     setDraftKnowledgeDocumentIds(referenceKnowledgeDocumentIds);
     setDraftForceOutlineAgentRepair(false);
     setKnowledgeSearch('');
     void loadKnowledgeIndex();
-  }, [generationDialogOpen, isExpansionWorkflow, outlineExpansionMode, referenceKnowledgeDocumentIds, selectedFormatProfileId]);
+  }, [generationDialogOpen, isExpansionWorkflow, outlineExpansionMode, referenceKnowledgeDocumentIds]);
 
   const loadKnowledgeIndex = async () => {
     try {
@@ -443,7 +431,6 @@ function OutlineEditPage({
     }
 
     setDraftOutlineExpansionMode(isExpansionWorkflow ? outlineExpansionMode : 'ai-complement');
-    setDraftFormatProfileId(selectedFormatProfileId || '');
     setDraftKnowledgeDocumentIds(referenceKnowledgeDocumentIds);
     setKnowledgeSearch('');
     setGenerationDialogOpen(true);
@@ -453,7 +440,6 @@ function OutlineEditPage({
     onOutlineConfigChange({
       referenceKnowledgeDocumentIds: draftKnowledgeDocumentIds,
       outlineExpansionMode: isExpansionWorkflow ? draftOutlineExpansionMode : 'ai-complement',
-      selectedFormatProfileId: draftFormatProfileId,
     });
     setGenerationDialogOpen(false);
     showToast('目录生成配置已保存', 'success');
@@ -468,6 +454,10 @@ function OutlineEditPage({
       showToast('请先完成招标文件解析', 'info');
       return;
     }
+    if (missingRequiredKnowledge) {
+      showToast('招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。', 'info');
+      return;
+    }
 
     try {
       const startedNow = Date.now();
@@ -478,13 +468,11 @@ function OutlineEditPage({
       onOutlineConfigChange({
         referenceKnowledgeDocumentIds: draftKnowledgeDocumentIds,
         outlineExpansionMode: nextOutlineExpansionMode,
-        selectedFormatProfileId: draftFormatProfileId,
       });
       setGenerationDialogOpen(false);
       await window.yibiao?.tasks.startOutlineGeneration({
         reference_knowledge_document_ids: draftKnowledgeDocumentIds,
         outline_expansion_mode: nextOutlineExpansionMode,
-        selected_format_profile_id: draftFormatProfileId || undefined,
         debug_force_outline_agent_repair: developerMode && draftForceOutlineAgentRepair,
       });
       trackConfigUsage({ outline_mode: isExpansionWorkflow ? nextOutlineExpansionMode : 'aligned' });
@@ -575,6 +563,7 @@ function OutlineEditPage({
     setEditingItemId(item.id);
     setEditTitle(stripRepeatedSourceNumber(item.title, item.source_number));
     setEditDescription(item.description);
+    setEditManualInputRequired(item.manual_input_required === true);
   };
 
   const saveEditing = async () => {
@@ -588,12 +577,17 @@ function OutlineEditPage({
       showToast('该节点标题来自招标文件，不能修改', 'info');
       return;
     }
+    if (editManualInputRequired && editingItem?.children?.length) {
+      showToast('只有没有下级目录的叶子节点可以设为人工填写', 'info');
+      return;
+    }
 
     try {
       await saveOutlineChange(updateOutlineItem(outlineData.outline, editingItemId, (item) => ({
         ...item,
         title: editTitle.trim() || item.title,
         description: editDescription.trim(),
+        manual_input_required: editManualInputRequired,
       })), 'edit', [editingItemId]);
       setEditingItemId(null);
       showToast('目录项已更新，相关正文已清空', 'success');
@@ -630,6 +624,10 @@ function OutlineEditPage({
     }
 
     const parent = findOutlineItem(outlineData.outline, parentId);
+    if (parent?.manual_input_required) {
+      showToast('人工填写节点不能添加子目录', 'info');
+      return;
+    }
     if (parent?.allow_ai_children === false) {
       showToast('该固定目录不允许添加子目录', 'info');
       return;
@@ -933,32 +931,20 @@ function OutlineEditPage({
     );
   };
 
-  const renderFormatProfilePicker = () => (
+  const renderDirectorySource = () => (
     <section className="outline-generation-config-section">
       <div className="outline-generation-config-head">
-        <strong>技术文件格式 Profile</strong>
-        <span>{draftFormatProfileId ? '已人工选择' : '自动匹配适用范围'}</span>
+        <strong>一级目录来源</strong>
+        <span>{hasExplicitFormat ? '格式要求' : hasUnspecifiedFormat ? '参考知识库' : '格式状态无效'}</span>
       </div>
-      <select
-        className="outline-knowledge-search"
-        value={draftFormatProfileId}
-        onChange={(event) => setDraftFormatProfileId(event.target.value)}
-        disabled={generating}
-      >
-        <option value="">自动按当前标段/标包匹配</option>
-        {formatProfiles.map((profile) => {
-          const scope = [
-            profile.applicable_scope?.section_title,
-            ...(profile.applicable_scope?.package_names || []),
-          ].filter(Boolean).join(' / ') || '全局';
-          return (
-            <option value={profile.profile_id} key={profile.profile_id}>
-              {profile.document_title || profile.profile_id} · {scope} · {profile.format_strength || ''}
-            </option>
-          );
-        })}
-      </select>
-      <small>自动匹配结果不唯一或没有匹配时，生成会停止并要求在此明确选择，不会猜测或退回评分目录。</small>
+      <small>
+        {hasExplicitFormat
+          ? '一级目录严格按格式要求生成，技术评分项和知识库只能补充二级及以下目录。'
+          : hasUnspecifiedFormat
+            ? '一级目录按本次选择的知识库文档目录生成，技术评分项只能补充二级及以下目录。'
+            : '格式要求解析结果缺少有效状态，请返回 Step02 重新解析。'}
+      </small>
+      {missingRequiredKnowledge && <small>招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。</small>}
     </section>
   );
 
@@ -1205,6 +1191,17 @@ function OutlineEditPage({
                     <span>描述</span>
                     <textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} disabled={outlineMutationLocked || sorting} />
                   </label>
+                  <label>
+                    <span>正文填写方式</span>
+                    <select
+                      value={editManualInputRequired ? 'manual' : 'ai'}
+                      onChange={(event) => setEditManualInputRequired(event.target.value === 'manual')}
+                      disabled={outlineMutationLocked || sorting || Boolean(selectedItem.children?.length)}
+                    >
+                      <option value="ai">AI 编写</option>
+                      <option value="manual">人工填写</option>
+                    </select>
+                  </label>
                   <div className="outline-detail-actions">
                     <button type="button" className="primary-action" onClick={() => { void saveEditing(); }} disabled={outlineMutationLocked || sorting}>保存</button>
                     <button type="button" className="secondary-action" onClick={() => setEditingItemId(null)}>取消</button>
@@ -1222,7 +1219,7 @@ function OutlineEditPage({
                   )}
                   <div className="outline-detail-actions">
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
-                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
+                    {selectedItem.allow_ai_children !== false && !selectedItem.manual_input_required && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
                     {!selectedItem.required_in_outline && <button type="button" className="danger-action" onClick={() => { void removeItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>删除</button>}
                   </div>
                 </>
@@ -1245,7 +1242,7 @@ function OutlineEditPage({
             <Dialog.Description className="sr-only">选择本次目录生成方式和参考知识库。</Dialog.Description>
 
             <div className={`outline-generation-config-body${isExpansionWorkflow ? ' has-expansion-mode' : ''}${developerMode ? ' has-dev-tools' : ''}`}>
-              {renderFormatProfilePicker()}
+              {renderDirectorySource()}
               {renderOutlineExpansionModePicker()}
               {developerMode && (
                 <section className="outline-generation-config-section outline-agent-debug-section">
@@ -1281,7 +1278,12 @@ function OutlineEditPage({
               <button type="button" className="secondary-action" onClick={saveOutlineConfig} disabled={generating || contentMutationLocked}>
                 保存配置
               </button>
-              <button type="button" className="primary-action" onClick={generateOutline} disabled={generating || contentMutationLocked || !projectOverview || !techRequirements}>
+              <button
+                type="button"
+                className="primary-action"
+                onClick={generateOutline}
+                disabled={generating || contentMutationLocked || !projectOverview || !techRequirements || missingRequiredKnowledge || (!hasExplicitFormat && !hasUnspecifiedFormat)}
+              >
                 开始生成
               </button>
             </div>

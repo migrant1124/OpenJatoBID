@@ -27,6 +27,11 @@ export function isBidAnalysisTaskResultValid(
     return false;
   }
 
+  if (definition.id === 'responseFileRequirements') {
+    const firstLine = String(state.content || '').replace(/^\uFEFF/u, '').trimStart().split(/\r?\n/u, 1)[0].trim();
+    return firstLine === '【技术文件目录状态】：明确' || firstLine === '【技术文件目录状态】：未明确';
+  }
+
   if (definition.output !== 'json') {
     return true;
   }

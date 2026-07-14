@@ -5,7 +5,7 @@ import type { KnowledgeAnalysisSnapshot, KnowledgeBaseEvent, KnowledgeBaseIndex,
 import type { RejectionCheckWorkspaceState, RejectionDocumentRole } from '../../features/rejection-check/types';
 import type { BidAnalysisMode, BidAnalysisTaskState, BidSectionMode, ContentGenerationOptions, ContentGenerationPlanState, ContentGenerationRuntimeState, ContentGenerationSectionState, DetectedBidSection, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../../features/technical-plan/types';
 import type { ExportFormatConfig, ExportTemplateRecord } from './exportFormat';
-import type { FixedMarkdownTableTemplate, LockedCommitmentTemplate, OutlineData, OutlineExpansionMode } from './outline';
+import type { OutlineData, OutlineExpansionMode } from './outline';
 
 export interface TaskEvent<TState = unknown, TRejectionCheckState = unknown, TDuplicateCheckState = unknown> {
   task: unknown;
@@ -506,14 +506,11 @@ export interface YibiaoBridge {
     setWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     switchWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     saveBidAnalysisConfig: (payload: { mode: BidAnalysisMode; selectedTaskIds: string[]; bidSectionMode?: BidSectionMode }) => Promise<TechnicalPlanState>;
-    confirmResponseTemplate: (payload: { templateId: string; template: LockedCommitmentTemplate | FixedMarkdownTableTemplate }) => Promise<TechnicalPlanState>;
-    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode; selectedFormatProfileId?: string }) => Promise<TechnicalPlanState>;
+    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode }) => Promise<TechnicalPlanState>;
     saveOutline: (payload: SaveOutlineRequest) => Promise<TechnicalPlanState>;
     saveGlobalFacts: (globalFacts: GlobalFactGroupState[]) => Promise<TechnicalPlanState>;
     saveContentGenerationOptions: (options: ContentGenerationOptions) => Promise<TechnicalPlanState>;
     saveChapterContent: (payload: { nodeId: string; content: string }) => Promise<TechnicalPlanState>;
-    saveLockedTemplateValues: (payload: { nodeId: string; templateId: string; slotValues: Record<string, string> }) => Promise<TechnicalPlanState>;
-    saveFixedTableValues: (payload: { nodeId: string; templateId: string; cellValues: Record<string, string>; repeatableRows: Record<string, Array<Record<string, string>>> }) => Promise<TechnicalPlanState>;
     clear: () => Promise<{ success: boolean; message?: string; state: TechnicalPlanState }>;
   };
   duplicateCheck: {

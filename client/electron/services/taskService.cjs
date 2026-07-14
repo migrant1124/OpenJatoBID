@@ -253,9 +253,6 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         'projectOverview',
         'techRequirements',
         'bidAnalysisTasks',
-        'responseTemplates',
-        'selectedFormatProfileId',
-        'selectedFormatProfileHash',
       ]);
       if (state.outlineData === null) {
         copyPatchFields(patch, state, [
@@ -283,9 +280,6 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         'bidAnalysisTask',
         'bidAnalysisTasks',
         'bidAnalysisProgress',
-        'responseTemplates',
-        'selectedFormatProfileId',
-        'selectedFormatProfileHash',
         'projectOverview',
         'techRequirements',
         'outlineData',
@@ -388,13 +382,16 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
   }
 
   function subscribe(webContents) {
+    const isNew = !subscribers.has(webContents);
     subscribers.add(webContents);
     for (const task of activeTasks.values()) {
       if (!webContents.isDestroyed()) {
         webContents.send('tasks:event', { task, ...getSnapshotForTask(task) });
       }
     }
-    webContents.once('destroyed', () => subscribers.delete(webContents));
+    if (isNew) {
+      webContents.once('destroyed', () => subscribers.delete(webContents));
+    }
   }
 
   function getTaskField(type) {

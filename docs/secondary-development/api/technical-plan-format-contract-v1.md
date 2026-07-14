@@ -1,21 +1,23 @@
-# OpenJatoBID 技术方案格式与受控响应契约 v1
+# OpenJatoBID 格式要求、目录来源与人工填写契约
 
 - 状态：Approved
 - 日期：2026-07-13
+- 修订依据：`docs/secondary-development/changes/format-requirements-simplification-change.md`
 - 关联 ADR：`docs/secondary-development/adr/format-driven-technical-plan.md`
-- 需求基线：`D:\download\OpenJatoBID_招标解析_格式驱动目录与写作改造_最终需求.md`
+- 说明：本文件保留原路径以避免引用漂移；原 v1 profile、锚点和固定模板契约已被本修订整体替代
 
 ## 1. 通用约定
 
-- Renderer 类型权威仍为 `client/src/shared/types/ipc.ts` 与 `client/src/shared/types/outline.ts`；运行时校验权威在 Electron Main。
-- Schema 版本从 `1` 开始；未知枚举、缺少必填字段、非法 source 或损坏 JSON 不得进入 `success`。
-- Main 对 AI 返回的 ID 做稳定化；所有 source ID 必须属于当前工作区保存的原始招标文件集合。
+- Main 是解析任务定义和运行时 Prompt 的唯一权威。
+- Renderer 只读取 `technicalPlan.loadState()` 返回的任务元数据和业务状态。
 - `outlineData.outline[*].content` 继续是最终 Markdown 正文权威。
-- IPC 内部参数属于本地可信数据，但固定格式完整性是业务规则，必须在 Main/Store 再校验。
+- 格式要求是 Markdown 业务语义，不是来源证明或模板数据。
+- IPC 参数属于可信本地调用；只校验真实业务约束，不重复做无意义的跨层校验。
+- SQLite 保持 v18，不删列、不降级、不新增 migration。
 
-## 2. 解析任务元数据
+## 2. 招标解析任务契约
 
-`technicalPlan.loadState()` 增加：
+### 2.1 任务定义
 
 ```ts
 interface BidAnalysisTaskDefinition {
@@ -27,474 +29,242 @@ interface BidAnalysisTaskDefinition {
   group: 'key' | 'optional';
   schema_version?: number;
 }
-
-interface BidAnalysisTaskState {
-  id: string;
-  label: string;
-  status: 'idle' | 'running' | 'success' | 'error';
-  content: string;
-  normalized_hash?: string;
-  error?: string;
-}
-
-interface TechnicalPlanState {
-  bidAnalysisTaskDefinitions: BidAnalysisTaskDefinition[];
-  responseTemplates: ResponseTemplateRecord[];
-  selectedFormatProfileId?: string;
-  selectedFormatProfileHash?: string;
-}
 ```
 
-Renderer 不保存另一套生产任务清单或 Prompt。
-
-活跃任务总数为 18；关键项共 7 项，顺序为：
+关键项顺序固定为：
 
 ```text
 projectOverview
 techRequirements
-bidDocumentFormatRequirements  // UI：格式要求
-procurementList                 // UI：采购与报价
+responseFileRequirements
+procurementList
 projectInfo
 partAInfo
 deliveryAndServiceRequirements
 ```
 
-`quotationRequirements` 不属于活跃任务目录；历史 SQLite 行只保留为不可见兼容数据。
-
-## 3. 公共来源与适用范围
+格式要求定义固定为：
 
 ```ts
-interface RequirementSource {
-  source_file_id: string;
-  source_file_name?: string;
-  section_hint?: string;
-  markdown_line_start: number;
-  markdown_line_end: number;
-  page_hint?: string;
-  excerpt?: string;
-}
+const responseFileRequirements: BidAnalysisTaskDefinition = {
+  id: 'responseFileRequirements',
+  label: '格式要求',
+  description: '投标/响应文件组成、技术目录、固定表格或附件、签章、命名、装订、上传和递交要求。',
+  required: true,
+  output: 'markdown',
+  group: 'key',
+};
+```
 
-interface SourceAnchor {
+`bidDocumentFormatRequirements` 不再是活跃任务。历史 Store 行允许存在，但不出现在任务定义、不计入进度，也不作为 `responseFileRequirements` 的成功结果。
+
+### 2.2 输入与输出
+
+输入：当前投标范围工作副本 Markdown。若用户已经选择标段/标包，格式要求不得重新读取其他范围并生成多 profile。
+
+输出：普通 Markdown，至少覆盖能够从原文识别的以下信息：
+
+- 投标/响应文件组成；
+- 技术文件明确目录及先后顺序；
+- 固定表格、承诺函和附件名称；
+- 必须提供与如适用内容；
+- 文件命名、格式、份数、签章、装订、上传和递交规则；
+- 未发现明确要求时的可读说明。
+
+第一行必须且只能是：
+
+```text
+【技术文件目录状态】：明确
+```
+
+或：
+
+```text
+【技术文件目录状态】：未明确
+```
+
+Main 只读取该首行选择 Step03 分支；状态缺失或非法时该项不得保存为成功。其余内容仍作为普通 Markdown 保存和展示。
+
+输出不得包含运行时依赖的：
+
+- `profiles`、`format_strength` 或 scope ID；
+- `source.anchor_ids`、行号、excerpt 或 source catalog；
+- `templates`、slot、cell、repeatable region 或固定 Hash。
+
+格式要求使用普通 Markdown AI 请求。不得进入格式专属 `requestJson()`、来源锚点校验或固定模板第二阶段请求。
+
+## 3. Step03 目录生成契约
+
+### 3.1 输入
+
+```ts
+interface SimplifiedOutlineGenerationContext {
+  project_overview: string;
+  technical_scoring_requirements: string;
+  format_requirements: string;
+  reference_knowledge_document_ids: string[];
+  reference_document_outlines: Array<{
+    document_id: string;
+    title: string;
+    outline_markdown: string;
+  }>;
+  original_plan_outline?: string;
+}
+```
+
+`format_requirements` 来自成功的 `responseFileRequirements`。`reference_document_outlines` 只包含用户本次明确选择的知识库文档目录或可用于恢复目录的标题结构，不把全部知识库隐式加入 Prompt。
+
+### 3.2 一级目录分支
+
+目录生成必须先判断格式要求是否明确给出技术文件目录。
+
+```text
+有明确格式
+  → 一级目录来自 format_requirements
+  → reference_document_outlines 仅用于二级及以下参考
+  → 技术评分项只能映射或补充二级及以下
+
+无明确格式
+  → 必须存在至少一份 reference_document_outlines
+  → 一级目录综合所选知识库文档目录生成
+  → 技术评分项只能映射或补充二级及以下
+```
+
+无明确格式且没有参考知识库文档时，抛出稳定业务错误：
+
+```text
+招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。
+```
+
+禁止的回退：
+
+- 按技术评分大类创建一级目录；
+- 自动生成实施方案、质量、安全、进度、售后等通用一级目录；
+- 使用未选择的知识库文档；
+- 使用历史 profile 或历史 `selected_format_profile_id`。
+
+### 3.3 目录节点
+
+沿用现有 `OutlineItem`，只新增一个业务字段：
+
+```ts
+interface OutlineItem {
   id: string;
-  sourceFileId: string;
-  markdownLineStart: number;
-  markdownLineEnd: number;
-  rawText: string;
-  visibleText: string;
-  canonicalText: string;
-  tableCells?: string[];
-  tableCellSpans?: Array<{ text: string; rowspan: number; colspan: number }>;
-  kind: 'markdown-line' | 'html-fragment' | 'html-table-row';
-}
-
-interface AiSourceReference {
-  anchor_id?: string;
-  anchor_ids?: string[];
-}
-
-interface ApplicableScope {
-  section_id?: string;
-  section_title?: string;
-  package_ids: string[];
-  package_names: string[];
-  document_type: 'technical' | 'quotation' | 'business' | 'qualification' | 'other';
-}
-
-interface TechnicalApplicableScope extends ApplicableScope {
-  document_type: 'technical';
-}
-```
-
-规范化规则：
-
-- 数组去重并保持源顺序；
-- `SourceAnchor` 仅存在于 Main 的本次分析内存和模型输入中，不通过 IPC 暴露，也不写入 SQLite；
-- `visibleText` 可加入标题层级和表格列分隔以帮助第一阶段识别；`canonicalText` 与 `tableCells` 不含这些人工层级/分隔标记，仅供 Main 做逐字和逐格校验，其中 HTML 空单元格在 `canonicalText` 中规范化为 `＿` 留空位；
-- 普通 Markdown 行生成 `markdown-line` 锚点并保留标题/列表前缀；同一物理行上的 HTML 标题、段落和列表项拆为 `html-fragment`，标题用等价 `#` 层级展示；原始 HTML 表格按 `<tr>` 生成 `html-table-row` 锚点，避免把整张单行 HTML 交给模型反推物理行号；
-- 第一阶段普通目录节点返回原始 `source_number + source_title`；能够唯一匹配时可省略 `AiSourceReference`，无编号或同名候选时必须提供一个输入中的真实锚点消歧。规则来源与固定模板位置仍使用 `AiSourceReference`，不得自行填写 `source_file_id`、行号或摘录；
-- `anchor_id` 表示单个锚点，`anchor_ids` 表示一个或多个输入锚点。普通目录由 Main 注入唯一真实锚点；聚合的规则来源允许由 Main 按源文件和原文顺序拆成多条连续记录；固定模板的多锚点必须属于同一源文件且连续，只允许补齐同一 HTML 表格内部漏选的 `<tr>`，拒绝未知锚点、跨表格或跨普通正文组合；
-- 回填后的 `source_file_id` 必须存在，`markdown_line_start/end` 必须是源 Markdown 内有效且有序的 1-based 行号，`excerpt` 使用锚点对应的原始片段；
-- 规范化完成后，每个格式节点和固定模板都必须具有 Main 可解析并回填的 `RequirementSource`；只有“全文检索后未发现明确要求”的根级 negative result 可没有节点来源；
-- profile scope key 由 Main 根据 `document_type`、标段和标包字段稳定生成；
-- 没有明确标段/标包时允许空数组，但不能伪造 ID。
-
-## 4. 格式要求（代码 ID：`bidDocumentFormatRequirements`）
-
-### 4.1 规范化结果
-
-```ts
-type FormatStrength = 'strict' | 'fixed-roots' | 'none';
-type NumberingPolicy = 'auto' | 'preserve-source' | 'none';
-type ResponseMode =
-  | 'freeform-markdown'
-  | 'fixed-markdown-table'
-  | 'locked-commitment'
-  | 'evidence-markdown'
-  | 'container'
-  | 'explicit-none';
-
-interface BidFormatNode {
-  format_node_id: string;
-  source_number?: string;
-  source_title: string;
+  title: string;
   description?: string;
-
-  required_in_outline: boolean;
-  response_required: boolean;
-  title_locked: boolean;
-  order_locked: boolean;
-  level_locked: boolean;
-
-  numbering_policy: NumberingPolicy;
-  response_mode: ResponseMode;
-  allow_ai_children: boolean;
-
-  template_id?: string;
-  empty_response_text?: string;
-  missing_evidence_risk?: 'high' | 'potential-rejection';
-  children: BidFormatNode[];
-  source: RequirementSource;
-}
-
-interface BidFormatProfile {
-  profile_id: string;
-  applicable_scope: TechnicalApplicableScope;
-  format_strength: FormatStrength;
-  document_title: string;
-  outline: BidFormatNode[];
-}
-
-interface BidDocumentFormatRequirements {
-  schema_version: 1;
-  has_explicit_technical_format: boolean;
-  profiles: BidFormatProfile[];
-  template_ids: string[];
-  other_format_rules: {
-    signature_and_seal: string[];
-    file_and_upload: string[];
-    typesetting: string[];
-    required_template_ids: string[];
-  };
-  sources: RequirementSource[];
+  children?: OutlineItem[];
+  content?: string;
+  manual_input_required?: boolean;
 }
 ```
 
-### 4.2 强制 normalizer 规则
+规则：
 
-- 标题含“如有”或语义为“其他”的适用节点强制：
-  `required_in_outline = true`、`response_required = true`。
-- 不允许 `optional_omit`。
-- `locked-commitment` 和 `fixed-markdown-table` 必须有 `template_id`。
-- `container` 必须有子节点；`allow_ai_children = false` 的节点禁止后续新增子节点。
-- `preserve-source` 必须有 `source_number`。
-- `source_title` 不含 `source_number`；`title` 在目录实例化时取 `source_title`，避免重复编号。
-- `evidence-markdown` 缺少强制材料时的风险由 `missing_evidence_risk` 决定；未给出时规范化为 `high`。
-- 所有格式 profile 的 `document_type` 必须为 `technical`；商务、报价或资格 profile 不得进入本契约。
-- `has_explicit_technical_format = false` 时必须且只能返回一个全局 profile：标段/标包字段为空、`format_strength = none`；Step03 自动使用它，不进入人工选择门。
-- `has_explicit_technical_format = true` 时至少有一个 `strict` 或 `fixed-roots` profile；允许为某个明确 scope 返回 `none`，表示该 scope 按评分回退。
+- 固定表格和承诺函节点必须设置 `manual_input_required = true`；
+- 其他节点缺省为 `false`；
+- 该字段不表示标题、顺序、层级或正文被程序锁定；
+- 用户可在 Step03 将误判节点切换为 AI 编写或人工填写；
+- 重新编号、移动或保存目录时必须保留该字段；
+- 持久化复用 `technical_plan_outline_nodes.format_constraints_json`，只要求保存该布尔值；不新增列。
 
-### 4.3 profile 匹配算法
+### 3.4 评分覆盖
 
-1. 根结果为 `has_explicit_technical_format = false`：直接选择唯一全局 `technical/none` profile。
-2. 根结果为 true：只比较 technical profile。
-3. profile 中非空的 `section_id/package_ids` 必须命中当前 scope；空数组或空字段表示该维度为通配。
-4. ID 优先于标题/名称匹配；标题/名称只用于旧数据没有稳定 ID 时的兼容匹配。
-5. 对所有匹配项计算 specificity：非空且命中的 section/package 维度越多，优先级越高。
-6. 最高 specificity 唯一时自动选择；零个或最高分并列多个时阻断并要求用户明确选择。
-7. 选择 `none` profile 才进入评分回退；任何 business/quotation/qualification profile 都是 Schema 错误。
+技术评分项首先映射到已经确定的一级目录，再在其下新增二级及以下节点。目录生成、知识库补充、Agent 修复和最终审查均不得新增一级目录。
 
-### 4.4 两阶段 AI 结果与 Main 回填
+最低校验要求：
 
-第一阶段模型读取来源锚点列表，返回 profile、递归目录树、响应模式、固定模板描述，以及目录节点的原始 `source_number + source_title`；不返回自行推测的行号、摘录或固定模板正文。Main 对普通目录节点从完整锚点目录中确定性选择唯一匹配行，模型只在无编号或同名候选时提供一个输入中的真实锚点用于消歧。`result.sources` 的聚合引用由 Main 按源文件和真实锚点顺序拆为连续来源记录。Main 在第二阶段前校验模板锚点引用并解析原始片段；同一 HTML 表格内部漏选的 `<tr>` 行可确定性补齐，未知锚点、跨表格或跨普通正文引用仍拒绝。第二阶段完成后由 normalizer 统一回填持久化的 `RequirementSource`。
+1. 一级目录非空；
+2. 每个一级目录都来源于当前分支允许的上下文；
+3. 所有技术评分项至少映射到一个二级或更深节点；
+4. `manual_input_required` 只能是布尔值；
+5. 四级目录不得继续包含子节点。
 
-只有第一阶段识别出 `locked-commitment` 或 `fixed-markdown-table` 时，才启动第二阶段模板编译。第二阶段输入仅包含这些模板描述和对应锚点的原始片段，不重复提交完整招标文件；无固定模板时不发起第二阶段请求。
+校验不要求模型返回来源 ID，也不执行招标原文逐字比对。
 
-格式任务的两个阶段均关闭通用 JSON 修复调用：每阶段只请求一次，JSON/root 结构错误直接失败，来源和模板语义错误只由 Main 确定性校验报告，避免缺少完整证据的额外模型请求改写结果。
+## 4. Step05 正文契约
 
-第二阶段返回固定模板结构后，Main 必须复核：
+### 4.1 普通节点
 
-- 模板 `source_title` 必须与所引用格式节点的标题一致，并由 Main 使用节点标题落盘；
-- 固定承诺函的 locked segments 必须按原顺序完整覆盖 `canonicalText`；每个 slot 必须在同一位置消费一个 `_`/`＿` 明确留空段，禁止遗漏留空位、增加无来源 slot 或把省略号/圆点等固定标点当留空；
-- 固定表格必须按来源 `<tr>/<td>` 或 Markdown 表格行逐格复核表头、固定单元格和 slot 列；Main 先按 `rowspan/colspan` 展开逻辑网格，slot 只允许对应空单元格或 `_`/`＿` 明确留空段；
-- 固定说明仍按原顺序、非重叠地在 canonical evidence 中定位；repeatable region 只能占据结构一致的来源行，不得改写固定内容。
+`manual_input_required !== true` 的叶子节点进入现有正文生成、单节重新生成、扩写、原方案优化、最低字数补充、表格清理和配图流程。
 
-两阶段结果通过 Main 的 normalizer 后返回：
+正文允许改写、扩写、调序、合并和专业化表达，不要求与招标文件或知识库素材逐字一致，但不得虚构项目事实和证明材料。
 
-```ts
-interface NormalizedFormatAnalysis {
-  result: BidDocumentFormatRequirements;
-  templates: ResponseTemplateRecord[];
-  normalized_hash: string;
-}
+### 4.2 人工填写节点
+
+`manual_input_required === true` 的节点：
+
+- 不进入批量正文 AI 目标集合；
+- 单节 AI 生成、重新生成和扩写入口禁用；
+- 不进入自动一致性修复、最低字数补充、表格清理或配图改写；
+- 使用普通 Markdown 编辑器人工填写；
+- 保存仍走现有章节正文保存接口；
+- 不需要 `template_id`、确认状态、slot/cell 值或专用保存 IPC。
+
+若用户尝试调用 AI 操作，返回：
+
+```text
+该章节需要人工填写，不能使用 AI 生成或改写。
 ```
 
-`normalized_hash` 必须覆盖完整的 `result + templates`，而不是只覆盖模板 ID：
+### 4.3 导出
 
-1. normalizer 先完成锚点校验、`RequirementSource` 确定性回填、稳定 ID、默认值和枚举校验；
-2. 对象 key 按字典序递归排序，数组保留业务顺序；
-3. 固定文本只统一 CRLF/LF，不改空格、标点或条款内容；
-4. 排除 `confirmed`、`locked_hash`、`created_at`、`updated_at` 等运行态字段；
-5. 对 `UTF-8(stableStringify({ result, templates }))` 计算 SHA-256。
+导出继续读取权威 Store。若存在 `manual_input_required === true` 且正文为空的节点，阻止导出并返回节点标题列表：
 
-Hash 输入必须包含 locked segments、slot schema、固定表头、有序表体、重复区和固定说明。
-
-`result` 稳定序列化后写入 `technical_plan_bid_items.content`，`normalized_hash` 写入该行的 `normalized_hash`；模板在同一事务写入 `technical_plan_response_templates`。`result` 仅保存模板 ID，不复制模板本体。
-
-重新解析时：
-
-- 新旧 normalized Hash 相同：保留已确认模板及下游状态；
-- Hash 不同：替换本次格式任务的模板记录并全部置为未确认，清理旧 locked Hash、引用节点和全部下游；
-- 用户对模板的核对/重确认不改变解析 Hash，只更新确认模板和 locked Hash，并按模板引用做定向失效。
-
-## 5. 采购与报价（代码 ID：`procurementList`）
-
-`procurementList` 是必选关键项，输出类型为 Markdown，不再维护独立的结构化报价 Schema。内容应按当前投标范围合并整理：
-
-- 采购清单、采购内容、规格参数、单位、数量、交付、验收、质保；
-- 报价方式、预算与最高限价、税务与发票、价格组成、精度和舍入、计算公式；
-- 必须提交的报价表、电子平台或提交渠道、一致性与优先级规则；
-- 禁止或无效报价情形、异常低价审查、结算与付款、外部附件或依赖。
-
-优先保留原始表格和字段含义；复杂表格可以按“清单项 + 要求说明”整理。没有明确内容时返回可读的未发现说明，不以空字符串冒充成功。
-
-结果继续写入 `technical_plan_bid_items.content`。Step03、全局事实和普通技术正文 Prompt 默认不得读取“采购与报价”内容；技术目录中明确存在费用类固定节点时，以格式节点本身为输入。
-
-历史 `quotationRequirements` SQLite 行保留但隐藏，不删除、不迁移，也不映射为 `procurementList` 的成功结果；历史工作区是否需要补跑由当前 7 个关键项的实际状态决定。
-
-## 6. 固定响应模板
-
-### 6.1 公共记录
-
-```ts
-interface ResponseTemplateRecord {
-  template_id: string;
-  kind: 'locked-commitment' | 'fixed-markdown-table';
-  analysis_item_id: 'bidDocumentFormatRequirements';
-  profile_id: string;
-  format_node_id: string;
-  source_title: string;
-  source_location: RequirementSource;
-  template: LockedCommitmentTemplate | FixedMarkdownTableTemplate;
-  confirmed: boolean;
-  locked_hash?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+```text
+以下章节需要人工填写后才能导出：{节点标题列表}
 ```
 
-Renderer 提交的 `confirmed`、`locked_hash` 不作为权威；Main 确认后重新计算。
+正文非空即可通过该项检查。系统不比较招标原文、不验证固定表头或承诺文字、不计算模板 Hash。
 
-### 6.2 固定承诺函
+## 5. UI 与 IPC
 
-```ts
-interface LockedSegment {
-  type: 'locked';
-  text: string;
-  hash?: string;
-}
+本次不新增专用 IPC。现有接口只需携带 `manual_input_required`：
 
-interface TemplateSlot {
-  type: 'slot';
-  slot_id: string;
-  label: string;
-  value_source: 'project-info' | 'part-a-info' | 'company-knowledge' | 'manual';
-  required: boolean;
-}
+- 目录生成返回与 Store 保存；
+- 目录编辑保存；
+- 技术方案状态加载；
+- 正文页面选择节点；
+- Word 导出前完整性检查。
 
-interface LockedCommitmentTemplate {
-  kind: 'locked-commitment';
-  segments: Array<LockedSegment | TemplateSlot>;
-}
+Renderer 类型同步 `OutlineItem.manual_input_required`。Main/Renderer 不再暴露或消费：
 
-interface LockedTemplateValues {
-  template_id: string;
-  slot_values: Record<string, string>;
-  knowledge_item_ids: string[];
-  missing_slots: string[];
-}
-```
+- `selectedFormatProfileId`、`selectedFormatProfileHash`；
+- 新生成的 `responseTemplates`；
+- 固定模板确认、slot 保存和 fixed table 保存入口。
 
-Main 按 segment 原顺序拼装 Markdown；仅 slot 值可变。
+历史字段可继续出现在旧工作区加载结果中，但新 UI 不显示旧 profile 和模板操作。
 
-### 6.3 固定 Markdown 表格
+## 6. 失效规则
 
-```ts
-interface FixedTableCell {
-  kind: 'locked' | 'slot';
-  text?: string;
-  slot_id?: string;
-  label?: string;
-  value_source?: 'project-info' | 'part-a-info' | 'company-knowledge' | 'manual';
-  required?: boolean;
-}
-
-interface FixedTableRow {
-  row_id: string;
-  cells: FixedTableCell[];
-}
-
-interface RepeatableTableRegion {
-  kind: 'repeatable-region';
-  region_id: string;
-  row_template: FixedTableRow;
-  min_rows: number;
-  max_rows?: number;
-}
-
-interface FixedTableBodyRow {
-  kind: 'row';
-  row: FixedTableRow;
-}
-
-type FixedTableBodyItem = FixedTableBodyRow | RepeatableTableRegion;
-
-interface FixedMarkdownTableTemplate {
-  kind: 'fixed-markdown-table';
-  table_title?: string;
-  headers: string[];
-  body: FixedTableBodyItem[];
-  fixed_notes: string[];
-  empty_response_text?: string;
-}
-
-interface FixedTableValues {
-  template_id: string;
-  cell_values: Record<string, string>;
-  repeatable_rows: Record<string, Array<Record<string, string>>>;
-  knowledge_item_ids: string[];
-  missing_fields: string[];
-}
-```
-
-`body` 是唯一的有序表体定义。Main 按数组顺序渲染固定行与重复区，因此多个重复区、固定尾行和固定说明前的插入位置都不存在歧义。
-
-Main 必须校验表头、列数、列顺序、固定单元格、固定说明、region ID 唯一、重复区最小/最大行数后再生成 Markdown。
-
-## 7. 目录节点持久化
-
-Renderer 使用展开后的便利类型，SQLite 把约束和响应状态分别保存为 JSON。
-
-```ts
-interface OutlineFormatConstraints {
-  format_node_id?: string;
-  source_number?: string;
-  source_title?: string;
-  numbering_policy: NumberingPolicy;
-  required_in_outline: boolean;
-  response_required: boolean;
-  title_locked: boolean;
-  order_locked: boolean;
-  level_locked: boolean;
-  response_mode: ResponseMode;
-  allow_ai_children: boolean;
-  template_id?: string;
-  empty_response_text?: string;
-  missing_evidence_risk?: 'high' | 'potential-rejection';
-  mapped_requirement_ids: string[];
-}
-
-type ResponseStatus =
-  | 'pending'
-  | 'responded-substantive'
-  | 'responded-none'
-  | 'needs-manual-input'
-  | 'missing-required-evidence';
-
-type ComplianceRisk = 'none' | 'warning' | 'high' | 'potential-rejection';
-
-interface OutlineResponseState {
-  template_values?: LockedTemplateValues | FixedTableValues;
-  knowledge_item_ids: string[];
-  response_status: ResponseStatus;
-  compliance_risk: ComplianceRisk;
-  compliance_message?: string;
-}
-```
-
-旧目录节点缺少 JSON 时计算为自由 Markdown 默认值；不得根据标题猜测模板类型。
-
-## 8. IPC 增量
-
-```ts
-interface TechnicalPlanBridge {
-  confirmResponseTemplate(payload: {
-    templateId: string;
-    template: LockedCommitmentTemplate | FixedMarkdownTableTemplate;
-  }): Promise<TechnicalPlanState>;
-
-  saveOutlineConfig(payload: {
-    referenceKnowledgeDocumentIds: string[];
-    outlineExpansionMode?: OutlineExpansionMode;
-    selectedFormatProfileId?: string;
-  }): Promise<TechnicalPlanState>;
-
-  saveLockedTemplateValues(payload: {
-    nodeId: string;
-    templateId: string;
-    slotValues: Record<string, string>;
-  }): Promise<TechnicalPlanState>;
-
-  saveFixedTableValues(payload: {
-    nodeId: string;
-    templateId: string;
-    cellValues: Record<string, string>;
-    repeatableRows: Record<string, Array<Record<string, string>>>;
-  }): Promise<TechnicalPlanState>;
-}
-```
-
-既有 `saveChapterContent({ nodeId, content })` 只允许自由 Markdown 和允许人工编辑的证明材料节点；固定承诺函、固定表格、容器和明确无内容节点必须拒绝。
-
-## 9. 技术方案导出
-
-Renderer 调用：
-
-```ts
-exportWord({
-  source: 'technical-plan',
-  requestId,
-  export_format,
-  acknowledgeMissingEvidence?: boolean,
-})
-```
-
-Main 行为：
-
-1. 回读当前 Technical Plan Store；
-2. 校验响应门禁；
-3. 根据模板记录重新渲染固定节点；
-4. 校验 locked Hash 和固定表格结构；
-5. 按编号策略生成标题；
-6. 复用现有 Markdown → DOCX 流程。
-
-未传 `source = technical-plan` 的通用导出保持现状。
-
-## 10. 错误与门禁
-
-建议稳定中文错误：
-
-| 场景 | 错误 |
+| 变化 | 必须清理 |
 | --- | --- |
-| 7 项未完成 | 请先完成 7 个关键招标文件解析项 |
-| profile 不唯一 | 当前投标范围存在多个格式方案，请先选择 |
-| profile 无匹配 | 未找到当前投标范围的适用格式方案，请人工选择 |
-| 删除固定节点 | 该节点属于招标文件固定目录，不能删除 |
-| 修改锁定标题 | 该节点标题来自招标文件，不能修改 |
-| 固定模板未确认 | 该固定模板尚未确认并锁定 |
-| 普通保存固定正文 | 该章节使用受控模板，不能覆盖完整 Markdown |
-| 固定 Hash 变化 | 固定模板内容校验失败，请重新核对模板 |
-| 必填槽位缺失 | 固定模板仍有必填字段未填写 |
-| 证明材料缺失 | 强制证明材料缺失，确认风险后方可导出 |
+| `responseFileRequirements` 内容变化 | 目录、全局事实、正文任务、正文计划、正文运行态、正文和配图计划 |
+| 有/无明确格式判断变化 | 同上 |
+| 无明确格式时参考知识库文档选择变化 | 同上 |
+| 一级目录变化 | 正文及全部正文运行缓存 |
+| `manual_input_required` 变化 | 对应节点正文任务状态、正文计划和自动处理缓存 |
 
-## 11. 失效规则
+相同输入和相同目录不重复清理。
 
-| 变化 | 清理 |
-| --- | --- |
-| 完整格式分析 Hash（result + templates）变化 | 模板确认、目录、profile 选择、全局事实、正文与配图全部下游 |
-| “采购与报价”结果变化 | 不清理技术目录或正文 |
-| profile 变化 | 目录、全局事实、正文与配图全部下游 |
-| 模板重新确认，骨架不变 | 引用节点正文、正文任务/计划/运行态、配图计划 |
-| 目录固定骨架或 response mode 变化 | 受影响正文及所有正文运行缓存 |
-| 规范化结果相同 | 不清理 |
+## 7. 兼容规则
 
-所有清理必须在 Store 事务中执行；任务启动前的 UI 只负责说明影响，不提前清空持久数据。
+- SQLite 保持 v18。
+- 历史 `bidDocumentFormatRequirements`、profile、模板和旧响应模式数据不删除。
+- 新任务成功后以 `responseFileRequirements` 为唯一格式要求来源。
+- 新目录不生成 `format_node_id`、`source_number`、锁定字段、`response_mode` 或 `template_id`。
+- 加载旧目录时保留其正文；只有用户重新生成目录后才应用新契约。
+- 不得把旧 `bidDocumentFormatRequirements` JSON 自动转换成新的 Markdown 成功结果。
+
+## 8. 验收用例
+
+1. `responseFileRequirements` 在任务元数据中是第 3 个关键项、Markdown 输出、UI 名称“格式要求”。
+2. 解析请求不包含 source catalog，模型/API 调用只有一次普通 Markdown 请求。
+3. 缺失或非法目录状态首行不能保存为成功，不猜测分支。
+4. 明确格式 fixture 的一级目录来自格式要求，评分项只生成二级及以下。
+5. 无格式 fixture 使用所选知识库目录生成一级目录，评分项只生成二级及以下。
+6. 无格式且知识库为空时返回固定中文错误，AI 目录请求次数为 0。
+7. 多份知识库文档只使用已选文档，并能综合为一套一级目录。
+8. 固定表格和承诺函节点被标记人工填写，正文 AI 调用次数为 0。
+9. 人工节点可以通过普通 Markdown 编辑器保存；空内容阻止导出，非空允许导出。
+10. 普通正文仍允许生成、扩写、保存和导出。
+11. 旧 v18 工作区可加载，旧 profile/template 数据不驱动新流程。

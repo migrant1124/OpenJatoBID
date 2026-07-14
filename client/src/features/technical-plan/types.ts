@@ -2,7 +2,6 @@ import type {
   OutlineData,
   OutlineExpansionMode,
   OutlineMode,
-  ResponseTemplateRecord,
 } from '../../shared/types/outline';
 
 export type TechnicalPlanStep = 'document-analysis' | 'bid-analysis' | 'outline-generation' | 'global-facts' | 'content-edit' | 'expand';
@@ -311,9 +310,6 @@ export interface TechnicalPlanState {
   outlineMode: OutlineMode;
   outlineExpansionMode: OutlineExpansionMode;
   referenceKnowledgeDocumentIds: string[];
-  responseTemplates: ResponseTemplateRecord[];
-  selectedFormatProfileId?: string;
-  selectedFormatProfileHash?: string;
   bidSectionExtractionTask?: BackgroundTaskState;
   bidAnalysisTask?: BackgroundTaskState;
   outlineGenerationTask?: BackgroundTaskState;

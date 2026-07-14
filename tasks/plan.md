@@ -675,6 +675,8 @@ flowchart LR
 
 ## 12. 招标解析、格式驱动目录与受控写作增量计划
 
+> 历史计划：本节记录 T47—T69 的原结构化格式、来源锚点和固定模板实现。CHG-001 已于 2026-07-13 替代其目标行为；本节不再作为后续 Build 的执行依据。当前计划见第 13 节。
+
 ### 12.1 需求基线与阶段边界
 
 - 冻结需求：`D:\download\OpenJatoBID_招标解析_格式驱动目录与写作改造_最终需求.md`
@@ -1123,3 +1125,181 @@ CP8（本计划审批）
 - 让 Agent 返回固定承诺函完整正文；
 - 嵌入或复制知识库原附件；
 - 新增依赖、测试框架、发布流程或管理端能力。
+
+## 13. CHG-001：格式要求、一级目录来源与人工填写简化计划
+
+### 13.1 已批准需求与阶段边界
+
+- 需求变更：`docs/secondary-development/changes/format-requirements-simplification-change.md`。
+- 架构决策：`docs/secondary-development/adr/format-driven-technical-plan.md`。
+- 数据/行为契约：`docs/secondary-development/api/technical-plan-format-contract-v1.md`。
+- UI 基线：`docs/secondary-development/design/format-driven-technical-plan-ui.md`。
+- 子系统：仅 `client/`。
+- 当前模式：Plan。CP12 批准前禁止修改生产业务逻辑。
+- 不修改依赖、SQLite schema 版本、管理端、Analytics、发布流程、自动更新或 Word/OOXML 编辑能力。
+- 当前工作树已有 T68/T69 未提交代码和测试改动；Build 时必须按 CHG-001 外科手术式退役，不使用 `git reset`、`git checkout` 或整提交回退覆盖其他成果。
+
+### 13.2 目标调用链
+
+```text
+当前投标范围 Markdown
+  → responseFileRequirements（UI：格式要求，关键项，Markdown）
+  → 读取首行“技术文件目录状态：明确/未明确”
+  → 明确：格式要求生成一级目录
+  → 未明确：所选知识库文档目录生成一级目录
+  → 技术评分项只映射/补充二级及以下
+  → 固定表格/承诺函标记 manual_input_required
+  → AI 正文跳过人工节点
+  → 用户用普通 Markdown 编辑器填写
+  → 空白人工节点阻止导出
+```
+
+### 13.3 保留与退役边界
+
+保留：
+
+- Main 单一解析任务目录与 Renderer 元数据消费；
+- 7 个关键项 UI、“采购与报价”和配置 Dialog 布局修复；
+- 后台任务生命周期、当前任务防旧响应覆盖、Store 权威状态；
+- 当前投标范围工作副本、多标段选择、知识库选择；
+- 普通目录生成、正文生成、Markdown 编辑和 Word 导出；
+- SQLite v18 列、表和旧记录，避免破坏性迁移。
+
+退役：
+
+- 活跃 `bidDocumentFormatRequirements` 任务、结构化格式 Schema 和专属 JSON 请求；
+- AnchorCatalog、来源锚点验证、格式重放与固定模板第二阶段；
+- profile 选择、格式 Hash、固定目录锁定和新目录的旧 `response_mode` 分流；
+- 固定模板确认、slot/cell/repeatable region、模板 Hash 和专用保存 UI/IPC；
+- 无明确格式时评分大类或通用目录作为一级目录来源。
+
+### 13.4 T70 需求与规划重基线 — M
+
+- 状态：完成后等待 CP12。
+- 范围：CHG-001、ADR、契约、UI 基线、`tasks/plan.md`、`tasks/todo.md`。
+- 目标：让业务规则、技术边界和任务状态只有一套当前口径；原 T47—T69 保留为历史记录但明确不再驱动 Build。
+- 验收：文档不再要求 profile、来源锚点、固定模板编译或评分大类一级目录回退；明确记录无格式/无知识库阻断和人工填写节点。
+
+### 13.5 T71 恢复 Markdown“格式要求”关键项 — M
+
+- 目标：恢复 `responseFileRequirements` 代码 ID、Markdown 请求和关键项状态，删除格式专属运行分支。
+- 主要生产范围：
+  - `client/electron/services/bidAnalysisTask.cjs`
+  - `client/src/features/technical-plan/pages/BidAnalysisPage.tsx`
+  - `client/src/features/technical-plan/pages/TechnicalPlanHome.tsx`
+  - `client/src/features/technical-plan/services/bidAnalysisWorkflow.ts`
+  - `client/src/features/technical-plan/types.ts`
+- 实现边界：
+  - Main 任务 ID 为 `responseFileRequirements`、名称“格式要求”、`required: true`、`output: markdown`；
+  - Prompt 沿用 upstream 原响应文件要求范围，增加稳定首行 `【技术文件目录状态】：明确/未明确`；
+  - 只读取当前投标范围工作副本；
+  - 首行缺失或非法时该项失败，不猜测；
+  - 移除 `runBidDocumentFormatAnalysis`、source catalog、模板编译和格式专属 diagnostic 运行分支；
+  - Step02 使用通用 Markdown 结果视图，删除 profile/模板核对和格式重跑清理专属 UI；
+  - 历史 `bidDocumentFormatRequirements` 行隐藏保留，不迁移为成功结果。
+- 测试：任务目录顺序、7 项门禁、Markdown 首行、当前投标范围输入、单项重试、历史行隔离、模型调用次数为 1。
+- 验收：真实格式项不再出现 JSON、锚点或固定模板编译错误。
+
+### 13.6 T72 重建一级目录来源与评分下级映射 — L / 高风险
+
+- 目标：一级目录只来自明确格式或所选知识库文档，技术评分项只能生成二级及以下。
+- 主要生产范围：
+  - `client/electron/services/outlineGenerationTask.cjs`
+  - `client/electron/services/outlineFormatConstraints.cjs`（删除或缩减为新目录纯逻辑）
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/src/features/technical-plan/pages/OutlineEditPage.tsx`
+  - `client/src/features/technical-plan/types.ts`
+- 实现边界：
+  - 读取 `responseFileRequirements` 和稳定状态首行；
+  - 明确格式：一级目录由格式要求生成，知识库只能参考二级及以下；
+  - 未明确：目录请求前确认至少选择一份知识库文档，并只加载已选文档的目录结构；
+  - 未明确且知识库为空：在任何目录 AI 请求前返回批准错误，调用次数为 0；
+  - 多份知识库由一个目录请求综合；
+  - 评分分组、知识库补充、Agent 修复和最终审查都只能返回一级目录内部 patch；
+  - “生成技术方案”和“已有方案扩写”执行相同一级目录规则；原方案只能补充下级目录和正文；
+  - 删除 profile 选择器、`selectedFormatProfileId/Hash` 活跃读写和 `original-only` 的格式 profile 特例。
+- 测试：明确格式、未明确单知识库、未明确多知识库、未明确无知识库、评分项企图新增一级目录、未选知识文档隔离、两个工作流。
+- 验收：不存在评分大类一级目录回退，也不读取未选知识库。
+
+### 13.7 T73 人工填写节点与正文/导出门禁 — L
+
+- 目标：固定表格和承诺函保留目录但完全由用户人工填写，不再建立固定模板。
+- 主要生产范围：
+  - `client/electron/services/technicalPlanStore.cjs`
+  - `client/electron/services/contentGenerationTask.cjs`
+  - `client/electron/services/exportService.cjs`
+  - `client/src/shared/types/outline.ts`
+  - `client/src/features/technical-plan/types.ts`
+  - `client/src/features/technical-plan/pages/OutlineEditPage.tsx`
+  - `client/src/features/technical-plan/pages/ContentEditPage.tsx`
+  - 必要的 preload/IPC 类型删除，不新增专用 IPC
+- 实现边界：
+  - 新目录节点只使用 `manual_input_required?: boolean`；
+  - 复用 `format_constraints_json` 持久化该布尔值，不新增 migration；
+  - 目录生成默认标记固定表格和承诺函，用户可在 Step03 修正；
+  - AI 编写目标、单节重生成、扩写、一致性修复、最低字数、表格清理和配图改写均过滤人工节点；
+  - 人工节点使用普通 Markdown 编辑和现有保存接口；
+  - 移除活跃模板确认、slot/cell 编辑和专用保存入口；
+  - 导出只检查人工节点内容是否非空，不比较招标原文和模板 Hash。
+- 测试：人工节点各 AI 入口调用次数 0、普通保存、状态恢复、空内容阻断导出、非空导出、普通节点无回归。
+- 验收：用户可以完成固定表格/承诺函内容，系统不生成、不改写、不做逐字校验。
+
+### 13.8 T74 旧架构退役与兼容清理 — M
+
+- 目标：删除不再可达的旧格式业务代码和测试，保留数据库兼容，不留下两套活跃行为。
+- 候选删除或收缩范围，以引用审计为准：
+  - `client/electron/services/bidAnalysisSourceAnchors.cjs`
+  - `client/electron/services/fixedMarkdownTemplateService.cjs`
+  - 格式专属 replay fixtures/tests、template tests、旧 response mode tests
+  - `client/electron/services/bidAnalysisResultSchemas.cjs` 中仅属于旧格式的 Schema/normalizer
+  - preload、IPC、Renderer 中固定模板专用接口和类型
+- 必须保留：
+  - 其他 JSON 解析项 normalizer/validator；
+  - 通用任务 stale response 保护；
+  - SQLite v18 schema 与旧数据加载容错；
+  - “采购与报价”、UI 布局及其他非格式功能。
+- 验收：全仓库生产引用中不存在活跃 `bidDocumentFormatRequirements`、AnchorCatalog、profile 选择或固定模板编译入口；历史文档和迁移字段可保留。
+
+### 13.9 T75 聚焦验证与现场验收 — M
+
+- 自动化只运行相关最小测试文件，不调用真实模型：
+  - 任务目录与 Markdown 状态首行；
+  - 两种一级目录来源；
+  - 无格式/无知识库零目录调用；
+  - 评分项只能补充二级及以下；
+  - 人工节点 AI 调用次数为 0；
+  - 旧 v18 工作区兼容。
+- CJS：对实际修改的 Main/preload/IPC 文件执行 `node --check`。
+- Renderer：`cd client; npm run build`。
+- 运行验收：重启 Electron Main，分别验证明确格式、无格式+知识库、无格式+无知识库、人工填写和导出阻断。
+- 真实模型：仅在用户提供样本并明确开始现场验收后执行；不得用自动重试掩盖失败。
+- 不打包、不提交、不推送，除非用户另行明确要求。
+
+### 13.10 CP12 实现审批门
+
+CP12 批准后才进入 Build，并按顺序执行：
+
+```text
+T71 → T72 → T73 → T74 → T75
+```
+
+批准 CP12 即确认以下技术口径：
+
+1. Markdown 首行使用固定“明确/未明确”状态，不引入 JSON；
+2. 无明确格式且未选知识库时在目录 AI 请求前阻断；
+3. 技术评分项在两个分支都不能创建一级目录；
+4. 人工填写使用 `manual_input_required` 和普通 Markdown 保存；
+5. SQLite v18 保留，不降级、不删列；
+6. 旧 profile/模板数据不迁移、不驱动新流程；
+7. Build 可删除确认无生产引用的旧锚点和固定模板代码，但不得回退其他有效成果。
+
+### 13.11 风险与回滚
+
+| 风险 | 处理 |
+| --- | --- |
+| AI 未按格式要求正确生成一级目录 | 明确状态首行只负责选分支；使用 fixture 和真实样本校验目录 Prompt，失败回到 Prompt/目录逻辑，不恢复锚点体系。 |
+| 多份知识库目录冲突 | 只综合用户选中的文档并在 UI 明示来源；不隐式读取全部知识库。 |
+| 评分补充产生新一级目录 | 所有评分 patch 只接受已有一级目录 ID，Main 拒绝根级 addition。 |
+| 人工节点被自动处理 | 在目标集合入口统一过滤，并为每个自动处理入口建立零调用测试。 |
+| 旧 v18 数据影响新流程 | 任务 ID 和新目录字段作为活跃判定；旧 profile/template 只读保留。 |
+| 大范围回退覆盖有效功能 | 不回退整个提交；逐文件引用审计后使用外科手术式删除。 |

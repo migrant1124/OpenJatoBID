@@ -3,13 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { areRequiredBidAnalysisTasksReady, getBidAnalysisTasks, isBidAnalysisTaskResultValid } from '../services/bidAnalysisWorkflow';
 import { MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
-import type { ResponseTemplateRecord } from '../../../shared/types/outline';
 import BidSectionSelectorDialog from '../components/BidSectionSelectorDialog';
 import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
 
 interface BidAnalysisPageProps {
   hasTenderFile: boolean;
-  hasFormatDependentWork: boolean;
   mode: BidAnalysisMode;
   selectedTaskIds: string[];
   bidSectionMode: BidSectionMode;
@@ -19,7 +17,6 @@ interface BidAnalysisPageProps {
   bidSectionExtractionError?: string;
   selectedSectionTitle?: string;
   taskDefinitions: BidAnalysisTaskDefinition[];
-  responseTemplates: ResponseTemplateRecord[];
   tasks: BidAnalysisTasks;
   task?: BackgroundTaskState;
   progress: number;
@@ -192,104 +189,8 @@ function JsonResultTable({ content }: { content: string }) {
   );
 }
 
-function asJsonRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-function formatApplicableScope(value: unknown) {
-  const scope = asJsonRecord(value);
-  if (!scope) return '全局';
-  const labels = [scope.section_title, ...(Array.isArray(scope.package_names) ? scope.package_names : [])]
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
-  return labels.length ? labels.join(' / ') : '全局';
-}
-
-function FormatOutlineTree({ nodes }: { nodes: unknown[] }) {
-  if (!nodes.length) return <p>当前范围没有明确固定目录，Step03 将按技术评分回退。</p>;
-  return (
-    <ul className="bid-analysis-structured-tree">
-      {nodes.map((value, index) => {
-        const node = asJsonRecord(value);
-        if (!node) return null;
-        const children = Array.isArray(node.children) ? node.children : [];
-        return (
-          <li key={String(node.format_node_id || `${node.source_title || 'node'}-${index}`)}>
-            <div>
-              <strong>{[node.source_number, node.source_title].filter(Boolean).join(' ')}</strong>
-              <span>{String(node.response_mode || 'freeform-markdown')}</span>
-              {node.title_locked === true && <em>标题锁定</em>}
-              {node.required_in_outline === true && <em>必须保留</em>}
-            </div>
-            {asJsonRecord(node.source) && (
-              <small>
-                {String(asJsonRecord(node.source)?.source_file_name || asJsonRecord(node.source)?.source_file_id || '来源')}
-                {' · 行 '}{String(asJsonRecord(node.source)?.markdown_line_start || '?')}-{String(asJsonRecord(node.source)?.markdown_line_end || '?')}
-              </small>
-            )}
-            {children.length > 0 && <FormatOutlineTree nodes={children} />}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function FormatRequirementsResult({
-  content,
-  templates,
-  onReviewTemplate,
-}: {
-  content: string;
-  templates: ResponseTemplateRecord[];
-  onReviewTemplate: (template: ResponseTemplateRecord) => void;
-}) {
-  const data = tryParseJsonObject(content);
-  if (!data || !Array.isArray(data.profiles)) return <JsonResultTable content={content} />;
-  return (
-    <div className="bid-analysis-structured-result">
-      <div className="bid-analysis-structured-summary">
-        <strong>{data.has_explicit_technical_format === true ? '已识别明确技术文件格式' : '未发现明确技术文件格式'}</strong>
-        <span>{data.profiles.length} 个适用 profile</span>
-      </div>
-      {data.profiles.map((value, index) => {
-        const profile = asJsonRecord(value);
-        if (!profile) return null;
-        return (
-          <section key={String(profile.profile_id || index)} className="bid-analysis-structured-card">
-            <header>
-              <strong>{String(profile.document_title || `格式 Profile ${index + 1}`)}</strong>
-              <span>{formatApplicableScope(profile.applicable_scope)}</span>
-              <em>{String(profile.format_strength || '')}</em>
-            </header>
-            <FormatOutlineTree nodes={Array.isArray(profile.outline) ? profile.outline : []} />
-          </section>
-        );
-      })}
-      <section className="bid-analysis-structured-card">
-        <header><strong>固定响应模板</strong><span>{templates.length} 项</span></header>
-        {templates.length ? (
-          <ul className="bid-analysis-template-list">
-            {templates.map((template) => (
-              <li key={template.template_id}>
-                <strong>{template.source_title}</strong>
-                <span>{template.kind === 'locked-commitment' ? '固定承诺函' : '固定表格'}</span>
-                <em>{template.confirmed ? '已锁定' : '待核对'}</em>
-                <button type="button" className="secondary-action" onClick={() => onReviewTemplate(template)}>
-                  {template.confirmed ? '重新核对' : '核对并锁定'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : <p>当前格式没有固定承诺函或固定表格。</p>}
-      </section>
-    </div>
-  );
-}
-
 function BidAnalysisPage({
   hasTenderFile,
-  hasFormatDependentWork,
   mode,
   selectedTaskIds,
   bidSectionMode,
@@ -298,7 +199,6 @@ function BidAnalysisPage({
   bidSectionExtractionStatus,
   bidSectionExtractionError,
   selectedSectionTitle,
-  responseTemplates,
   taskDefinitions,
   tasks,
   task,
@@ -316,14 +216,6 @@ function BidAnalysisPage({
   const [sectionSelectorOpen, setSectionSelectorOpen] = useState(false);
   const [selectingSection, setSelectingSection] = useState(false);
   const [pendingAnalysisAfterSection, setPendingAnalysisAfterSection] = useState<{ taskIds?: string[]; nextTaskIds: string[] } | null>(null);
-  const [pendingFormatReset, setPendingFormatReset] = useState<{
-    taskIds?: string[];
-    nextTaskIds: string[];
-    options: { skipCheck?: boolean; overrideMode?: BidSectionMode };
-  } | null>(null);
-  const [reviewingTemplate, setReviewingTemplate] = useState<ResponseTemplateRecord | null>(null);
-  const [templateDraft, setTemplateDraft] = useState('');
-  const [savingTemplate, setSavingTemplate] = useState(false);
   const [sectionModeWarning, setSectionModeWarning] = useState<{
     type: 'single-suspected-multiple' | 'multiple-not-detected';
     taskIds?: string[];
@@ -511,7 +403,7 @@ function BidAnalysisPage({
   const startAnalysis = async (
     taskIds?: string[],
     nextTaskIds = draftSelectedTaskIds,
-    options: { skipCheck?: boolean; overrideMode?: BidSectionMode; formatResetConfirmed?: boolean } = {},
+    options: { skipCheck?: boolean; overrideMode?: BidSectionMode } = {},
   ) => {
     if (!hasTenderFile) {
       showToast('请先上传招标文件', 'info');
@@ -520,14 +412,6 @@ function BidAnalysisPage({
 
     const nextBidSectionMode = options.overrideMode || draftBidSectionMode;
     const normalizedTaskIds = normalizeSelectedTaskIds(taskDefinitions, nextTaskIds);
-    const includesFormatAnalysis = taskIds?.length
-      ? taskIds.includes('bidDocumentFormatRequirements')
-      : normalizedTaskIds.includes('bidDocumentFormatRequirements');
-    if (hasFormatDependentWork && includesFormatAnalysis && !options.formatResetConfirmed) {
-      setPendingFormatReset({ taskIds, nextTaskIds: normalizedTaskIds, options });
-      return;
-    }
-
     if (!options.skipCheck) {
       try {
         const detection = await window.yibiao?.technicalPlan.checkBidSections();
@@ -672,30 +556,6 @@ function BidAnalysisPage({
     showToast('解析结果已复制', 'success');
   };
 
-  const openTemplateReview = (template: ResponseTemplateRecord) => {
-    setReviewingTemplate(template);
-    setTemplateDraft(JSON.stringify(template.template, null, 2));
-  };
-
-  const confirmTemplate = async () => {
-    if (!reviewingTemplate) return;
-    try {
-      setSavingTemplate(true);
-      const parsed = JSON.parse(templateDraft) as ResponseTemplateRecord['template'];
-      const saved = await window.yibiao?.technicalPlan.confirmResponseTemplate({
-        templateId: reviewingTemplate.template_id,
-        template: parsed,
-      });
-      if (saved) onConfigSaved(saved);
-      setReviewingTemplate(null);
-      showToast('固定模板已由 Main 校验并锁定', 'success');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '固定模板核对失败', 'error');
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
-
   const renderConfigTask = (definition: BidAnalysisTaskDefinition) => {
     const selected = normalizeSelectedTaskIds(taskDefinitions, draftSelectedTaskIds).includes(definition.id);
     const required = definition.required;
@@ -832,9 +692,7 @@ function BidAnalysisPage({
 
           {activeTaskContent ? (
             activeTask?.output === 'json' ? (
-              activeTask.id === 'bidDocumentFormatRequirements'
-                ? <FormatRequirementsResult content={activeTaskContent} templates={responseTemplates} onReviewTemplate={openTemplateReview} />
-                : <JsonResultTable content={activeTaskContent} />
+              <JsonResultTable content={activeTaskContent} />
             ) : (
               <MarkdownFullscreenViewer className="markdown-viewer bid-analysis-output" title={`${activeTask?.label || '解析结果'}全屏预览`}>
                 <MarkdownRenderer>
@@ -1006,58 +864,6 @@ function BidAnalysisPage({
                   <button type="button" className="primary-action" onClick={() => continueFromSectionModeWarning('multiple')}>继续 AI 识别</button>
                 </>
               )}
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
-      <Dialog.Root open={Boolean(pendingFormatReset)} onOpenChange={(open) => { if (!open) setPendingFormatReset(null); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="content-regenerate-modal" />
-          <Dialog.Content className="content-regenerate-card">
-            <Dialog.Title className="content-regenerate-title">确认补充或重做格式解析</Dialog.Title>
-            <Dialog.Description className="content-regenerate-description">
-              当前工作区已有目录或正文。只有新的完整格式分析结果与原 Hash 不同时，系统才会清理旧目录、全局事实和正文；相同结果会原样保留。是否继续？
-            </Dialog.Description>
-            <div className="content-regenerate-actions">
-              <button type="button" className="secondary-action" onClick={() => setPendingFormatReset(null)}>取消</button>
-              <button
-                type="button"
-                className="primary-action"
-                onClick={() => {
-                  const pending = pendingFormatReset;
-                  setPendingFormatReset(null);
-                  if (pending) {
-                    void startAnalysis(pending.taskIds, pending.nextTaskIds, { ...pending.options, formatResetConfirmed: true });
-                  }
-                }}
-              >继续解析</button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
-      <Dialog.Root open={Boolean(reviewingTemplate)} onOpenChange={(open) => { if (!open && !savingTemplate) setReviewingTemplate(null); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="content-regenerate-modal" />
-          <Dialog.Content className="content-regenerate-card bid-analysis-template-review-card">
-            <Dialog.Title className="content-regenerate-title">核对并锁定：{reviewingTemplate?.source_title}</Dialog.Title>
-            <Dialog.Description className="content-regenerate-description">
-              只修正文档转 Markdown 造成的原文、标点、槽位或表格结构错误。确认后 Main 将重新校验模板并计算锁定 Hash；不要改写招标文件固定内容。
-            </Dialog.Description>
-            <textarea
-              className="bid-analysis-template-review-editor"
-              value={templateDraft}
-              onChange={(event) => setTemplateDraft(event.target.value)}
-              spellCheck={false}
-              disabled={savingTemplate}
-              aria-label="固定模板结构"
-            />
-            <div className="content-regenerate-actions">
-              <button type="button" className="secondary-action" onClick={() => setReviewingTemplate(null)} disabled={savingTemplate}>取消</button>
-              <button type="button" className="primary-action" onClick={() => { void confirmTemplate(); }} disabled={savingTemplate}>
-                {savingTemplate ? '锁定中...' : '确认并锁定'}
-              </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

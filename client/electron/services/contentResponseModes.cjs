@@ -239,6 +239,15 @@ function deriveResponseCompletion(outlineItems, options = {}) {
 function protectWriteForResponseMode(item = {}, operation) {
   const mode = normalizeResponseMode(item.response_mode);
   const normalizedOperation = normalizeOperation(operation);
+  if (item.manual_input_required === true) {
+    return {
+      decision: 'reject',
+      allowed: false,
+      response_mode: mode || String(item.response_mode || 'freeform-markdown'),
+      operation: normalizedOperation,
+      reason: '该章节必须人工填写，AI 和自动处理不能修改',
+    };
+  }
   if (!mode) {
     return {
       decision: 'reject',

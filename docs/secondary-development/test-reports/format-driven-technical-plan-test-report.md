@@ -1,5 +1,39 @@
 # 招标解析、格式驱动目录与受控写作测试报告
 
+> 历史证据：本报告验证的是已由 CHG-001 替代的结构化 profile、来源锚点和固定模板架构，不作为当前 Markdown 格式要求与人工填写方案的验收结论。当前需求见 `docs/secondary-development/changes/format-requirements-simplification-change.md`。
+
+## CHG-001 / CP12 验证补充（2026-07-13）
+
+本节是当前 Markdown“格式要求”、两类一级目录来源和人工填写方案的有效验收证据；下方原 T47—T69 内容仅保留为历史记录。
+
+### 聚焦自动化
+
+```powershell
+cd client
+node --test electron/services/bidAnalysisMarkdownFormat.test.cjs electron/services/outlineGenerationTask.format.test.cjs electron/services/manualInputFlow.test.cjs
+node --test electron/services/technicalPlanExport.test.cjs electron/services/contentResponseModes.test.cjs electron/services/technicalPlanStore.bidAnalysisDiagnostics.test.cjs
+```
+
+结果：32 项通过，0 失败。验证范围包括：
+
+- `responseFileRequirements` 为第 3 个关键 Markdown 项，格式状态首行只接受“明确/未明确”，单次请求不进入 JSON、锚点或模板编译；
+- 明确格式、单份/多份所选知识库、无格式且未选知识库零目录调用、技术评分项禁止占用一级目录，以及已有方案只能补充下级目录；
+- `manual_input_required` 节点不进入 AI 正文、扩写或自动写入，空内容阻断导出，人工 Markdown 非空后可导出；
+- SQLite v18 旧固定模板节点按人工 Markdown 兼容读取，不再要求模板 ID；
+- 权威 Store 导出、编号、证明材料风险确认和普通 DOCX 导出无回归。
+
+测试使用固定脱敏夹具，模型/API 调用次数为 0。
+
+### 语法与构建
+
+对实际修改的 Main、preload 和 IPC 文件执行 `node --check`，全部通过。执行 `cd client; npm run build`，`tsc --noEmit && vite build` 退出码为 0；仅有既有 chunk 大小警告。
+
+### Electron 烟测
+
+复用已运行的本地 Vite `http://127.0.0.1:5173/`，单独启动当前 Electron Main 并启用 9222 调试端口。`/json/list` 返回标题“佳图智能投标助手”、URL `http://127.0.0.1:5173/` 和有效 Renderer WebSocket；验收后仅关闭本轮 Electron 进程，9222 已释放，既有 Vite 进程未主动终止。
+
+本轮未提供真实招标样本，且 CP12 禁止未经批准调用真实模型，因此两类真实样本的 Step02→Step05 现场业务验收仍待用户后续测试；本节不声明真实模型 E2E 通过。未打包、未提交、未推送。
+
 - 日期：2026-07-13
 - 分支：`opt/jiexihemulu`
 - 需求文件：`D:\download\OpenJatoBID_招标解析_格式驱动目录与写作改造_最终需求.md`
