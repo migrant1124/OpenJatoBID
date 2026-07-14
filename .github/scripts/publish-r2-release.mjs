@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import {
   DeleteObjectsCommand,
@@ -144,12 +143,12 @@ function createR2Client({ accountId, accessKeyId, secretAccessKey }) {
 }
 
 async function putObject(client, bucket, key, filePath, fileName) {
-  const stat = await fs.stat(filePath);
+  const body = await fs.readFile(filePath);
   await client.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    Body: createReadStream(filePath),
-    ContentLength: stat.size,
+    Body: body,
+    ContentLength: body.length,
     ContentType: contentTypeFromFileName(fileName),
     CacheControl: cacheControlFromFileName(fileName),
   }));
