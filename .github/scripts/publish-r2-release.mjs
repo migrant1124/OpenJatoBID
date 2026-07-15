@@ -215,7 +215,6 @@ async function putObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bu
     '--body', filePath,
     '--content-type', contentTypeFromFileName(fileName),
     '--cache-control', cacheControlFromFileName(fileName),
-    '--no-cli-pager',
   ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
   console.log(`Uploaded R2 object: ${key}`);
 }
@@ -305,7 +304,6 @@ async function listR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey
       '--bucket', bucket,
       '--prefix', prefix ? `${prefix}/` : '',
       '--output', 'json',
-      '--no-cli-pager',
     ];
     if (continuationToken) {
       args.push('--continuation-token', continuationToken);
@@ -450,7 +448,6 @@ async function deleteR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessK
       '--endpoint-url', createR2EndpointUrl(accountId),
       '--bucket', bucket,
       '--key', key,
-      '--no-cli-pager',
     ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
     console.log(`Deleted old R2 object: ${key}`);
   }
