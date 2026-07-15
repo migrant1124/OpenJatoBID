@@ -2,7 +2,7 @@
 
 `Jato AI BID` 是佳图数字科技有限公司内部使用的投标文件制作客户端，桌面标题为“佳图智能投标助手”。
 
-- 当前版本：`1.0.0`
+- 
 - 开发名：`OpenJatoBID`
 - 版权所有：佳图数字科技有限公司
 - 英文名称：Jato Digital Technology Co., Ltd.
@@ -84,15 +84,15 @@ npm run dist:mac
 
 ### 产品识别配置
 
-| 配置           | 值                                  |
-| ------------ | ---------------------------------- |
-| package name | `jatoaibid`                        |
-| productName  | `Jato AI BID`                      |
-| appId        | `com.jdt.jatoaibid`                |
-| 窗口标题         | `佳图智能投标助手`                         |
+| 配置           | 值                                    |
+| ------------ | ------------------------------------ |
+| package name | `jatoaibid`                          |
+| productName  | `Jato AI BID`                        |
+| appId        | `com.jdt.jatoaibid`                  |
+| 窗口标题         | `佳图智能投标助手`                           |
 | Windows 安装包  | `Jato-AI-BID-${version}-win-x64.exe` |
-| GitHub 归档仓库   | `migrant1124/OpenJatoBID`          |
-| 自动更新通道      | 私有 R2 + Worker 许可证代理             |
+| GitHub 归档仓库  | `migrant1124/OpenJatoBID`            |
+| 自动更新通道       | 私有 R2 + Worker 许可证代理                 |
 
 ### 第一阶段技术边界
 
