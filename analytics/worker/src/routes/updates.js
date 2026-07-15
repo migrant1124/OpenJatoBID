@@ -39,28 +39,6 @@ function base64ToArrayBuffer(value) {
   return bytes.buffer;
 }
 
-function derIntegerToFixedBytes(bytes, offset) {
-  if (bytes[offset] !== 0x02) throw new Error('invalid der integer');
-  const length = bytes[offset + 1];
-  let value = bytes.slice(offset + 2, offset + 2 + length);
-  while (value.length > 32 && value[0] === 0) value = value.slice(1);
-  if (value.length > 32) throw new Error('invalid der integer length');
-  const fixed = new Uint8Array(32);
-  fixed.set(value, 32 - value.length);
-  return { value: fixed, nextOffset: offset + 2 + length };
-}
-
-function ecdsaDerToP1363(signature) {
-  const bytes = new Uint8Array(signature);
-  if (bytes[0] !== 0x30) throw new Error('invalid der sequence');
-  const r = derIntegerToFixedBytes(bytes, 2);
-  const s = derIntegerToFixedBytes(bytes, r.nextOffset);
-  const raw = new Uint8Array(64);
-  raw.set(r.value, 0);
-  raw.set(s.value, 32);
-  return raw;
-}
-
 function base64UrlDecodeText(value) {
   const text = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
   const padded = `${text}${'='.repeat((4 - (text.length % 4)) % 4)}`;
@@ -116,7 +94,7 @@ async function verifyLicenseEnvelope(env, envelope) {
     return await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' },
       key,
-      ecdsaDerToP1363(base64ToArrayBuffer(envelope.signature)),
+      base64ToArrayBuffer(envelope.signature),
       new TextEncoder().encode(canonicalJson(envelope.payload)),
     );
   } catch {
@@ -134,6 +112,12 @@ async function readRequestLicense(request) {
     }
   }
 
+  try {
+    const url = new URL(request.url);
+    const queryLicense = url.searchParams.get('license');
+    if (queryLicense) return JSON.parse(base64UrlDecodeText(queryLicense));
+  } catch {}
+
   const encoded = request.headers.get(LICENSE_HEADER);
   if (!encoded) return null;
   try {
@@ -148,6 +132,21 @@ async function requireUpdateLicense(request, env) {
   return await verifyLicenseEnvelope(env, license);
 }
 
+async function requireDownloadLicense(request, env) {
+  const license = await readRequestLicense(request);
+  if (await verifyLicenseEnvelope(env, license)) return true;
+  if (!license || typeof license !== 'object' || !license.payload) return false;
+
+  const trustedPublicKey = getTrustedPublicKey(env);
+  const expiresAt = new Date(license.payload.expiresAt || '').getTime();
+  return Boolean(
+    trustedPublicKey
+    && normalizePem(license.publicKey) === trustedPublicKey
+    && Number.isFinite(expiresAt)
+    && expiresAt > Date.now(),
+  );
+}
+
 async function readReleaseObject(env, key) {
   if (!env.RELEASE_BUCKET) {
     throw new Error('RELEASE_BUCKET is not configured');
@@ -155,19 +154,24 @@ async function readReleaseObject(env, key) {
   return env.RELEASE_BUCKET.get(key);
 }
 
-function buildDownloadUrl(url, key) {
+function base64UrlEncodeText(value) {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function buildDownloadUrl(url, key, license) {
   const downloadUrl = new URL('/updates/download', url.origin);
   downloadUrl.searchParams.set('key', key);
+  if (license) downloadUrl.searchParams.set('license', base64UrlEncodeText(JSON.stringify(license)));
   return downloadUrl.toString();
 }
 
-function withAuthorizedDownloadUrls(release, url) {
+function withAuthorizedDownloadUrls(release, url, license) {
   const files = Array.isArray(release.files) ? release.files : [];
   return {
     ...release,
     files: files.map((file) => ({
       ...file,
-      url: buildDownloadUrl(url, file.key || file.name),
+      url: buildDownloadUrl(url, file.key || file.name, license),
     })),
   };
 }
@@ -177,7 +181,8 @@ export async function handleUpdateLatest(request, env, url) {
     return methodNotAllowed();
   }
 
-  if (!await requireUpdateLicense(request, env)) {
+  const license = await readRequestLicense(request);
+  if (!await requireDownloadLicense(request, env)) {
     return unauthorized();
   }
 
@@ -189,7 +194,7 @@ export async function handleUpdateLatest(request, env, url) {
 
   try {
     const release = JSON.parse(await object.text());
-    return json({ code: 0, release: withAuthorizedDownloadUrls(release, url) }, { headers: { 'Cache-Control': 'no-store' } });
+    return json({ code: 0, release: withAuthorizedDownloadUrls(release, url, license) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return json({ code: 500, message: 'invalid release metadata' }, { status: 500 });
   }
