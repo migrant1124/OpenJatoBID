@@ -45,8 +45,8 @@
 | `GET/POST /api/license-config` | KV | `ADMIN_TOKEN` | 授权配置后台管理 |
 | `GET /resources` | `RESOURCE_DB` + AE | 无 | 客户端资源列表，点击量为 D1 累计 + AE 今天 |
 | `GET/POST/DELETE /api/resources` | `RESOURCE_DB` + R2 + AE | `ADMIN_TOKEN` | 资源管理 |
-| `POST /updates/latest` | R2 + 管理端授权公钥 | 本地许可证 | 授权用户获取最新安装包清单 |
-| `GET /updates/download` | R2 + 管理端授权公钥 | 本地许可证 Header | 授权用户下载安装包 |
+| `POST /updates/latest` | 私有 R2 + 管理端授权公钥 | JSON Body 中的本地许可证 | 校验完整必要载荷、年度有效期、离线校验期限和签名后，返回 `release/latest.json` 和无许可证查询参数的下载 URL |
+| `GET /updates/download` | 私有 R2 + 管理端授权公钥 | `X-Jato-License` Header | 执行同一完整许可证校验并校验 `release/<version>/` 规范 key 后流式返回安装包 |
 
 旧 `/api/summary` 已删除。
 
@@ -83,6 +83,8 @@
 | `agent_runtime` | Agent 执行成功率、重试次数、重试后成功率 |
 
 `config_usage` 使用 `config_key/config_value` 键值对上报，每个配置项一条事件。Worker 从 Cloudflare 真实客户端 IP 请求头读取公网 IP 并写入 `blob13`，客户端不自报 IP；`CF-Pseudo-IPv4` 不参与统计。授权状态写入 `blob14-blob18`，只包含状态、授权类型、有效期日期和可信来源标记，不上传设备原始指纹。`ai_request` 只采集请求类型、服务商、endpoint host、模型名和 token 用量，不采集 API Key、Prompt、响应内容或错误详情。`agent_runtime` 只采集执行状态、重试次数、文本模型服务商、endpoint host 和模型名，编码到单个字段 `blob9=v2|<success|failed>|r<0-3>|<provider>|<host>|<model>`，不采集 API Key、任务内容、错误详情、Prompt、输出或本地路径。
+
+更新 Bucket 通过 `RELEASE_BUCKET` Binding 固定绑定私有 `jatoaibid`。Worker 不需要也不接受 R2 写入密钥；客户端下载 URL 只包含对象 `key`，许可证不得放入 URL。许可证必要载荷与管理端签发结构保持一致，并同时检查 `expiresAt` 和 `offlineValidUntil`。客户端发布工作流使用 AWS CLI v2 的 S3-compatible API 写入 `release/<version>/`，`release/latest.json` 只在三个制品和 `manifest.json` 的大小与 SHA-256 验证通过后提升；GitHub Release 正式化失败会恢复旧值。
 
 ## 首次部署
 

@@ -1,0 +1,100 @@
+name: Build Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '管理端独立版本号，例如 1.3.2'
+        required: true
+        type: string
+      ref:
+        description: 'main 历史中要构建的 commit、tag 或 ref'
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-management:
+    name: Build Windows management artifact
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: management
+        shell: bash
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Validate requested ref is trusted main history
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          REQUESTED_SHA="$(git rev-parse HEAD)"
+          MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
+          if ! git merge-base --is-ancestor "$REQUESTED_SHA" "$MAIN_SHA"; then
+            echo "Requested ref $REQUESTED_SHA is not reachable from origin/main."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: management/package-lock.json
+
+      - name: Validate independent management version
+        env:
+          MANAGEMENT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$MANAGEMENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid management version: $MANAGEMENT_VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create temporary initial administrator credential
+        env:
+          MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON: ${{ secrets.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON }}
+        run: |
+          if [ -z "$MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON" ]; then
+            echo "MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON is required."
+            exit 1
+          fi
+          node -e "JSON.parse(process.env.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON); require('node:fs').writeFileSync('initial-admin.private.json', process.env.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON, 'utf8')"
+
+      - name: Test management application
+        run: npm test
+
+      - name: Sync independent management version
+        env:
+          MANAGEMENT_VERSION: ${{ inputs.version }}
+        run: npm version "$MANAGEMENT_VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build and verify Windows management application
+        run: npm run dist:win
+
+      - name: Prepare exact management Artifact
+        env:
+          MANAGEMENT_VERSION: ${{ inputs.version }}
+        run: node scripts/prepare-release-artifacts.cjs
+
+      - name: Remove temporary initial administrator credential
+        if: ${{ always() }}
+        run: rm -f initial-admin.private.json
+
+      - name: Upload management Artifact for internal distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jato-AI-BID-Management-${{ inputs.version }}-win-x64
+          path: management/release-artifact/*
+          if-no-files-found: error
+          retention-days: 30

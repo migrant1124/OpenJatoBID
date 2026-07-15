@@ -1,80 +1,28 @@
-import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import {
-  DeleteObjectsCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { pathToFileURL } from 'node:url';
 
-const DEFAULT_RELEASE_PREFIX = 'release';
+const R2_BUCKET = 'jatoaibid';
+const RELEASE_PREFIX = 'release';
 const KEEP_VERSION_COUNT = 2;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 
 function requireEnv(name) {
   const value = String(process.env[name] || '').trim();
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
+  if (!value) throw new Error(`${name} is required.`);
   return value;
 }
 
-function optionalEnv(name, fallback = '') {
-  return String(process.env[name] || fallback).trim();
-}
-
-function getCloudflareApiToken() {
-  return optionalEnv('CLOUDFLARE_API_TOKEN') || optionalEnv('JATOBID_BUILD_CLOUDFLARE_API_TOKEN');
-}
-
-function normalizePrefix(value) {
-  return String(value || DEFAULT_RELEASE_PREFIX)
-    .trim()
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
-}
-
-function joinKey(prefix, fileName) {
-  return prefix ? `${prefix}/${fileName}` : fileName;
-}
-
-function normalizePublicBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
-}
-
-function createPublicUrl(publicBaseUrl, key) {
-  const encodedKey = String(key)
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-  return `${publicBaseUrl}/${encodedKey}`;
-}
-
-function encodeR2ObjectKey(key) {
-  return String(key)
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-}
-
 function contentTypeFromFileName(fileName) {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith('.yml') || lower.endsWith('.yaml')) return 'application/x-yaml; charset=utf-8';
-  if (lower.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (lower.endsWith('.dmg')) return 'application/x-apple-diskimage';
-  if (lower.endsWith('.zip')) return 'application/zip';
-  if (lower.endsWith('.exe')) return 'application/vnd.microsoft.portable-executable';
-  if (lower.endsWith('.msi')) return 'application/octet-stream';
-  if (lower.endsWith('.blockmap')) return 'application/octet-stream';
+  if (fileName.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (fileName.endsWith('.zip')) return 'application/zip';
+  if (fileName.endsWith('.exe')) return 'application/vnd.microsoft.portable-executable';
   return 'application/octet-stream';
-}
-
-function cacheControlFromFileName(fileName) {
-  if (/^latest(?:-mac)?\.(?:yml|yaml|json)$/i.test(fileName)) {
-    return 'no-cache';
-  }
-  return 'public, max-age=3600';
 }
 
 function runCommand(file, args, env = {}) {
@@ -108,431 +56,302 @@ function createAwsCliEnv({ accessKeyId, secretAccessKey }) {
   };
 }
 
-function createR2EndpointUrl(accountId) {
+function createEndpointUrl(accountId) {
   return `https://${accountId}.r2.cloudflarestorage.com`;
 }
 
-async function listAssetFiles(assetsDir) {
-  const entries = await fs.readdir(assetsDir, { withFileTypes: true });
-  const files = entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(assetsDir, entry.name))
-    .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
-
-  if (files.length === 0) {
-    throw new Error(`No release assets found in ${assetsDir}.`);
-  }
-  return files;
-}
-
-async function readGithubRelease(releaseJsonPath, tagName) {
-  const raw = await fs.readFile(releaseJsonPath, 'utf-8');
-  const release = JSON.parse(raw);
-  if (!release.tagName && !release.tag_name) {
-    release.tagName = tagName;
-  }
-  return release;
-}
-
-async function buildLatestJson({ assetFiles, githubRelease, publicBaseUrl, prefix, tagName }) {
-  const files = [];
-  for (const filePath of assetFiles) {
-    const stat = await fs.stat(filePath);
-    const name = path.basename(filePath);
-    const key = joinKey(prefix, name);
-    files.push({
-      name,
-      key,
-      url: createPublicUrl(publicBaseUrl, key),
-      size: stat.size,
-      contentType: contentTypeFromFileName(name),
-    });
-  }
-
-  const resolvedTagName = githubRelease.tagName || githubRelease.tag_name || tagName;
-  const version = String(resolvedTagName || '').replace(/^v/i, '');
-  return {
-    version,
-    tagName: resolvedTagName,
-    name: githubRelease.name || resolvedTagName,
-    body: githubRelease.body || '',
-    isPrerelease: Boolean(githubRelease.isPrerelease),
-    isDraft: Boolean(githubRelease.isDraft),
-    githubReleaseUrl: githubRelease.url || '',
-    releaseBaseUrl: prefix ? createPublicUrl(publicBaseUrl, prefix) : publicBaseUrl,
-    files,
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-function createR2Client({ accountId, accessKeyId, secretAccessKey }) {
-  return new S3Client({
-    region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    forcePathStyle: true,
-    requestChecksumCalculation: 'WHEN_REQUIRED',
-    responseChecksumValidation: 'WHEN_REQUIRED',
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
-}
-
-async function putObject(client, bucket, key, filePath, fileName) {
-  const body = await fs.readFile(filePath);
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: body,
-    ContentLength: body.length,
-    ContentType: contentTypeFromFileName(fileName),
-    CacheControl: cacheControlFromFileName(fileName),
-  }));
-  console.log(`Uploaded R2 object: ${key}`);
-}
-
-async function putJsonObject(client, bucket, key, value) {
-  const body = JSON.stringify(value, null, 2);
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: body,
-    ContentLength: Buffer.byteLength(body),
-    ContentType: 'application/json; charset=utf-8',
-    CacheControl: 'no-cache',
-  }));
-  console.log(`Uploaded R2 object: ${key}`);
-}
-
-async function putObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key, filePath, fileName }) {
-  await runCommand('aws', [
+function awsCommandArgs(config, command) {
+  return [
     's3api',
-    'put-object',
-    '--endpoint-url', createR2EndpointUrl(accountId),
-    '--bucket', bucket,
-    '--key', key,
-    '--body', filePath,
-    '--content-type', contentTypeFromFileName(fileName),
-    '--cache-control', cacheControlFromFileName(fileName),
-  ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
-  console.log(`Uploaded R2 object: ${key}`);
+    command,
+    '--endpoint-url', createEndpointUrl(config.accountId),
+    '--no-cli-pager',
+  ];
 }
 
-async function putJsonObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key, value }) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'r2-release-'));
-  const tempPath = path.join(tempDir, 'latest.json');
-  try {
-    await fs.writeFile(tempPath, JSON.stringify(value, null, 2), 'utf-8');
-    await putObjectWithAwsCli({
-      accountId,
-      accessKeyId,
-      secretAccessKey,
-      bucket,
-      key,
-      filePath: tempPath,
-      fileName: path.basename(key),
-    });
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
-async function putObjectWithApi({ accountId, apiToken, bucket, key, filePath, fileName }) {
-  const body = await fs.readFile(filePath);
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        'Content-Type': contentTypeFromFileName(fileName),
-        'Content-Length': String(body.length),
-      },
-      body,
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Cloudflare R2 API upload failed for ${key}: ${response.status} ${await response.text()}`);
-  }
-  console.log(`Uploaded R2 object: ${key}`);
-}
-
-async function putJsonObjectWithApi({ accountId, apiToken, bucket, key, value }) {
-  const body = Buffer.from(JSON.stringify(value, null, 2), 'utf-8');
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': String(body.length),
-      },
-      body,
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Cloudflare R2 API upload failed for ${key}: ${response.status} ${await response.text()}`);
-  }
-  console.log(`Uploaded R2 object: ${key}`);
-}
-
-async function listR2Objects(client, bucket, prefix) {
-  const objects = [];
-  let continuationToken;
-  do {
-    const result = await client.send(new ListObjectsV2Command({
-      Bucket: bucket,
-      Prefix: prefix ? `${prefix}/` : '',
-      ContinuationToken: continuationToken,
-    }));
-    objects.push(...(result.Contents || []));
-    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
-  } while (continuationToken);
-  return objects;
-}
-
-async function listR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, prefix }) {
-  const objects = [];
-  let continuationToken = '';
-  do {
-    const args = [
-      's3api',
-      'list-objects-v2',
-      '--endpoint-url', createR2EndpointUrl(accountId),
-      '--bucket', bucket,
-      '--prefix', prefix ? `${prefix}/` : '',
-      '--output', 'json',
-    ];
-    if (continuationToken) {
-      args.push('--continuation-token', continuationToken);
-    }
-    const output = await runCommand('aws', args, createAwsCliEnv({ accessKeyId, secretAccessKey }));
-    const result = JSON.parse(output || '{}');
-    objects.push(...(result.Contents || []));
-    continuationToken = result.IsTruncated ? result.NextContinuationToken || '' : '';
-  } while (continuationToken);
-  return objects;
-}
-
-async function listR2ObjectsWithApi({ accountId, apiToken, bucket, prefix }) {
-  const objects = [];
-  let cursor = '';
-  do {
-    const url = new URL(`https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects`);
-    if (prefix) url.searchParams.set('prefix', `${prefix}/`);
-    if (cursor) url.searchParams.set('cursor', cursor);
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
-    if (!response.ok) {
-      throw new Error(`Cloudflare R2 API list failed: ${response.status} ${await response.text()}`);
-    }
-    const data = await response.json();
-    const result = data.result || {};
-    objects.push(...(result.objects || result.items || []));
-    cursor = result.cursor || result.nextCursor || '';
-  } while (cursor);
-  return objects.map((object) => ({
-    Key: object.key || object.name || object.Key || '',
-    LastModified: object.uploaded || object.LastModified,
-    Size: object.size || object.Size,
-  }));
-}
-
-function extractVersionFromKey(key, prefix) {
-  const expectedPrefix = prefix ? `${prefix}/` : '';
-  if (!key.startsWith(expectedPrefix)) return '';
-  const fileName = key.slice(expectedPrefix.length);
-  return fileName.match(/^Yibiao-(.+?)-(?:win|mac|linux)-/i)?.[1] || '';
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const input = fs.createReadStream(filePath);
+    input.on('error', reject);
+    input.on('data', (chunk) => hash.update(chunk));
+    input.on('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 function parseVersion(value) {
-  const match = String(value).match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.+)?$/);
-  if (!match) {
-    return null;
-  }
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] ? match[4].split('.') : [],
-  };
+  if (!VERSION_PATTERN.test(String(value || ''))) return null;
+  const [major, minor, patch] = String(value).split('.').map(Number);
+  return { major, minor, patch };
 }
 
-function comparePrereleaseSegment(a, b) {
-  const aNumeric = /^\d+$/.test(a);
-  const bNumeric = /^\d+$/.test(b);
-  if (aNumeric && bNumeric) return Number(a) - Number(b);
-  if (aNumeric) return -1;
-  if (bNumeric) return 1;
-  return a.localeCompare(b);
-}
-
-function compareVersions(a, b) {
+export function compareVersions(a, b) {
   const parsedA = parseVersion(a);
   const parsedB = parseVersion(b);
-  if (!parsedA || !parsedB) {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-  }
-
+  if (!parsedA || !parsedB) throw new Error(`Invalid semantic version comparison: ${a}, ${b}`);
   for (const key of ['major', 'minor', 'patch']) {
     if (parsedA[key] !== parsedB[key]) return parsedA[key] - parsedB[key];
   }
-
-  if (parsedA.prerelease.length === 0 && parsedB.prerelease.length === 0) return 0;
-  if (parsedA.prerelease.length === 0) return 1;
-  if (parsedB.prerelease.length === 0) return -1;
-
-  const maxLength = Math.max(parsedA.prerelease.length, parsedB.prerelease.length);
-  for (let index = 0; index < maxLength; index += 1) {
-    const segmentA = parsedA.prerelease[index];
-    const segmentB = parsedB.prerelease[index];
-    if (segmentA === undefined) return -1;
-    if (segmentB === undefined) return 1;
-    const segmentResult = comparePrereleaseSegment(segmentA, segmentB);
-    if (segmentResult !== 0) return segmentResult;
-  }
-
   return 0;
 }
 
-function chooseObjectsToDelete(objects, prefix) {
-  const releaseObjects = [];
-  const versions = new Set();
+function expectedArtifactNames(version) {
+  return ['exe', 'msi', 'zip'].map((format) => `Jato-AI-BID-${version}-win-x64.${format}`);
+}
 
-  for (const object of objects) {
-    const key = object.Key || '';
-    const version = extractVersionFromKey(key, prefix);
-    if (!version) continue;
-    versions.add(version);
-    releaseObjects.push({ key, version });
+export async function readAndValidateManifest(assetsDir, tagName) {
+  const entries = (await fsp.readdir(assetsDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+  const manifest = JSON.parse(await fsp.readFile(path.join(assetsDir, 'manifest.json'), 'utf8'));
+  const version = String(tagName || '').replace(/^v/, '');
+  const expectedNames = expectedArtifactNames(version);
+  const expectedPublishedFiles = [...expectedNames, 'manifest.json'].sort();
+  if (!VERSION_PATTERN.test(version) || manifest.version !== version || manifest.tagName !== tagName) {
+    throw new Error('manifest version or tag does not match the release tag.');
+  }
+  if (!/^[0-9a-f]{40}$/i.test(String(manifest.gitCommitSha || '')) || !Number.isFinite(Date.parse(manifest.generatedAt))) {
+    throw new Error('manifest must contain a valid checkout commit SHA and generated timestamp.');
+  }
+  if (entries.length !== expectedPublishedFiles.length || entries.some((entry, index) => entry !== expectedPublishedFiles[index])) {
+    throw new Error(`Release directory must contain exactly: ${expectedPublishedFiles.join(', ')}`);
+  }
+  if (!Array.isArray(manifest.files) || manifest.files.length !== 3) {
+    throw new Error('manifest must contain exactly three client files.');
   }
 
-  const keptVersions = new Set(
-    [...versions]
-      .sort(compareVersions)
-      .slice(-KEEP_VERSION_COUNT),
-  );
-  const deletedKeys = releaseObjects
-    .filter((object) => !keptVersions.has(object.version))
-    .map((object) => object.key)
-    .sort();
+  for (const name of expectedNames) {
+    const file = manifest.files.find((candidate) => candidate?.name === name);
+    const format = path.extname(name).slice(1);
+    if (
+      !file
+      || file.key !== `${RELEASE_PREFIX}/${version}/${name}`
+      || file.platform !== 'win32'
+      || file.arch !== 'x64'
+      || file.format !== format
+      || !Number.isFinite(Number(file.size))
+      || Number(file.size) <= 0
+      || !SHA256_PATTERN.test(String(file.sha256 || ''))
+    ) {
+      throw new Error(`Invalid manifest entry: ${name}`);
+    }
+    const filePath = path.join(assetsDir, name);
+    const stat = await fsp.stat(filePath);
+    if (stat.size !== Number(file.size) || await sha256File(filePath) !== file.sha256.toLowerCase()) {
+      throw new Error(`Local artifact does not match manifest: ${name}`);
+    }
+  }
+  return manifest;
+}
 
+async function putFile(config, key, filePath, sha256) {
+  await runCommand('aws', [
+    ...awsCommandArgs(config, 'put-object'),
+    '--bucket', R2_BUCKET,
+    '--key', key,
+    '--body', filePath,
+    '--content-type', contentTypeFromFileName(path.basename(filePath)),
+    '--cache-control', key.endsWith('/latest.json') ? 'no-cache' : 'private, max-age=3600',
+    '--metadata', `sha256=${sha256}`,
+  ], config.awsEnv);
+  console.log(`Uploaded R2 object: ${key}`);
+}
+
+async function downloadObject(config, key, destinationPath, allowMissing = false) {
+  try {
+    await runCommand('aws', [
+      ...awsCommandArgs(config, 'get-object'),
+      '--bucket', R2_BUCKET,
+      '--key', key,
+      destinationPath,
+    ], config.awsEnv);
+    return true;
+  } catch (error) {
+    if (allowMissing && /NoSuchKey|404|Not Found/i.test(error.message)) return false;
+    throw error;
+  }
+}
+
+async function verifyRemoteFile(config, key, sourcePath, expectedSize, expectedSha256) {
+  const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'jatobid-r2-verify-'));
+  const downloadedPath = path.join(temporaryDirectory, path.basename(sourcePath));
+  try {
+    await downloadObject(config, key, downloadedPath);
+    const stat = await fsp.stat(downloadedPath);
+    const digest = await sha256File(downloadedPath);
+    if (stat.size !== expectedSize || digest !== expectedSha256) {
+      throw new Error(`R2 verification failed for ${key}.`);
+    }
+    console.log(`Verified R2 object size and SHA-256: ${key}`);
+  } finally {
+    await fsp.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+async function putAndVerifyFile(config, key, filePath, expectedSha256 = '') {
+  const stat = await fsp.stat(filePath);
+  const sha256 = expectedSha256 || await sha256File(filePath);
+  await putFile(config, key, filePath, sha256);
+  await verifyRemoteFile(config, key, filePath, stat.size, sha256);
+}
+
+async function putAndVerifyJson(config, key, value) {
+  const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'jatobid-r2-json-'));
+  const filePath = path.join(temporaryDirectory, path.basename(key));
+  try {
+    await fsp.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    await putAndVerifyFile(config, key, filePath);
+  } finally {
+    await fsp.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+async function readJsonObject(config, key, allowMissing = false) {
+  const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'jatobid-r2-read-'));
+  const filePath = path.join(temporaryDirectory, 'object.json');
+  try {
+    if (!await downloadObject(config, key, filePath, allowMissing)) return null;
+    return JSON.parse(await fsp.readFile(filePath, 'utf8'));
+  } finally {
+    await fsp.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+async function publishVersion(config) {
+  const manifest = await readAndValidateManifest(config.assetsDir, config.tagName);
+  for (const file of manifest.files) {
+    await putAndVerifyFile(config, file.key, path.join(config.assetsDir, file.name), file.sha256.toLowerCase());
+  }
+  await putAndVerifyFile(
+    config,
+    `${RELEASE_PREFIX}/${manifest.version}/manifest.json`,
+    path.join(config.assetsDir, 'manifest.json'),
+  );
+}
+
+export function buildLatestJson(manifest, githubRelease = {}) {
   return {
-    keptVersions: [...keptVersions].sort(compareVersions).reverse(),
-    deletedKeys,
+    ...manifest,
+    name: githubRelease.name || manifest.tagName,
+    body: githubRelease.body || '',
+    githubReleaseUrl: githubRelease.url || '',
   };
 }
 
-async function deleteR2Objects(client, bucket, keys) {
-  for (let index = 0; index < keys.length; index += 1000) {
-    const chunk = keys.slice(index, index + 1000);
-    await client.send(new DeleteObjectsCommand({
-      Bucket: bucket,
-      Delete: {
-        Objects: chunk.map((Key) => ({ Key })),
-        Quiet: true,
-      },
-    }));
-    for (const key of chunk) {
-      console.log(`Deleted old R2 object: ${key}`);
-    }
+async function promoteLatest(config) {
+  const manifest = await readAndValidateManifest(config.assetsDir, config.tagName);
+  const current = await readJsonObject(config, `${RELEASE_PREFIX}/latest.json`, true);
+  if (current?.version && compareVersions(manifest.version, current.version) < 0) {
+    throw new Error(`Refusing to replace latest ${current.version} with older version ${manifest.version}.`);
   }
+  await fsp.mkdir(path.dirname(config.previousLatestPath), { recursive: true });
+  await fsp.writeFile(
+    config.previousLatestPath,
+    `${JSON.stringify({ exists: Boolean(current), value: current }, null, 2)}\n`,
+    'utf8',
+  );
+  const githubRelease = JSON.parse(await fsp.readFile(config.githubReleaseJson, 'utf8'));
+  await putAndVerifyJson(config, `${RELEASE_PREFIX}/latest.json`, buildLatestJson(manifest, githubRelease));
+  console.log(`Promoted R2 latest.json to ${manifest.version}.`);
 }
 
-async function deleteR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, keys }) {
+async function deleteObject(config, key) {
+  await runCommand('aws', [
+    ...awsCommandArgs(config, 'delete-object'),
+    '--bucket', R2_BUCKET,
+    '--key', key,
+  ], config.awsEnv);
+  console.log(`Deleted R2 object: ${key}`);
+}
+
+async function rollbackLatest(config) {
+  const state = JSON.parse(await fsp.readFile(config.previousLatestPath, 'utf8'));
+  if (state.exists) {
+    await putAndVerifyJson(config, `${RELEASE_PREFIX}/latest.json`, state.value);
+    console.log(`Rolled back R2 latest.json to ${state.value.version}.`);
+    return;
+  }
+  await deleteObject(config, `${RELEASE_PREFIX}/latest.json`);
+  console.log('Removed R2 latest.json because no previous version existed.');
+}
+
+export function chooseVersionDirectoriesToDelete(keys, keepCount = KEEP_VERSION_COUNT, protectedVersions = []) {
+  const versions = new Set();
   for (const key of keys) {
-    await runCommand('aws', [
-      's3api',
-      'delete-object',
-      '--endpoint-url', createR2EndpointUrl(accountId),
-      '--bucket', bucket,
-      '--key', key,
-    ], createAwsCliEnv({ accessKeyId, secretAccessKey }));
-    console.log(`Deleted old R2 object: ${key}`);
+    const match = String(key || '').match(new RegExp(`^${RELEASE_PREFIX}/([^/]+)/`));
+    if (match && VERSION_PATTERN.test(match[1])) versions.add(match[1]);
   }
+  const sortedVersions = [...versions].sort(compareVersions).reverse();
+  const keptVersions = new Set();
+  for (const version of protectedVersions) {
+    if (versions.has(version) && keptVersions.size < keepCount) keptVersions.add(version);
+  }
+  for (const version of sortedVersions) {
+    if (keptVersions.size >= keepCount) break;
+    keptVersions.add(version);
+  }
+  return {
+    keptVersions: [...keptVersions],
+    deletedKeys: keys.filter((key) => {
+      const match = String(key || '').match(new RegExp(`^${RELEASE_PREFIX}/([^/]+)/`));
+      return match && VERSION_PATTERN.test(match[1]) && !keptVersions.has(match[1]);
+    }).sort(),
+  };
 }
 
-async function deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys }) {
-  for (const key of keys) {
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodeR2ObjectKey(key)}`,
-      { method: 'DELETE', headers: { Authorization: `Bearer ${apiToken}` } },
-    );
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Cloudflare R2 API delete failed for ${key}: ${response.status} ${await response.text()}`);
-    }
-    console.log(`Deleted old R2 object: ${key}`);
+async function cleanupVersions(config) {
+  const output = await runCommand('aws', [
+    ...awsCommandArgs(config, 'list-objects-v2'),
+    '--bucket', R2_BUCKET,
+    '--prefix', `${RELEASE_PREFIX}/`,
+    '--output', 'json',
+  ], config.awsEnv);
+  const keys = (JSON.parse(output || '{}').Contents || []).map((object) => object.Key).filter(Boolean);
+  const manifest = await readAndValidateManifest(config.assetsDir, config.tagName);
+  const state = JSON.parse(await fsp.readFile(config.previousLatestPath, 'utf8'));
+  const protectedVersions = [manifest.version];
+  if (state.exists && VERSION_PATTERN.test(String(state.value?.version || ''))) {
+    protectedVersions.push(state.value.version);
   }
+  const { keptVersions, deletedKeys } = chooseVersionDirectoriesToDelete(
+    keys,
+    KEEP_VERSION_COUNT,
+    protectedVersions,
+  );
+  console.log(`Keeping R2 release versions: ${keptVersions.join(', ') || '(none)'}.`);
+  for (const key of deletedKeys) await deleteObject(config, key);
 }
 
-async function verifyR2ApiWrite({ accountId, apiToken, bucket, prefix }) {
-  const key = joinKey(prefix, `__publish-check-${Date.now()}.json`);
-  await putJsonObjectWithApi({
+function createConfig() {
+  const accountId = requireEnv('R2_ACCOUNT_ID');
+  const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
+  const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
+  return {
     accountId,
-    apiToken,
-    bucket,
-    key,
-    value: { ok: true, checkedAt: new Date().toISOString() },
-  });
-  await deleteR2ObjectsWithApi({ accountId, apiToken, bucket, keys: [key] });
-  console.log('Verified Cloudflare R2 API write access.');
+    accessKeyId,
+    secretAccessKey,
+    awsEnv: createAwsCliEnv({ accessKeyId, secretAccessKey }),
+    action: requireEnv('R2_RELEASE_ACTION'),
+    tagName: String(process.env.TAG_NAME || '').trim(),
+    assetsDir: path.resolve(process.env.RELEASE_ASSETS_DIR || 'release-assets'),
+    githubReleaseJson: path.resolve(process.env.GITHUB_RELEASE_JSON || 'github-release.json'),
+    previousLatestPath: path.resolve(process.env.PREVIOUS_LATEST_PATH || '.release-state/previous-latest.json'),
+  };
 }
 
 async function main() {
-  const accountId = requireEnv('R2_ACCOUNT_ID');
-  const bucket = requireEnv('R2_BUCKET');
-  const publicBaseUrl = normalizePublicBaseUrl(requireEnv('R2_PUBLIC_BASE_URL'));
-  const tagName = requireEnv('TAG_NAME');
-  const assetsDir = requireEnv('RELEASE_ASSETS_DIR');
-  const releaseJsonPath = requireEnv('GITHUB_RELEASE_JSON');
-  const prefix = normalizePrefix(optionalEnv('R2_RELEASE_PREFIX', DEFAULT_RELEASE_PREFIX));
-  const cloudflareApiToken = getCloudflareApiToken();
-
-  const assetFiles = await listAssetFiles(assetsDir);
-  const githubRelease = await readGithubRelease(releaseJsonPath, tagName);
-  const latestJson = await buildLatestJson({ assetFiles, githubRelease, publicBaseUrl, prefix, tagName });
-
-  console.log(`Publishing ${assetFiles.length} release assets to R2 bucket ${bucket}/${prefix}.`);
-  let objects;
-  let client;
-  if (cloudflareApiToken) {
-    await verifyR2ApiWrite({ accountId, apiToken: cloudflareApiToken, bucket, prefix });
-    for (const filePath of assetFiles) {
-      const fileName = path.basename(filePath);
-      await putObjectWithApi({ accountId, apiToken: cloudflareApiToken, bucket, key: joinKey(prefix, fileName), filePath, fileName });
-    }
-    await putJsonObjectWithApi({ accountId, apiToken: cloudflareApiToken, bucket, key: joinKey(prefix, 'latest.json'), value: latestJson });
-    objects = await listR2ObjectsWithApi({ accountId, apiToken: cloudflareApiToken, bucket, prefix });
-  } else {
-    const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
-    const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
-    for (const filePath of assetFiles) {
-      const fileName = path.basename(filePath);
-      await putObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key: joinKey(prefix, fileName), filePath, fileName });
-    }
-    await putJsonObjectWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, key: joinKey(prefix, 'latest.json'), value: latestJson });
-    objects = await listR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, prefix });
-  }
-  const { keptVersions, deletedKeys } = chooseObjectsToDelete(objects, prefix);
-  console.log(`Keeping release versions: ${keptVersions.join(', ') || '(none)'}.`);
-
-  if (deletedKeys.length > 0) {
-    if (cloudflareApiToken) {
-      await deleteR2ObjectsWithApi({ accountId, apiToken: cloudflareApiToken, bucket, keys: deletedKeys });
-    } else {
-      const accessKeyId = requireEnv('R2_ACCESS_KEY_ID');
-      const secretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY');
-      await deleteR2ObjectsWithAwsCli({ accountId, accessKeyId, secretAccessKey, bucket, keys: deletedKeys });
-    }
-  } else {
-    console.log('No old R2 release objects to delete.');
-  }
-
-  console.log(`R2 release published: ${latestJson.tagName}`);
+  const config = createConfig();
+  if (config.action === 'publish') return publishVersion(config);
+  if (config.action === 'promote') return promoteLatest(config);
+  if (config.action === 'rollback') return rollbackLatest(config);
+  if (config.action === 'cleanup') return cleanupVersions(config);
+  throw new Error(`Unsupported R2_RELEASE_ACTION: ${config.action}`);
 }
 
-main().catch((error) => {
-  console.error(error?.stack || error?.message || String(error));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(error?.stack || error?.message || String(error));
+    process.exit(1);
+  });
+}

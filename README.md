@@ -31,9 +31,11 @@
 
 ### 安装与更新
 
-Windows 安装包名称为 `Jato AI BID Setup 1.0.0.exe`。内部发布版本可从 [OpenJatoBID Releases](https://github.com/migrant1124/OpenJatoBID/releases) 获取。
+Windows 正式发布制品统一命名为 `Jato-AI-BID-<version>-win-x64.exe/.msi/.zip`。客户端历史版本可从 [OpenJatoBID Releases](https://github.com/migrant1124/OpenJatoBID/releases) 由负责人获取。
 
-客户端仅使用 `migrant1124/OpenJatoBID` 的 GitHub Releases 检查和下载更新，不使用 Cloudflare R2 更新源。
+客户端自动更新不直接访问 GitHub Release 或 R2：先向 Cloudflare Worker 提交本地许可证查询 `release/latest.json`，再携带 `X-Jato-License` Header 经 Worker 从私有 R2 下载 EXE，并在打开前强制校验文件大小和 SHA-256。GitHub Release 只作为客户端正式版本的长期归档。
+
+客户端正式发布由 `.github/workflows/release.yml` 在 `v*` 标签或手动指定已有标签时触发，只接受稳定版 `vX.Y.Z` 并构建 Windows x64。工作流先创建 Draft Release，通过 AWS CLI v2 验证精确四文件白名单、私有 R2 版本目录和 Worker 下载，再转为正式 Release；验证或正式化失败时恢复上一个 `latest.json`，成功后只保留当前版本和发布前稳定版本。所需 GitHub Secrets 为 `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` 和用于发布后验证的 `JATOBID_UPDATE_TEST_LICENSE_JSON`。
 
 ### 数据说明
 
@@ -88,8 +90,9 @@ npm run dist:mac
 | productName  | `Jato AI BID`                      |
 | appId        | `com.jdt.jatoaibid`                |
 | 窗口标题         | `佳图智能投标助手`                         |
-| Windows 安装包  | `Jato AI BID Setup ${version}.exe` |
-| 更新仓库         | `migrant1124/OpenJatoBID`          |
+| Windows 安装包  | `Jato-AI-BID-${version}-win-x64.exe` |
+| GitHub 归档仓库   | `migrant1124/OpenJatoBID`          |
+| 自动更新通道      | 私有 R2 + Worker 许可证代理             |
 
 ### 第一阶段技术边界
 

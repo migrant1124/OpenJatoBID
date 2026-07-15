@@ -69,6 +69,8 @@ async function signPayload(payload, privateJwk) {
 }
 
 function getGitCommitSha() {
+  const explicitSha = String(process.env.GIT_COMMIT_SHA || '').trim();
+  if (explicitSha) return explicitSha;
   const envSha = String(process.env.GITHUB_SHA || '').trim();
   if (envSha) return envSha;
   try {

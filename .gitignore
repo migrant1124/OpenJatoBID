@@ -21,7 +21,9 @@ requirements_build.txt
 frontend/build/
 backend/static/
 client/release/
+client/release-publish/
 management/release/
+management/release-artifact/
 
 # 管理端初始管理员私有构建凭据及其生成摘要
 management/initial-admin.private.json

@@ -38,6 +38,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "Jato-AI-BID-Management-${version}-win-${arch}.${ext}",
     "files": [
       "dist/**/*",
       "electron/**/*",

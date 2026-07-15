@@ -4,8 +4,25 @@ import { normalizeText } from '../utils.js';
 const DEFAULT_RELEASE_PREFIX = 'release';
 const LICENSE_HEADER = 'X-Jato-License';
 const SIGNATURE_ALGORITHM = 'ECDSA_P256_SHA256';
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
+const REQUIRED_LICENSE_FIELDS = [
+  'licenseId',
+  'employeeId',
+  'deviceId',
+  'name',
+  'phone',
+  'deviceFingerprint',
+  'clientId',
+  'platform',
+  'arch',
+  'issuedAt',
+  'expiresAt',
+  'verifiedAt',
+  'offlineValidUntil',
+];
 
-function canonicalJson(value) {
+export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
@@ -39,6 +56,34 @@ function base64ToArrayBuffer(value) {
   return bytes.buffer;
 }
 
+function derEcdsaSignatureToP1363(value) {
+  const bytes = new Uint8Array(value);
+  if (bytes.length === 64) return bytes;
+  if (bytes.length < 8 || bytes[0] !== 0x30 || bytes[1] !== bytes.length - 2 || bytes[2] !== 0x02) {
+    throw new Error('invalid ECDSA signature encoding');
+  }
+  const rLength = bytes[3];
+  const rStart = 4;
+  const sType = rStart + rLength;
+  if (bytes[sType] !== 0x02) throw new Error('invalid ECDSA signature encoding');
+  const sLength = bytes[sType + 1];
+  const sStart = sType + 2;
+  if (sStart + sLength !== bytes.length) throw new Error('invalid ECDSA signature encoding');
+
+  const normalizeInteger = (start, length) => {
+    let integer = bytes.slice(start, start + length);
+    while (integer.length > 32 && integer[0] === 0) integer = integer.slice(1);
+    if (integer.length > 32) throw new Error('invalid ECDSA integer length');
+    const normalized = new Uint8Array(32);
+    normalized.set(integer, 32 - integer.length);
+    return normalized;
+  };
+  const signature = new Uint8Array(64);
+  signature.set(normalizeInteger(rStart, rLength), 0);
+  signature.set(normalizeInteger(sStart, sLength), 32);
+  return signature;
+}
+
 function base64UrlDecodeText(value) {
   const text = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
   const padded = `${text}${'='.repeat((4 - (text.length % 4)) % 4)}`;
@@ -61,27 +106,52 @@ function joinKey(prefix, fileName) {
   return prefix ? `${prefix}/${fileName}` : fileName;
 }
 
-function isAllowedReleaseKey(key, prefix) {
-  const normalized = String(key || '').replace(/^\/+/, '');
-  return Boolean(normalized)
-    && !normalized.includes('..')
-    && (!prefix || normalized.startsWith(`${prefix}/`));
+export function isAllowedReleaseKey(key, prefix) {
+  const normalized = String(key || '');
+  if (!normalized || normalized !== normalized.replace(/^\/+/, '') || normalized.includes('..') || normalized.includes('\\')) {
+    return false;
+  }
+  const prefixSegments = normalizePrefix(prefix).split('/').filter(Boolean);
+  const segments = normalized.split('/');
+  if (segments.length !== prefixSegments.length + 2) return false;
+  if (!prefixSegments.every((segment, index) => segments[index] === segment)) return false;
+
+  const version = segments[prefixSegments.length];
+  const fileName = segments[prefixSegments.length + 1];
+  if (!VERSION_PATTERN.test(version)) return false;
+  return fileName === 'manifest.json'
+    || ['exe', 'msi', 'zip'].some((format) => fileName === `Jato-AI-BID-${version}-win-x64.${format}`);
 }
 
 function getTrustedPublicKey(env) {
   return normalizePem(env.JATOBID_UPDATE_LICENSE_PUBLIC_KEY || env.UPDATE_LICENSE_PUBLIC_KEY);
 }
 
-async function verifyLicenseEnvelope(env, envelope) {
+export async function verifyLicenseEnvelope(env, envelope) {
   if (!envelope || typeof envelope !== 'object') return false;
   if (envelope.algorithm !== SIGNATURE_ALGORITHM) return false;
-  if (!envelope.payload || !envelope.signature || !envelope.publicKey) return false;
+  if (!envelope.payload || typeof envelope.payload !== 'object' || Array.isArray(envelope.payload)) return false;
+  if (!envelope.signature || !envelope.publicKey) return false;
+  if (REQUIRED_LICENSE_FIELDS.some((field) => (
+    typeof envelope.payload[field] !== 'string' || !envelope.payload[field].trim()
+  ))) return false;
 
   const trustedPublicKey = getTrustedPublicKey(env);
   if (!trustedPublicKey || normalizePem(envelope.publicKey) !== trustedPublicKey) return false;
 
-  const expiresAt = new Date(envelope.payload.expiresAt || '').getTime();
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+  const issuedAt = new Date(envelope.payload.issuedAt).getTime();
+  const expiresAt = new Date(envelope.payload.expiresAt).getTime();
+  const verifiedAt = new Date(envelope.payload.verifiedAt).getTime();
+  const offlineValidUntil = new Date(envelope.payload.offlineValidUntil).getTime();
+  const now = Date.now();
+  if (
+    ![issuedAt, expiresAt, verifiedAt, offlineValidUntil].every(Number.isFinite)
+    || issuedAt > verifiedAt
+    || verifiedAt > offlineValidUntil
+    || offlineValidUntil > expiresAt
+    || expiresAt <= now
+    || offlineValidUntil <= now
+  ) return false;
 
   try {
     const key = await crypto.subtle.importKey(
@@ -94,7 +164,7 @@ async function verifyLicenseEnvelope(env, envelope) {
     return await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' },
       key,
-      base64ToArrayBuffer(envelope.signature),
+      derEcdsaSignatureToP1363(base64ToArrayBuffer(envelope.signature)),
       new TextEncoder().encode(canonicalJson(envelope.payload)),
     );
   } catch {
@@ -102,22 +172,16 @@ async function verifyLicenseEnvelope(env, envelope) {
   }
 }
 
-async function readRequestLicense(request) {
-  if (request.method === 'POST') {
-    try {
-      const body = await request.json();
-      return body.license || body.licenseEnvelope || body.license_envelope || null;
-    } catch {
-      return null;
-    }
-  }
-
+async function readLatestLicense(request) {
   try {
-    const url = new URL(request.url);
-    const queryLicense = url.searchParams.get('license');
-    if (queryLicense) return JSON.parse(base64UrlDecodeText(queryLicense));
-  } catch {}
+    const body = await request.json();
+    return body.license || body.licenseEnvelope || body.license_envelope || null;
+  } catch {
+    return null;
+  }
+}
 
+function readDownloadLicense(request) {
   const encoded = request.headers.get(LICENSE_HEADER);
   if (!encoded) return null;
   try {
@@ -127,26 +191,6 @@ async function readRequestLicense(request) {
   }
 }
 
-async function requireUpdateLicense(request, env) {
-  const license = await readRequestLicense(request);
-  return await verifyLicenseEnvelope(env, license);
-}
-
-async function requireDownloadLicense(request, env) {
-  const license = await readRequestLicense(request);
-  if (await verifyLicenseEnvelope(env, license)) return true;
-  if (!license || typeof license !== 'object' || !license.payload) return false;
-
-  const trustedPublicKey = getTrustedPublicKey(env);
-  const expiresAt = new Date(license.payload.expiresAt || '').getTime();
-  return Boolean(
-    trustedPublicKey
-    && normalizePem(license.publicKey) === trustedPublicKey
-    && Number.isFinite(expiresAt)
-    && expiresAt > Date.now(),
-  );
-}
-
 async function readReleaseObject(env, key) {
   if (!env.RELEASE_BUCKET) {
     throw new Error('RELEASE_BUCKET is not configured');
@@ -154,24 +198,35 @@ async function readReleaseObject(env, key) {
   return env.RELEASE_BUCKET.get(key);
 }
 
-function base64UrlEncodeText(value) {
-  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function buildDownloadUrl(url, key, license) {
+function buildDownloadUrl(url, key) {
   const downloadUrl = new URL('/updates/download', url.origin);
   downloadUrl.searchParams.set('key', key);
-  if (license) downloadUrl.searchParams.set('license', base64UrlEncodeText(JSON.stringify(license)));
   return downloadUrl.toString();
 }
 
-function withAuthorizedDownloadUrls(release, url, license) {
-  const files = Array.isArray(release.files) ? release.files : [];
+function isValidReleaseMetadata(release, prefix) {
+  if (!VERSION_PATTERN.test(String(release?.version || '')) || !Array.isArray(release?.files) || release.files.length !== 3) {
+    return false;
+  }
+  const expectedNames = new Set(['exe', 'msi', 'zip'].map(
+    (format) => `Jato-AI-BID-${release.version}-win-x64.${format}`,
+  ));
+  for (const file of release.files) {
+    if (!expectedNames.delete(file?.name)) return false;
+    if (!isAllowedReleaseKey(file?.key, prefix)) return false;
+    if (file.key !== joinKey(prefix, `${release.version}/${file.name}`)) return false;
+    if (!Number.isFinite(Number(file?.size)) || Number(file.size) <= 0) return false;
+    if (!SHA256_PATTERN.test(String(file?.sha256 || ''))) return false;
+  }
+  return expectedNames.size === 0;
+}
+
+function withAuthorizedDownloadUrls(release, url) {
   return {
     ...release,
-    files: files.map((file) => ({
+    files: release.files.map((file) => ({
       ...file,
-      url: buildDownloadUrl(url, file.key || file.name, license),
+      url: buildDownloadUrl(url, file.key),
     })),
   };
 }
@@ -181,8 +236,8 @@ export async function handleUpdateLatest(request, env, url) {
     return methodNotAllowed();
   }
 
-  const license = await readRequestLicense(request);
-  if (!await requireDownloadLicense(request, env)) {
+  const license = await readLatestLicense(request);
+  if (!await verifyLicenseEnvelope(env, license)) {
     return unauthorized();
   }
 
@@ -194,7 +249,13 @@ export async function handleUpdateLatest(request, env, url) {
 
   try {
     const release = JSON.parse(await object.text());
-    return json({ code: 0, release: withAuthorizedDownloadUrls(release, url, license) }, { headers: { 'Cache-Control': 'no-store' } });
+    if (!isValidReleaseMetadata(release, prefix)) {
+      throw new Error('invalid release metadata');
+    }
+    return json(
+      { code: 0, release: withAuthorizedDownloadUrls(release, url) },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch {
     return json({ code: 500, message: 'invalid release metadata' }, { status: 500 });
   }
@@ -205,7 +266,7 @@ export async function handleUpdateDownload(request, env, url) {
     return methodNotAllowed();
   }
 
-  if (!await requireUpdateLicense(request, env)) {
+  if (!await verifyLicenseEnvelope(env, readDownloadLicense(request))) {
     return unauthorized();
   }
 
@@ -223,6 +284,6 @@ export async function handleUpdateDownload(request, env, url) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('Cache-Control', 'no-store');
-  headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(key.split('/').pop() || 'download')}"`);
+  headers.set('Content-Disposition', `attachment; filename="${key.split('/').pop() || 'download'}"`);
   return new Response(object.body, { headers });
 }

@@ -18,6 +18,7 @@
     "postinstall": "electron-builder install-app-deps",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "generate-build-attestation": "node scripts/generate-build-attestation.cjs",
+    "test:update": "node --test electron/services/updateService.test.cjs",
     "prepare-opencode-tools": "node scripts/prepare-opencode-tools.cjs",
     "verify-opencode-tools": "node scripts/verify-opencode-tools.cjs",
     "smoke:electron-native": "electron scripts/electron-native-smoke.cjs",
@@ -79,14 +80,14 @@
       ]
     },
     "nsis": {
-      "artifactName": "Jato AI BID Setup ${version}.${ext}",
+      "artifactName": "Jato-AI-BID-${version}-win-${arch}.${ext}",
       "shortcutName": "Jato AI BID",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
     },
     "msi": {
-      "artifactName": "Jato-AI-BID-${version}-${arch}.${ext}",
+      "artifactName": "Jato-AI-BID-${version}-win-${arch}.${ext}",
       "shortcutName": "Jato AI BID",
       "oneClick": false,
       "perMachine": false,

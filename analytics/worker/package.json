@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "dev": "wrangler dev",
     "deploy": "node ../scripts/deploy-if-changed.mjs analytics/worker",
     "setup:notice-kv": "node ../scripts/setup-notice-kv.mjs",

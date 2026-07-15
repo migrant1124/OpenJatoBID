@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
@@ -13,16 +14,21 @@ let autoUpdaterInstance = null;
 let downloadedUpdateVersion = '';
 let downloadedUpdateChannel = '';
 let downloadedUpdateFilePath = '';
+let downloadedUpdateFileSize = 0;
+let downloadedUpdateSha256 = '';
 let activeUpdateCheckPromise = null;
 
 function compareVersions(a, b) {
-  const pa = String(a || '').replace(/^v/, '').split('.').map(Number);
-  const pb = String(b || '').replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const na = Number.isFinite(pa[i]) ? pa[i] : 0;
-    const nb = Number.isFinite(pb[i]) ? pb[i] : 0;
-    if (na > nb) return 1;
-    if (na < nb) return -1;
+  const parse = (value) => {
+    const match = String(value || '').match(/^v?(\d+)\.(\d+)\.(\d+)$/);
+    return match ? match.slice(1).map(Number) : null;
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (!pa || !pb) return 0;
+  for (let i = 0; i < 3; i += 1) {
+    if (pa[i] > pb[i]) return 1;
+    if (pa[i] < pb[i]) return -1;
   }
   return 0;
 }
@@ -154,6 +160,11 @@ function getUpdateLicenseHeader(app) {
   return base64UrlEncodeText(JSON.stringify(license));
 }
 
+function normalizeUpdateSha256(value) {
+  const normalized = String(value || '').trim().replace(/^sha256:/i, '').toLowerCase();
+  return /^[0-9a-f]{64}$/.test(normalized) ? normalized : '';
+}
+
 async function fetchAuthorizedLatestRelease(options = {}) {
   const license = readUpdateLicense(options.app);
   if (!license) {
@@ -167,14 +178,14 @@ async function fetchAuthorizedLatestRelease(options = {}) {
       name: asset.name || '',
       url: asset.browser_download_url || '',
       size: Number(asset.size || 0),
-      digest: asset.digest || '',
+      sha256: normalizeUpdateSha256(asset.sha256 || asset.digest),
     }))
     : Array.isArray(release.files)
       ? release.files.map((file) => ({
         name: file.name || '',
         url: file.url || '',
         size: Number(file.size || 0),
-        digest: file.digest || '',
+        sha256: normalizeUpdateSha256(file.sha256 || file.digest),
       }))
     : [];
   const downloadFile = pickPlatformDownloadFile(files);
@@ -270,15 +281,38 @@ function getUpdateDownloadPath(app, release, file) {
   return path.join(app.getPath('userData'), 'updates', fileName);
 }
 
-function isDownloadedFileReady(filePath, expectedSize = 0) {
+function calculateFileSha256(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const input = fs.createReadStream(filePath);
+    input.on('error', reject);
+    input.on('data', (chunk) => hash.update(chunk));
+    input.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+async function isDownloadedFileReady(filePath, expectedSize = 0, expectedSha256 = '', removeInvalid = false) {
   if (!filePath) {
     return false;
   }
+  let valid = false;
   try {
     const stat = fs.statSync(filePath);
-    return stat.isFile() && stat.size > 0 && (!expectedSize || stat.size === expectedSize);
+    if (!stat.isFile() || stat.size <= 0 || (expectedSize && stat.size !== expectedSize)) {
+      return false;
+    }
+    const normalizedSha256 = normalizeUpdateSha256(expectedSha256);
+    if (expectedSha256 && !normalizedSha256) {
+      return false;
+    }
+    valid = !normalizedSha256 || await calculateFileSha256(filePath) === normalizedSha256;
+    return valid;
   } catch {
     return false;
+  } finally {
+    if (!valid && removeInvalid) {
+      try { fs.rmSync(filePath, { force: true }); } catch {}
+    }
   }
 }
 
@@ -289,7 +323,7 @@ function requestModuleForUrl(url) {
 }
 
 function downloadFile(url, destinationPath, options = {}, redirectCount = 0) {
-  const { expectedSize = 0, onProgress, headers = {} } = options;
+  const { expectedSize = 0, expectedSha256 = '', onProgress, headers = {} } = options;
   return new Promise((resolve, reject) => {
     let parsedUrl;
     try {
@@ -345,14 +379,22 @@ function downloadFile(url, destinationPath, options = {}, redirectCount = 0) {
         response.on('error', fail);
         output.on('error', fail);
         output.on('finish', () => {
-          output.close(() => {
+          output.close(async () => {
             try {
+              if (expectedSize && fs.statSync(tempPath).size !== expectedSize) {
+                throw new Error('更新包下载不完整，请重新检查更新');
+              }
+              const normalizedSha256 = normalizeUpdateSha256(expectedSha256);
+              if (expectedSha256 && !normalizedSha256) {
+                throw new Error('更新清单缺少有效的 SHA-256');
+              }
+              if (normalizedSha256 && await calculateFileSha256(tempPath) !== normalizedSha256) {
+                fs.rmSync(destinationPath, { force: true });
+                throw new Error('更新包校验失败，请重新检查更新');
+              }
               fs.rmSync(destinationPath, { force: true });
               fs.renameSync(tempPath, destinationPath);
               tempPath = '';
-              if (expectedSize && fs.statSync(destinationPath).size !== expectedSize) {
-                throw new Error('更新包下载不完整，请重新检查更新');
-              }
               onProgress?.(100);
               settled = true;
               resolve(destinationPath);
@@ -392,10 +434,12 @@ async function runMacDmgUpdateCheck(options, release, channel) {
   const expectedSize = Number(dmgFile.size || 0);
 
   try {
-    if (isDownloadedFileReady(destinationPath, expectedSize)) {
+    if (await isDownloadedFileReady(destinationPath, expectedSize)) {
       downloadedUpdateVersion = release.version;
       downloadedUpdateChannel = channel;
       downloadedUpdateFilePath = destinationPath;
+      downloadedUpdateFileSize = expectedSize;
+      downloadedUpdateSha256 = '';
       onDownloaded?.(release.version);
       return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
     }
@@ -412,6 +456,8 @@ async function runMacDmgUpdateCheck(options, release, channel) {
     downloadedUpdateVersion = release.version;
     downloadedUpdateChannel = channel;
     downloadedUpdateFilePath = destinationPath;
+    downloadedUpdateFileSize = expectedSize;
+    downloadedUpdateSha256 = '';
     setProgressBar(mainWindow, -1);
     onDownloaded?.(release.version);
     return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
@@ -434,12 +480,21 @@ async function runDirectUpdateCheck(options, release, channel) {
 
   const destinationPath = getUpdateDownloadPath(app, release, download);
   const expectedSize = Number(download.size || 0);
+  const expectedSha256 = normalizeUpdateSha256(download.sha256);
+
+  if (!expectedSha256) {
+    const message = '更新清单缺少有效的 SHA-256';
+    onError?.(message);
+    return { enabled: true, updateAvailable: true, version: release.version, failed: true, message, channel };
+  }
 
   try {
-    if (isDownloadedFileReady(destinationPath, expectedSize)) {
+    if (await isDownloadedFileReady(destinationPath, expectedSize, expectedSha256, true)) {
       downloadedUpdateVersion = release.version;
       downloadedUpdateChannel = channel;
       downloadedUpdateFilePath = destinationPath;
+      downloadedUpdateFileSize = expectedSize;
+      downloadedUpdateSha256 = expectedSha256;
       onDownloaded?.(release.version);
       return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
     }
@@ -447,6 +502,7 @@ async function runDirectUpdateCheck(options, release, channel) {
     setProgressBar(mainWindow, 0);
     await downloadFile(download.url, destinationPath, {
       expectedSize,
+      expectedSha256,
       headers: { [LICENSE_HEADER]: getUpdateLicenseHeader(app) },
       onProgress: (percent) => {
         setProgressBar(mainWindow, Math.max(0, Math.min(1, percent / 100)));
@@ -457,6 +513,8 @@ async function runDirectUpdateCheck(options, release, channel) {
     downloadedUpdateVersion = release.version;
     downloadedUpdateChannel = channel;
     downloadedUpdateFilePath = destinationPath;
+    downloadedUpdateFileSize = expectedSize;
+    downloadedUpdateSha256 = expectedSha256;
     setProgressBar(mainWindow, -1);
     onDownloaded?.(release.version);
     return { enabled: true, updateAvailable: true, version: release.version, downloaded: true, channel };
@@ -488,12 +546,19 @@ async function checkAndDownloadUpdate(options = {}) {
     return getDisabledResult();
   }
   if (downloadedUpdateVersion && downloadedUpdateChannel === channel) {
-    if (isDownloadedFileReady(downloadedUpdateFilePath)) {
+    if (await isDownloadedFileReady(
+      downloadedUpdateFilePath,
+      downloadedUpdateFileSize,
+      downloadedUpdateSha256,
+      true,
+    )) {
       return { enabled: true, updateAvailable: true, version: downloadedUpdateVersion, downloaded: true, channel };
     }
     downloadedUpdateVersion = '';
     downloadedUpdateChannel = '';
     downloadedUpdateFilePath = '';
+    downloadedUpdateFileSize = 0;
+    downloadedUpdateSha256 = '';
   }
   if (activeUpdateCheckPromise) {
     return activeUpdateCheckPromise;
@@ -516,7 +581,12 @@ function triggerUpdateDownload(options) {
 }
 
 async function quitAndInstall(options = {}) {
-  if (isDownloadedFileReady(downloadedUpdateFilePath)) {
+  if (await isDownloadedFileReady(
+    downloadedUpdateFilePath,
+    downloadedUpdateFileSize,
+    downloadedUpdateSha256,
+    true,
+  )) {
     const openError = await shell.openPath(downloadedUpdateFilePath);
     if (openError) {
       return { success: false, message: `打开更新安装包失败：${openError}` };
@@ -547,4 +617,12 @@ module.exports = {
   quitAndInstall,
   getLatestVersion,
   getUpdateDownloadUrl,
+  __test__: {
+    compareVersions,
+    calculateFileSha256,
+    downloadFile,
+    isDownloadedFileReady,
+    normalizeUpdateSha256,
+    pickPlatformDownloadFile,
+  },
 };
