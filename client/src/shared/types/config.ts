@@ -2,7 +2,7 @@ export type TextModelProvider = 'jinlong' | 'volcengine' | 'deepseek' | 'agnes' 
 export type LegacyTextModelProvider = 'longcat';
 export type ConfiguredTextModelProvider = TextModelProvider | LegacyTextModelProvider;
 export type AiRequestMode = 'normal' | 'stream';
-export type UpdateChannel = 'github';
+export type UpdateChannel = 'cloudflare-r2';
 
 export interface TextModelConfig {
   api_key: string;
@@ -66,14 +66,22 @@ export interface FileParserConfig {
   mineru_token?: string;
 }
 
+export interface LocalRenderingConfig {
+  enabled: boolean;
+  mermaid_concurrency_limit: number;
+  html_concurrency_limit: number;
+}
+
 export interface AgentModeScenariosConfig {
   existing_plan_expansion_original_outline_extraction: boolean;
 }
 
 export interface ClientConfig extends AiConfig {
+  config_version?: number;
   image_model: ImageModelConfig;
   image_model_profiles: ImageModelProfiles;
   file_parser: FileParserConfig;
+  local_rendering?: LocalRenderingConfig;
   agent_mode_scenarios: AgentModeScenariosConfig;
   update_channel?: UpdateChannel;
   gpu_hardware_acceleration_enabled?: boolean;

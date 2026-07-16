@@ -7,6 +7,7 @@ import ContentExpansionReplaceTestPage from '../features/developer/pages/Content
 import DeveloperDemoPage, { isDeveloperDemoSection } from '../features/developer/pages/DeveloperDemoPage';
 import OpenCodeAgentTestPage from '../features/developer/pages/OpenCodeAgentTestPage';
 import DeveloperTestPage from '../features/developer/pages/DeveloperTestPage';
+import SystemDiagnosticsPage from '../features/developer/pages/SystemDiagnosticsPage';
 import ExportFormatPage from '../features/export-format/pages/ExportFormatPage';
 import MyTemplatesPage from '../features/export-format/pages/MyTemplatesPage';
 import DuplicateCheckPage from '../features/duplicate-check/pages/DuplicateCheckPage';
@@ -77,6 +78,8 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
       return <ContentExpansionReplaceTestPage />;
     case 'developer-opencode-agent-test':
       return <OpenCodeAgentTestPage />;
+    case 'developer-system-diagnostics':
+      return <SystemDiagnosticsPage />;
     case 'settings':
       return <SettingsPage onDeveloperModeChange={onDeveloperModeChange} onLogout={onLogout} />;
     default:

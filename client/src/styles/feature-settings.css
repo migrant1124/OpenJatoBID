@@ -23,6 +23,12 @@
   box-shadow: var(--yb-shadow);
 }
 
+.settings-subsection-title {
+  margin: 20px 24px 12px;
+  color: #1d2b45;
+  font-size: 16px;
+}
+
 /* [8701-8729] settings-tab-shell/settings-tab */
 .settings-tab-shell {
   display: flex;
@@ -1107,15 +1113,18 @@
 
 .privacy-list {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   align-items: start;
   gap: 14px;
 }
 
 .privacy-item {
   display: grid;
-  align-content: start;
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  align-items: start;
+  column-gap: 14px;
+  row-gap: 8px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(33, 116, 253, 0.12);
@@ -1123,6 +1132,7 @@
 }
 
 .privacy-item > span {
+  grid-row: 1 / span 2;
   width: fit-content;
   padding: 4px 9px;
   color: #ffffff;
@@ -1135,6 +1145,10 @@
 .privacy-item strong {
   color: var(--yb-text);
   font-size: 15px;
+}
+
+.privacy-item p {
+  grid-column: 2;
 }
 
 /* [11683-11691] (rewritten, shared-range) settings-page-section responsive border-radius (split from mixed media block, see shared-components for panel/empty-panel part) */
@@ -1154,10 +1168,6 @@
     grid-template-columns: 1fr;
   }
 
-  .privacy-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .settings-row {
     grid-template-columns: minmax(220px, 1fr) minmax(280px, 380px);
   }
@@ -1175,6 +1185,16 @@
 @media (max-width: 860px) {
   .privacy-list {
     grid-template-columns: 1fr;
+  }
+
+  .privacy-item {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-item > span,
+  .privacy-item p {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .agent-self-check-status,

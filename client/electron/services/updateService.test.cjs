@@ -43,11 +43,28 @@ test('compares stable versions and rejects prerelease ambiguity', () => {
   assert.equal(__test__.compareVersions('1.3.2-rc.1', '1.3.1'), 0);
 });
 
+test('uses the Cloudflare R2 update channel for both current and legacy configuration', () => {
+  assert.equal(__test__.normalizeUpdateChannel('cloudflare-r2'), 'cloudflare-r2');
+  assert.equal(__test__.normalizeUpdateChannel('github'), 'cloudflare-r2');
+});
+
 test('normalizes manifest and GitHub digest SHA-256 values', () => {
   const digest = 'a'.repeat(64);
   assert.equal(__test__.normalizeUpdateSha256(digest.toUpperCase()), digest);
   assert.equal(__test__.normalizeUpdateSha256(`sha256:${digest}`), digest);
   assert.equal(__test__.normalizeUpdateSha256('not-a-digest'), '');
+});
+
+test('keeps update errors stage-aware and removes HTML from the user message', () => {
+  const error = __test__.createUpdateError('latest', 'UPDATE_RESPONSE_INVALID', '<html>服务返回错误</html>', { statusCode: 502 });
+  assert.deepEqual(__test__.getUpdateErrorPayload(error), {
+    stage: 'latest',
+    code: 'UPDATE_RESPONSE_INVALID',
+    statusCode: 502,
+    version: undefined,
+    fileName: undefined,
+    message: '服务返回错误',
+  });
 });
 
 test('reuses a cached update only when size and SHA-256 both match', async (t) => {
@@ -79,7 +96,7 @@ test('downloads atomically and deletes a stale cache when SHA-256 verification f
       expectedSize: body.length,
       expectedSha256: '0'.repeat(64),
     }),
-    /更新包校验失败/,
+    (error) => error.code === 'UPDATE_SHA256_MISMATCH' && /更新包校验失败/.test(error.message),
   );
   assert.equal(fs.existsSync(filePath), false);
 });

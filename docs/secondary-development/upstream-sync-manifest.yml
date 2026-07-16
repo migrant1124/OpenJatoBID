@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "remote": "upstream",
+    "branch": "upstream-main",
+    "last_reviewed_merge_base": "212c0d5ce95a2d5ae7ea52fb015fdffc7518df69",
+    "last_reviewed_head": "af3d24a4c014306955ca8589fa64b1778fb6249d",
+    "reviewed_at": "2026-07-15"
+  },
+  "protected_paths": [
+    { "path": "client/package.json", "reason": "产品身份与打包元数据", "owner": "客户端发布", "required_adr": "ADR-0002" },
+    { "path": "client/electron/services/licenseService.cjs", "reason": "LAN 授权边界", "owner": "客户端授权", "required_adr": "ADR-0002" },
+    { "path": "client/electron/services/lanManagementClient.cjs", "reason": "局域网管理端协议", "owner": "客户端授权", "required_adr": "ADR-0002" },
+    { "path": "client/electron/services/analyticsService.cjs", "reason": "埋点与隐私边界", "owner": "Analytics", "required_adr": "ADR-0002" },
+    { "path": "client/electron/services/updateService.cjs", "reason": "更新通道与签名契约", "owner": "客户端发布", "required_adr": "ADR-0003" },
+    { "path": "client/electron/services/configStore.cjs", "reason": "用户配置迁移", "owner": "客户端设置", "required_adr": "ADR-0007" },
+    { "path": "client/src/features/content-generation", "reason": "结构化响应写入", "owner": "内容生成", "required_adr": "ADR-0004" },
+    { "path": "client/electron/services/exportService.cjs", "reason": "文档导出合规", "owner": "文档导出", "required_adr": "ADR-0004" },
+    { "path": "management", "reason": "独立 LAN 管理端", "owner": "管理端", "required_adr": "ADR-0002" },
+    { "path": "analytics", "reason": "埋点服务与看板", "owner": "Analytics", "required_adr": "ADR-0002" },
+    { "path": ".github/workflows/release.yml", "reason": "正式发布流程", "owner": "客户端发布", "required_adr": "ADR-0009" }
+  ],
+  "capabilities": {
+    "adopted": [
+      { "id": "runtime-version-bridge", "upstream_commits": [], "local_files": ["client/electron/preload.cjs", "client/src/shared/runtime/appVersion.ts"], "status": "local" },
+      { "id": "configuration-v2", "upstream_commits": [], "local_files": ["client/electron/services/configStore.cjs"], "status": "local" }
+    ],
+    "forked": [
+      { "id": "lan-authorization-and-management", "reason": "Jato 部署为局域网管理端与离线授权模型" }
+    ],
+    "rejected": [
+      { "id": "automatic-full-upstream-merge", "reason": "会覆盖 Jato 产品与合规边界" }
+    ],
+    "pending": [
+      { "id": "local-renderer", "risk": "需要评估窗口隔离、长图内存和导出一致性" },
+      { "id": "structured-chart-dsl", "risk": "需要保持既有内容生成与导出兼容" }
+    ]
+  },
+  "policies": {
+    "allow_full_merge": false,
+    "allow_bulk_cherry_pick": false,
+    "require_semantic_merge": true
+  }
+}

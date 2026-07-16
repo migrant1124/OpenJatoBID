@@ -159,6 +159,12 @@ const developerMenuItems: AppMenuItem[] = [
         description: '验证常驻 OpenCode Server、OpenCode AI proxy、agentService 的完整链路。',
         icon: 'tool',
       },
+      {
+        id: 'developer-system-diagnostics',
+        label: '系统诊断',
+        description: '检查运行时、本地转图、DSL、存储和外部能力状态。',
+        icon: 'tool',
+      },
     ],
   },
 ];

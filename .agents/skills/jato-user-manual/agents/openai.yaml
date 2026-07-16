@@ -1,0 +1,4 @@
+interface:
+  display_name: Jato User Manual
+  short_description: Jato manual and changelog workflow
+  default_prompt: Use dry-run first; never publish documentation without a confirmed plan hash.

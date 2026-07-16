@@ -1,13 +1,14 @@
 ﻿import { useEffect, useState } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
+import { getAppVersion } from '../../../shared/runtime/appVersion';
 import { FloatingToolbar, InputWithAction, useToast } from '../../../shared/ui';
 import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
-import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, TextModelConfig, TextModelProfiles, TextModelProvider, UpdateChannel } from '../../../shared/types';
+import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, LocalRenderingConfig, TextModelConfig, TextModelProfiles, TextModelProvider } from '../../../shared/types';
 import type { SettingsPageState } from '../types';
 import logoUrl from '../../../../assets/logo.png';
 
-type SettingsTab = 'general' | 'text-model' | 'image-model' | 'file-parser' | 'agent' | 'about';
+type SettingsTab = 'general' | 'text-model' | 'image-model' | 'components' | 'agent' | 'about';
 type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'error' | 'disabled';
 type AgentSelfCheckUiStatus = 'untested' | 'checking' | 'normal' | 'busy' | 'error';
 
@@ -15,7 +16,7 @@ const settingsTabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'general', label: '通用' },
   { id: 'text-model', label: '文本模型' },
   { id: 'image-model', label: '生图模型' },
-  { id: 'file-parser', label: '文件解析' },
+  { id: 'components', label: '组件设置' },
   { id: 'agent', label: '智能体配置' },
   { id: 'about', label: '关于' },
 ];
@@ -37,10 +38,6 @@ const agentToolCheckStatusMeta: Record<AgentToolCheckResult['status'], { label: 
 const defaultAgentModeScenarios: AgentModeScenariosConfig = {
   existing_plan_expansion_original_outline_extraction: true,
 };
-
-function normalizeUpdateChannel(value?: string): UpdateChannel {
-  return value === 'github' ? value : 'github';
-}
 
 function normalizeAgentModeScenarios(value?: Partial<AgentModeScenariosConfig>): AgentModeScenariosConfig {
   return {
@@ -482,11 +479,15 @@ const initialState: SettingsPageState = {
     provider: 'local',
     mineru_token: '',
   },
+  localRendering: {
+    enabled: true,
+    mermaid_concurrency_limit: 5,
+    html_concurrency_limit: 5,
+  },
   agentModeScenarios: { ...defaultAgentModeScenarios },
   general: {
     developer_mode: false,
     developer_token_stats_auto_open: false,
-    update_channel: 'github',
     gpu_hardware_acceleration_enabled: true,
     gpu_hardware_acceleration_configured: true,
   },
@@ -522,7 +523,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
 
   useEffect(() => {
     void loadTextConfig();
-    void window.yibiao?.getVersion().then(setAppVersion);
+    void getAppVersion().then(setAppVersion);
     void window.yibiao?.license?.getStatus().then(setLicenseStatus).catch(() => setLicenseStatus(null));
 
     const unsubs: Array<() => void> = [];
@@ -576,11 +577,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           provider: config.file_parser.provider,
           mineru_token: config.file_parser.mineru_token || '',
         },
+        localRendering: config.local_rendering || initialState.localRendering,
         agentModeScenarios: normalizeAgentModeScenarios(config.agent_mode_scenarios),
         general: {
           developer_mode: Boolean(config.developer_mode),
           developer_token_stats_auto_open: Boolean(config.developer_token_stats_auto_open),
-          update_channel: normalizeUpdateChannel(config.update_channel),
           gpu_hardware_acceleration_enabled: Boolean(config.gpu_hardware_acceleration_enabled),
           gpu_hardware_acceleration_configured: Boolean(config.gpu_hardware_acceleration_configured),
         },
@@ -625,8 +626,8 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         provider: state.fileParser.provider,
         mineru_token: state.fileParser.mineru_token || '',
       },
+      local_rendering: state.localRendering,
       agent_mode_scenarios: state.agentModeScenarios,
-      update_channel: state.general.update_channel,
       gpu_hardware_acceleration_enabled: state.general.gpu_hardware_acceleration_enabled,
       gpu_hardware_acceleration_configured: state.general.gpu_hardware_acceleration_configured,
       developer_mode: state.general.developer_mode,
@@ -1177,13 +1178,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       return JSON.stringify({
         developer_mode: Boolean(state.general.developer_mode),
         developer_token_stats_auto_open: Boolean(state.general.developer_token_stats_auto_open),
-        update_channel: state.general.update_channel,
         gpu_hardware_acceleration_enabled: Boolean(state.general.gpu_hardware_acceleration_enabled),
         gpu_hardware_acceleration_configured: Boolean(state.general.gpu_hardware_acceleration_configured),
       }) !== JSON.stringify({
         developer_mode: Boolean(savedConfig.developer_mode),
         developer_token_stats_auto_open: Boolean(savedConfig.developer_token_stats_auto_open),
-        update_channel: normalizeUpdateChannel(savedConfig.update_channel),
         gpu_hardware_acceleration_enabled: Boolean(savedConfig.gpu_hardware_acceleration_enabled),
         gpu_hardware_acceleration_configured: Boolean(savedConfig.gpu_hardware_acceleration_configured),
       });
@@ -1199,8 +1198,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       });
     }
 
-    if (activeTab === 'file-parser') {
-      return JSON.stringify(state.fileParser) !== JSON.stringify(savedConfig.file_parser);
+    if (activeTab === 'components') {
+      return JSON.stringify({ fileParser: state.fileParser, localRendering: state.localRendering }) !== JSON.stringify({
+        fileParser: savedConfig.file_parser,
+        localRendering: savedConfig.local_rendering || initialState.localRendering,
+      });
     }
 
     if (activeTab === 'agent') {
@@ -1281,7 +1283,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       await saveImageConfig();
       return;
     }
-    if (activeTab === 'file-parser') {
+    if (activeTab === 'components') {
       await saveFileParserConfig();
       return;
     }
@@ -1290,7 +1292,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     }
   };
 
-  const canSaveActiveTab = activeTab === 'general' || activeTab === 'text-model' || activeTab === 'image-model' || activeTab === 'file-parser' || activeTab === 'agent';
+  const canSaveActiveTab = activeTab === 'general' || activeTab === 'text-model' || activeTab === 'image-model' || activeTab === 'components' || activeTab === 'agent';
   const activeTabDirty = isActiveTabDirty();
   const currentTextProviderDefault = textProviderDefaults[state.textModel.provider];
   const imageModelStatus: ImageModelStatus = state.imageModel.status || 'untested';
@@ -1389,13 +1391,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
               <select value="classic" disabled>
                 <option value="classic">经典布局</option>
               </select>
-            </div>
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <strong>自动更新来源</strong>
-                <span>使用 GitHub Releases 检查和下载客户端更新</span>
-              </div>
-              <span className="settings-static-value">GitHub Releases</span>
             </div>
             <label className="settings-row">
               <div className="settings-row-copy">
@@ -1762,12 +1757,13 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         </section>
       )}
 
-      {activeTab === 'file-parser' && (
+      {activeTab === 'components' && (
         <section className="settings-page-section">
           <div className="settings-section-title">
             <span />
-            <strong>文件解析配置</strong>
+            <strong>组件设置</strong>
           </div>
+          <h3 className="settings-subsection-title">文件解析</h3>
           <div className="settings-list">
             <label className="settings-row">
               <div className="settings-row-copy">
@@ -1828,6 +1824,27 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           </div>
           <div className="parser-note">
             招标文件大多数是 Word 或 Word 导出的带文字层 PDF，本地解析可以适应 95% 以上的情况；如果解析失败，再尝试 MinerU 精准解析 API。
+          </div>
+          <h3 className="settings-subsection-title">本地转图组件</h3>
+          <div className="settings-list">
+            {([
+              ['mermaid_concurrency_limit', 'Mermaid 转换并发量', '同时本地渲染 Mermaid 图的最大任务数，默认 5'],
+              ['html_concurrency_limit', 'HTML 转换并发量', '同时本地截取 HTML 配图的最大任务数，默认 5'],
+            ] as Array<[keyof Pick<LocalRenderingConfig, 'mermaid_concurrency_limit' | 'html_concurrency_limit'>, string, string]>).map(([key, title, description]) => (
+              <label className="settings-row" key={key}>
+                <div className="settings-row-copy"><strong>{title}</strong><span>{description}</span></div>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={state.localRendering[key]}
+                  onChange={(event) => setState((prev) => ({
+                    ...prev,
+                    localRendering: { ...prev.localRendering, [key]: Number(event.target.value) },
+                  }))}
+                />
+              </label>
+            ))}
           </div>
         </section>
       )}
@@ -1975,7 +1992,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
               <ul className="about-links-list">
                 <li className="about-links-item">
                   <span className="about-links-label">版本号</span>
-                  <span className="about-links-value">{appVersion || '1.0.0'}</span>
+                  <span className="about-links-value">{appVersion || '未知版本'}</span>
                 </li>
                 <li className="about-links-item">
                   <span className="about-links-label">版权所有</span>

@@ -1,0 +1,42 @@
+name: Upstream audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream history
+        run: |
+          git remote add upstream https://github.com/FB208/OpenBidKit_Yibiao.git
+          git fetch --no-tags upstream main:upstream-main
+      - name: Validate ADRs
+        run: node scripts/check-adrs.mjs
+      - name: Generate audit reports
+        id: audit
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          set +e
+          node scripts/audit-upstream-diff.mjs --json > artifacts/upstream-audit.json
+          audit_status=$?
+          node scripts/audit-upstream-diff.mjs > artifacts/upstream-audit.md
+          text_status=$?
+          if [ "$audit_status" -eq 3 ] || [ "$text_status" -eq 3 ]; then exit 3; fi
+          if [ "$audit_status" -eq 4 ] || [ "$text_status" -eq 4 ]; then exit 4; fi
+          exit 0
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-audit
+          path: artifacts/

@@ -87,9 +87,11 @@ export interface BackgroundTaskState {
       illustration_planning_step_label?: string;
       illustration_candidate_ai?: number;
       illustration_candidate_mermaid?: number;
+      illustration_candidate_chart?: number;
       illustration_candidate_html?: number;
       illustration_selected_ai?: number;
       illustration_selected_mermaid?: number;
+      illustration_selected_chart?: number;
       illustration_selected_html?: number;
       illustration_generation_total?: number;
       illustration_generation_completed?: number;
@@ -97,6 +99,8 @@ export interface BackgroundTaskState {
       illustration_generation_ai_completed?: number;
       illustration_generation_mermaid_total?: number;
       illustration_generation_mermaid_completed?: number;
+      illustration_generation_chart_total?: number;
+      illustration_generation_chart_completed?: number;
       illustration_generation_html_total?: number;
       illustration_generation_html_completed?: number;
       illustration_generation_step_label?: string;
@@ -162,7 +166,7 @@ export interface ContentGenerationSectionState {
 export type ContentGenerationSections = Record<string, ContentGenerationSectionState>;
 
 export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibility';
-export type ContentIllustrationKind = 'ai' | 'mermaid' | 'html';
+export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
 
 export interface ContentGenerationPlanData {

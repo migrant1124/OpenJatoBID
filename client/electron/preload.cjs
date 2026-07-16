@@ -29,6 +29,19 @@ const bridge = {
     ipcRenderer.on('app:update-error', listener);
     return () => ipcRenderer.removeListener('app:update-error', listener);
   },
+  diagnostics: {
+    getLast: () => ipcRenderer.invoke('diagnostics:get-last'),
+    runAll: (options) => ipcRenderer.invoke('diagnostics:run-all', options),
+    runOne: (id, options) => ipcRenderer.invoke('diagnostics:run-one', id, options),
+    cancel: () => ipcRenderer.invoke('diagnostics:cancel'),
+    exportReport: (format) => ipcRenderer.invoke('diagnostics:export-report', format),
+    subscribe: () => ipcRenderer.send('diagnostics:subscribe'),
+    onUpdate: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('diagnostics:update', listener);
+      return () => ipcRenderer.removeListener('diagnostics:update', listener);
+    },
+  },
   database: {
     getStatus: () => ipcRenderer.invoke('workspace-database:get-status'),
     onStatus: (callback) => {
@@ -197,6 +210,7 @@ const bridge = {
 };
 
 contextBridge.exposeInMainWorld('yibiao', bridge);
+contextBridge.exposeInMainWorld('jatoaibid', bridge);
 
 contextBridge.exposeInMainWorld('yibiaoClient', {
   appName: bridge.appName,

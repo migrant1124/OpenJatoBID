@@ -688,6 +688,41 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return fs.readFileSync(resolvedPath, 'utf-8');
   }
 
+  // 按确定性路径找回已保存的 HTML 源文件，避免任务恢复时重复调用模型。
+  function findIllustrationHtml({ revision, itemId }) {
+    const safeRevision = normalizeIllustrationFilePart(revision);
+    const safeItemId = normalizeIllustrationFilePart(itemId);
+    const relativePath = path.join('illustrations', safeRevision, 'html', `${safeItemId}.html`).replace(/\\/g, '/');
+    const content = readIllustrationHtml(relativePath);
+    return content ? { relativePath, content } : null;
+  }
+
+  function saveIllustrationChart({ revision, itemId, spec, reference }) {
+    const safeRevision = normalizeIllustrationFilePart(revision);
+    const safeItemId = normalizeIllustrationFilePart(itemId);
+    const relativePath = path.join('illustrations', safeRevision, 'chart', `${safeItemId}.json`).replace(/\\/g, '/');
+    const filePath = path.join(path.dirname(originalPlanMarkdownPath), relativePath);
+    const source = JSON.stringify(spec, null, 2);
+    writeIllustrationFile(filePath, `${source}\n`);
+    writeIllustrationFile(filePath.replace(/\.json$/, '.meta.json'), `${JSON.stringify({
+      schema_version: 1,
+      spec_hash: `sha256:${crypto.createHash('sha256').update(source).digest('hex')}`,
+      reference_hash: `sha256:${crypto.createHash('sha256').update(String(reference || '')).digest('hex')}`,
+      renderer_version: 1,
+      chart_type: spec.chart_type,
+      source_path: relativePath,
+      updated_at: now(),
+    }, null, 2)}\n`);
+    return { relativePath, filePath };
+  }
+
+  function readIllustrationChart(relativePath) {
+    const resolvedPath = path.resolve(path.dirname(originalPlanMarkdownPath), String(relativePath || ''));
+    const root = `${path.resolve(illustrationsDir)}${path.sep}`;
+    if (!resolvedPath.startsWith(root) || !fs.existsSync(resolvedPath)) return null;
+    try { return JSON.parse(fs.readFileSync(resolvedPath, 'utf-8')); } catch { return null; }
+  }
+
   // 保存 HTML 截图 PNG，并返回 Renderer/导出层均可读取的资产 URL。
   function saveIllustrationPng({ revision, itemId, buffer }) {
     const safeRevision = normalizeIllustrationFilePart(revision);
@@ -2546,6 +2581,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     readOriginalTenderMarkdown,
     readOriginalPlanMarkdown,
     readIllustrationHtml,
+    findIllustrationHtml,
+    readIllustrationChart,
     readOriginalOutlineRuntime,
     saveOriginalOutlineRuntime,
     clearOriginalOutlineRuntime,
@@ -2557,6 +2594,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveOutline,
     saveGlobalFacts,
     saveIllustrationHtml,
+    saveIllustrationChart,
     saveIllustrationPng,
     saveContentGenerationOptions,
     saveChapterContent,

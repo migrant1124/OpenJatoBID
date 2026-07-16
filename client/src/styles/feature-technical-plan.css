@@ -2188,8 +2188,45 @@
   width: min(640px, calc(100vw - 40px));
 }
 
-.html-image-types-card textarea {
-  min-height: 260px;
+.html-image-types-list {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px;
+}
+
+.html-image-types-option {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  color: var(--yb-text);
+  background: rgba(248, 250, 253, 0.82);
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.html-image-types-option:has(input:checked) {
+  color: var(--yb-primary);
+  background: rgba(33, 116, 253, 0.08);
+  border-color: rgba(33, 116, 253, 0.28);
+}
+
+.html-image-types-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--yb-primary);
+}
+
+.html-image-types-option span {
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .export-progress-card {

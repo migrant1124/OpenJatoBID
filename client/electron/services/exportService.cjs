@@ -1,6 +1,5 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const zlib = require('node:zlib');
 const { fileURLToPath } = require('node:url');
 const { app, dialog, nativeImage } = require('electron');
 const cheerio = require('cheerio');
@@ -8,6 +7,7 @@ const { imageSize } = require('image-size');
 const { compactLogError, createDeveloperLogger, textMetrics } = require('../utils/developerLog.cjs');
 const { getMermaidCacheEntry, saveMermaidCacheImage } = require('../utils/mermaidCache.cjs');
 const { assertSupportedMermaidSyntax } = require('../utils/mermaidPolicy.cjs');
+const { getLocalImageRenderService } = require('./localImageRenderService.cjs');
 const { getGeneratedImagesDir, getImportedImagesDir } = require('../utils/paths.cjs');
 const { REMOTE_IMAGE_RETRY_ATTEMPTS, REMOTE_IMAGE_RETRY_DELAY_MS } = require('../utils/remoteImageRetry.cjs');
 const { renderMarkdownHtml } = require('../utils/renderMarkdownHtml.cjs');
@@ -102,18 +102,6 @@ const PAPER_DIMENSIONS_MM = {
 
 function mmToTwips(mm) {
   return Math.round(mm * 56.6929); // 1mm = 1440 twips ÷ 25.4 mm/inch
-}
-
-function encodeMermaidForInk(code) {
-  const state = JSON.stringify({
-    code: String(code || ''),
-    mermaid: { theme: 'default' },
-  });
-  return `pako:${zlib.deflateSync(Buffer.from(state, 'utf-8')).toString('base64url')}`;
-}
-
-function mermaidInkUrl(code) {
-  return `https://mermaid.ink/img/${encodeMermaidForInk(code)}?type=png&bgColor=!white`;
 }
 
 function delay(ms) {
@@ -1210,7 +1198,8 @@ async function resolveMermaidImageForExport(code, context = {}, options = {}) {
     };
   }
 
-  const loaded = await loadImageWithRetry(mermaidInkUrl(cacheEntry.code), context, options.loadRetry);
+  const rendered = await getLocalImageRenderService().renderMermaidToPng(cacheEntry.code, { timeoutMs: 30000 });
+  const loaded = { buffer: rendered.buffer, type: 'png' };
   if (loaded?.buffer?.length) {
     try {
       saveMermaidCacheImage(app, cacheEntry.hash, loaded.buffer);

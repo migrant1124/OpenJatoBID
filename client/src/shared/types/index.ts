@@ -42,6 +42,7 @@ export type {
   ImageModelSize,
   ImageModelStatus,
   LegacyTextModelProvider,
+  LocalRenderingConfig,
   ModelListResult,
   TextModelConfig,
   TextModelProvider,
@@ -49,6 +50,7 @@ export type {
   UpdateChannel,
 } from './config';
 export type { AppMenuItem, SectionId } from './navigation';
+export type { DiagnosticItemResult, DiagnosticStatus, DiagnosticsSnapshot } from './diagnostics';
 export type {
   ExportFormatConfig,
   ExportTemplateRecord,

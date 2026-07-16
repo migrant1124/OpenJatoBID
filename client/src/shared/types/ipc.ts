@@ -1,6 +1,7 @@
 import type { AiHttpErrorPayload, ChatCompletionRequest, JsonCompletionRequest } from './ai';
 import type { DuplicateCheckWorkspaceState, FileSelectionResult } from './bid';
 import type { ClientConfig, ConfigSaveResult, ImageModelTestResult, ModelListResult, UpdateChannel } from './config';
+import type { DiagnosticsSnapshot } from './diagnostics';
 import type { KnowledgeAnalysisSnapshot, KnowledgeBaseEvent, KnowledgeBaseIndex, KnowledgeBaseIndexMutationResult, KnowledgeBaseMigrationResult, KnowledgeBaseMigrationStatus, KnowledgeBaseMutationResult, KnowledgeBaseRetryDocumentResult, KnowledgeBaseStartMatchingResult, KnowledgeBaseUploadResult, KnowledgeDocument, KnowledgeFolder, KnowledgeItem } from '../../features/knowledge-base/types';
 import type { RejectionCheckWorkspaceState, RejectionDocumentRole } from '../../features/rejection-check/types';
 import type { BidAnalysisMode, BidAnalysisTaskState, BidSectionMode, ContentGenerationOptions, ContentGenerationPlanState, ContentGenerationRuntimeState, ContentGenerationSectionState, DetectedBidSection, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../../features/technical-plan/types';
@@ -120,6 +121,8 @@ export interface UpdateCheckResult {
   downloaded?: boolean;
   failed?: boolean;
   message?: string;
+  code?: string;
+  stage?: 'latest' | 'license' | 'select-asset' | 'download' | 'integrity' | 'open-installer';
   channel?: UpdateChannel;
 }
 
@@ -412,7 +415,16 @@ export interface YibiaoBridge {
   quitAndInstall: () => Promise<UpdateInstallResult>;
   onUpdateProgress: (callback: (event: { percent: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (event: { version: string }) => void) => () => void;
-  onUpdateError: (callback: (event: { message: string }) => void) => () => void;
+  onUpdateError: (callback: (event: { message: string; code?: string; stage?: UpdateCheckResult['stage']; statusCode?: number; version?: string; fileName?: string }) => void) => () => void;
+  diagnostics: {
+    getLast: () => Promise<DiagnosticsSnapshot>;
+    runAll: (options?: { full?: boolean }) => Promise<DiagnosticsSnapshot>;
+    runOne: (id: string, options?: { full?: boolean }) => Promise<DiagnosticsSnapshot>;
+    cancel: () => Promise<{ success: boolean }>;
+    exportReport: (format: 'json' | 'markdown') => Promise<{ success: boolean; path: string }>;
+    subscribe: () => void;
+    onUpdate: (callback: (snapshot: DiagnosticsSnapshot) => void) => () => void;
+  };
   database: {
     getStatus: () => Promise<WorkspaceDatabaseStatus>;
     onStatus: (callback: (status: WorkspaceDatabaseStatus) => void) => () => void;

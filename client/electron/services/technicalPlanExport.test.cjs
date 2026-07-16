@@ -4,6 +4,7 @@ const AdmZip = require('adm-zip');
 
 const {
   buildDocxBuffer,
+  buildDocxResult,
   formatOutlineTitle,
   resolveTechnicalPlanExportPayload,
 } = require('./exportService.cjs');
@@ -140,4 +141,20 @@ test('authoritative manually filled Markdown reaches DOCX without rewriting cont
   assert.match(xml, new RegExp(commitment));
   assert.match(xml, /完全响应/);
   assert.match(xml, new RegExp(fixedNote));
+});
+
+test('a generated PNG referenced by authoritative Markdown is embedded into DOCX media', async () => {
+  const pngDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const result = await buildDocxResult({
+    project_name: 'HTML 生图导出回归',
+    outline: [responseItem('1', {
+      title: '实施架构',
+      content: `正文\n\n![总体系统架构图](${pngDataUrl})\n\n*图：总体系统架构图*`,
+    })],
+  });
+  const mediaEntries = new AdmZip(result.buffer).getEntries()
+    .filter((entry) => entry.entryName.startsWith('word/media/') && !entry.isDirectory);
+
+  assert.equal(result.warnings.length, 0);
+  assert.equal(mediaEntries.length, 1);
 });

@@ -5,6 +5,7 @@ const { registerAgentIpc } = require('./agentIpc.cjs');
 const { registerAiIpc } = require('./aiIpc.cjs');
 const { registerConfigIpc } = require('./configIpc.cjs');
 const { registerDeveloperIpc } = require('./developerIpc.cjs');
+const { registerDiagnosticsIpc } = require('./diagnosticsIpc.cjs');
 const { registerDuplicateCheckIpc } = require('./duplicateCheckIpc.cjs');
 const { registerExportIpc } = require('./exportIpc.cjs');
 const { registerFileIpc } = require('./fileIpc.cjs');
@@ -28,6 +29,8 @@ const { createFileService } = require('../services/fileService.cjs');
 const { createKnowledgeBaseService } = require('../services/knowledgeBaseService.cjs');
 const { createKnowledgeBaseStore } = require('../services/knowledgeBaseStore.cjs');
 const { createLicenseService } = require('../services/licenseService.cjs');
+const { initLocalImageRenderService } = require('../services/localImageRenderService.cjs');
+const { createSystemDiagnosticsService } = require('../services/systemDiagnosticsService.cjs');
 const { createRejectionCheckStore } = require('../services/rejectionCheckStore.cjs');
 const { createSqliteDatabase } = require('../services/sqliteDatabase.cjs');
 const { createSystemFontService } = require('../services/systemFontService.cjs');
@@ -181,7 +184,7 @@ function registerWorkspaceDatabaseStatusIpc({ mainWindow }) {
   };
 }
 
-function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, updateStatus }) {
+function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus }) {
   const sqliteDatabase = createSqliteDatabase(app, { onStatus: updateStatus });
   const knowledgeBaseStore = createKnowledgeBaseStore({ app, db: sqliteDatabase.db });
   const knowledgeBaseService = createKnowledgeBaseService({ app, aiService, configStore, knowledgeBaseStore });
@@ -190,7 +193,7 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   const rejectionCheckStore = createRejectionCheckStore({ app, db: sqliteDatabase.db, fileService, technicalPlanStore });
   const templateStore = createTemplateStore({ db: sqliteDatabase.db });
   const duplicateCheckService = createDuplicateCheckService({ app, configStore, workspaceStore: duplicateCheckStore });
-  const taskService = createTaskService({ aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService });
+  const taskService = createTaskService({ aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService, localImageRenderService });
 
   clearWorkspaceDatabaseIpc();
   registerKnowledgeBaseIpc({ knowledgeBaseService });
@@ -219,12 +222,17 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   const agentService = createAgentService({ app, configStore, mainWindow, analyticsService });
   const fileService = createFileService({ app, configStore });
   const exportService = createExportService({ configStore });
+  const localImageRenderService = initLocalImageRenderService({ app, configStore });
+  const diagnosticsService = createSystemDiagnosticsService({ app, configStore, localImageRenderService });
+  const unregisterDiagnosticsIpc = registerDiagnosticsIpc({ diagnosticsService });
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
   let workspaceDatabaseStarted = false;
   let gpuTrialRelaunchStarted = false;
 
   const closeServices = async () => {
+    unregisterDiagnosticsIpc?.();
+    localImageRenderService.dispose?.();
     await agentService.close?.();
   };
 
@@ -319,7 +327,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     databaseStatus.updateStatus({ phase: 'checking', ready: false, message: '正在检查本地数据库' });
     setTimeout(() => {
       try {
-        registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, updateStatus: databaseStatus.updateStatus });
+        registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus: databaseStatus.updateStatus });
       } catch (error) {
         databaseStatus.updateStatus({
           phase: 'error',
@@ -417,8 +425,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
       onDownloaded: (version) => {
         sendToWebContents(webContents, 'app:update-downloaded', { version });
       },
-      onError: (message) => {
-        sendToWebContents(webContents, 'app:update-error', { message });
+      onError: (error) => {
+        sendToWebContents(webContents, 'app:update-error', typeof error === 'string' ? { message: error } : error);
       },
     });
   });
@@ -435,8 +443,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
       onDownloaded: (version) => {
         sendToWebContents(webContents, 'app:update-downloaded', { version });
       },
-      onError: (message) => {
-        sendToWebContents(webContents, 'app:update-error', { message });
+      onError: (error) => {
+        sendToWebContents(webContents, 'app:update-error', typeof error === 'string' ? { message: error } : error);
       },
     });
   });

@@ -15,6 +15,26 @@ const MERMAID_IMAGE_TYPE_DESCRIPTIONS = {
   hierarchy: '层级图：用于表达组织、系统模块、资源分类等上下级或包含关系；不用于时间顺序或职责矩阵。',
   responsibility: '职责关系图：用于表达角色、岗位、责任边界和协作关系；不用于设备拓扑或纯流程步骤。',
 };
+const HTML_IMAGE_TYPE_LABELS = new Map([
+  ['gantt', '甘特图'],
+  ['network', '进度网络图'],
+  ['organization', '组织架构图'],
+  ['swimlane', '泳道图'],
+  ['raci', 'RACI 职责矩阵'],
+  ['risk-matrix', '风险矩阵'],
+  ['architecture', '系统架构与拓扑图'],
+  ['wbs', 'WBS 工作分解结构图'],
+  ['fishbone', '鱼骨图'],
+  ['timeline', '时间轴'],
+  ['process', '流程图'],
+  ['hierarchy', '层级图'],
+  ['responsibility', '职责关系图'],
+  ['bar', '柱状图'],
+  ['line', '折线图'],
+  ['pie', '饼图'],
+  ['table', '数据表'],
+]);
+const HTML_IMAGE_TYPE_VALUES = new Set(HTML_IMAGE_TYPE_LABELS.values());
 
 function singleLine(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -31,6 +51,12 @@ function stableHash(value) {
 // 解析用户允许的 HTML 图片类型。
 function parseHtmlImageTypes(value) {
   return [...new Set(String(value || '').split(/[\n,，、;；]+/).map(singleLine).filter(Boolean))];
+}
+
+function resolveAllowedHtmlTypes(value) {
+  const selectedTypes = parseHtmlImageTypes(value);
+  const allowedTypes = selectedTypes.map((type) => HTML_IMAGE_TYPE_LABELS.get(type) || (HTML_IMAGE_TYPE_VALUES.has(type) ? type : '')).filter(Boolean);
+  return allowedTypes.length ? [...new Set(allowedTypes)] : [...HTML_IMAGE_TYPE_LABELS.values()];
 }
 
 function normalizeLimit(value, fallback, sectionCount) {
@@ -95,7 +121,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
 
   const outline = visit(outlineData?.outline || []);
   const eligibleCount = eligibleSectionIds.length;
-  const allowedHtmlTypes = parseHtmlImageTypes(options?.htmlImageTypes);
+  const allowedHtmlTypes = resolveAllowedHtmlTypes(options?.htmlImageTypes);
   const config = {
     ai: {
       enabled: Boolean(options?.useAiImages) && Boolean(aiImagesAvailable),
@@ -290,8 +316,8 @@ function resolveIllustrationPlan(content, context) {
 
   const occupiedSectionIds = new Set();
   const selected = [];
-  const candidateStats = { ai: 0, mermaid: 0, html: 0 };
-  const selectedStats = { ai: 0, mermaid: 0, html: 0 };
+  const candidateStats = { html: 0, ai: 0, mermaid: 0 };
+  const selectedStats = { html: 0, ai: 0, mermaid: 0 };
   for (const candidate of candidates) candidateStats[candidate.kind] += 1;
 
   for (const kind of ILLUSTRATION_KINDS) {

@@ -3006,7 +3006,7 @@ function withSection(sections, item, partial) {
   };
 }
 
-async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, updateTask, payload, taskControl, previousState }) {
+async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, localImageRenderService, updateTask, payload, taskControl, previousState }) {
   const resume = Boolean(payload.resume);
   const storedPlan = resume ? (previousState || {}) : (workspaceStore.loadTechnicalPlan() || {});
   let outlineData = storedPlan.outlineData;
@@ -3139,9 +3139,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     illustration_planning_step_label: '',
     illustration_candidate_ai: 0,
     illustration_candidate_mermaid: 0,
+    illustration_candidate_chart: 0,
     illustration_candidate_html: 0,
     illustration_selected_ai: 0,
     illustration_selected_mermaid: 0,
+    illustration_selected_chart: 0,
     illustration_selected_html: 0,
     illustration_generation_total: 0,
     illustration_generation_completed: 0,
@@ -3149,6 +3151,8 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     illustration_generation_ai_completed: 0,
     illustration_generation_mermaid_total: 0,
     illustration_generation_mermaid_completed: 0,
+    illustration_generation_chart_total: 0,
+    illustration_generation_chart_completed: 0,
     illustration_generation_html_total: 0,
     illustration_generation_html_completed: 0,
     illustration_generation_step_label: '',
@@ -6342,7 +6346,7 @@ workspace 文件说明：
     contentStats.illustration_planning_step_label = '正在执行全文图片编排 Agent';
     pauseIfRequested('正文生成已在图片编排输入准备后暂停，本次 Agent 未启动；继续后将重新执行。');
 
-    const enabledKinds = ['html', 'mermaid', 'ai'].filter((kind) => planningContext.config[kind].enabled);
+    const enabledKinds = ['html', 'ai', 'mermaid'].filter((kind) => planningContext.config[kind].enabled);
     let resolved;
     if (!planningContext.eligibleSectionIds.length || !enabledKinds.length) {
       resolved = resolveIllustrationPlan({ items: [] }, planningContext);
@@ -6387,9 +6391,11 @@ workspace 文件说明：
     contentStats.illustration_planning_step_label = '正在保存全文图片计划';
     contentStats.illustration_candidate_ai = resolved.stats.candidate.ai;
     contentStats.illustration_candidate_mermaid = resolved.stats.candidate.mermaid;
+    contentStats.illustration_candidate_chart = 0;
     contentStats.illustration_candidate_html = resolved.stats.candidate.html;
     contentStats.illustration_selected_ai = resolved.stats.selected.ai;
     contentStats.illustration_selected_mermaid = resolved.stats.selected.mermaid;
+    contentStats.illustration_selected_chart = 0;
     contentStats.illustration_selected_html = resolved.stats.selected.html;
     const saved = workspaceStore.updateTechnicalPlan({
       contentIllustrationPlan: resolved.plan,
@@ -6448,6 +6454,8 @@ workspace 文件说明：
       contentStats.illustration_generation_ai_completed = countCompleted('ai');
       contentStats.illustration_generation_mermaid_total = executions.filter(({ planItem }) => planItem.kind === 'mermaid').length;
       contentStats.illustration_generation_mermaid_completed = countCompleted('mermaid');
+      contentStats.illustration_generation_chart_total = 0;
+      contentStats.illustration_generation_chart_completed = 0;
       contentStats.illustration_generation_html_total = executions.filter(({ planItem }) => planItem.kind === 'html').length;
       contentStats.illustration_generation_html_completed = countCompleted('html');
       contentStats.illustration_generation_step_label = label || contentStats.illustration_generation_step_label;
@@ -6481,7 +6489,7 @@ workspace 文件说明：
           result = await generateAiIllustration(aiService, execution);
           logs = [...logs, `AI 配图完成：${planItem.section_ids[0]} ${planItem.title}`];
         } else if (planItem.kind === 'mermaid') {
-          result = await generateMermaidIllustration(aiService, execution, isPauseLikeError);
+          result = await generateMermaidIllustration(aiService, execution, localImageRenderService, isPauseLikeError);
           logs = [...logs, result.attempts
             ? `Mermaid 配图已修复并完成：${planItem.section_ids[0]} ${planItem.title}（修复 ${result.attempts} 轮）`
             : `Mermaid 配图完成：${planItem.section_ids[0]} ${planItem.title}`];
@@ -6491,6 +6499,12 @@ workspace 文件说明：
             execution,
             plan: illustrationPlan,
             workspaceStore,
+            localImageRenderService,
+            onSourceSaved: (source) => persistIllustrationGeneration(
+              planItem.item_id,
+              { status: 'running', error: undefined, ...source },
+              'HTML 源文件已保存，正在转换图片',
+            ),
             runAgentHtml: async ({ title, prompt, outputFile, files, validateOutput }) => {
               const response = await runContentAgentTask({
                 title,
@@ -6531,9 +6545,8 @@ workspace 文件说明：
           title: planItem.title,
           error: compactError(error?.message || error),
         });
-        if (planItem.kind !== 'html') {
-          logs = [...logs, `${planItem.kind === 'ai' ? 'AI' : 'Mermaid'} 配图失败：${planItem.section_ids[0]}，${error.message || '生成失败'}，已保留正文。`];
-        }
+        const kindLabel = planItem.kind === 'ai' ? 'AI' : planItem.kind === 'mermaid' ? 'Mermaid' : 'HTML';
+        logs = [...logs, `${kindLabel} 配图失败：${planItem.section_ids[0]}，${error.message || '生成失败'}，已保留正文。`];
       }
     }
 
@@ -6644,8 +6657,13 @@ workspace 文件说明：
       updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
     }
 
-    let illustrationPlan = runOnlyIllustrationGeneration ? storedPlan.contentIllustrationPlan : null;
-    if (!runOnlyIllustrationGeneration) {
+    const canReuseStoredIllustrationPlan = runOnlyIllustrationGeneration
+      && Number(storedPlan.contentIllustrationPlan?.plan_version) === ILLUSTRATION_PLAN_VERSION;
+    let illustrationPlan = canReuseStoredIllustrationPlan ? storedPlan.contentIllustrationPlan : null;
+    if (!canReuseStoredIllustrationPlan) {
+      if (runOnlyIllustrationGeneration) {
+        logs = [...logs, '检测到旧版图片计划，已按当前 HTML 生图规则重新编排。'];
+      }
       pauseIfRequested('正文生成已在全文图片编排前暂停，可导出当前已完成内容，稍后继续。');
       illustrationPlan = await runIllustrationPlanning();
     }

@@ -75,3 +75,38 @@ test('preserves an existing LongCat provider as a legacy configuration', (t) => 
   assert.equal(saved.text_model_profiles.longcat.model_name, 'legacy-model');
   assert.equal(saved.text_model_profiles.longcat.concurrency_limit, 3);
 });
+
+test('migrates local rendering defaults without dropping LAN or unknown configuration fields', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-client-config-'));
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const configPath = path.join(userData, 'user_config.json');
+  fs.writeFileSync(configPath, JSON.stringify({
+    config_version: 1,
+    lan_management: { server_address: '192.168.10.8:47821' },
+    components: { mermaid_concurrency_limit: 21, html_concurrency_limit: 0 },
+    future_option: { enabled: true },
+  }), 'utf-8');
+
+  const config = createConfigStore({ getPath: () => userData }).load();
+
+  assert.equal(config.config_version, 2);
+  assert.deepEqual(config.local_rendering, {
+    enabled: true,
+    mermaid_concurrency_limit: 20,
+    html_concurrency_limit: 5,
+  });
+  assert.equal(config.lan_management.server_address, '192.168.10.8:47821');
+  assert.deepEqual(config.future_option, { enabled: true });
+  assert.equal(fs.existsSync(`${configPath}.v1.backup`), true);
+});
+
+test('migrates the obsolete GitHub update channel to the Cloudflare R2 channel', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-client-config-'));
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const configPath = path.join(userData, 'user_config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ update_channel: 'github' }), 'utf-8');
+
+  const config = createConfigStore({ getPath: () => userData }).load();
+
+  assert.equal(config.update_channel, 'cloudflare-r2');
+});

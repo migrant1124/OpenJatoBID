@@ -1,4 +1,5 @@
 import type { ClientConfig } from '../types/config';
+import { getAppVersion } from '../runtime/appVersion';
 
 const PROJECT_NAME = 'yibiao-client';
 const LEGACY_CLIENT_ID_KEY = 'analytics_client_id';
@@ -124,10 +125,7 @@ function getPlatform() {
 }
 
 function getVersion() {
-  if (!versionPromise) {
-    versionPromise = window.yibiao?.getVersion?.().catch(() => '') || Promise.resolve('');
-  }
-
+  if (!versionPromise) versionPromise = getAppVersion();
   return versionPromise;
 }
 

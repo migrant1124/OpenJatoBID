@@ -23,6 +23,7 @@ export type SectionId =
   | 'developer-export-preview'
   | 'developer-expansion-replace-test'
   | 'developer-opencode-agent-test'
+  | 'developer-system-diagnostics'
   | 'settings';
 
 export interface AppMenuNotice {

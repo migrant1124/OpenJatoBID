@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import logoUrl from '../../../assets/logo.png';
 import type { LicenseRuntimeStatus } from '../../shared/types';
+import { getAppVersion } from '../../shared/runtime/appVersion';
 import AuthorizationRequestDialog from './AuthorizationRequestDialog';
 
 interface StartupAuthPageProps {
@@ -24,6 +25,15 @@ function StartupAuthPage({ initialStatus, onAuthorized }: StartupAuthPageProps) 
   const [requestOpen, setRequestOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(statusMessage(initialStatus));
+  const [appVersion, setAppVersion] = useState('');
+  const [versionLoaded, setVersionLoaded] = useState(false);
+
+  useEffect(() => {
+    void getAppVersion().then((version) => {
+      setAppVersion(version);
+      setVersionLoaded(true);
+    });
+  }, []);
 
   const login = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -64,7 +74,9 @@ function StartupAuthPage({ initialStatus, onAuthorized }: StartupAuthPageProps) 
           <div className="startup-login-divider"><span>或</span></div>
           <button type="button" className="startup-request-link" onClick={() => setRequestOpen(true)}>授权申请 <span aria-hidden="true">›</span></button>
         </form>
-        <small className="startup-auth-version">内部专用 · 版本 1.0.0</small>
+        <small className="startup-auth-version">
+          内部专用 · {!versionLoaded ? '正在读取版本…' : appVersion ? `版本 ${appVersion}` : '未知版本'}
+        </small>
       </div>
       <AuthorizationRequestDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </main>

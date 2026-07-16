@@ -82,6 +82,7 @@ const originalPlanCoverageRepairModeOptions: Array<{ value: OriginalPlanCoverage
 ];
 
 const illustrationKindLabels: Record<ContentIllustrationKind, string> = {
+  chart: '历史结构化图表',
   html: 'HTML 图片',
   mermaid: 'Mermaid 图片',
   ai: 'AI 图片',
@@ -120,7 +121,35 @@ function ImageExampleIcon() {
   );
 }
 
-const DEFAULT_HTML_IMAGE_TYPES = '甘特图、进度网络图、组织架构图、泳道图、RACI 职责矩阵、风险矩阵、系统架构与拓扑图、WBS 工作分解结构图、鱼骨图、柱状图、折线图、饼图';
+const htmlImageTypeOptions = [
+  { value: 'gantt', label: '甘特图' },
+  { value: 'network', label: '进度网络图' },
+  { value: 'organization', label: '组织架构图' },
+  { value: 'swimlane', label: '泳道图' },
+  { value: 'raci', label: 'RACI 职责矩阵' },
+  { value: 'risk-matrix', label: '风险矩阵' },
+  { value: 'architecture', label: '系统架构与拓扑图' },
+  { value: 'wbs', label: 'WBS 工作分解结构图' },
+  { value: 'fishbone', label: '鱼骨图' },
+  { value: 'timeline', label: '时间轴' },
+  { value: 'process', label: '流程图' },
+  { value: 'hierarchy', label: '层级图' },
+  { value: 'responsibility', label: '职责关系图' },
+  { value: 'bar', label: '柱状图' },
+  { value: 'line', label: '折线图' },
+  { value: 'pie', label: '饼图' },
+  { value: 'table', label: '数据表' },
+];
+
+const DEFAULT_HTML_IMAGE_TYPES = htmlImageTypeOptions.map((option) => option.value).join(', ');
+
+function resolveSelectedHtmlImageTypes(value: string | undefined) {
+  const selected = new Set(String(value || '').split(/[\n,，、;；]+/).map((item) => item.trim()).filter(Boolean));
+  const allowedTypes = htmlImageTypeOptions
+    .filter((option) => selected.has(option.value) || selected.has(option.label))
+    .map((option) => option.value);
+  return allowedTypes.length ? allowedTypes : htmlImageTypeOptions.map((option) => option.value);
+}
 
 const defaultContentGenerationOptions: ContentGenerationOptions = {
   useAiImages: false,
@@ -327,7 +356,7 @@ function ContentEditPage({
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [draftGenerationOptions, setDraftGenerationOptions] = useState<DraftContentGenerationOptions>(defaultContentGenerationOptions);
   const [htmlImageTypesDialogOpen, setHtmlImageTypesDialogOpen] = useState(false);
-  const [htmlImageTypesDraft, setHtmlImageTypesDraft] = useState(DEFAULT_HTML_IMAGE_TYPES);
+  const [htmlImageTypesDraft, setHtmlImageTypesDraft] = useState(() => htmlImageTypeOptions.map((option) => option.value));
   const [pendingMinimumWordsChoice, setPendingMinimumWordsChoice] = useState<PendingMinimumWordsChoice | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
@@ -356,6 +385,7 @@ function ContentEditPage({
   const contentStats = task?.stats?.content;
   const illustrationStats = useMemo(() => {
     const stats: Record<ContentIllustrationKind, { planned: number; success: number }> = {
+      chart: { planned: 0, success: 0 },
       html: { planned: 0, success: 0 },
       mermaid: { planned: 0, success: 0 },
       ai: { planned: 0, success: 0 },
@@ -654,15 +684,19 @@ function ContentEditPage({
     }
   };
 
-  // 打开 HTML 图片类型设置并建立独立草稿。
+  // HTML 图片类型使用固定复选项，不接受自由定义。
   const openHtmlImageTypesDialog = () => {
-    setHtmlImageTypesDraft(draftGenerationOptions.htmlImageTypes);
+    setHtmlImageTypesDraft(resolveSelectedHtmlImageTypes(draftGenerationOptions.htmlImageTypes));
     setHtmlImageTypesDialogOpen(true);
   };
 
-  // 确认 HTML 图片类型设置并写回主配置草稿。
+  // 保持旧配置字段的兼容存储，但始终写入受控图表白名单。
   const confirmHtmlImageTypes = () => {
-    setDraftGenerationOptions((prev) => ({ ...prev, htmlImageTypes: htmlImageTypesDraft }));
+    if (!htmlImageTypesDraft.length) {
+      showToast('请至少选择一种图表类型', 'info');
+      return;
+    }
+    setDraftGenerationOptions((prev) => ({ ...prev, htmlImageTypes: htmlImageTypesDraft.join(', ') }));
     setHtmlImageTypesDialogOpen(false);
   };
 
@@ -1441,6 +1475,34 @@ function ContentEditPage({
                 </label>
               )}
               <div className="content-generation-config-row">
+                <span><strong>Mermaid 生图</strong></span>
+                <Switch.Root
+                  className="content-generation-switch"
+                  checked={draftGenerationOptions.useMermaidImages}
+                  disabled={generationStrategyLocked}
+                  onCheckedChange={(checked) => setDraftGenerationOptions((prev) => ({ ...prev, useMermaidImages: checked }))}
+                  aria-label="是否使用 Mermaid 生图"
+                >
+                  <Switch.Thumb className="content-generation-switch-thumb" />
+                </Switch.Root>
+              </div>
+              {draftGenerationOptions.useMermaidImages && (
+                <label className="content-generation-config-row">
+                  <span><strong>Mermaid 生图上限</strong></span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={Math.max(1, leaves.length)}
+                    value={draftGenerationOptions.maxMermaidImages}
+                    disabled={generationStrategyLocked}
+                    onChange={(event) => setDraftGenerationOptions((prev) => ({
+                      ...prev,
+                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                    }))}
+                  />
+                </label>
+              )}
+              <div className="content-generation-config-row">
                 <div className="content-generation-image-option-title">
                   <strong>生成 HTML 图片</strong>
                   <button
@@ -1480,8 +1542,8 @@ function ContentEditPage({
                     />
                   </label>
                   <div className="content-generation-config-row">
-                    <span><strong>高级设置</strong></span>
-                    <button type="button" className="secondary-action" onClick={openHtmlImageTypesDialog} disabled={generationStrategyLocked}>打开</button>
+                    <span><strong>支持图表类型</strong></span>
+                    <button type="button" className="secondary-action" onClick={openHtmlImageTypesDialog} disabled={generationStrategyLocked}>查看</button>
                   </div>
                 </>
               )}
@@ -1502,13 +1564,25 @@ function ContentEditPage({
           <Dialog.Overlay className="content-regenerate-modal html-image-types-modal" />
           <Dialog.Content className="content-regenerate-card html-image-types-card" aria-describedby={undefined}>
             <div className="content-regenerate-card-head">
-              <Dialog.Title>HTML 可生成的图片类型</Dialog.Title>
+              <Dialog.Title>HTML 生图类型设置</Dialog.Title>
             </div>
-            <textarea
-              value={htmlImageTypesDraft}
-              onChange={(event) => setHtmlImageTypesDraft(event.target.value)}
-              aria-label="HTML 可生成的图片类型"
-            />
+            <div className="html-image-types-list" aria-label="HTML 生图类型">
+              {htmlImageTypeOptions.map((option) => (
+                <label className="html-image-types-option" key={option.value}>
+                  <input
+                    type="checkbox"
+                    checked={htmlImageTypesDraft.includes(option.value)}
+                    onChange={(event) => setHtmlImageTypesDraft((current) => {
+                      const selected = new Set(current);
+                      if (event.target.checked) selected.add(option.value);
+                      else selected.delete(option.value);
+                      return htmlImageTypeOptions.filter((item) => selected.has(item.value)).map((item) => item.value);
+                    })}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="primary-action" onClick={confirmHtmlImageTypes}>确认</button>

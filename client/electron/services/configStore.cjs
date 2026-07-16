@@ -7,7 +7,7 @@ const textModelProviders = ['jinlong', 'volcengine', 'deepseek', 'agnes', 'custo
 const legacyTextModelProviders = ['longcat'];
 const imageModelProviders = ['jinlong', 'volcengine', 'google-ai-studio', 'agnes', 'custom'];
 const aiRequestModes = ['normal', 'stream'];
-const updateChannels = ['github'];
+const updateChannels = ['cloudflare-r2', 'github'];
 const DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT = 400000;
 const DEFAULT_TEXT_CONCURRENCY_LIMIT = 10;
 const DEFAULT_IMAGE_CONCURRENCY_LIMIT = 2;
@@ -220,6 +220,7 @@ const defaultExportFormat = {
 };
 
 const defaultConfig = {
+  config_version: 2,
   text_model_provider: 'jinlong',
   text_model_profiles: defaultTextModelProfiles,
   api_key: '',
@@ -236,7 +237,12 @@ const defaultConfig = {
     provider: 'local',
     mineru_token: '',
   },
-  update_channel: 'github',
+  local_rendering: {
+    enabled: true,
+    mermaid_concurrency_limit: 5,
+    html_concurrency_limit: 5,
+  },
+  update_channel: 'cloudflare-r2',
   gpu_hardware_acceleration_enabled: true,
   gpu_hardware_acceleration_configured: true,
   export_format: defaultExportFormat,
@@ -286,7 +292,7 @@ function normalizeAiRequestMode(value, fallback = 'stream') {
 }
 
 function normalizeUpdateChannel(value, fallback = defaultConfig.update_channel) {
-  return updateChannels.includes(value) ? value : fallback;
+  return updateChannels.includes(value) ? 'cloudflare-r2' : fallback;
 }
 
 function normalizeTextContextLengthLimit(value, fallback = DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT) {
@@ -302,6 +308,12 @@ function normalizeTextConcurrencyLimit(value, fallback = DEFAULT_TEXT_CONCURRENC
 function normalizeImageConcurrencyLimit(value, fallback = DEFAULT_IMAGE_CONCURRENCY_LIMIT) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number) : fallback;
+}
+
+function normalizeRenderConcurrencyLimit(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 5;
+  return Math.min(20, Math.max(1, Math.round(number)));
 }
 
 function normalizeTextModelProfile(provider, profile) {
@@ -595,7 +607,13 @@ function normalizeExportFormat(source) {
 
 function normalizeConfig(config) {
   const source = config || {};
-  const fileParser = source.file_parser ? source.file_parser : {};
+  const legacyComponents = source.components && typeof source.components === 'object' ? source.components : {};
+  const fileParser = source.file_parser && typeof source.file_parser === 'object'
+    ? source.file_parser
+    : (legacyComponents.file_parser && typeof legacyComponents.file_parser === 'object' ? legacyComponents.file_parser : {});
+  const localRendering = source.local_rendering && typeof source.local_rendering === 'object'
+    ? source.local_rendering
+    : {};
   const hasTextProvider = Object.prototype.hasOwnProperty.call(source, 'text_model_provider');
   const rawTextProvider = typeof source.text_model_provider === 'string' ? source.text_model_provider : '';
   const sourceTextProvider = isTextModelProvider(rawTextProvider) || isLegacyTextModelProvider(rawTextProvider)
@@ -630,7 +648,9 @@ function normalizeConfig(config) {
     : {};
 
   return {
+    ...source,
     ...defaultConfig,
+    config_version: 2,
     text_model_provider: textModelProvider,
     text_model_profiles: textModelProfiles,
     api_key: activeTextProfile.api_key,
@@ -644,6 +664,18 @@ function normalizeConfig(config) {
     file_parser: {
       provider: fileParser.provider || defaultConfig.file_parser.provider,
       mineru_token: fileParser.mineru_token || defaultConfig.file_parser.mineru_token,
+    },
+    local_rendering: {
+      enabled: localRendering.enabled !== false,
+      mermaid_concurrency_limit: normalizeRenderConcurrencyLimit(
+        localRendering.mermaid_concurrency_limit ?? legacyComponents.mermaid_concurrency_limit,
+      ),
+      html_concurrency_limit: normalizeRenderConcurrencyLimit(
+        localRendering.html_concurrency_limit
+          ?? localRendering.chart_concurrency_limit
+          ?? localRendering.legacy_html_concurrency_limit
+          ?? legacyComponents.html_concurrency_limit,
+      ),
     },
     update_channel: normalizeUpdateChannel(source.update_channel),
     gpu_hardware_acceleration_enabled: gpuHardwareAccelerationEnabled,
@@ -712,6 +744,10 @@ function createConfigStore(app) {
         const config = normalizeConfig(parsedConfig);
         const nextConfig = withAnalyticsIdentity(config);
         if (JSON.stringify(parsedConfig) !== JSON.stringify(nextConfig)) {
+          if (Number(parsedConfig.config_version || 1) < 2) {
+            const backupFile = `${configFile}.v1.backup`;
+            if (!fs.existsSync(backupFile)) fs.copyFileSync(configFile, backupFile);
+          }
           persist(nextConfig);
         }
         return nextConfig;
@@ -743,6 +779,10 @@ function createConfigStore(app) {
           lan_management: {
             ...currentConfig.lan_management,
             ...(config && config.lan_management ? config.lan_management : {}),
+          },
+          local_rendering: {
+            ...currentConfig.local_rendering,
+            ...(config && config.local_rendering ? config.local_rendering : {}),
           },
           analytics_client_id: config?.analytics_client_id || currentConfig.analytics_client_id,
           analytics_created_at: config?.analytics_created_at || currentConfig.analytics_created_at,
