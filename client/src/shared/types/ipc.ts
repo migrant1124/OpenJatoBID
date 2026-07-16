@@ -350,6 +350,7 @@ export interface AgentSelfCheckDiagnostics {
   opencode_stdout_tail?: string;
   opencode_stderr_tail?: string;
   opencode_request_log?: unknown[];
+  isolation_check?: AgentIsolationCheckResult | null;
 }
 
 export interface AgentSelfCheckEnvironmentSnapshot {
@@ -358,6 +359,22 @@ export interface AgentSelfCheckEnvironmentSnapshot {
   paths?: Record<string, unknown>;
   opencode?: Record<string, unknown>;
   text_model?: Record<string, unknown>;
+}
+
+export interface AgentIsolationCheckResult {
+  success: boolean;
+  workspace_dir: string;
+  home_dir: string;
+  config_dir: string;
+  temp_dir: string;
+  allowed_roots: string[];
+  effective_permission: string;
+  external_read_denied: boolean;
+  loaded_skills: Array<{
+    name: string;
+    location?: string;
+  }>;
+  violations: string[];
 }
 
 export interface AgentSelfCheckResult {
@@ -377,6 +394,7 @@ export interface AgentSelfCheckResult {
   conclusion?: string;
   model_config?: Record<string, unknown>;
   environment?: AgentSelfCheckEnvironmentSnapshot | null;
+  isolation_check?: AgentIsolationCheckResult | null;
   direct_model_test?: Record<string, unknown> | null;
   tool_check_summary?: string;
   tool_check_environment?: Record<string, unknown> | null;
@@ -487,7 +505,7 @@ export interface YibiaoBridge {
     moveDocument: (documentId: string, targetFolderId: string, targetDocumentId?: string | null, position?: 'before' | 'after') => Promise<KnowledgeBaseIndexMutationResult>;
     uploadDocuments: (folderId: string) => Promise<KnowledgeBaseUploadResult>;
     retryDocument: (documentId: string) => Promise<KnowledgeBaseRetryDocumentResult>;
-    startMatching: (documentId: string, batchSize: number) => Promise<KnowledgeBaseStartMatchingResult>;
+    startMatching: (documentId: string, batchSize?: number) => Promise<KnowledgeBaseStartMatchingResult>;
     readMarkdown: (documentId: string) => Promise<string>;
     readItems: (documentId: string) => Promise<KnowledgeItem[]>;
     readAnalysis: (documentId: string) => Promise<KnowledgeAnalysisSnapshot>;

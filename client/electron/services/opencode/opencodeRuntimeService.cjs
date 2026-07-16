@@ -7,6 +7,10 @@ const { startOpenCodeSidecar, closeOpenCodeSidecar } = require('./opencodeServer
 const { createSession, sendPrompt, getSessionDiff } = require('./opencodeHttpClient.cjs');
 const { writeOpenCodeAgentsFile } = require('./opencodeToolEnvironment.cjs');
 const {
+  redactOpenCodeSensitiveText,
+  redactOpenCodeSensitiveValue,
+} = require('./opencodeRedaction.cjs');
+const {
   SELF_CHECK_TASK_ID,
   SELF_CHECK_OUTPUT_FILE,
   SELF_CHECK_TIMEOUT_MS,
@@ -366,13 +370,41 @@ function getMessageRole(db, cache, messageId) {
   return role;
 }
 
-function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
+function createOpenCodeRuntimeService({
+  app,
+  configStore,
+  analyticsService,
+  startSidecar = startOpenCodeSidecar,
+  createSessionRequest = createSession,
+  sendPromptRequest = sendPrompt,
+  getSessionDiffRequest = getSessionDiff,
+}) {
   const runtimeRoot = getAgentRuntimeDir(app);
   const serviceRuntimeRoot = path.join(runtimeRoot, 'service');
   const serviceWorkspaceDir = path.join(serviceRuntimeRoot, 'workspace');
   const tasksRoot = path.join(runtimeRoot, 'tasks');
   const diagnostics = createRuntimeDiagnostics();
   const listeners = new Set();
+
+  function getRuntimeSensitiveValues() {
+    try {
+      return [configStore.load()?.api_key];
+    } catch {
+      return [];
+    }
+  }
+
+  function sanitizeRuntimeText(value) {
+    return redactOpenCodeSensitiveText(value, getRuntimeSensitiveValues());
+  }
+
+  function sanitizeRuntimeValue(value) {
+    return redactOpenCodeSensitiveValue(value, getRuntimeSensitiveValues());
+  }
+
+  function getSidecarRequestLog() {
+    return sidecar?.getRequestLog?.() || sanitizeRuntimeValue(sidecar?.requestLog || []);
+  }
 
   let phase = 'stopped';
   let healthy = false;
@@ -403,7 +435,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
   }
 
   function appendRuntimeEvent(event = {}) {
-    diagnostics.record('runtime.event', event);
+    diagnostics.record('runtime.event', sanitizeRuntimeValue(event));
   }
 
   function getActiveTaskSummary() {
@@ -434,7 +466,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
   }
 
   function getStatus() {
-    return {
+    return sanitizeRuntimeValue({
       phase,
       healthy,
       message,
@@ -454,7 +486,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         last_exit_code: lastExitCode,
         last_exit_signal: lastExitSignal,
       },
-    };
+    });
   }
 
   function emitStatus() {
@@ -709,7 +741,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         await closeOpenCodeSidecar(sidecar);
         sidecar = null;
       }
-      sidecar = await startOpenCodeSidecar({
+      sidecar = await startSidecar({
         app,
         configStore,
         runtimeRoot: serviceRuntimeRoot,
@@ -839,7 +871,11 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
     try {
       const taskDir = path.join(tasksRoot, safeTaskPathSegment(taskId));
       fs.mkdirSync(taskDir, { recursive: true });
-      fs.writeFileSync(path.join(taskDir, 'diagnostics.json'), JSON.stringify(payload, null, 2), 'utf-8');
+      fs.writeFileSync(
+        path.join(taskDir, 'diagnostics.json'),
+        JSON.stringify(sanitizeRuntimeValue(payload), null, 2),
+        'utf-8',
+      );
     } catch {}
   }
 
@@ -847,14 +883,18 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
     try {
       const taskDir = path.join(tasksRoot, safeTaskPathSegment(taskId));
       fs.mkdirSync(taskDir, { recursive: true });
-      fs.writeFileSync(path.join(taskDir, 'result.json'), JSON.stringify(payload, null, 2), 'utf-8');
+      fs.writeFileSync(
+        path.join(taskDir, 'result.json'),
+        JSON.stringify(sanitizeRuntimeValue(payload), null, 2),
+        'utf-8',
+      );
     } catch {}
   }
 
   function collectDiagnostics({ taskId, title, outputFile }) {
     let output = { path: '', content: '' };
     try { output = readOutputContent(serviceWorkspaceDir, outputFile); } catch {}
-    return {
+    return sanitizeRuntimeValue({
       taskId,
       title,
       workspaceDir: serviceWorkspaceDir,
@@ -862,12 +902,12 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
       outputFile,
       outputPath: output.path,
       outputContent: output.content,
-      requestLog: sidecar?.requestLog || [],
+      requestLog: getSidecarRequestLog(),
       stderrTail: sidecar?.getStderrTail?.(8000) || '',
       stdoutTail: sidecar?.getStdoutTail?.(8000) || '',
       status: getStatus(),
       events: diagnostics.events.slice(-120),
-    };
+    });
   }
 
   function moveDiagnosticsToArchivedWorkspace(diagnosticsPayload, archivedWorkspaceDir, outputFile) {
@@ -883,7 +923,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
   }
 
   async function runOpenCodeTaskWithRetry({ title, prompt, outputFile, signal, agent, taskActivity, onSessionCreated, validateOutput, maxRetries, retryAttempts }) {
-    const session = await createSession(sidecar, title, { signal, onActivity: taskActivity });
+    const session = await createSessionRequest(sidecar, title, { signal, onActivity: taskActivity });
     const sessionId = session?.id || session?.sessionID || session?.session_id || '';
     if (!sessionId) {
       throw new Error('OpenCode session 创建成功但缺少 session id');
@@ -897,7 +937,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
     for (let attemptIndex = 0; attemptIndex <= maxRetries; attemptIndex += 1) {
       const attempt = attemptIndex + 1;
       try {
-        lastMessageResult = await sendPrompt(sidecar, sessionId, nextPrompt, { signal, agent, onActivity: taskActivity });
+        lastMessageResult = await sendPromptRequest(sidecar, sessionId, nextPrompt, { signal, agent, onActivity: taskActivity });
         lastText = extractTextFromPromptResult(lastMessageResult);
         const output = readOutputContent(serviceWorkspaceDir, outputFile);
         const candidateResult = {
@@ -926,7 +966,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
             throw markAgentValidationError(validationError);
           }
         }
-        const diff = await getSessionDiff(sidecar, sessionId, { signal, onActivity: taskActivity }).catch(() => []);
+        const diff = await getSessionDiffRequest(sidecar, sessionId, { signal, onActivity: taskActivity }).catch(() => []);
         return {
           session,
           message: lastMessageResult?.info || null,
@@ -1162,7 +1202,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         retry_count: result.retry_count || 0,
         retry_attempts: result.retry_attempts || [],
         validation_result: result.validation_result,
-        opencode_request_log: sidecar?.requestLog || [],
+        opencode_request_log: getSidecarRequestLog(),
         opencode_stderr_tail: sidecar?.getStderrTail?.(8000) || '',
         opencode_stdout_tail: sidecar?.getStdoutTail?.(8000) || '',
       };
@@ -1376,11 +1416,12 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         output_file: SELF_CHECK_OUTPUT_FILE,
         output_path: path.join(serviceWorkspaceDir, SELF_CHECK_OUTPUT_FILE),
         opencode_binary_path: '',
+        isolation_check: null,
         runtime_status: getStatus(),
         steps: [],
         detail_text: '',
       };
-      busyResult.detail_text = formatSelfCheckDetails(busyResult);
+      busyResult.detail_text = formatSelfCheckDetails(busyResult, getRuntimeSensitiveValues());
       return busyResult;
     }
 
@@ -1392,6 +1433,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
     let config = null;
     let modelConfig = null;
     let environment = null;
+    let isolationCheck = null;
     let directModelTest = null;
     let toolCheckResult = null;
     let agentResult = null;
@@ -1475,7 +1517,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
 
     function createBaseResult({ success, status, resultMessage, error }) {
       const runtimeStatus = getStatus();
-      const diagnosticsPayload = error ? compactSelfCheckError(error) : {
+      const diagnosticsPayload = error ? compactSelfCheckError(error, getRuntimeSensitiveValues()) : {
         opencode_binary_path: opencodeBinaryPath,
         opencode_base_url: sidecar?.baseUrl || '',
         opencode_port: sidecar?.port || 0,
@@ -1483,7 +1525,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         opencode_exit_signal: lastExitSignal,
         opencode_stdout_tail: sidecar?.getStdoutTail?.(8000) || '',
         opencode_stderr_tail: sidecar?.getStderrTail?.(8000) || '',
-        opencode_request_log: agentResult?.opencode_request_log || sidecar?.requestLog || [],
+        opencode_request_log: agentResult?.opencode_request_log || getSidecarRequestLog(),
       };
       diagnosticsPayload.opencode_binary_path = diagnosticsPayload.opencode_binary_path || opencodeBinaryPath;
       diagnosticsPayload.opencode_base_url = diagnosticsPayload.opencode_base_url || sidecar?.baseUrl || '';
@@ -1493,7 +1535,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
       diagnosticsPayload.opencode_stdout_tail = diagnosticsPayload.opencode_stdout_tail || sidecar?.getStdoutTail?.(8000) || agentResult?.opencode_stdout_tail || '';
       diagnosticsPayload.opencode_stderr_tail = diagnosticsPayload.opencode_stderr_tail || sidecar?.getStderrTail?.(8000) || agentResult?.opencode_stderr_tail || '';
       if (!diagnosticsPayload.opencode_request_log?.length) {
-        diagnosticsPayload.opencode_request_log = agentResult?.opencode_request_log || sidecar?.requestLog || [];
+        diagnosticsPayload.opencode_request_log = agentResult?.opencode_request_log || getSidecarRequestLog();
       }
       diagnosticsPayload.runtime_status = runtimeStatus;
 
@@ -1501,7 +1543,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
       const outputPath = agentResult?.workspace_dir
         ? path.join(agentResult.workspace_dir, SELF_CHECK_OUTPUT_FILE)
         : error?.agentOutputPath || path.join(serviceWorkspaceDir, SELF_CHECK_OUTPUT_FILE);
-      return {
+      return sanitizeRuntimeValue({
         success,
         status,
         message: resultMessage,
@@ -1517,6 +1559,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         opencode_binary_path: opencodeBinaryPath,
         model_config: modelConfig,
         environment,
+        isolation_check: isolationCheck || error?.isolationCheck || sidecar?.isolationCheck || null,
         direct_model_test: directModelTest,
         tool_check_summary: toolCheckResult?.summary || '',
         tool_check_environment: toolCheckResult ? {
@@ -1538,7 +1581,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         diagnostics: diagnosticsPayload,
         error: error ? diagnosticsPayload : undefined,
         detail_text: '',
-      };
+      });
     }
 
     try {
@@ -1584,6 +1627,29 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         ? toolCheckResult.summary || '集成工具校验通过'
         : `集成工具校验完成，存在不可用工具：${toolCheckResult.summary || '请查看详情'}`);
 
+      setStep('ai-proxy-start', 'running', '正在确认常驻 OpenCode AI proxy');
+      const runningSidecar = await ensureStarted();
+      completeRuntimeSteps();
+
+      setStep('isolation-check', 'running', '正在检查 OpenCode 逻辑隔离');
+      isolationCheck = runningSidecar?.isolationCheck || null;
+      if (!isolationCheck?.success) {
+        const violations = Array.isArray(isolationCheck?.violations)
+          ? isolationCheck.violations.filter(Boolean).join('；')
+          : '';
+        const isolationError = createSelfCheckStageError(
+          'isolation-check',
+          violations ? `OpenCode 逻辑隔离检查失败：${violations}` : 'OpenCode 逻辑隔离未返回有效结果',
+        );
+        isolationError.isolationCheck = isolationCheck;
+        throw isolationError;
+      }
+      setStep(
+        'isolation-check',
+        'success',
+        `外部目录规则已拒绝，已加载 ${isolationCheck.loaded_skills?.length || 0} 个 Skill`,
+      );
+
       setStep('direct-model-test', 'running', '正在直接请求当前文本模型');
       directModelTest = await runDirectModelSelfCheck(config);
       if (!directModelTest.success) {
@@ -1591,7 +1657,6 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
       }
       setStep('direct-model-test', 'success', directModelTest.message || '直接模型测试成功');
 
-      setStep('ai-proxy-start', 'running', '正在确认常驻 OpenCode AI proxy');
       agentTaskStarted = true;
       agentResult = await runTask({
         task_id: SELF_CHECK_TASK_ID,
@@ -1607,7 +1672,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
       if (agentResult?.status === 'busy') {
         const busyResult = createBaseResult({ success: false, status: 'busy', resultMessage: BUSY_MESSAGE });
         busyResult.conclusion = 'Agent 子服务正在执行任务，自检已跳过；这不是 OpenCode 故障。';
-        busyResult.detail_text = formatSelfCheckDetails(busyResult);
+        busyResult.detail_text = formatSelfCheckDetails(busyResult, getRuntimeSensitiveValues());
         logger.write('result', busyResult);
         return busyResult;
       }
@@ -1627,7 +1692,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
 
       const result = createBaseResult({ success: true, status: 'normal', resultMessage: '智能体自检正常' });
       result.conclusion = createSelfCheckConclusion(result);
-      result.detail_text = formatSelfCheckDetails(result);
+      result.detail_text = formatSelfCheckDetails(result, getRuntimeSensitiveValues());
       logger.write('result', result);
       return result;
     } catch (error) {
@@ -1642,7 +1707,7 @@ function createOpenCodeRuntimeService({ app, configStore, analyticsService }) {
         error,
       });
       result.conclusion = createSelfCheckConclusion(result);
-      result.detail_text = formatSelfCheckDetails(result);
+      result.detail_text = formatSelfCheckDetails(result, getRuntimeSensitiveValues());
       logger.write('result', result);
       return result;
     }

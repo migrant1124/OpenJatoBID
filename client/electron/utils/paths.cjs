@@ -106,7 +106,7 @@ function getPlatformArchKey() {
 }
 
 function getBundledOpencodeBinaryPath(app) {
-  if (process.env.YIBIAO_OPENCODE_BIN) {
+  if (!app.isPackaged && process.env.YIBIAO_OPENCODE_BIN) {
     return process.env.YIBIAO_OPENCODE_BIN;
   }
 
@@ -121,7 +121,7 @@ function getBundledOpencodeBinaryPath(app) {
 }
 
 function getBundledOpencodeToolsBinDir(app) {
-  if (process.env.YIBIAO_OPENCODE_TOOLS_BIN_DIR) {
+  if (!app.isPackaged && process.env.YIBIAO_OPENCODE_TOOLS_BIN_DIR) {
     return process.env.YIBIAO_OPENCODE_TOOLS_BIN_DIR;
   }
 
