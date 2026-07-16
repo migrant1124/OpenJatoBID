@@ -176,6 +176,7 @@ export function validateTrackEvent(event) {
 }
 
 export function writeAnalyticsDataPoint(env, event) {
+  if (!env.ANALYTICS) return;
   env.ANALYTICS.writeDataPoint({
     blobs: event.blobs,
     doubles: event.doubles,

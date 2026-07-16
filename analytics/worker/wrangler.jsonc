@@ -12,7 +12,7 @@
   "analytics_engine_datasets": [
     {
       "binding": "ANALYTICS",
-      "dataset": "agnet_analytics"
+      "dataset": "jatobid_analytics"
     }
   ],
   "r2_buckets": [
