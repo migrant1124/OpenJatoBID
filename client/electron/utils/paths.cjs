@@ -1,4 +1,5 @@
 const path = require('node:path');
+const os = require('node:os');
 
 function getUserDataPath(app) {
   return app.getPath('userData');
@@ -10,6 +11,22 @@ function getConfigFilePath(app) {
 
 function getLicenseFilePath(app) {
   return path.join(getUserDataPath(app), 'license.json');
+}
+
+function getDeviceBootstrapFilePath({
+  platform = process.platform,
+  env = process.env,
+  homeDir = os.homedir(),
+} = {}) {
+  if (platform === 'win32') {
+    const localAppData = env.LOCALAPPDATA || path.win32.join(homeDir, 'AppData', 'Local');
+    return path.win32.join(localAppData, 'JatoDigital', 'OpenJatoBID', 'bootstrap.json');
+  }
+  if (platform === 'darwin') {
+    return path.posix.join(homeDir, 'Library', 'Application Support', 'JatoDigital', 'OpenJatoBID', 'bootstrap.json');
+  }
+  const configRoot = env.XDG_CONFIG_HOME || path.posix.join(homeDir, '.config');
+  return path.posix.join(configRoot, 'JatoDigital', 'OpenJatoBID', 'bootstrap.json');
 }
 
 function getGpuStartupProbePath(app) {
@@ -143,6 +160,7 @@ module.exports = {
   getDuplicateCheckContentDir,
   getDuplicateCheckDir,
   getConfigFilePath,
+  getDeviceBootstrapFilePath,
   getGpuStartupProbePath,
   getGeneratedImagesDir,
   getImportedImagesDir,

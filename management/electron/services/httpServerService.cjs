@@ -2,6 +2,7 @@ const http = require('node:http');
 
 function createHttpServerService({ router }) {
   let server = null;
+  const sockets = new Set();
 
   function start({ host, port }) {
     if (server) throw new Error('HTTP_SERVER_ALREADY_STARTED');
@@ -20,6 +21,10 @@ function createHttpServerService({ router }) {
           error: { code: 'INTERNAL_ERROR', message: '管理端处理请求失败' },
         }));
       });
+    });
+    server.on('connection', (socket) => {
+      sockets.add(socket);
+      socket.once('close', () => sockets.delete(socket));
     });
 
     return new Promise((resolve, reject) => {
@@ -44,6 +49,11 @@ function createHttpServerService({ router }) {
     server = null;
     return new Promise((resolve, reject) => {
       activeServer.close((error) => error ? reject(error) : resolve());
+      if (typeof activeServer.closeAllConnections === 'function') {
+        activeServer.closeAllConnections();
+      } else {
+        for (const socket of sockets) socket.destroy();
+      }
     });
   }
 

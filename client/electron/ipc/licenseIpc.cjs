@@ -15,9 +15,18 @@ function registerLicenseIpc({ licenseService, mainWindow }) {
   ipcMain.handle('license:login', (_event, input) => licenseService.login(input).then(notifyStatus));
   ipcMain.handle('license:verify', () => verifyAndNotify());
 
-  powerMonitor.on('resume', () => {
+  const handleResume = () => {
     void verifyAndNotify().catch(() => {});
-  });
+  };
+  const unsubscribeStatus = licenseService.onStatusChanged?.(notifyStatus);
+  licenseService.startLifecycle?.();
+  powerMonitor.on('resume', handleResume);
+
+  return () => {
+    powerMonitor.removeListener('resume', handleResume);
+    unsubscribeStatus?.();
+    licenseService.close?.();
+  };
 }
 
 module.exports = {

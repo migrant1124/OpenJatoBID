@@ -42,6 +42,7 @@ function normalizeInitialCredential(initialCredential) {
 function createAdminAuthService({
   database,
   initialCredential,
+  allowInitialBootstrap = false,
   now = () => new Date(),
   saltFactory = () => crypto.randomBytes(16).toString('hex'),
 }) {
@@ -53,6 +54,7 @@ function createAdminAuthService({
     database.transaction(() => {
       const auth = readAuth();
       if (!auth) {
+        if (!allowInitialBootstrap) throw new Error('ADMIN_AUTH_MISSING_FROM_EXISTING_DATABASE');
         database.prepare(`
           INSERT INTO admin_auth (
             id, username, password_hash, password_salt, credential_state,
@@ -70,15 +72,11 @@ function createAdminAuthService({
       } else if (auth.credential_state === ADMIN_CREDENTIAL_STATES.LEGACY) {
         database.prepare(`
           UPDATE admin_auth
-          SET username = ?, password_hash = ?, password_salt = ?,
-              credential_state = ?, initial_credential_version = ?, updated_at = ?
+          SET username = ?, credential_state = ?, updated_at = ?
           WHERE id = 1
         `).run(
-          normalizedInitialCredential.username,
-          normalizedInitialCredential.passwordHash,
-          normalizedInitialCredential.passwordSalt,
-          ADMIN_CREDENTIAL_STATES.INITIAL_PASSWORD_REQUIRED,
-          normalizedInitialCredential.credentialVersion,
+          String(auth.username || '').trim() || normalizedInitialCredential.username,
+          ADMIN_CREDENTIAL_STATES.OWNER_PASSWORD_ACTIVE,
           timestamp,
         );
       } else if (

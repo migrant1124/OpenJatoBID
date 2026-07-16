@@ -145,6 +145,7 @@ function registerAdminIpc({
     if (denied) return denied;
     return {
       success: true,
+      summary: authorizationService.getSummary(),
       applications: authorizationService.listApplications(),
       employees: authorizationService.listEmployees(),
     };

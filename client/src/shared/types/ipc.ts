@@ -169,7 +169,7 @@ export interface AgentRuntimeActiveTask {
   idle_seconds: number;
 }
 
-export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'revoked' | 'offline_expired' | 'invalid' | 'machine_mismatch' | 'identity_mismatch' | 'debug_disabled';
+export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'revoked' | 'not_authorized' | 'offline_expired' | 'invalid' | 'machine_mismatch' | 'identity_mismatch' | 'debug_disabled';
 
 export interface LicenseRuntimeStatus {
   status: LicenseStatusValue | string;
@@ -183,6 +183,8 @@ export interface LicenseRuntimeStatus {
   untrustedReason: string;
   machineFingerprintHash: string;
   fingerprintVersion: string;
+  deviceCode: string;
+  deviceCodeVersion: string;
   buildTrusted: boolean;
   buildChanged: boolean;
   buildId: string;
@@ -211,6 +213,8 @@ export interface AuthorizationApplicationResult {
   name: string;
   phone: string;
   deviceFingerprint: string;
+  deviceCode?: string;
+  deviceCodeVersion?: string;
   clientId: string;
   platform: string;
   arch: string;
@@ -459,7 +463,7 @@ export interface YibiaoBridge {
     testServer: (serverAddress: string) => Promise<{ success: boolean; serverAddress: string; data: unknown }>;
     submitApplication: (input: { name: string; phone: string; serverAddress: string }) => Promise<AuthorizationApplicationResult>;
     getApplicationStatus: () => Promise<AuthorizationApplicationResult>;
-    login: (input: { name: string; phone: string }) => Promise<LicenseRuntimeStatus>;
+    login: (input: { name: string; phone: string; serverAddress?: string }) => Promise<LicenseRuntimeStatus>;
     verify: () => Promise<LicenseRuntimeStatus>;
     onStatusChanged: (callback: (status: LicenseRuntimeStatus) => void) => () => void;
   };

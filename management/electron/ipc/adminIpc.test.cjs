@@ -36,6 +36,7 @@ function createFixture() {
   const authService = createAdminAuthService({
     database: databaseService.database,
     initialCredential: createInitialCredential(),
+    allowInitialBootstrap: databaseService.isNewDatabase,
   });
   const ipcMain = new FakeIpcMain();
   const serverStarts = [];
@@ -44,6 +45,12 @@ function createFixture() {
     database: databaseService.database,
     authService,
     authorizationService: {
+      getSummary: () => ({
+        applicationCount: 1,
+        pendingApplicationCount: 1,
+        employeeCount: 1,
+        activeDeviceBindingCount: 1,
+      }),
       listApplications: () => [{ id: 'application-1' }],
       listEmployees: () => [{ id: 'employee-1' }],
       approveApplication: () => ({}),
@@ -115,7 +122,14 @@ test('enforces initial login, password change, and server setup before business 
     serverConfigured: true,
     server: { host: '0.0.0.0', port: 47821 },
   });
-  assert.equal((await ipcMain.invoke('management:authorization:list')).success, true);
+  const authorizationList = await ipcMain.invoke('management:authorization:list');
+  assert.equal(authorizationList.success, true);
+  assert.deepEqual(authorizationList.summary, {
+    applicationCount: 1,
+    pendingApplicationCount: 1,
+    employeeCount: 1,
+    activeDeviceBindingCount: 1,
+  });
   fixture.databaseService.close();
 });
 

@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const Database = require('better-sqlite3');
 const { createDatabaseService } = require('./databaseService.cjs');
 const { MIGRATIONS, migrateDatabase } = require('./migrations.cjs');
@@ -8,9 +11,9 @@ test('creates the phase-two schema and can reopen it idempotently', () => {
   const service = createDatabaseService({ databasePath: ':memory:' });
   const tables = service.database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name);
 
-  assert.equal(service.database.pragma('user_version', { simple: true }), 3);
+  assert.equal(service.database.pragma('user_version', { simple: true }), 4);
   assert.deepEqual(
-    ['admin_auth', 'analytics_events', 'authorization_applications', 'devices', 'employees', 'licenses', 'settings'].filter((name) => !tables.includes(name)),
+    ['admin_auth', 'analytics_events', 'authorization_applications', 'authorization_revocations', 'devices', 'employees', 'licenses', 'settings'].filter((name) => !tables.includes(name)),
     [],
   );
   assert.doesNotThrow(() => service.migrate());
@@ -62,7 +65,7 @@ test('migrates legacy administrator data without removing authorization, analyti
   migrateDatabase(database);
   migrateDatabase(database);
 
-  assert.equal(database.pragma('user_version', { simple: true }), 3);
+  assert.equal(database.pragma('user_version', { simple: true }), 4);
   assert.deepEqual(database.prepare('SELECT username, credential_state FROM admin_auth WHERE id = 1').get(), {
     username: '',
     credential_state: 'LEGACY',
@@ -107,4 +110,67 @@ test('database trigger prevents a fourth active device license for one employee'
     /EMPLOYEE_DEVICE_LIMIT/,
   );
   service.close();
+});
+
+test('creates and validates a real-file backup before schema migration', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-management-db-backup-'));
+  const databasePath = path.join(root, 'management.sqlite3');
+  let service = null;
+  try {
+    const legacy = new Database(databasePath);
+    for (const migration of MIGRATIONS.filter((item) => item.version <= 3)) {
+      legacy.exec(migration.sql);
+      legacy.pragma(`user_version = ${migration.version}`);
+    }
+    legacy.prepare('INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)')
+      .run('server_config', '{"host":"0.0.0.0","port":47821}', '2026-07-10T00:00:00.000Z');
+    legacy.close();
+
+    service = createDatabaseService({ databasePath });
+    const backupFiles = fs.readdirSync(path.join(root, 'backups')).filter((name) => name.endsWith('.sqlite3'));
+    assert.equal(backupFiles.length, 1);
+    const backup = new Database(path.join(root, 'backups', backupFiles[0]), { readonly: true });
+    assert.equal(backup.pragma('integrity_check', { simple: true }), 'ok');
+    assert.equal(backup.prepare('SELECT value_json FROM settings WHERE key = ?').get('server_config').value_json.includes('47821'), true);
+    backup.close();
+    service.close();
+    service = null;
+  } finally {
+    service?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('restores the original real-file database and leaves no empty database when migration fails', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-management-db-rollback-'));
+  const databasePath = path.join(root, 'management.sqlite3');
+  let unexpectedService = null;
+  try {
+    const original = createDatabaseService({ databasePath });
+    original.database.prepare('INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)')
+      .run('server_config', '{"host":"0.0.0.0","port":47821}', '2026-07-10T00:00:00.000Z');
+    original.close();
+
+    assert.throws(
+      () => {
+        unexpectedService = createDatabaseService({
+          databasePath,
+          migrate(database) {
+            database.exec('CREATE TABLE migration_should_rollback (id INTEGER PRIMARY KEY)');
+            throw new Error('FORCED_MIGRATION_FAILURE');
+          },
+        });
+      },
+      /FORCED_MIGRATION_FAILURE/,
+    );
+
+    const restored = new Database(databasePath, { readonly: true });
+    assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
+    assert.equal(restored.prepare('SELECT value_json FROM settings WHERE key = ?').get('server_config').value_json.includes('47821'), true);
+    assert.equal(restored.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_should_rollback'").get(), undefined);
+    restored.close();
+  } finally {
+    unexpectedService?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -19,6 +19,7 @@ function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('bid-generation');
   const [developerMode, setDeveloperMode] = useState(false);
   const leaveGuardRef = useRef<((nextSection?: string) => Promise<boolean>) | null>(null);
+  const licenseEventRevisionRef = useRef(0);
 
   useEffect(() => {
     const licenseApi = window.yibiao?.license;
@@ -26,8 +27,10 @@ function App() {
       setAuthorizationChecked(true);
       return;
     }
+    const requestRevision = licenseEventRevisionRef.current;
     void licenseApi.getStatus()
       .then((status) => {
+        if (requestRevision !== licenseEventRevisionRef.current) return;
         setInitialLicenseStatus(status);
         if (status.status === 'debug_disabled') setAuthorized(true);
       })
@@ -35,22 +38,25 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!authorized) return undefined;
+    const license = window.yibiao?.license;
+    if (!license) return undefined;
     const handleStatus = (status: LicenseRuntimeStatus) => {
-      if (status.status === 'active' || status.status === 'debug_disabled') return;
       setInitialLicenseStatus(status);
-      setAuthorized(false);
+      if (status.status !== 'active' && status.status !== 'debug_disabled') {
+        licenseEventRevisionRef.current += 1;
+        setAuthorized(false);
+      }
     };
     const verifyAfterReconnect = () => {
-      void window.yibiao?.license.verify().then(handleStatus).catch(() => {});
+      void license.verify().then(handleStatus).catch(() => {});
     };
-    const unsubscribe = window.yibiao?.license.onStatusChanged(handleStatus);
+    const unsubscribe = license.onStatusChanged(handleStatus);
     window.addEventListener('online', verifyAfterReconnect);
     return () => {
       unsubscribe?.();
       window.removeEventListener('online', verifyAfterReconnect);
     };
-  }, [authorized]);
+  }, []);
 
   useEffect(() => {
     if (!authorized) return;
@@ -75,6 +81,17 @@ function App() {
     }
   }, [activeSection, developerMode]);
 
+  const confirmAuthorization = async (status: LicenseRuntimeStatus) => {
+    const requestRevision = licenseEventRevisionRef.current;
+    let latestStatus = status;
+    try {
+      latestStatus = await window.yibiao?.license.getStatus() ?? status;
+    } catch {}
+    if (requestRevision !== licenseEventRevisionRef.current) return;
+    setInitialLicenseStatus(latestStatus);
+    setAuthorized(latestStatus.status === 'active' || latestStatus.status === 'debug_disabled');
+  };
+
   const requestSectionChange = async (section: SectionId) => {
     if (section === activeSection) {
       return;
@@ -96,7 +113,7 @@ function App() {
   }
 
   if (!authorized) {
-    return <StartupAuthPage initialStatus={initialLicenseStatus} onAuthorized={(status) => { setInitialLicenseStatus(status); setAuthorized(true); }} />;
+    return <StartupAuthPage initialStatus={initialLicenseStatus} onAuthorized={(status) => { void confirmAuthorization(status); }} />;
   }
 
   return (
