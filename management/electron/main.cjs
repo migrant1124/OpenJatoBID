@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Tray } = require('electron');
 const path = require('node:path');
 const initialAdminCredential = require('./generated/initialAdminCredential.cjs');
 const { registerAdminIpc } = require('./ipc/adminIpc.cjs');
@@ -9,6 +9,10 @@ const { createAuthorizationService } = require('./services/authorizationService.
 const { createDatabaseService } = require('./services/databaseService.cjs');
 const { createHttpRouter } = require('./services/httpRouter.cjs');
 const { createHttpServerService } = require('./services/httpServerService.cjs');
+const {
+  getFixedManagementDataRoot,
+  prepareFixedManagementDatabase,
+} = require('./services/managementDataService.cjs');
 const { createSigningService } = require('./services/signingService.cjs');
 const { createWindowCloseHandler } = require('./services/windowLifecycle.cjs');
 
@@ -24,6 +28,7 @@ let httpServerState = { status: 'STOPPED', address: null, message: '' };
 let authorizationService = null;
 let analyticsIngestService = null;
 let analyticsQueryService = null;
+let revocationCleanupTimer = null;
 
 function readServerConfig() {
   const row = databaseService?.database.prepare('SELECT value_json FROM settings WHERE key = ?').get('server_config');
@@ -142,41 +147,67 @@ if (!hasSingleInstanceLock) {
   app.on('second-instance', showMainWindow);
   app.on('before-quit', () => {
     isQuitting = true;
+    if (revocationCleanupTimer) clearInterval(revocationCleanupTimer);
+    revocationCleanupTimer = null;
     void httpServerService?.stop();
     databaseService?.close();
     databaseService = null;
   });
   app.on('window-all-closed', () => {});
-  app.whenReady().then(() => {
-    nativeTheme.themeSource = 'light';
-    Menu.setApplicationMenu(null);
-    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-    databaseService = createDatabaseService({
-      databasePath: path.join(app.getPath('userData'), 'management.sqlite3'),
-    });
-    authorizationService = createAuthorizationService({
-      database: databaseService.database,
-      signingService: createSigningService({ database: databaseService.database }),
-    });
-    analyticsIngestService = createAnalyticsIngestService({ database: databaseService.database });
-    analyticsQueryService = createAnalyticsQueryService({ database: databaseService.database });
-    registerAdminIpc({
-      ipcMain,
-      database: databaseService.database,
-      authService: createAdminAuthService({
+  app.whenReady().then(async () => {
+    try {
+      nativeTheme.themeSource = 'light';
+      Menu.setApplicationMenu(null);
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+      const legacyDatabasePath = path.join(app.getPath('userData'), 'management.sqlite3');
+      const preparedData = await prepareFixedManagementDatabase({
+        fixedDataRoot: getFixedManagementDataRoot(),
+        legacyDatabasePath,
+      });
+      databaseService = createDatabaseService({ databasePath: preparedData.databasePath });
+      const authService = createAdminAuthService({
         database: databaseService.database,
         initialCredential: initialAdminCredential,
-      }),
-      authorizationService,
-      analyticsQueryService,
-      onSetupComplete: startLanServer,
-    });
-    registerAppIpc();
-    const serverConfig = readServerConfig();
-    if (serverConfig) {
-      void startLanServer(serverConfig).catch(() => {});
+        allowInitialBootstrap: databaseService.isNewDatabase,
+      });
+      authorizationService = createAuthorizationService({
+        database: databaseService.database,
+        signingService: createSigningService({ database: databaseService.database }),
+      });
+      authorizationService.cleanupRevocations();
+      revocationCleanupTimer = setInterval(
+        () => authorizationService?.cleanupRevocations(),
+        6 * 60 * 60 * 1000,
+      );
+      analyticsIngestService = createAnalyticsIngestService({ database: databaseService.database });
+      analyticsQueryService = createAnalyticsQueryService({ database: databaseService.database });
+      registerAdminIpc({
+        ipcMain,
+        database: databaseService.database,
+        authService,
+        authorizationService,
+        analyticsQueryService,
+        onSetupComplete: startLanServer,
+      });
+      registerAppIpc();
+      const serverConfig = readServerConfig();
+      if (serverConfig) {
+        void startLanServer(serverConfig).catch(() => {});
+      }
+      createMainWindow();
+      createTray();
+    } catch (error) {
+      if (revocationCleanupTimer) clearInterval(revocationCleanupTimer);
+      revocationCleanupTimer = null;
+      await httpServerService?.stop().catch(() => {});
+      httpServerService = null;
+      databaseService?.close();
+      databaseService = null;
+      dialog.showErrorBox(
+        '管理端数据升级失败',
+        `数据库迁移或校验失败，局域网服务未启动。原数据库和迁移备份均已保留。\n\n${error instanceof Error ? error.message : String(error)}`,
+      );
+      app.quit();
     }
-    createMainWindow();
-    createTray();
   });
 }

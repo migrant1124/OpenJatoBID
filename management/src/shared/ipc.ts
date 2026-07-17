@@ -93,6 +93,8 @@ export interface AuthorizationApplication {
   name: string;
   phone: string;
   deviceFingerprint: string;
+  deviceCode?: string;
+  deviceCodeVersion?: string | null;
   clientId: string;
   platform: string;
   arch: string;
@@ -104,6 +106,8 @@ export interface AuthorizationApplication {
 export interface AuthorizedDevice {
   id: string;
   clientId: string;
+  deviceCode?: string;
+  deviceCodeVersion?: string | null;
   platform: string;
   arch: string;
   status: 'ACTIVE' | 'REVOKED';
@@ -123,7 +127,15 @@ export interface AuthorizedEmployee {
   devices: AuthorizedDevice[];
 }
 
+export interface AuthorizationSummary {
+  applicationCount: number;
+  pendingApplicationCount: number;
+  employeeCount: number;
+  activeDeviceBindingCount: number;
+}
+
 export interface ManagementAuthorizationListResult extends ManagementOperationResult {
+  summary?: AuthorizationSummary;
   applications?: AuthorizationApplication[];
   employees?: AuthorizedEmployee[];
 }

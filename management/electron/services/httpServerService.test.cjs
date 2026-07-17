@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHttpRouter } = require('./httpRouter.cjs');
 const { createHttpServerService } = require('./httpServerService.cjs');
+const { createDatabaseService } = require('./databaseService.cjs');
+const { createSigningService } = require('./signingService.cjs');
+const { createAuthorizationService } = require('./authorizationService.cjs');
 
 test('serves a versioned health response with consistent JSON headers', async () => {
   const router = createHttpRouter({
@@ -92,4 +95,119 @@ test('accepts a bounded analytics batch and forwards the LAN source IP', async (
   assert.deepEqual(await response.json(), { data: { acceptedEventIds: ['event-1'] } });
   assert.equal(received.sourceIp, '127.0.0.1');
   await server.stop();
+});
+
+test('streams revocation through a Bearer watch token and server stop closes active SSE connections', async () => {
+  const databaseService = createDatabaseService({ databasePath: ':memory:' });
+  let nextId = 0;
+  const authorizationService = createAuthorizationService({
+    database: databaseService.database,
+    signingService: createSigningService({ database: databaseService.database }),
+    now: () => new Date('2026-07-10T00:00:00.000Z'),
+    idFactory: (prefix) => `${prefix}-${++nextId}`,
+  });
+  const application = authorizationService.submitApplication({
+    name: '张三',
+    phone: '13800138000',
+    deviceCode: 'device-code-1',
+    deviceCodeVersion: 'jato-device-v1',
+    deviceFingerprint: 'fingerprint-1',
+    clientId: 'client-1',
+    platform: 'win32',
+    arch: 'x64',
+  });
+  const approved = authorizationService.approveApplication(application.id);
+  const server = createHttpServerService({
+    router: createHttpRouter({ getServiceInfo: () => ({}), authorizationService }),
+  });
+  const address = await server.start({ host: '127.0.0.1', port: 0 });
+  try {
+    const applicationResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/v1/authorization/applications/${application.id}`,
+    );
+    const applicationState = (await applicationResponse.json()).data;
+    assert.equal(applicationState.status, 'APPROVED');
+    assert.equal(typeof applicationState.watchToken, 'string');
+    assert.equal(typeof applicationState.watchExpiresAt, 'string');
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/authorization/watch`, {
+      headers: { Authorization: `Bearer ${applicationState.watchToken}` },
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') || '', /^text\/event-stream/);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let eventText = decoder.decode((await reader.read()).value || new Uint8Array());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    authorizationService.revokeLicense(approved.license.payload.licenseId);
+    while (!eventText.includes('event: revoked')) {
+      const next = await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SSE_REVOCATION_TIMEOUT')), 1000)),
+      ]);
+      if (next.done) break;
+      eventText += decoder.decode(next.value, { stream: true });
+    }
+    assert.match(eventText, /event: revoked/);
+    assert.match(eventText, /"status":"REVOKED"/);
+
+    await Promise.race([
+      server.stop(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SSE_SERVER_STOP_TIMEOUT')), 1000)),
+    ]);
+  } finally {
+    await server.stop();
+    databaseService.close();
+  }
+});
+
+test('late SSE subscription receives a revocation that was committed before subscribe without losing headers', async () => {
+  const databaseService = createDatabaseService({ databasePath: ':memory:' });
+  let nextId = 0;
+  const authorizationService = createAuthorizationService({
+    database: databaseService.database,
+    signingService: createSigningService({ database: databaseService.database }),
+    now: () => new Date('2026-07-10T00:00:00.000Z'),
+    idFactory: (prefix) => `${prefix}-${++nextId}`,
+  });
+  const application = authorizationService.submitApplication({
+    name: '张三',
+    phone: '13800138000',
+    deviceCode: 'device-code-late',
+    deviceCodeVersion: 'jato-device-v1',
+    deviceFingerprint: 'fingerprint-late',
+    clientId: 'client-late',
+    platform: 'win32',
+    arch: 'x64',
+  });
+  const approved = authorizationService.approveApplication(application.id);
+  authorizationService.revokeLicense(approved.license.payload.licenseId);
+  const server = createHttpServerService({
+    router: createHttpRouter({ getServiceInfo: () => ({}), authorizationService }),
+  });
+  const address = await server.start({ host: '127.0.0.1', port: 0 });
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/authorization/watch`, {
+      headers: { Authorization: `Bearer ${approved.watchToken}` },
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') || '', /^text\/event-stream/);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let eventText = '';
+    while (!eventText.includes('event: revoked')) {
+      const next = await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('LATE_SSE_REVOCATION_TIMEOUT')), 1000)),
+      ]);
+      if (next.done) break;
+      eventText += decoder.decode(next.value, { stream: true });
+    }
+    assert.match(eventText, /event: revoked/);
+    assert.match(eventText, /"status":"REVOKED"/);
+  } finally {
+    await server.stop();
+    databaseService.close();
+  }
 });

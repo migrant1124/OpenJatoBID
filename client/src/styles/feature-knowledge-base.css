@@ -131,6 +131,89 @@
   padding-top: 2px;
 }
 
+.knowledge-rename-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 121;
+  width: min(480px, calc(100vw - 32px));
+  padding: 24px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 20px;
+  box-shadow: 0 28px 72px rgba(23, 32, 51, 0.18);
+  transform: translate(-50%, -50%);
+}
+
+.knowledge-rename-form,
+.knowledge-rename-head,
+.knowledge-rename-field {
+  display: grid;
+}
+
+.knowledge-rename-form {
+  gap: 18px;
+}
+
+.knowledge-rename-head {
+  gap: 7px;
+}
+
+.knowledge-rename-head h2 {
+  margin: 0;
+  color: var(--yb-text);
+  font-size: 22px;
+}
+
+.knowledge-rename-head p {
+  margin: 0;
+  color: var(--yb-text-soft);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.knowledge-rename-field {
+  gap: 8px;
+  color: var(--yb-text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.knowledge-rename-field input {
+  width: 100%;
+  height: 44px;
+  padding: 0 13px;
+  box-sizing: border-box;
+  color: var(--yb-text);
+  font-size: 14px;
+  background: #ffffff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 12px;
+  outline: none;
+}
+
+.knowledge-rename-field input:focus {
+  border-color: rgba(33, 116, 253, 0.5);
+  box-shadow: 0 0 0 3px rgba(33, 116, 253, 0.1);
+}
+
+.knowledge-rename-field input[aria-invalid='true'] {
+  border-color: rgba(185, 28, 28, 0.55);
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.08);
+}
+
+.knowledge-rename-error {
+  margin: -8px 0 0;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.knowledge-rename-actions {
+  padding-top: 0;
+}
+
 .knowledge-workspace-bar {
   display: flex;
   align-items: center;
@@ -747,13 +830,92 @@
   min-height: 0;
   gap: 12px;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
-.knowledge-viewer-bar .knowledge-breadcrumb strong {
+.knowledge-viewer-bar {
+  display: grid;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  grid-template-areas:
+    'label file count back modes'
+    'developer developer developer developer developer';
+  grid-template-columns: auto minmax(260px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-width: 0;
   overflow: hidden;
-  max-width: min(680px, 48vw);
-  text-overflow: ellipsis;
+}
+
+.knowledge-viewer-label {
+  grid-area: label;
+  color: var(--yb-text-muted);
+  font-size: 13px;
   white-space: nowrap;
+}
+
+.knowledge-viewer-file-name {
+  grid-area: file;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  color: var(--yb-text);
+  font-size: 18px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.knowledge-viewer-count {
+  grid-area: count;
+  color: var(--yb-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.knowledge-viewer-back {
+  grid-area: back;
+  white-space: nowrap;
+}
+
+.knowledge-viewer-mode-actions {
+  display: grid;
+  grid-area: modes;
+  gap: 8px;
+}
+
+.knowledge-viewer-mode-actions .secondary-action,
+.knowledge-viewer-developer-actions .secondary-action {
+  white-space: nowrap;
+}
+
+.knowledge-viewer-mode-actions .secondary-action.is-active,
+.knowledge-viewer-developer-actions .secondary-action.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--yb-primary), var(--yb-violet));
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(33, 116, 253, 0.16);
+}
+
+.knowledge-viewer-developer-actions {
+  display: flex;
+  grid-area: developer;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--yb-border-soft);
+}
+
+.knowledge-viewer-developer-actions > span {
+  color: var(--yb-text-muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .knowledge-viewer-panel {
@@ -963,7 +1125,8 @@
   }
 
   .knowledge-viewer-page {
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .knowledge-layout {
@@ -1025,5 +1188,51 @@
   .knowledge-migration-actions {
     align-items: stretch;
     flex-direction: column-reverse;
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1100px) {
+  .knowledge-viewer-bar {
+    grid-template-areas:
+      'label file count'
+      'back back modes'
+      'developer developer developer';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .knowledge-viewer-back {
+    justify-self: start;
+  }
+
+  .knowledge-viewer-mode-actions {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 859px) {
+  .knowledge-viewer-bar {
+    grid-template-areas:
+      'label'
+      'file'
+      'count'
+      'back'
+      'modes'
+      'developer';
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .knowledge-viewer-back {
+    width: fit-content;
+  }
+
+  .knowledge-viewer-mode-actions,
+  .knowledge-viewer-mode-actions .secondary-action {
+    width: 100%;
+  }
+
+  .knowledge-viewer-developer-actions {
+    justify-content: flex-start;
   }
 }

@@ -169,7 +169,7 @@ export interface AgentRuntimeActiveTask {
   idle_seconds: number;
 }
 
-export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'revoked' | 'offline_expired' | 'invalid' | 'machine_mismatch' | 'identity_mismatch' | 'debug_disabled';
+export type LicenseStatusValue = 'missing' | 'active' | 'expired' | 'revoked' | 'not_authorized' | 'offline_expired' | 'invalid' | 'machine_mismatch' | 'identity_mismatch' | 'debug_disabled';
 
 export interface LicenseRuntimeStatus {
   status: LicenseStatusValue | string;
@@ -183,6 +183,8 @@ export interface LicenseRuntimeStatus {
   untrustedReason: string;
   machineFingerprintHash: string;
   fingerprintVersion: string;
+  deviceCode: string;
+  deviceCodeVersion: string;
   buildTrusted: boolean;
   buildChanged: boolean;
   buildId: string;
@@ -211,6 +213,8 @@ export interface AuthorizationApplicationResult {
   name: string;
   phone: string;
   deviceFingerprint: string;
+  deviceCode?: string;
+  deviceCodeVersion?: string;
   clientId: string;
   platform: string;
   arch: string;
@@ -350,6 +354,7 @@ export interface AgentSelfCheckDiagnostics {
   opencode_stdout_tail?: string;
   opencode_stderr_tail?: string;
   opencode_request_log?: unknown[];
+  isolation_check?: AgentIsolationCheckResult | null;
 }
 
 export interface AgentSelfCheckEnvironmentSnapshot {
@@ -358,6 +363,22 @@ export interface AgentSelfCheckEnvironmentSnapshot {
   paths?: Record<string, unknown>;
   opencode?: Record<string, unknown>;
   text_model?: Record<string, unknown>;
+}
+
+export interface AgentIsolationCheckResult {
+  success: boolean;
+  workspace_dir: string;
+  home_dir: string;
+  config_dir: string;
+  temp_dir: string;
+  allowed_roots: string[];
+  effective_permission: string;
+  external_read_denied: boolean;
+  loaded_skills: Array<{
+    name: string;
+    location?: string;
+  }>;
+  violations: string[];
 }
 
 export interface AgentSelfCheckResult {
@@ -377,6 +398,7 @@ export interface AgentSelfCheckResult {
   conclusion?: string;
   model_config?: Record<string, unknown>;
   environment?: AgentSelfCheckEnvironmentSnapshot | null;
+  isolation_check?: AgentIsolationCheckResult | null;
   direct_model_test?: Record<string, unknown> | null;
   tool_check_summary?: string;
   tool_check_environment?: Record<string, unknown> | null;
@@ -441,7 +463,7 @@ export interface YibiaoBridge {
     testServer: (serverAddress: string) => Promise<{ success: boolean; serverAddress: string; data: unknown }>;
     submitApplication: (input: { name: string; phone: string; serverAddress: string }) => Promise<AuthorizationApplicationResult>;
     getApplicationStatus: () => Promise<AuthorizationApplicationResult>;
-    login: (input: { name: string; phone: string }) => Promise<LicenseRuntimeStatus>;
+    login: (input: { name: string; phone: string; serverAddress?: string }) => Promise<LicenseRuntimeStatus>;
     verify: () => Promise<LicenseRuntimeStatus>;
     onStatusChanged: (callback: (status: LicenseRuntimeStatus) => void) => () => void;
   };
@@ -487,7 +509,7 @@ export interface YibiaoBridge {
     moveDocument: (documentId: string, targetFolderId: string, targetDocumentId?: string | null, position?: 'before' | 'after') => Promise<KnowledgeBaseIndexMutationResult>;
     uploadDocuments: (folderId: string) => Promise<KnowledgeBaseUploadResult>;
     retryDocument: (documentId: string) => Promise<KnowledgeBaseRetryDocumentResult>;
-    startMatching: (documentId: string, batchSize: number) => Promise<KnowledgeBaseStartMatchingResult>;
+    startMatching: (documentId: string, batchSize?: number) => Promise<KnowledgeBaseStartMatchingResult>;
     readMarkdown: (documentId: string) => Promise<string>;
     readItems: (documentId: string) => Promise<KnowledgeItem[]>;
     readAnalysis: (documentId: string) => Promise<KnowledgeAnalysisSnapshot>;

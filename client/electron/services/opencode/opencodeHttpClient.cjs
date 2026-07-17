@@ -19,9 +19,12 @@ function errorCauseMessage(error) {
 
 function appendRequestLog(server, payload) {
   if (!Array.isArray(server?.requestLog)) return;
+  const safePayload = typeof server.redactLogValue === 'function'
+    ? server.redactLogValue(payload)
+    : payload;
   server.requestLog.push({
     at: new Date().toISOString(),
-    ...payload,
+    ...safePayload,
   });
   if (server.requestLog.length > 80) {
     server.requestLog.splice(0, server.requestLog.length - 80);
@@ -202,6 +205,22 @@ async function getSessionDiff(server, sessionId, options = {}) {
   });
 }
 
+async function getOpenCodePath(server, options = {}) {
+  return requestJson(server, '/path', { signal: options.signal });
+}
+
+async function getOpenCodeConfig(server, options = {}) {
+  return requestJson(server, '/config', { signal: options.signal });
+}
+
+async function getOpenCodeSkills(server, options = {}) {
+  return requestJson(server, '/skill', { signal: options.signal });
+}
+
+async function getOpenCodeAgents(server, options = {}) {
+  return requestJson(server, '/agent', { signal: options.signal });
+}
+
 function extractTextFromPromptResult(result) {
   const parts = Array.isArray(result?.parts) ? result.parts : [];
   return parts
@@ -228,6 +247,10 @@ async function runOpenCodeTask(server, { title, prompt, signal, agent, onActivit
 
 module.exports = {
   createSession,
+  getOpenCodeAgents,
+  getOpenCodeConfig,
+  getOpenCodePath,
+  getOpenCodeSkills,
   sendPrompt,
   getSessionDiff,
   runOpenCodeTask,

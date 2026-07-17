@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AuthorizationApplication, AuthorizedDevice, AuthorizedEmployee } from '../../shared/ipc';
+import type {
+  AuthorizationApplication,
+  AuthorizationSummary,
+  AuthorizedDevice,
+  AuthorizedEmployee,
+} from '../../shared/ipc';
 
 type ConfirmAction =
   | { type: 'reject'; id: string; title: string }
@@ -22,6 +27,12 @@ function formatDate(value: string | null) {
 function AuthorizationPage() {
   const [applications, setApplications] = useState<AuthorizationApplication[]>([]);
   const [employees, setEmployees] = useState<AuthorizedEmployee[]>([]);
+  const [summary, setSummary] = useState<AuthorizationSummary>({
+    applicationCount: 0,
+    pendingApplicationCount: 0,
+    employeeCount: 0,
+    activeDeviceBindingCount: 0,
+  });
   const [activeView, setActiveView] = useState<'applications' | 'employees'>('applications');
   const [filter, setFilter] = useState('');
   const [busyId, setBusyId] = useState('');
@@ -35,6 +46,12 @@ function AuthorizationPage() {
       setError(result.message ?? '授权数据读取失败');
       return;
     }
+    setSummary(result.summary ?? {
+      applicationCount: 0,
+      pendingApplicationCount: 0,
+      employeeCount: 0,
+      activeDeviceBindingCount: 0,
+    });
     setApplications(result.applications ?? []);
     setEmployees(result.employees ?? []);
   };
@@ -44,14 +61,18 @@ function AuthorizationPage() {
   const visibleApplications = useMemo(() => {
     const keyword = filter.trim().toLowerCase();
     if (!keyword) return applications;
-    return applications.filter((item) => [item.name, item.phone, item.clientId, item.deviceFingerprint]
+    return applications.filter((item) => [item.name, item.phone, item.clientId, item.deviceCode ?? '', item.deviceFingerprint]
       .some((value) => value.toLowerCase().includes(keyword)));
   }, [applications, filter]);
 
   const visibleEmployees = useMemo(() => {
     const keyword = filter.trim().toLowerCase();
     if (!keyword) return employees;
-    return employees.filter((item) => [item.name, item.phone, ...item.devices.map((device) => device.clientId)]
+    return employees.filter((item) => [
+      item.name,
+      item.phone,
+      ...item.devices.flatMap((device) => [device.clientId, device.deviceCode ?? '']),
+    ]
       .some((value) => value.toLowerCase().includes(keyword)));
   }, [employees, filter]);
 
@@ -82,8 +103,8 @@ function AuthorizationPage() {
     <>
       <section className="authorization-toolbar">
         <div className="segmented-control" aria-label="授权数据视图">
-          <button type="button" className={activeView === 'applications' ? 'is-active' : ''} onClick={() => setActiveView('applications')}>申请记录 <span>{applications.filter((item) => item.status === 'PENDING').length}</span></button>
-          <button type="button" className={activeView === 'employees' ? 'is-active' : ''} onClick={() => setActiveView('employees')}>员工与设备 <span>{employees.length}</span></button>
+          <button type="button" className={activeView === 'applications' ? 'is-active' : ''} onClick={() => setActiveView('applications')}>申请记录 <span>{summary.applicationCount}</span><span>待审批 {summary.pendingApplicationCount}</span></button>
+          <button type="button" className={activeView === 'employees' ? 'is-active' : ''} onClick={() => setActiveView('employees')}>员工与设备 <span>员工 {summary.employeeCount}</span><span>有效设备 {summary.activeDeviceBindingCount}</span></button>
         </div>
         <input aria-label="搜索授权记录" type="search" placeholder="搜索姓名、手机号或客户端 ID" value={filter} onChange={(event) => setFilter(event.target.value)} />
         <button type="button" className="secondary-button" onClick={() => { void load(); }}>刷新</button>
@@ -139,7 +160,7 @@ function AuthorizationPage() {
         <div className="confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}>
           <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
             <h2 id="confirm-title">确认授权操作</h2>
-            <p>{confirmAction.title}？操作后客户端将在下一次联网校验时更新状态。</p>
+            <p>{confirmAction.title}？在线客户端将立即退出授权，离线客户端下次联网即失效。</p>
             <div><button type="button" className="secondary-button" onClick={() => setConfirmAction(null)}>取消</button><button autoFocus type="button" className={confirmAction.type === 'renew' ? 'primary-button' : 'danger-button'} onClick={() => { void runConfirmedAction(); }}>确认</button></div>
           </section>
         </div>

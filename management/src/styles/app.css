@@ -93,10 +93,10 @@
 .settings-warning strong { font-size: 14px; }
 .settings-warning p { margin: 7px 0 0; color: #ad6800; font-size: 13px; line-height: 1.7; }
 
-.authorization-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.authorization-toolbar > input { width: min(360px, 35vw); height: 36px; margin-left: auto; padding: 7px 11px; border: 1px solid var(--mg-border); border-radius: var(--mg-radius); }
+.authorization-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.authorization-toolbar > input { width: auto; min-width: 220px; height: 36px; flex: 1 1 260px; margin-left: auto; padding: 7px 11px; border: 1px solid var(--mg-border); border-radius: var(--mg-radius); }
 .segmented-control { display: inline-flex; padding: 3px; background: rgba(0,0,0,.04); border-radius: var(--mg-radius); }
-.segmented-control button { min-height: 30px; padding: 4px 12px; color: var(--mg-text-secondary); background: transparent; border: 0; border-radius: 4px; }
+.segmented-control button { min-height: 30px; padding: 4px 12px; color: var(--mg-text-secondary); white-space: nowrap; background: transparent; border: 0; border-radius: 4px; }
 .segmented-control button.is-active { color: var(--mg-text); background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .segmented-control span { margin-left: 5px; color: var(--mg-text-tertiary); font-size: 12px; }
 .secondary-button, .danger-button { min-height: 36px; padding: 7px 14px; background: #fff; border: 1px solid var(--mg-border); border-radius: var(--mg-radius); }

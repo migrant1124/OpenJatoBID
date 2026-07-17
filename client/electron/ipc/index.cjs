@@ -225,6 +225,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   const localImageRenderService = initLocalImageRenderService({ app, configStore });
   const diagnosticsService = createSystemDiagnosticsService({ app, configStore, localImageRenderService });
   const unregisterDiagnosticsIpc = registerDiagnosticsIpc({ diagnosticsService });
+  let unregisterLicenseIpc = null;
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
   let workspaceDatabaseStarted = false;
@@ -232,6 +233,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
 
   const closeServices = async () => {
     unregisterDiagnosticsIpc?.();
+    unregisterLicenseIpc?.();
     localImageRenderService.dispose?.();
     await agentService.close?.();
   };
@@ -301,7 +303,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   });
   registerDeveloperIpc({ configStore, aiService, openDeveloperTokenStatsWindow, developerExpansionReplaceTestService });
   registerAnalyticsIpc({ analyticsService });
-  registerLicenseIpc({ licenseService, mainWindow });
+  unregisterLicenseIpc = registerLicenseIpc({ licenseService, mainWindow });
   registerAiIpc({ aiService });
   registerAgentIpc({ agentService, mainWindow });
   registerFileIpc({ fileService });

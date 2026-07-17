@@ -14,6 +14,8 @@ const previewLicenseStatus: LicenseRuntimeStatus = {
   untrustedReason: '',
   machineFingerprintHash: 'browser-preview',
   fingerprintVersion: 'preview',
+  deviceCode: 'browser-preview',
+  deviceCodeVersion: 'jato-device-v1',
   buildTrusted: true,
   buildChanged: false,
   buildId: 'browser-preview',

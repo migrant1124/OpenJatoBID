@@ -156,6 +156,36 @@ const MIGRATIONS = [
       DELETE FROM settings WHERE key = 'smtp_config';
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE devices ADD COLUMN device_code TEXT;
+      ALTER TABLE devices ADD COLUMN device_code_version TEXT;
+      ALTER TABLE authorization_applications ADD COLUMN device_code TEXT;
+      ALTER TABLE authorization_applications ADD COLUMN device_code_version TEXT;
+
+      CREATE UNIQUE INDEX idx_devices_employee_device_code
+        ON devices(employee_id, device_code)
+        WHERE device_code IS NOT NULL AND device_code <> '';
+
+      CREATE TABLE authorization_revocations (
+        id TEXT PRIMARY KEY,
+        license_id TEXT NOT NULL UNIQUE,
+        employee_id TEXT NOT NULL,
+        device_code TEXT,
+        legacy_device_fingerprint TEXT,
+        revoked_at TEXT NOT NULL,
+        acknowledged_at TEXT,
+        purge_after TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_authorization_revocations_purge
+        ON authorization_revocations(purge_after);
+      CREATE INDEX idx_authorization_revocations_device_code
+        ON authorization_revocations(employee_id, device_code);
+    `,
+  },
 ];
 
 function migrateDatabase(database) {
