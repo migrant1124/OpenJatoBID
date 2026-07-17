@@ -27,6 +27,7 @@ test('bootstraps an empty database, forces the initial change, and never restore
   const auth = createAdminAuthService({
     database: databaseService.database,
     initialCredential,
+    allowInitialBootstrap: databaseService.isNewDatabase,
   });
 
   assert.deepEqual(auth.getStatus(), {
@@ -63,6 +64,7 @@ test('bootstraps an empty database, forces the initial change, and never restore
       password: 'Replacement-Password-789',
       credentialVersion: 'test-v2',
     }),
+    allowInitialBootstrap: false,
   });
   assert.equal(restarted.login({ username: 'replacement-owner', password: 'Replacement-Password-789' }).success, false);
   assert.equal(restarted.login({ username: 'initial-owner', password: 'Owner-Password-456' }).success, true);
@@ -70,15 +72,18 @@ test('bootstraps an empty database, forces the initial change, and never restore
   databaseService.close();
 });
 
-test('replaces legacy authentication once and removes its mail setting without touching other settings', () => {
+test('migrates LEGACY authentication without replacing its password hash or salt', () => {
   const databaseService = createDatabaseService({ databasePath: ':memory:' });
   const timestamp = '2026-07-10T00:00:00.000Z';
+  const legacyPassword = 'Legacy-Password-123';
+  const legacySalt = 'legacy-salt-0123456789abcdef';
+  const legacyHash = crypto.scryptSync(legacyPassword, legacySalt, 64).toString('hex');
   databaseService.database.prepare(`
     INSERT INTO admin_auth (
       id, username, password_hash, password_salt, credential_state,
       initial_credential_version, created_at, updated_at
-    ) VALUES (1, '', 'legacy-hash', 'legacy-salt', 'LEGACY', NULL, ?, ?)
-  `).run(timestamp, timestamp);
+    ) VALUES (1, '', ?, ?, 'LEGACY', NULL, ?, ?)
+  `).run(legacyHash, legacySalt, timestamp, timestamp);
   databaseService.database.prepare(`
     INSERT INTO settings (key, value_json, updated_at) VALUES
       ('smtp_config', '{"authorizationCode":"legacy-secret"}', ?),
@@ -89,13 +94,53 @@ test('replaces legacy authentication once and removes its mail setting without t
   const auth = createAdminAuthService({
     database: databaseService.database,
     initialCredential: createInitialCredential(),
+    allowInitialBootstrap: false,
   });
 
-  assert.equal(auth.login({ username: 'initial-owner', password: 'Initial-Password-123' }).success, true);
-  assert.equal(auth.login({ username: 'initial-owner', password: 'legacy-password' }).success, false);
+  assert.equal(auth.login({ username: 'initial-owner', password: legacyPassword }).success, true);
+  assert.equal(auth.login({ username: 'initial-owner', password: 'Initial-Password-123' }).success, false);
+  assert.deepEqual(
+    databaseService.database.prepare('SELECT password_hash, password_salt, credential_state FROM admin_auth WHERE id = 1').get(),
+    {
+      password_hash: legacyHash,
+      password_salt: legacySalt,
+      credential_state: ADMIN_CREDENTIAL_STATES.OWNER_PASSWORD_ACTIVE,
+    },
+  );
   assert.equal(databaseService.database.prepare('SELECT 1 FROM settings WHERE key = ?').get('smtp_config'), undefined);
   assert.equal(databaseService.database.prepare('SELECT 1 FROM settings WHERE key = ?').get('server_config')['1'], 1);
   assert.equal(databaseService.database.prepare('SELECT 1 FROM settings WHERE key = ?').get('license_signing_key')['1'], 1);
+  databaseService.close();
+});
+
+test('keeps the original INITIAL_PASSWORD_REQUIRED credential when the packaged credential changes', () => {
+  const databaseService = createDatabaseService({ databasePath: ':memory:' });
+  const original = createInitialCredential({
+    username: 'original-owner',
+    password: 'Original-Initial-123',
+    credentialVersion: 'initial-v1',
+  });
+  createAdminAuthService({
+    database: databaseService.database,
+    initialCredential: original,
+    allowInitialBootstrap: databaseService.isNewDatabase,
+  });
+  const before = databaseService.database.prepare('SELECT * FROM admin_auth WHERE id = 1').get();
+
+  const restarted = createAdminAuthService({
+    database: databaseService.database,
+    initialCredential: createInitialCredential({
+      username: 'replacement-owner',
+      password: 'Replacement-Initial-456',
+      credentialVersion: 'initial-v2',
+    }),
+    allowInitialBootstrap: false,
+  });
+  const after = databaseService.database.prepare('SELECT * FROM admin_auth WHERE id = 1').get();
+
+  assert.equal(restarted.login({ username: 'original-owner', password: 'Original-Initial-123' }).success, true);
+  assert.equal(restarted.login({ username: 'replacement-owner', password: 'Replacement-Initial-456' }).success, false);
+  assert.deepEqual(after, before);
   databaseService.close();
 });
 
@@ -104,6 +149,7 @@ test('changes an active owner password only when the current password matches', 
   const auth = createAdminAuthService({
     database: databaseService.database,
     initialCredential: createInitialCredential(),
+    allowInitialBootstrap: databaseService.isNewDatabase,
   });
   auth.completeInitialPasswordChange('Owner-Password-456');
 

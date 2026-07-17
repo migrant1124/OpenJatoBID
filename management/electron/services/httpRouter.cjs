@@ -43,7 +43,14 @@ function sendServiceError(response, error) {
   if (code === 'PAYLOAD_TOO_LARGE') return sendJson(response, 413, { error: { code, message: '请求内容过大' } });
   if (code === 'INVALID_ANALYTICS_BATCH') return sendJson(response, 422, { error: { code, message: '埋点批次格式无效' } });
   if (code === 'APPLICATION_CONFLICT') return sendJson(response, 409, { error: { code, message: '当前设备已有待审批申请' } });
+  if (code === 'INVALID_WATCH_TOKEN') return sendJson(response, 401, { error: { code, message: '撤销监听凭据无效或已过期' } });
   return sendJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: '管理端处理请求失败' } });
+}
+
+function readBearerToken(request) {
+  const authorization = String(request.headers.authorization || '');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
 }
 
 function createHttpRouter({ getServiceInfo, authorizationService, analyticsIngestService, now = () => new Date() }) {
@@ -114,6 +121,55 @@ function createHttpRouter({ getServiceInfo, authorizationService, analyticsInges
       return;
     }
 
+    if (authorizationService && request.method === 'GET' && url.pathname === '/api/v1/authorization/watch') {
+      const watchToken = readBearerToken(request);
+      if (!watchToken) {
+        sendJson(response, 401, { error: { code: 'INVALID_WATCH_TOKEN', message: '请提供有效的撤销监听凭据' } });
+        return;
+      }
+      let unsubscribe;
+      try {
+        unsubscribe = authorizationService.subscribeRevocations(watchToken, (event) => {
+          if (!response.destroyed && !response.writableEnded) {
+            response.write(`event: revoked\ndata: ${JSON.stringify(event)}\n\n`);
+          }
+        });
+      } catch (error) {
+        sendServiceError(response, error);
+        return;
+      }
+      response.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+        'x-content-type-options': 'nosniff',
+      });
+      response.write(': connected\n\n');
+      const cleanup = () => {
+        if (!unsubscribe) return;
+        unsubscribe();
+        unsubscribe = null;
+      };
+      request.once('close', cleanup);
+      response.once('close', cleanup);
+      return;
+    }
+
+    if (authorizationService && request.method === 'POST' && url.pathname === '/api/v1/authorization/revocations/ack') {
+      try {
+        const input = await readJsonBody(request);
+        if (typeof input?.watchToken !== 'string' || !input.watchToken) {
+          sendJson(response, 422, { error: { code: 'VALIDATION_ERROR', message: '撤销监听凭据不能为空' } });
+          return;
+        }
+        authorizationService.acknowledgeRevocation(input.watchToken);
+        sendJson(response, 200, { data: { acknowledged: true } });
+      } catch (error) {
+        sendServiceError(response, error);
+      }
+      return;
+    }
+
     if (analyticsIngestService && request.method === 'POST' && url.pathname === '/api/v1/analytics/events') {
       try {
         const input = await readJsonBody(request);
@@ -133,4 +189,4 @@ function createHttpRouter({ getServiceInfo, authorizationService, analyticsInges
   };
 }
 
-module.exports = { createHttpRouter, readJsonBody, sendJson, validateApplicationInput };
+module.exports = { createHttpRouter, readBearerToken, readJsonBody, sendJson, validateApplicationInput };

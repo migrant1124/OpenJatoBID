@@ -39,6 +39,12 @@ interface KnowledgeDocumentDropTarget {
   position: KnowledgeDropPosition;
 }
 
+interface RenameFolderState {
+  folderId: string;
+  originalName: string;
+  name: string;
+}
+
 interface RenderDebugTrace {
   id: string;
   kind: RenderDebugKind;
@@ -309,12 +315,14 @@ function KnowledgeBasePage() {
   const [markdownPreview, setMarkdownPreview] = useState('');
   const [itemsPreview, setItemsPreview] = useState<KnowledgeItem[]>([]);
   const [analysisSnapshot, setAnalysisSnapshot] = useState<KnowledgeAnalysisSnapshot | null>(null);
-  const [batchSize, setBatchSize] = useState(20);
   const [startingMatching, setStartingMatching] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [renameFolderState, setRenameFolderState] = useState<RenameFolderState | null>(null);
+  const [renameFolderBusy, setRenameFolderBusy] = useState(false);
+  const [renameFolderError, setRenameFolderError] = useState('');
   const [retryingDocumentIds, setRetryingDocumentIds] = useState<Set<string>>(() => new Set());
   const [visibleDocumentCount, setVisibleDocumentCount] = useState(documentRenderBatchSize);
   const [dragPayload, setDragPayload] = useState<KnowledgeDragPayload | null>(null);
@@ -325,6 +333,7 @@ function KnowledgeBasePage() {
   const documentParseNoticeIdsRef = useRef(new Set<string>());
   const viewerRequestIdRef = useRef(0);
   const viewerTraceRef = useRef<RenderDebugTrace | null>(null);
+  const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
   const { showDocumentParseNotice } = useDocumentParseNotice();
 
@@ -395,7 +404,7 @@ function KnowledgeBasePage() {
     const pendingDocuments = index.documents.filter((document) => document.status === 'ready_for_matching' && !autoMatchingIdsRef.current.has(document.id));
     pendingDocuments.forEach((document) => {
       autoMatchingIdsRef.current.add(document.id);
-      void startMatching(document, 20, { silent: true });
+      void startMatching(document, { silent: true });
     });
   }, [developerMode, index.documents]);
 
@@ -671,24 +680,52 @@ function KnowledgeBasePage() {
     }
   };
 
-  const renameFolder = async (folderId: string, currentName: string) => {
+  const openRenameFolder = (folderId: string, currentName: string) => {
     if (migrationRunning) {
       showToast('知识库迁移中，请稍候', 'info');
       return;
     }
-    const name = window.prompt('请输入新的文件夹名称', currentName)?.trim();
-    if (!name || name === currentName) return;
+
+    setRenameFolderError('');
+    setRenameFolderBusy(false);
+    setRenameFolderState({ folderId, originalName: currentName, name: currentName });
+  };
+
+  const closeRenameFolder = () => {
+    if (renameFolderBusy) return;
+    setRenameFolderState(null);
+    setRenameFolderError('');
+  };
+
+  const submitRenameFolder = async () => {
+    if (renameFolderBusy || !renameFolderState) return;
+    const name = renameFolderState.name.trim();
+    if (!name) {
+      setRenameFolderError('请输入文件夹名称');
+      return;
+    }
+    if (name === renameFolderState.originalName) {
+      closeRenameFolder();
+      return;
+    }
 
     try {
-      const folder = await window.yibiao?.knowledgeBase.renameFolder(folderId, name);
-      if (!folder) return;
+      setRenameFolderBusy(true);
+      setRenameFolderError('');
+      const folder = await window.yibiao?.knowledgeBase.renameFolder(renameFolderState.folderId, name);
+      if (!folder) {
+        throw new Error('重命名失败，未收到保存结果');
+      }
       setIndex((prev) => ({
         ...prev,
         folders: prev.folders.map((item) => (item.id === folder.id ? folder : item)),
       }));
+      setRenameFolderState(null);
       showToast('文件夹已重命名', 'success');
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '重命名文件夹失败', 'error');
+      setRenameFolderError(error instanceof Error ? error.message : '重命名文件夹失败');
+    } finally {
+      setRenameFolderBusy(false);
     }
   };
 
@@ -897,7 +934,7 @@ function KnowledgeBasePage() {
     });
   };
 
-  const startMatching = async (targetDocument = viewer?.document, batchSizeOverride = batchSize, options?: { silent?: boolean }) => {
+  const startMatching = async (targetDocument = viewer?.document, options?: { silent?: boolean }) => {
     if (migrationRunning) {
       if (!options?.silent) showToast('知识库迁移中，请稍候', 'info');
       return;
@@ -905,7 +942,7 @@ function KnowledgeBasePage() {
     if (!targetDocument) return;
     try {
       setStartingMatching(true);
-      const result = await window.yibiao?.knowledgeBase.startMatching(targetDocument.id, batchSizeOverride);
+      const result = await window.yibiao?.knowledgeBase.startMatching(targetDocument.id);
       if (!options?.silent) {
         showToast(result?.message || '已提交匹配任务', result?.success ? 'success' : 'info');
       }
@@ -942,10 +979,8 @@ function KnowledgeBasePage() {
           analysisSnapshot={analysisSnapshot}
           viewerLoading={viewerLoading}
           viewerTrace={viewerTrace}
-          batchSize={batchSize}
           startingMatching={startingMatching}
           developerMode={developerMode}
-          onBatchSizeChange={setBatchSize}
           onBack={closeViewer}
           onModeChange={(mode) => void openDocument(viewer.document, mode)}
           onStartMatching={() => void startMatching()}
@@ -1042,7 +1077,7 @@ function KnowledgeBasePage() {
                       </button>
                     </div>
                     <div className="knowledge-folder-actions">
-                      <button type="button" onClick={() => void renameFolder(folder.id, folder.name)} disabled={migrationRunning}>重命名</button>
+                      <button type="button" onClick={() => openRenameFolder(folder.id, folder.name)} disabled={migrationRunning}>重命名</button>
                       <button type="button" className="is-danger" onClick={() => void deleteFolder(folder.id, folder.name)} disabled={migrationRunning}>删除</button>
                     </div>
                   </article>
@@ -1138,6 +1173,59 @@ function KnowledgeBasePage() {
         </main>
         </section>
       </div>
+      <Dialog.Root open={Boolean(renameFolderState)} onOpenChange={(open) => !open && closeRenameFolder()}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content
+            className="knowledge-rename-card"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              renameFolderInputRef.current?.focus();
+              renameFolderInputRef.current?.select();
+            }}
+          >
+            <form
+              className="knowledge-rename-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitRenameFolder();
+              }}
+            >
+              <div className="knowledge-rename-head">
+                <Dialog.Title>重命名文件夹</Dialog.Title>
+                <Dialog.Description>输入新的文件夹名称，保存后列表会立即更新。</Dialog.Description>
+              </div>
+              <label className="knowledge-rename-field" htmlFor="knowledge-rename-folder-input">
+                <span>文件夹名称</span>
+                <input
+                  ref={renameFolderInputRef}
+                  id="knowledge-rename-folder-input"
+                  value={renameFolderState?.name || ''}
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    setRenameFolderState((current) => (current ? { ...current, name } : current));
+                    if (renameFolderError) setRenameFolderError('');
+                  }}
+                  aria-invalid={Boolean(renameFolderError)}
+                  aria-describedby={renameFolderError ? 'knowledge-rename-folder-error' : undefined}
+                  disabled={renameFolderBusy}
+                />
+              </label>
+              {renameFolderError && (
+                <p id="knowledge-rename-folder-error" className="knowledge-rename-error" role="alert">
+                  {renameFolderError}
+                </p>
+              )}
+              <div className="content-regenerate-actions knowledge-rename-actions">
+                <button type="button" className="secondary-action" onClick={closeRenameFolder} disabled={renameFolderBusy}>取消</button>
+                <button type="submit" className="primary-action" disabled={renameFolderBusy || !renameFolderState?.name.trim()}>
+                  {renameFolderBusy ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       {migrationDialog}
     </>
   );
@@ -1213,10 +1301,8 @@ interface KnowledgeDocumentViewerProps {
   analysisSnapshot: KnowledgeAnalysisSnapshot | null;
   viewerLoading: boolean;
   viewerTrace: RenderDebugTrace | null;
-  batchSize: number;
   startingMatching: boolean;
   developerMode: boolean;
-  onBatchSizeChange: (value: number) => void;
   onBack: () => void;
   onModeChange: (mode: KnowledgeViewer['mode']) => void;
   onStartMatching: () => void;
@@ -1231,10 +1317,8 @@ function KnowledgeDocumentViewer({
   analysisSnapshot,
   viewerLoading,
   viewerTrace,
-  batchSize,
   startingMatching,
   developerMode,
-  onBatchSizeChange,
   onBack,
   onModeChange,
   onStartMatching,
@@ -1303,19 +1387,24 @@ function KnowledgeDocumentViewer({
   return (
     <div className="page-stack knowledge-viewer-page">
       <section className="knowledge-workspace-bar knowledge-viewer-bar">
-        <div className="knowledge-breadcrumb">
-          <span>知识库</span>
-          <strong>{document.file_name}</strong>
-          {developerMode && <code className="knowledge-entity-id">文档ID：{document.id}</code>}
-          <small>{mode === 'analysis' ? '分析调试' : mode === 'items' ? `${document.item_count || 0} 条知识` : 'Markdown 原文'}</small>
-        </div>
-        <div className="knowledge-toolbar-actions">
-          <button type="button" className="secondary-action" onClick={onBack}>返回知识库</button>
-          {developerMode && <button type="button" className="secondary-action" onClick={() => void copyDebugLogs()}>复制调试日志</button>}
-          {developerMode && <button type="button" className={`secondary-action ${mode === 'analysis' ? 'is-active' : ''}`} onClick={() => onModeChange('analysis')}>分析调试</button>}
+        <span className="knowledge-viewer-label">知识库</span>
+        <strong className="knowledge-viewer-file-name">{document.file_name}</strong>
+        <small className="knowledge-viewer-count">
+          {mode === 'analysis' ? '分析调试' : mode === 'items' ? `${document.item_count || 0} 条知识` : 'Markdown 原文'}
+        </small>
+        <button type="button" className="secondary-action knowledge-viewer-back" onClick={onBack}>返回知识库</button>
+        <div className="knowledge-viewer-mode-actions" aria-label="查看模式">
           <button type="button" className={`secondary-action ${mode === 'items' ? 'is-active' : ''}`} onClick={() => onModeChange('items')} disabled={document.status !== 'success'}>知识条目</button>
           <button type="button" className={`secondary-action ${mode === 'markdown' ? 'is-active' : ''}`} onClick={() => onModeChange('markdown')} disabled={!canOpenMarkdown(document)}>Markdown</button>
         </div>
+        {developerMode && (
+          <div className="knowledge-viewer-developer-actions" aria-label="开发者辅助操作">
+            <span>开发者辅助</span>
+            <code className="knowledge-entity-id">文档ID：{document.id}</code>
+            <button type="button" className="secondary-action" onClick={() => void copyDebugLogs()}>复制调试日志</button>
+            <button type="button" className={`secondary-action ${mode === 'analysis' ? 'is-active' : ''}`} onClick={() => onModeChange('analysis')}>分析调试</button>
+          </div>
+        )}
       </section>
 
       <section className="knowledge-viewer-panel">
@@ -1323,9 +1412,7 @@ function KnowledgeDocumentViewer({
           <KnowledgeAnalysisView
             document={document}
             snapshot={analysisSnapshot}
-            batchSize={batchSize}
             startingMatching={startingMatching}
-            onBatchSizeChange={onBatchSizeChange}
             onStartMatching={onStartMatching}
             onRefresh={onRefreshAnalysis}
           />
@@ -1527,14 +1614,12 @@ function DebuggableMarkdownContent({ children, className, debugTrace, developerM
 interface KnowledgeAnalysisViewProps {
   document: KnowledgeDocument;
   snapshot: KnowledgeAnalysisSnapshot | null;
-  batchSize: number;
   startingMatching: boolean;
-  onBatchSizeChange: (value: number) => void;
   onStartMatching: () => void;
   onRefresh: () => void;
 }
 
-function KnowledgeAnalysisView({ document, snapshot, batchSize, startingMatching, onBatchSizeChange, onStartMatching, onRefresh }: KnowledgeAnalysisViewProps) {
+function KnowledgeAnalysisView({ document, snapshot, startingMatching, onStartMatching, onRefresh }: KnowledgeAnalysisViewProps) {
   const report = snapshot?.report;
   const canStart = ['ready_for_matching', 'success', 'error'].includes(document.status) && Boolean(snapshot?.candidate_items.length);
 
@@ -1542,19 +1627,9 @@ function KnowledgeAnalysisView({ document, snapshot, batchSize, startingMatching
     <div className="knowledge-analysis-view">
       <div className="knowledge-analysis-command">
         <div>
-          <strong>分批段落匹配</strong>
-          <p>候选条目已由 AI 两轮抽取生成。这里设置每批投入多少条知识条目，程序会用稳定全文前缀循环匹配段落并执行补漏。</p>
+          <strong>自动分段段落匹配</strong>
+          <p>系统根据文本模型上下文自动分段匹配段落，并在匹配后执行遗漏补漏。</p>
         </div>
-        <label>
-          <span>每批条目数</span>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={batchSize}
-            onChange={(event) => onBatchSizeChange(Number(event.target.value) || 1)}
-          />
-        </label>
         <button type="button" className="primary-action" onClick={onStartMatching} disabled={!canStart || startingMatching}>
           {startingMatching ? '提交中...' : document.status === 'success' ? '重新匹配' : '开始匹配'}
         </button>
@@ -1581,7 +1656,7 @@ function KnowledgeAnalysisView({ document, snapshot, batchSize, startingMatching
           <span>AI 舍弃 {report.discarded_blocks_count} 个 block</span>
           <span>重试后系统舍弃 {report.system_discarded_after_retry_count} 个 block</span>
           <span>补漏轮次 {report.recovery_attempt_count}</span>
-          <span>批次大小 {report.batch_size}</span>
+          <span>block 段数 {report.batch_size}</span>
         </div>
       )}
 

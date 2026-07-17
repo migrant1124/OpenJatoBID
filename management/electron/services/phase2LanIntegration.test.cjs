@@ -11,6 +11,7 @@ const { createHttpRouter } = require('./httpRouter.cjs');
 const { createHttpServerService } = require('./httpServerService.cjs');
 const { createSigningService } = require('./signingService.cjs');
 const { createAnalyticsService } = require('../../../client/electron/services/analyticsService.cjs');
+const { createDeviceBootstrapStore } = require('../../../client/electron/services/deviceBootstrapStore.cjs');
 const { createLicenseService } = require('../../../client/electron/services/licenseService.cjs');
 
 test('completes application, approval, login, analytics and revocation across both applications', async () => {
@@ -59,6 +60,10 @@ test('completes application, approval, login, analytics and revocation across bo
       configStore,
       now,
       machineFingerprintFactory: () => 'integration-fingerprint-1',
+      deviceBootstrapStore: createDeviceBootstrapStore({
+        filePath: path.join(userData, 'device-bootstrap.json'),
+        now,
+      }),
       debugLicenseDisabled: false,
     });
 
