@@ -1,26 +1,54 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "bidupdat",
-  "main": "src/index.js",
+  "main": "./src/index.js",
   "compatibility_date": "2026-07-14",
   "workers_dev": true,
+  "keep_vars": true,
+
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
   },
-  "keep_vars": true,
+
   "analytics_engine_datasets": [
     {
       "binding": "ANALYTICS",
       "dataset": "jatobid_analytics"
     }
   ],
+
+  "kv_namespaces": [
+    {
+      "binding": "NOTICE_STORE",
+      "id": "b844c8df3b1c486cbf0828bbd9070c41"
+    }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "ANALYTICS_DB",
+      "database_name": "jatoaibid-analytics",
+      "database_id": "a9575062-816e-41cb-aa03-33d79e2a30b1"
+    },
+    {
+      "binding": "RESOURCE_DB",
+      "database_name": "jatoaibid-resources",
+      "database_id": "2aa37ad4-07b8-43ba-b35a-8b5e15d855a6"
+    }
+  ],
+
   "r2_buckets": [
     {
       "binding": "RELEASE_BUCKET",
       "bucket_name": "jatoaibid"
+    },
+    {
+      "binding": "RESOURCE_BUCKET",
+      "bucket_name": "jatoaibid"
     }
   ],
+
   "triggers": {
     "crons": [
       "0 17 * * *",

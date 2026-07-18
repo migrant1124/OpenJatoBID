@@ -9,8 +9,8 @@ import { addBusinessDateDays, businessDateSqlExpression, getBusinessToday, sqlSt
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(__dirname, '.env');
-const analyticsD1DatabaseName = 'openbidkit-analytics';
-const resourceD1DatabaseName = 'openbidkit-resources';
+const analyticsD1DatabaseName = 'jatoaibid-analytics';
+const resourceD1DatabaseName = 'jatoaibid-resources';
 const projectName = 'yibiao-client';
 const retryableStatuses = new Set([429, 500, 502, 503, 504]);
 

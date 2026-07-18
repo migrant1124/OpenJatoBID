@@ -7,7 +7,7 @@ import { businessDateSqlExpression, formatBusinessDateTime, getBusinessToday, no
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(__dirname, '.env');
-const analyticsD1DatabaseName = 'openbidkit-analytics';
+const analyticsD1DatabaseName = 'jatoaibid-analytics';
 const projectName = 'yibiao-client';
 const UNKNOWN_VERSION = '未知版本';
 const retryableStatuses = new Set([429, 500, 502, 503, 504]);

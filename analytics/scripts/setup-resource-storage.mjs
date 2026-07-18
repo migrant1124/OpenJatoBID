@@ -8,9 +8,9 @@ const workerDir = resolve(__dirname, '../worker');
 const workerConfigPath = resolve(workerDir, 'wrangler.jsonc');
 
 const d1BindingName = 'RESOURCE_DB';
-const d1DatabaseName = 'openbidkit-resources';
+const d1DatabaseName = 'jatoaibid-resources';
 const r2BindingName = 'RESOURCE_BUCKET';
-const r2BucketName = 'openbidkit';
+const r2BucketName = 'jatoaibid';
 
 function readConfig() {
   return readFileSync(workerConfigPath, 'utf8');
@@ -225,16 +225,6 @@ function ensureR2Bucket() {
   console.log(`RESOURCE_BUCKET R2 bucket created and configured: ${r2BucketName}`);
 }
 
-function applyD1Migrations() {
-  const result = runWrangler(['d1', 'migrations', 'apply', d1BindingName, '--remote']);
-  if (result.status !== 0) {
-    console.error(result.output);
-    process.exit(result.status || 1);
-  }
-
-  console.log('RESOURCE_DB D1 migrations applied.');
-}
-
 ensureD1Database();
 ensureR2Bucket();
-applyD1Migrations();
+console.log('No migration was executed. Apply RESOURCE_DB migrations manually when needed.');

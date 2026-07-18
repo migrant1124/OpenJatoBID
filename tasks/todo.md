@@ -250,3 +250,12 @@
 - [x] T104 实现撤销墓碑、设备额度即时释放、Bearer Watch Token 实时撤销、客户端失效落盘、重连验证和 30 天清理。
 - [x] T105 固定管理端数据目录，保护三类管理员凭据状态，并实现真实文件数据库迁移前备份、失败回退和旧目录安全迁移；Node 与 Electron ABI 真实文件回归均通过。
 - [ ] T106 客户端 139/139、管理端 68/68、两端构建、三档视觉验收、CJS、`git diff --check`、独立只读终审和测试报告均已完成；仍待使用当前代码生成的管理端安装包执行实体覆盖安装与重装登录，未获授权前不标记完整验收通过。
+
+## 阶段 12：Analytics Worker Cloudflare 部署边界
+
+> 权威需求：将 `analytics/worker` 固定为 `bidupdat` 的自包含 Worker 项目；普通部署不得创建或修改 R2、D1、KV，也不得执行远程 migration。
+
+- [x] T107 完成 Worker、部署 helper 与三类基础设施脚本审计；明确全部 Binding、资源副作用及 `deploy-if-changed.mjs` 调用者。
+- [x] T108 固定 Worker package、lockfile 和 Wrangler 4.111.0，移除普通 Worker deploy 对 setup、回填和部署 helper 的调用。
+- [x] T109 固定现有 KV/D1/R2/Analytics Engine Binding、`bidupdat` 配置、Cron 与 `keep_vars`，新增配置防护和 health Binding 布尔状态测试。
+- [x] T110 完成本地 `npm ci`、11 项测试、配置验证、部署 dry-run、脚本语法检查与差异检查；未执行真实部署、迁移、资源写入或 Git 状态变更。详见 `docs/secondary-development/test-reports/2026-07-18-worker-deployment-boundary-test-report.md`。

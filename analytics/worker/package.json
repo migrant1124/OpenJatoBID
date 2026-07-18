@@ -3,17 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "test": "node --test",
-    "dev": "wrangler dev",
-    "deploy": "node ../scripts/deploy-if-changed.mjs analytics/worker",
-    "setup:notice-kv": "node ../scripts/setup-notice-kv.mjs",
-    "setup:resources": "node ../scripts/setup-resource-storage.mjs",
-    "setup:analytics-storage": "node ../scripts/setup-analytics-storage.mjs",
-    "backfill:analytics-stats": "node ../scripts/backfill-analytics-stats.mjs",
-    "backfill:analytics-stat-fields": "node ../scripts/backfill-analytics-stat-fields.mjs"
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "validate:config": "node scripts/validate-config.mjs",
+    "deploy:dry-run": "npm run validate:config && wrangler deploy --config wrangler.jsonc --dry-run",
+    "deploy": "npm run validate:config && wrangler deploy --config wrangler.jsonc"
   },
   "devDependencies": {
-    "wrangler": "^4.13.2"
+    "wrangler": "4.111.0"
   }
 }

@@ -1,6 +1,6 @@
 # 埋点统计部署手册
 
-本目录维护 `Cloudflare Workers + Analytics Engine + D1 + Cron Triggers + Workers Static Assets` 埋点统计服务。公开仓库不保存 `ACCOUNT_ID`、`ADMIN_TOKEN`、`ANALYTICS_API_TOKEN` 等密钥。
+本目录维护 `Cloudflare Workers + Analytics Engine + D1 + Cron Triggers` 埋点统计服务。公开仓库不保存 `ACCOUNT_ID`、`ADMIN_TOKEN`、`ANALYTICS_API_TOKEN` 等密钥。
 
 ## 地址
 
@@ -13,13 +13,14 @@
 
 | 数据源                                | Binding           | 用途                              |
 | ---------------------------------- | ----------------- | ------------------------------- |
-| Analytics Engine `agnet_analytics` | `ANALYTICS`       | 详细事件、今天/7天/30天查询、最近事件、Cron 汇总来源 |
-| D1 `openbidkit-analytics`          | `ANALYTICS_DB`    | 新版 `stats_*` 长期统计表              |
-| D1 `openbidkit-resources`          | `RESOURCE_DB`     | 资源管理元数据                         |
-| R2 `openbidkit`                    | `RESOURCE_BUCKET` | 资源图片                            |
-| KV                                 | `NOTICE_STORE`    | 公告、授权配置和 GitHub stats 缓存        |
+| Analytics Engine `jatobid_analytics` | `ANALYTICS`       | 详细事件、今天/7天/30天查询、最近事件、Cron 汇总来源 |
+| D1 `jatoaibid-analytics`            | `ANALYTICS_DB`    | 新版 `stats_*` 长期统计表              |
+| D1 `jatoaibid-resources`            | `RESOURCE_DB`     | 资源管理元数据                         |
+| R2 `jatoaibid`                      | `RELEASE_BUCKET`  | 私有客户端更新制品                       |
+| R2 `jatoaibid`                      | `RESOURCE_BUCKET` | 资源图片                            |
+| KV                                  | `NOTICE_STORE`    | 公告、授权配置和 GitHub stats 缓存        |
 
-`openbidkit-analytics` 可以在改版时直接删除并由 `setup:analytics-storage` 重建；不要删除 `openbidkit-resources`。
+这些生产资源由 Cloudflare 后台人工维护；普通 Worker 部署不会创建、删除或迁移它们。
 
 ## 接口
 
@@ -90,14 +91,14 @@
 
 ### 1. Cloudflare 凭据
 
-自动创建 KV/D1/R2 需要在 Cloudflare Workers Build 的构建环境变量中配置：
+普通 Worker 构建和部署不需要基础设施管理凭据。仅在人工维护现有资源或执行独立迁移时，才在本机终端临时配置：
 
 | 变量                      | 说明                                |
 | ----------------------- | --------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | 具备 Workers KV、D1、R2 和 Worker 部署权限 |
+| `CLOUDFLARE_API_TOKEN`  | 仅人工维护时使用，按目标操作授予最小权限 |
 | `CLOUDFLARE_ACCOUNT_ID` | 53d21f8ee647e4b1877d5147e1424636  |
 
-这两个变量不是 GitHub Secrets，也不是 Worker 运行时 Secret；本地手动执行 setup 时，才需要在本机终端临时设置它们。
+这两个变量不是 Worker 运行时 Secret；不得写入仓库或用于普通 Worker 部署。
 
 Worker 运行时还需要在 Cloudflare 后台配置 Secret：
 
@@ -121,27 +122,21 @@ node -e "const { webcrypto } = require('node:crypto'); (async () => { const key 
 
 公钥由客户端发布脚本从私钥 JWK 自动导出并打入安装包，不需要作为 Secret 保存。
 
-### 2. 创建或复用存储
+### 2. 基础设施维护
 
-正常部署不需要本地手动执行 setup。Cloudflare Workers Build 执行 `npm run deploy` 时，会由 `deploy-if-changed.mjs` 自动运行：
+`analytics/worker` 的普通 `npm run deploy` 只部署 Worker 代码和已有 Binding 配置，不调用 `analytics/scripts`，不创建 R2、D1、KV，也不执行数据库迁移。`setup-*.mjs` 与历史回填脚本仅限人工维护，必须由运维人员在确认目标资源和权限后单独执行。
+
+数据库 migration 也必须由人工单独执行，且不能与普通 Worker 部署混用。完成备份并确认目标 Binding 后，在 `analytics/worker` 目录按编号执行：
 
 ```powershell
-npm run setup:notice-kv
-npm run setup:resources
-npm run setup:analytics-storage
+npx wrangler d1 migrations apply RESOURCE_DB --remote --config wrangler.jsonc
+npx wrangler d1 execute ANALYTICS_DB --remote --file analytics-migrations/0001_create_stats_schema.sql --config wrangler.jsonc
+npx wrangler d1 execute ANALYTICS_DB --remote --file analytics-migrations/0002_create_rollup_stages.sql --config wrangler.jsonc
+npx wrangler d1 execute ANALYTICS_DB --remote --file analytics-migrations/0003_create_retention_tables.sql --config wrangler.jsonc
+npx wrangler d1 execute ANALYTICS_DB --remote --file analytics-migrations/0004_create_agent_runtime_stats.sql --config wrangler.jsonc
 ```
 
-本地手动执行仅用于调试，必须先在本机设置 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。
-
-`setup:analytics-storage` 会：
-
-| 动作        | 说明                                                                                                                   |
-| --------- | -------------------------------------------------------------------------------------------------------------------- |
-| D1        | 创建或复用 `openbidkit-analytics`，binding 为 `ANALYTICS_DB`                                                                |
-| Cron      | 确认北京时间 01:00 到 03:00 每 30 分钟一个触发点的 5 个 Cron                                                                          |
-| Migration | 执行 `analytics-migrations/*.sql`，并自动补齐 `stats_clients` 授权字段、`stats_versions.client_count`、`stats_models.total_tokens` |
-
-如果刚删除过 `openbidkit-analytics`，脚本会重新创建并更新 `wrangler.jsonc` 的 `database_id`。
+这些命令会写入远端 D1；本轮未执行。
 
 ### 3. 部署 Worker
 
@@ -149,10 +144,14 @@ API Worker 配置：
 
 | 项目             | 值                     |
 | -------------- | --------------------- |
-| Worker 名称      | `agnet-analytics-api` |
+| Worker 名称      | `bidupdat`            |
+| Git 仓库         | `migrant1124/OpenJatoBID` |
+| 生产分支         | `main`                |
 | Root directory | `analytics/worker`    |
-| Build command  | `npm install`         |
+| Build command  | `npm ci && npm test && npm run deploy:dry-run` |
 | Deploy command | `npm run deploy`      |
+| 非生产分支构建    | 关闭                    |
+| Build watch paths | `analytics/worker/*` |
 
 Dashboard Worker 配置：
 
@@ -194,7 +193,7 @@ Invoke-RestMethod `
 
 ## 历史回填
 
-新版历史回填脚本会按 Cron 同一套逻辑，把 Analytics Engine 中 `yibiao-client` 在脚本执行当天北京时间之前的所有历史日期汇总到 D1 `stats_*` 表；回填会补齐留存所需的 30 天 `app_open` 活动窗口并生成 `stats_retention` 快照；资源点击量会按历史总量写入 `openbidkit-resources.resources.click_count`，不会按天重复累加。
+新版历史回填脚本会按 Cron 同一套逻辑，把 Analytics Engine 中 `yibiao-client` 在脚本执行当天北京时间之前的所有历史日期汇总到 D1 `stats_*` 表；回填会补齐留存所需的 30 天 `app_open` 活动窗口并生成 `stats_retention` 快照；资源点击量会按历史总量写入 `jatoaibid-resources.resources.click_count`，不会按天重复累加。
 
 本地执行前，在 `analytics/scripts/.env` 中配置：
 
@@ -203,14 +202,13 @@ Invoke-RestMethod `
 | `CLOUDFLARE_ACCOUNT_ID` 或 `ACCOUNT_ID` | Cloudflare Account ID                                 |
 | `CLOUDFLARE_API_TOKEN`                 | 具备 D1 Query 权限的 Cloudflare API Token                  |
 | `ANALYTICS_API_TOKEN`                  | Analytics Engine SQL Read Token                       |
-| `ANALYTICS_DB_ID`                      | 可选；不填则按 D1 名称 `openbidkit-analytics` 自动查找             |
-| `RESOURCE_DB_ID`                       | 可选；不填则按 D1 名称 `openbidkit-resources` 自动查找，用于回填资源累计点击量 |
+| `ANALYTICS_DB_ID`                      | 可选；不填则按 D1 名称 `jatoaibid-analytics` 自动查找             |
+| `RESOURCE_DB_ID`                       | 可选；不填则按 D1 名称 `jatoaibid-resources` 自动查找，用于回填资源累计点击量 |
 
 执行回填：
 
 ```powershell
-cd analytics\worker
-npm run backfill:analytics-stats
+node analytics\scripts\backfill-analytics-stats.mjs
 ```
 
 只补指定日期时使用 `BACKFILL_DATE` 环境变量：
@@ -218,7 +216,7 @@ npm run backfill:analytics-stats
 ```powershell
 cd analytics\worker
 $env:BACKFILL_DATE="2026-06-17"
-npm run backfill:analytics-stats
+node ..\scripts\backfill-analytics-stats.mjs
 Remove-Item Env:\BACKFILL_DATE
 ```
 
@@ -226,7 +224,7 @@ Remove-Item Env:\BACKFILL_DATE
 
 ```powershell
 cd analytics\worker
-npm run backfill:analytics-stat-fields
+node ..\scripts\backfill-analytics-stat-fields.mjs
 ```
 
 注意事项：
@@ -248,30 +246,29 @@ npm run backfill:analytics-stat-fields
 | 问题                               | 处理                                                                                                                   |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `unauthorized`                   | 检查 Dashboard 输入的 `ADMIN_TOKEN`                                                                                       |
-| `ANALYTICS_DB is not configured` | 确认 Cloudflare Workers Build 已配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，重新触发 API Worker 部署；本地调试时才手动运行 setup |
+| `ANALYTICS_DB is not configured` | 检查 `wrangler.jsonc` 中的 `ANALYTICS_DB` Binding 与真实 D1 ID；不要通过普通 Worker 部署创建资源 |
 | 查询为空                             | 先确认 `/track` 成功，再等待 AE 写入或第二天 Cron 汇总                                                                                |
 | 历史总数为空                           | 新版 D1 刚重建时没有历史数据，需等待 Cron 或后续回填                                                                                      |
 | 今日/7天/30天为空                      | 检查 `ACCOUNT_ID` 和 `ANALYTICS_API_TOKEN`                                                                              |
-| 资源数据异常                           | 不要删除 `openbidkit-resources`、`RESOURCE_DB`、`RESOURCE_BUCKET`                                                          |
+| 资源数据异常                           | 不要删除 `jatoaibid`、`RESOURCE_DB`、`RESOURCE_BUCKET`                                                          |
 
 查看 Worker 日志：
 
 ```powershell
 cd analytics\worker
-npx wrangler tail agnet-analytics-api --format pretty
+npx wrangler tail bidupdat --config wrangler.jsonc --format pretty
 ```
 
 ## 自动部署触发规则
 
-Cloudflare Workers Builds 会在生产分支推送时触发构建。部署脚本按目录判断是否需要部署：
+Cloudflare Workers Builds 仅在生产分支 `main` 推送时触发 `bidupdat` 构建；Root directory 为 `analytics/worker`，Build watch path 为 `analytics/worker/*`，非生产分支构建关闭。
 
-| Worker                      | 监听目录                  |
-| --------------------------- | --------------------- |
-| `agnet-analytics-api`       | `analytics/worker`    |
-| `agnet-analytics-dashboard` | `analytics/dashboard` |
+| Worker      | 监听目录               |
+| ----------- | ---------------------- |
+| `bidupdat` | `analytics/worker/*` |
 
 强制部署可临时设置：
 
 ```text
-FORCE_DEPLOY=1 npm run deploy
+npm run deploy
 ```
