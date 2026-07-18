@@ -67,7 +67,10 @@ function requireBaseUrl(baseUrl, message) {
 
 function isResponseFormatUnsupported(message) {
   const normalized = String(message || '').toLowerCase();
-  return normalized.includes('response_format') && [
+  if (!normalized.includes('response_format') && !normalized.includes('***.format')) {
+    return false;
+  }
+  return [
     'not supported',
     'does not support',
     'not support',
@@ -75,6 +78,7 @@ function isResponseFormatUnsupported(message) {
     'unknown parameter',
     'invalid parameter',
     'must be',
+    'must contain',
   ].some((marker) => normalized.includes(marker));
 }
 
@@ -802,6 +806,29 @@ function createChatRequestBody(config, request, options = {}) {
 
   if (request.response_format && !options.omitResponseFormat) {
     body.response_format = request.response_format;
+
+    // OpenAI API 要求使用 json_object 格式时消息中必须包含 "json" 字样（部分提供商大小写敏感）
+    if (body.response_format?.type === 'json_object') {
+      const hasJsonHint = body.messages.some(
+        (msg) => String(msg?.content || '').includes('json'),
+      );
+      if (!hasJsonHint) {
+        const systemIndex = body.messages.findIndex((msg) => msg.role === 'system');
+        if (systemIndex !== -1) {
+          body.messages = body.messages.map((msg, index) => {
+            if (index === systemIndex) {
+              return { ...msg, content: String(msg.content || '').trimEnd() + '\n\n请以 json 格式输出。' };
+            }
+            return msg;
+          });
+        } else {
+          body.messages = [
+            { role: 'system', content: '请以 json 格式输出。' },
+            ...body.messages,
+          ];
+        }
+      }
+    }
   }
 
   return body;

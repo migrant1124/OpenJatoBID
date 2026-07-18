@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bidupdat",
   "main": "src/index.js",
-  "compatibility_date": "2026-05-14",
+  "compatibility_date": "2026-07-14",
   "workers_dev": true,
   "observability": {
     "enabled": true,
