@@ -30,6 +30,10 @@ export function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+function rejected(reason) {
+  return { ok: false, reason };
+}
+
 function normalizePem(value) {
   return String(value || '').trim().replace(/\r\n/g, '\n');
 }
@@ -127,49 +131,63 @@ function getTrustedPublicKey(env) {
   return normalizePem(env.JATOBID_UPDATE_LICENSE_PUBLIC_KEY || env.UPDATE_LICENSE_PUBLIC_KEY);
 }
 
-export async function verifyLicenseEnvelope(env, envelope) {
-  if (!envelope || typeof envelope !== 'object') return false;
-  if (envelope.algorithm !== SIGNATURE_ALGORITHM) return false;
-  if (!envelope.payload || typeof envelope.payload !== 'object' || Array.isArray(envelope.payload)) return false;
-  if (!envelope.signature || !envelope.publicKey) return false;
+export async function verifyLicenseEnvelopeDetailed(env, envelope) {
+  if (!envelope) return rejected('missing_envelope');
+  if (typeof envelope !== 'object') return rejected('invalid_payload');
+  if (envelope.algorithm !== SIGNATURE_ALGORITHM) return rejected('invalid_algorithm');
+  if (!envelope.payload || typeof envelope.payload !== 'object' || Array.isArray(envelope.payload)) return rejected('invalid_payload');
+  if (!envelope.signature) return rejected('missing_signature');
+  if (!envelope.publicKey) return rejected('missing_public_key');
   if (REQUIRED_LICENSE_FIELDS.some((field) => (
     typeof envelope.payload[field] !== 'string' || !envelope.payload[field].trim()
-  ))) return false;
+  ))) return rejected('missing_required_field');
 
   const trustedPublicKey = getTrustedPublicKey(env);
-  if (!trustedPublicKey || normalizePem(envelope.publicKey) !== trustedPublicKey) return false;
+  if (!trustedPublicKey) return rejected('trusted_public_key_missing');
+  if (normalizePem(envelope.publicKey) !== trustedPublicKey) return rejected('public_key_mismatch');
 
   const issuedAt = new Date(envelope.payload.issuedAt).getTime();
   const expiresAt = new Date(envelope.payload.expiresAt).getTime();
   const verifiedAt = new Date(envelope.payload.verifiedAt).getTime();
   const offlineValidUntil = new Date(envelope.payload.offlineValidUntil).getTime();
   const now = Date.now();
-  if (
-    ![issuedAt, expiresAt, verifiedAt, offlineValidUntil].every(Number.isFinite)
-    || issuedAt > verifiedAt
-    || verifiedAt > offlineValidUntil
-    || offlineValidUntil > expiresAt
-    || expiresAt <= now
-    || offlineValidUntil <= now
-  ) return false;
+  if (![issuedAt, expiresAt, verifiedAt, offlineValidUntil].every(Number.isFinite)) return rejected('invalid_time');
+  if (issuedAt > verifiedAt || verifiedAt > offlineValidUntil || offlineValidUntil > expiresAt) return rejected('invalid_time_order');
+  if (expiresAt <= now) return rejected('license_expired');
+  if (offlineValidUntil <= now) return rejected('offline_window_expired');
 
+  let key;
   try {
-    const key = await crypto.subtle.importKey(
+    key = await crypto.subtle.importKey(
       'spki',
       pemToArrayBuffer(envelope.publicKey),
       { name: 'ECDSA', namedCurve: 'P-256' },
       false,
       ['verify'],
     );
-    return await crypto.subtle.verify(
+  } catch {
+    return rejected('public_key_import_failed');
+  }
+
+  try {
+    const verified = await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' },
       key,
       derEcdsaSignatureToP1363(base64ToArrayBuffer(envelope.signature)),
       new TextEncoder().encode(canonicalJson(envelope.payload)),
     );
+    return verified ? { ok: true, reason: '' } : rejected('signature_invalid');
   } catch {
-    return false;
+    return rejected('signature_invalid');
   }
+}
+
+export async function verifyLicenseEnvelope(env, envelope) {
+  return (await verifyLicenseEnvelopeDetailed(env, envelope)).ok;
+}
+
+function logUpdateLicenseRejected(route, reason) {
+  console.warn('[update-license-rejected]', { route, reason });
 }
 
 async function readLatestLicense(request) {
@@ -237,7 +255,9 @@ export async function handleUpdateLatest(request, env, url) {
   }
 
   const license = await readLatestLicense(request);
-  if (!await verifyLicenseEnvelope(env, license)) {
+  const verification = await verifyLicenseEnvelopeDetailed(env, license);
+  if (!verification.ok) {
+    logUpdateLicenseRejected('/updates/latest', verification.reason);
     return unauthorized();
   }
 
@@ -266,7 +286,9 @@ export async function handleUpdateDownload(request, env, url) {
     return methodNotAllowed();
   }
 
-  if (!await verifyLicenseEnvelope(env, readDownloadLicense(request))) {
+  const verification = await verifyLicenseEnvelopeDetailed(env, readDownloadLicense(request));
+  if (!verification.ok) {
+    logUpdateLicenseRejected('/updates/download', verification.reason);
     return unauthorized();
   }
 

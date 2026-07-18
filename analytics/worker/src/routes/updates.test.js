@@ -7,6 +7,7 @@ import {
   handleUpdateLatest,
   isAllowedReleaseKey,
   verifyLicenseEnvelope,
+  verifyLicenseEnvelopeDetailed,
 } from './updates.js';
 
 async function createLicenseFixture() {
@@ -96,10 +97,48 @@ test('accepts only canonical version-directory release keys', () => {
 test('strictly verifies a trusted, unexpired ECDSA license envelope', async () => {
   const fixture = await createLicenseFixture();
   assert.equal(await verifyLicenseEnvelope(fixture.env, fixture.license), true);
+  assert.deepEqual(await verifyLicenseEnvelopeDetailed(fixture.env, fixture.license), { ok: true, reason: '' });
   assert.equal(await verifyLicenseEnvelope(fixture.env, {
     ...fixture.license,
     payload: { ...fixture.license.payload, employeeId: 'tampered' },
   }), false);
+});
+
+test('returns every allowed non-sensitive license rejection reason', async () => {
+  const fixture = await createLicenseFixture();
+  const now = Date.now();
+  const orderedPastTimes = {
+    issuedAt: new Date(now - 300_000).toISOString(),
+    verifiedAt: new Date(now - 240_000).toISOString(),
+    offlineValidUntil: new Date(now - 180_000).toISOString(),
+    expiresAt: new Date(now - 120_000).toISOString(),
+  };
+  const expiredOfflineTimes = {
+    issuedAt: new Date(now - 300_000).toISOString(),
+    verifiedAt: new Date(now - 240_000).toISOString(),
+    offlineValidUntil: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 60_000).toISOString(),
+  };
+  const cases = [
+    ['missing_envelope', fixture.env, null],
+    ['invalid_algorithm', fixture.env, { ...fixture.license, algorithm: 'other' }],
+    ['invalid_payload', fixture.env, { ...fixture.license, payload: [] }],
+    ['missing_signature', fixture.env, { ...fixture.license, signature: '' }],
+    ['missing_public_key', fixture.env, { ...fixture.license, publicKey: '' }],
+    ['missing_required_field', fixture.env, { ...fixture.license, payload: { ...fixture.license.payload, name: '' } }],
+    ['trusted_public_key_missing', {}, fixture.license],
+    ['public_key_mismatch', { JATOBID_UPDATE_LICENSE_PUBLIC_KEY: 'different-key' }, fixture.license],
+    ['invalid_time', fixture.env, { ...fixture.license, payload: { ...fixture.license.payload, issuedAt: 'not-a-date' } }],
+    ['invalid_time_order', fixture.env, { ...fixture.license, payload: { ...fixture.license.payload, issuedAt: new Date(now).toISOString(), verifiedAt: new Date(now - 60_000).toISOString() } }],
+    ['license_expired', fixture.env, { ...fixture.license, payload: { ...fixture.license.payload, ...orderedPastTimes } }],
+    ['offline_window_expired', fixture.env, { ...fixture.license, payload: { ...fixture.license.payload, ...expiredOfflineTimes } }],
+    ['public_key_import_failed', { JATOBID_UPDATE_LICENSE_PUBLIC_KEY: 'not-a-public-key' }, { ...fixture.license, publicKey: 'not-a-public-key' }],
+    ['signature_invalid', fixture.env, { ...fixture.license, signature: 'invalid' }],
+  ];
+
+  for (const [reason, env, license] of cases) {
+    assert.deepEqual(await verifyLicenseEnvelopeDetailed(env, license), { ok: false, reason });
+  }
 });
 
 test('rejects a signed license with a missing required field or expired offline window', async () => {
@@ -168,6 +207,36 @@ test('download requires the license header and rejects query-only credentials', 
   queryOnlyUrl.searchParams.set('license', encoded);
   const queryOnly = await handleUpdateDownload(new Request(queryOnlyUrl), env, queryOnlyUrl);
   assert.equal(queryOnly.status, 401);
+  assert.deepEqual(await queryOnly.json(), { code: 401, message: 'unauthorized' });
+});
+
+test('update endpoints log only route and reason when a license is rejected', async () => {
+  const fixture = await createLicenseFixture();
+  const release = createRelease();
+  const env = { ...fixture.env, RELEASE_BUCKET: createBucket(release) };
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const latest = await handleUpdateLatest(new Request('https://updates.example.test/updates/latest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }), env, new URL('https://updates.example.test/updates/latest'));
+    const downloadUrl = new URL('https://updates.example.test/updates/download?key=release%2F1.3.2%2FJato-AI-BID-1.3.2-win-x64.exe');
+    const download = await handleUpdateDownload(new Request(downloadUrl), env, downloadUrl);
+
+    assert.equal(latest.status, 401);
+    assert.deepEqual(await latest.json(), { code: 401, message: 'unauthorized' });
+    assert.equal(download.status, 401);
+    assert.deepEqual(await download.json(), { code: 401, message: 'unauthorized' });
+    assert.deepEqual(warnings, [
+      ['[update-license-rejected]', { route: '/updates/latest', reason: 'missing_envelope' }],
+      ['[update-license-rejected]', { route: '/updates/download', reason: 'missing_envelope' }],
+    ]);
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test('download rejects non-release keys even with a valid license', async () => {
