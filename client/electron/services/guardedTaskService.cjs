@@ -1,7 +1,10 @@
 'use strict';
 
 const { createGuardedOutlineRunner } = require('./outlineGenerationGuard.cjs');
-const { createGuardedContentRunner } = require('./contentGenerationGuard.cjs');
+const {
+  createGuardedContentRunner,
+  recoverInterruptedContentBackup,
+} = require('./contentGenerationGuard.cjs');
 const outlineTaskModule = require('./outlineGenerationTask.cjs');
 const contentTaskModule = require('./contentGenerationTask.cjs');
 
@@ -19,4 +22,21 @@ if (!contentTaskModule[CONTENT_GUARD_FLAG]) {
 
 const taskServicePath = require.resolve('./taskService.cjs');
 delete require.cache[taskServicePath];
-module.exports = require(taskServicePath);
+const baseTaskServiceModule = require(taskServicePath);
+
+function createTaskService(options) {
+  const service = baseTaskServiceModule.createTaskService(options);
+  const getActiveTasks = service.getActiveTasks.bind(service);
+  return {
+    ...service,
+    getActiveTasks() {
+      recoverInterruptedContentBackup(options?.technicalPlanStore);
+      return getActiveTasks();
+    },
+  };
+}
+
+module.exports = {
+  ...baseTaskServiceModule,
+  createTaskService,
+};
