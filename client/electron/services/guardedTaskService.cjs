@@ -25,6 +25,10 @@ delete require.cache[taskServicePath];
 const baseTaskServiceModule = require(taskServicePath);
 
 function createTaskService(options) {
+  // Restore an interrupted full-regeneration backup before load-state IPC can expose
+  // the partially-cleared workspace to the renderer. getActiveTasks keeps a fallback
+  // check for older startup sequences and tests that construct services lazily.
+  recoverInterruptedContentBackup(options?.technicalPlanStore);
   const service = baseTaskServiceModule.createTaskService(options);
   const getActiveTasks = service.getActiveTasks.bind(service);
   return {
