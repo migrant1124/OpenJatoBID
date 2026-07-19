@@ -77,6 +77,7 @@ const resetState = {
   bidAnalysisTask: undefined,
   requirementMatrixTask: undefined,
   outlineGenerationTask: undefined,
+  outlineDeepeningTask: undefined,
   globalFactsTask: undefined,
   globalFacts: [] as GlobalFactGroupState[],
   contentGenerationTask: undefined,
@@ -147,7 +148,7 @@ function workflowLabel(kind: TechnicalPlanWorkflowKind) {
 }
 
 function hasRunningTechnicalPlanTask(state: TechnicalPlanState) {
-  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.requirementMatrixTask, state.outlineGenerationTask, state.globalFactsTask, state.contentGenerationTask]
+  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.requirementMatrixTask, state.outlineGenerationTask, state.outlineDeepeningTask, state.globalFactsTask, state.contentGenerationTask]
     .some((task) => task?.status === 'running' || task?.status === 'pausing');
 }
 
@@ -165,6 +166,7 @@ function hasWorkflowSpecificProgress(state: TechnicalPlanState) {
     || state.contentGenerationRuntime
     || state.contentGenerationOptions
     || state.outlineGenerationTask
+    || state.outlineDeepeningTask
     || state.globalFactsTask
     || state.contentGenerationTask
     || ['outline-generation', 'global-facts', 'content-edit', 'expand'].includes(state.step),
@@ -572,6 +574,13 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             contentGenerationPlans: hasOwnField(technicalPlan, 'contentGenerationPlans') ? (technicalPlan.contentGenerationPlans || {}) : (outlineDataChanged ? {} : prev.contentGenerationPlans),
             contentIllustrationPlan: hasOwnField(technicalPlan, 'contentIllustrationPlan') ? technicalPlan.contentIllustrationPlan : (outlineDataChanged ? undefined : prev.contentIllustrationPlan),
             contentGenerationRuntime: hasOwnField(technicalPlan, 'contentGenerationRuntime') ? technicalPlan.contentGenerationRuntime : (outlineDataChanged ? undefined : prev.contentGenerationRuntime),
+          };
+        }
+
+        if (taskType === 'outline-deepening') {
+          return {
+            ...prev,
+            outlineDeepeningTask: trimTaskLogs(technicalPlan.outlineDeepeningTask) || latestTask,
           };
         }
 
@@ -1008,6 +1017,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           referenceKnowledgeDocumentIds={state.referenceKnowledgeDocumentIds}
           outlineData={state.outlineData}
           task={state.outlineGenerationTask}
+          deepeningTask={state.outlineDeepeningTask}
+          requirementResponseMatrix={state.requirementResponseMatrix}
           contentTaskStatus={state.contentGenerationTask?.status}
           onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode }) => {
             setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds }));
@@ -1018,6 +1029,15 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             });
           }}
           onOutlineSaved={saveOutline}
+          onStartOutlineDeepening={(payload) => window.yibiao?.tasks.startOutlineDeepening(payload)}
+          onApplyOutlineDeepening={async (payload) => {
+            const saved = await window.yibiao?.technicalPlan.applyOutlineDeepening(payload);
+            setState((prev) => ({ ...prev, ...(saved || {}), outlineData: saved?.outlineData || prev.outlineData }));
+          }}
+          onDeepWritingChange={async (payload) => {
+            const saved = await window.yibiao?.technicalPlan.setOutlineDeepWriting(payload);
+            setState((prev) => ({ ...prev, ...(saved || {}), outlineData: saved?.outlineData || prev.outlineData }));
+          }}
           onSortGuardChange={(guard) => {
             sortGuardRef.current = guard;
           }}

@@ -542,6 +542,8 @@ export interface YibiaoBridge {
     saveBidAnalysisConfig: (payload: { mode: BidAnalysisMode; selectedTaskIds: string[]; bidSectionMode?: BidSectionMode }) => Promise<TechnicalPlanState>;
     saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode }) => Promise<TechnicalPlanState>;
     saveOutline: (payload: SaveOutlineRequest) => Promise<TechnicalPlanState>;
+    applyOutlineDeepening: (payload: { patch: unknown; allowAiValueAdditions?: boolean }) => Promise<TechnicalPlanState & { outlineDeepeningDiff?: unknown }>;
+    setOutlineDeepWriting: (payload: { targetNodeId: string; deepWriting: boolean }) => Promise<TechnicalPlanState>;
     saveGlobalFacts: (globalFacts: GlobalFactGroupState[]) => Promise<TechnicalPlanState>;
     saveContentGenerationOptions: (options: ContentGenerationOptions) => Promise<TechnicalPlanState>;
     saveChapterContent: (payload: { nodeId: string; content: string }) => Promise<TechnicalPlanState>;
@@ -575,6 +577,7 @@ export interface YibiaoBridge {
     startBidAnalysis: (payload: unknown) => Promise<unknown>;
     startRequirementMatrixGeneration: (payload?: unknown) => Promise<unknown>;
     startOutlineGeneration: (payload: unknown) => Promise<unknown>;
+    startOutlineDeepening: (payload: unknown) => Promise<unknown>;
     startGlobalFactsGeneration: (payload: unknown) => Promise<unknown>;
     startContentGeneration: (payload: unknown) => Promise<unknown>;
     pauseContentGeneration: () => Promise<unknown>;

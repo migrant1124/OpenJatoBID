@@ -19,6 +19,8 @@ const {
   normalizeOutlineQualityMetadata,
   normalizeRequirementResponseMatrix,
 } = require('./technicalPlanQualityModel.cjs');
+const { applyOutlineDeepeningPatch } = require('./outlineDeepeningPatch.cjs');
+const { applyOutlineQualityRules, validateConditionalOutlineDepth } = require('./outlineQualityRules.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
 const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
@@ -127,6 +129,7 @@ const initialState = {
   contentGenerationRuntime: undefined,
   requirementResponseMatrix: undefined,
   requirementMatrixTask: undefined,
+  outlineDeepeningTask: undefined,
   outlineQualityReview: undefined,
   outlineData: null,
 };
@@ -137,6 +140,7 @@ const taskFieldTypes = {
   outlineGenerationTask: 'outline-generation',
   globalFactsTask: 'global-facts-generation',
   requirementMatrixTask: 'requirement-matrix-generation',
+  outlineDeepeningTask: 'outline-deepening',
   contentGenerationTask: 'content-generation',
 };
 
@@ -1758,7 +1762,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearDownstreamFromOriginalPlan() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
@@ -1791,7 +1795,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearWorkflowSpecificState(workflowKind) {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
@@ -1990,6 +1994,9 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       } else {
         saveOutlineData(partial.outlineData);
       }
+    }
+    if (hasOwn(partial, 'outlineQualityReview')) {
+      updateMeta({ outline_quality_review_json: jsonOrNull(partial.outlineQualityReview) });
     }
 
     if (hasOwn(partial, 'contentGenerationSections')) saveContentSections(partial.contentGenerationSections);
@@ -2205,7 +2212,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearDownstreamFromFormatAnalysisChange() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
@@ -2338,6 +2345,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       assertFormatConstrainedOutlineMutation(outlineData);
       const snapshot = loadOutlinePersistenceSnapshot();
       const outlineToSave = buildOutlineWithPersistedContent(outlineData, { snapshot, reverseMap, affectedIds, clearAll });
+      validateConditionalOutlineDepth(outlineToSave);
       saveOutlineData(outlineToSave);
       const rows = flattenOutlineItems(outlineToSave?.outline || []);
       const nextIds = new Set(rows.map((row) => row.node_id));
@@ -2348,6 +2356,125 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         updateMeta({ content_generation_runtime_json: null });
       }
       updateMeta({ content_illustration_plan_json: null });
+    });
+    transaction();
+    return loadTechnicalPlan();
+  }
+
+  function applyOutlineDeepening({ patch, allowAiValueAdditions = false }) {
+    const current = loadTechnicalPlan();
+    if (!current.outlineData || !current.requirementResponseMatrix) {
+      throw new Error('目录或评分响应矩阵不存在，不能应用局部深化');
+    }
+    const result = applyOutlineDeepeningPatch({
+      outlineData: current.outlineData,
+      requirementResponseMatrix: current.requirementResponseMatrix,
+      patch,
+      outlineExpansionMode: current.outlineExpansionMode,
+      allowAiValueAdditions: allowAiValueAdditions === true,
+    });
+    const affectedNodeIds = result.diff.affected_node_ids;
+    const targetNodeId = result.diff.target_node_id;
+    const transaction = db.transaction(() => {
+      assertOutlineMutationAllowed();
+      saveOutlineData(result.outlineData);
+      updateMeta({
+        requirement_response_matrix_json: jsonOrNull(result.requirementResponseMatrix),
+        outline_quality_review_json: jsonOrNull(result.outlineQualityReview),
+      });
+      const placeholders = affectedNodeIds.map(() => '?').join(', ');
+      if (placeholders) {
+        db.prepare(`DELETE FROM technical_plan_content_sections WHERE node_id IN (${placeholders})`).run(...affectedNodeIds);
+        db.prepare(`DELETE FROM technical_plan_content_plans WHERE node_id IN (${placeholders})`).run(...affectedNodeIds);
+      }
+      const meta = ensureMetaRow();
+      const illustrationPlan = safeJsonParse(meta.content_illustration_plan_json, undefined);
+      const illustrationItems = Array.isArray(illustrationPlan?.items)
+        ? illustrationPlan.items
+        : Array.isArray(illustrationPlan?.plan?.items) ? illustrationPlan.plan.items : null;
+      if (illustrationItems) {
+        const filteredItems = illustrationItems.filter((item) => !item?.section_ids?.some((id) => String(id) === targetNodeId || String(id).startsWith(`${targetNodeId}.`)));
+        if (Array.isArray(illustrationPlan?.items)) illustrationPlan.items = filteredItems;
+        else illustrationPlan.plan.items = filteredItems;
+        updateMeta({ content_illustration_plan_json: jsonOrNull(illustrationPlan) });
+      }
+      saveTask('outline-deepening', undefined);
+      clearTechnicalPlanMermaidCache();
+    });
+    transaction();
+    return { ...loadTechnicalPlan(), outlineDeepeningDiff: result.diff };
+  }
+
+  function setOutlineDeepWriting({ targetNodeId, deepWriting }) {
+    const current = loadTechnicalPlan();
+    if (!current.outlineData || !current.requirementResponseMatrix) {
+      throw new Error('目录或评分响应矩阵不存在，不能修改深度写作');
+    }
+    const targetId = String(targetNodeId || '').trim();
+    const nextOutline = JSON.parse(JSON.stringify(current.outlineData));
+    const rows = flattenOutlineItems(nextOutline.outline || []);
+    const targetRow = rows.find((row) => row.node_id === targetId);
+    if (!targetRow || targetRow.level !== 2) {
+      throw new Error('深度写作只能设置在真实的二级目录上');
+    }
+    const findItem = (items, nodeId) => {
+      for (const item of items || []) {
+        if (String(item.id) === nodeId) return item;
+        const child = findItem(item.children, nodeId);
+        if (child) return child;
+      }
+      return null;
+    };
+    const target = findItem(nextOutline.outline, targetId);
+    const depthRows = flattenOutlineItems([target], null, 2);
+    const maxDepth = Math.max(...depthRows.map((row) => row.level));
+    const removedIds = [];
+    if (deepWriting === true) {
+      if (maxDepth !== 5) {
+        throw new Error('请先使用“AI 深化本节”生成完整五级目录，再开启深度写作');
+      }
+      Object.assign(target, normalizeOutlineQualityMetadata({
+        ...target,
+        deep_writing: true,
+        deep_writing_source: 'user',
+        writing_profile: target.writing_profile === 'creative-proposal' ? 'creative-proposal' : 'deep',
+      }));
+    } else {
+      const removeLevelFiveChildren = (item, level) => {
+        if (level === 4) {
+          for (const child of item.children || []) {
+            if (String(child.content || '').trim()) {
+              throw new Error('第五级目录已有正文，请先保留或迁移正文后再取消深度写作');
+            }
+            removedIds.push(String(child.id));
+          }
+          item.children = [];
+          return;
+        }
+        for (const child of item.children || []) removeLevelFiveChildren(child, level + 1);
+      };
+      removeLevelFiveChildren(target, 2);
+      Object.assign(target, normalizeOutlineQualityMetadata({
+        ...target,
+        deep_writing: false,
+        deep_writing_source: 'user',
+        writing_profile: 'standard',
+      }));
+    }
+    const quality = applyOutlineQualityRules(nextOutline, current.requirementResponseMatrix);
+    const transaction = db.transaction(() => {
+      assertOutlineMutationAllowed();
+      saveOutlineData(quality.outline);
+      updateMeta({
+        requirement_response_matrix_json: jsonOrNull(quality.matrix),
+        outline_quality_review_json: jsonOrNull(quality.review),
+      });
+      if (removedIds.length) {
+        const placeholders = removedIds.map(() => '?').join(', ');
+        db.prepare(`DELETE FROM technical_plan_content_sections WHERE node_id IN (${placeholders})`).run(...removedIds);
+        db.prepare(`DELETE FROM technical_plan_content_plans WHERE node_id IN (${placeholders})`).run(...removedIds);
+      }
+      clearTechnicalPlanMermaidCache();
     });
     transaction();
     return loadTechnicalPlan();
@@ -2649,6 +2776,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveBidAnalysisConfig,
     saveOutlineConfig,
     saveOutline,
+    applyOutlineDeepening,
+    setOutlineDeepWriting,
     saveGlobalFacts,
     saveIllustrationHtml,
     saveIllustrationChart,

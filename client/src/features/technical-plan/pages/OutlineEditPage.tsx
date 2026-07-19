@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, DragEvent } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { useToast } from '../../../shared/ui';
-import type { BackgroundTaskState, SaveOutlineRequest, TechnicalPlanWorkflowKind } from '../types';
+import type { BackgroundTaskState, RequirementResponseMatrix, SaveOutlineRequest, TechnicalPlanWorkflowKind } from '../types';
 import type { KnowledgeBaseIndex, KnowledgeDocument } from '../../knowledge-base/types';
 import type { OutlineData, OutlineExpansionMode, OutlineItem } from '../../../shared/types';
 import type { ExportFormatConfig } from '../../../shared/types/exportFormat';
@@ -23,9 +23,14 @@ interface OutlineEditPageProps {
   referenceKnowledgeDocumentIds: string[];
   outlineData: OutlineData | null;
   task?: BackgroundTaskState;
+  deepeningTask?: BackgroundTaskState;
+  requirementResponseMatrix?: RequirementResponseMatrix;
   contentTaskStatus?: BackgroundTaskState['status'];
   onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode }) => void;
   onOutlineSaved: (request: SaveOutlineRequest) => Promise<void>;
+  onStartOutlineDeepening: (payload: { target_node_id: string; allow_ai_value_additions: boolean }) => Promise<unknown> | undefined;
+  onApplyOutlineDeepening: (payload: { patch: unknown; allowAiValueAdditions: boolean }) => Promise<void>;
+  onDeepWritingChange: (payload: { targetNodeId: string; deepWriting: boolean }) => Promise<void>;
   onSortGuardChange?: (guard: OutlineSortGuard | null) => void;
 }
 
@@ -229,7 +234,6 @@ function getOutlineConstraintLabels(item: OutlineItem) {
   if (!hasFormatConstraints) return [];
 
   const labels: string[] = [];
-  if (item.manual_input_required) labels.push('人工填写');
   if (item.format_node_id) labels.push('固定目录');
   if (item.required_in_outline) labels.push('不可删除');
   if (item.title_locked) labels.push('标题锁定');
@@ -237,16 +241,20 @@ function getOutlineConstraintLabels(item: OutlineItem) {
   if (item.level_locked) labels.push('层级锁定');
   if (item.response_required === false) labels.push('只保留标题');
 
-  const responseModeLabel = item.response_mode && {
-    'freeform-markdown': 'AI 正文',
+  return labels;
+}
+
+function getOutlineWritingLabel(item: OutlineItem) {
+  const specialLabels: Record<string, string> = {
     'fixed-markdown-table': '固定表格',
     'locked-commitment': '固定承诺函',
     'evidence-markdown': '证明材料',
     container: '目录容器',
     'explicit-none': '明确无内容响应',
-  }[item.response_mode];
-  if (responseModeLabel) labels.push(responseModeLabel);
-  return labels;
+  };
+  const specialLabel = item.response_mode ? specialLabels[item.response_mode] : undefined;
+  if (specialLabel) return specialLabel;
+  return item.manual_input_required ? '人工填写' : 'AI编写';
 }
 
 function getInitialExpandedKnowledgeFolders(index: KnowledgeBaseIndex) {
@@ -269,9 +277,14 @@ function OutlineEditPage({
   referenceKnowledgeDocumentIds,
   outlineData,
   task,
+  deepeningTask,
+  requirementResponseMatrix,
   contentTaskStatus,
   onOutlineConfigChange,
   onOutlineSaved,
+  onStartOutlineDeepening,
+  onApplyOutlineDeepening,
+  onDeepWritingChange,
   onSortGuardChange,
 }: OutlineEditPageProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -283,6 +296,9 @@ function OutlineEditPage({
   const [startingOutline, setStartingOutline] = useState(false);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [deepeningDialogOpen, setDeepeningDialogOpen] = useState(false);
+  const [allowAiValueAdditions, setAllowAiValueAdditions] = useState(false);
+  const [applyingDeepening, setApplyingDeepening] = useState(false);
   const [draftOutlineExpansionMode, setDraftOutlineExpansionMode] = useState<OutlineExpansionMode>(outlineExpansionMode);
   const [draftKnowledgeDocumentIds, setDraftKnowledgeDocumentIds] = useState<string[]>(referenceKnowledgeDocumentIds);
   const [developerMode, setDeveloperMode] = useState(false);
@@ -309,6 +325,10 @@ function OutlineEditPage({
   const missingRequiredKnowledge = hasUnspecifiedFormat && draftKnowledgeDocumentIds.length === 0;
   const activeOutlineData = sorting ? draftOutlineData : outlineData;
   const selectedItem = activeOutlineData && selectedItemId ? findOutlineItem(activeOutlineData.outline, selectedItemId) : null;
+  const selectedItemIsSecondLevel = Boolean(selectedItem && selectedItem.id.split('.').length === 2);
+  const deepeningRunning = deepeningTask?.status === 'running' || deepeningTask?.status === 'pausing';
+  const deepeningStats = deepeningTask?.stats as { patch?: unknown; diff?: { target_node_id?: string; added_node_ids?: string[]; description_updated_node_ids?: string[]; mapped_scoring_point_ids?: string[]; value_anchor_ids?: string[]; deep_writing_changed?: boolean }; allow_ai_value_additions?: boolean } | undefined;
+  const deepeningCandidateReady = deepeningTask?.status === 'success' && deepeningStats?.patch && String(deepeningStats?.diff?.target_node_id || '') === String(selectedItem?.id || '');
   const taskRunning = task?.status === 'running';
   const taskFailed = task?.status === 'error';
   const generating = startingOutline || taskRunning;
@@ -553,6 +573,50 @@ function OutlineEditPage({
       idMap: renumbered.idMap,
       affectedNodeIds,
     });
+  };
+
+  const openDeepeningDialog = () => {
+    if (!selectedItem || !selectedItemIsSecondLevel || outlineMutationLocked || !requirementResponseMatrix) {
+      return;
+    }
+    setAllowAiValueAdditions(outlineExpansionMode !== 'original-only');
+    setDeepeningDialogOpen(true);
+  };
+
+  const startOutlineDeepening = async () => {
+    if (!selectedItem) return;
+    try {
+      await onStartOutlineDeepening({
+        target_node_id: selectedItem.id,
+        allow_ai_value_additions: allowAiValueAdditions,
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'AI 深化本节启动失败', 'error');
+    }
+  };
+
+  const applyOutlineDeepening = async () => {
+    if (!deepeningStats?.patch) return;
+    setApplyingDeepening(true);
+    try {
+      await onApplyOutlineDeepening({ patch: deepeningStats.patch, allowAiValueAdditions: allowAiValueAdditions });
+      setDeepeningDialogOpen(false);
+      showToast('局部深化已应用，仅目标二级子树的正文计划和图片已失效', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '应用局部深化失败，原目录未修改', 'error');
+    } finally {
+      setApplyingDeepening(false);
+    }
+  };
+
+  const changeDeepWriting = async (deepWriting: boolean) => {
+    if (!selectedItem) return;
+    try {
+      await onDeepWritingChange({ targetNodeId: selectedItem.id, deepWriting });
+      showToast(deepWriting ? '已开启深度写作' : '已取消深度写作，AI 推荐原因仍会保留', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '修改深度写作失败', 'error');
+    }
   };
 
   const startEditing = (item: OutlineItem) => {
@@ -856,6 +920,7 @@ function OutlineEditPage({
     const heading = exportFormat.headings[Math.min(item.id.split('.').length - 1, 5)];
     const displayTitle = formatOutlineDisplayTitle(item, heading);
     const constraintLabels = getOutlineConstraintLabels(item);
+    const writingLabel = getOutlineWritingLabel(item);
     const positionLocked = isOutlinePositionLocked(item);
     const dropClass = isDropTarget
       ? dropTarget.valid
@@ -890,6 +955,7 @@ function OutlineEditPage({
             onDoubleClick={() => hasChildren && toggleExpanded(item.id)}
           >
             <strong>{displayTitle}</strong>
+            <span className="bid-analysis-section-chip">{writingLabel}</span>
             {constraintLabels.length > 0 && <span className="bid-analysis-section-chip">{constraintLabels.join(' · ')}</span>}
           </button>
         </div>
@@ -1198,7 +1264,7 @@ function OutlineEditPage({
                       onChange={(event) => setEditManualInputRequired(event.target.value === 'manual')}
                       disabled={outlineMutationLocked || sorting || Boolean(selectedItem.children?.length)}
                     >
-                      <option value="ai">AI 编写</option>
+                      <option value="ai">AI编写</option>
                       <option value="manual">人工填写</option>
                     </select>
                   </label>
@@ -1212,10 +1278,30 @@ function OutlineEditPage({
                   <h3>{formatOutlineDisplayTitle(selectedItem, exportFormat.headings[Math.min(selectedItem.id.split('.').length - 1, 5)])}</h3>
                   <p>{selectedItem.description || '无描述'}</p>
                   {selectedItem.source_requirement_title && <small>来源评分项：{selectedItem.source_requirement_title}</small>}
-                  {getOutlineConstraintLabels(selectedItem).length > 0 && (
+                   {getOutlineConstraintLabels(selectedItem).length > 0 && (
                     <div className="outline-detail-actions" aria-label="目录约束状态">
                       {getOutlineConstraintLabels(selectedItem).map((label) => <span className="bid-analysis-section-chip" key={label}>{label}</span>)}
                     </div>
+                   )}
+                  <div className="outline-detail-actions" aria-label="正文填写方式">
+                    <span className="bid-analysis-section-chip">{getOutlineWritingLabel(selectedItem)}</span>
+                  </div>
+                  {selectedItemIsSecondLevel && (
+                    <section className="outline-deepening-panel">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedItem.deep_writing === true}
+                          onChange={(event) => { void changeDeepWriting(event.target.checked); }}
+                          disabled={outlineMutationLocked || sorting || deepeningRunning}
+                        />
+                        <span>深度写作</span>
+                      </label>
+                      {selectedItem.deep_writing_recommended && <small>AI 推荐原因：{selectedItem.deep_writing_reason || '该章节评分价值较高，建议深化编制'}</small>}
+                      <button type="button" className="secondary-action" onClick={openDeepeningDialog} disabled={outlineMutationLocked || sorting || deepeningRunning || !requirementResponseMatrix}>
+                        {deepeningRunning ? 'AI 正在深化本节' : 'AI 深化本节'}
+                      </button>
+                    </section>
                   )}
                   <div className="outline-detail-actions">
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
@@ -1286,6 +1372,49 @@ function OutlineEditPage({
               >
                 开始生成
               </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={deepeningDialogOpen} onOpenChange={setDeepeningDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="outline-deepening-dialog">
+            <Dialog.Title>AI 深化本节目录</Dialog.Title>
+            <Dialog.Description>
+              仅生成并应用当前二级目录的局部 Patch；不会重写其他目录。
+            </Dialog.Description>
+            {outlineExpansionMode === 'original-only' && (
+              <label className="outline-deepening-option">
+                <input type="checkbox" checked={allowAiValueAdditions} onChange={(event) => setAllowAiValueAdditions(event.target.checked)} disabled={deepeningRunning || applyingDeepening} />
+                <span>允许 AI 增值深化（可新增来源外标题）</span>
+              </label>
+            )}
+            {deepeningCandidateReady ? (
+              <div className="outline-deepening-diff">
+                <strong>深化差异预览</strong>
+                <span>新增目录：{deepeningStats?.diff?.added_node_ids?.length || 0}</span>
+                <span>完善说明：{deepeningStats?.diff?.description_updated_node_ids?.length || 0}</span>
+                <span>评分点：{deepeningStats?.diff?.mapped_scoring_point_ids?.join('、') || '保持原映射'}</span>
+                <span>增值锚点：{deepeningStats?.diff?.value_anchor_ids?.join('、') || '无'}</span>
+                <small>应用后仅该二级子树关联的正文计划、正文状态和图片计划会失效；既有正文保留为待重新分配素材。</small>
+              </div>
+            ) : (
+              <p className="outline-deepening-hint">生成候选后会先展示新增节点、说明与评分/锚点变化，确认后才写入工作区。</p>
+            )}
+            {deepeningTask?.status === 'error' && <p className="outline-deepening-error">{deepeningTask.error || 'AI 深化本节失败，原目录未修改'}</p>}
+            <div className="content-regenerate-actions">
+              <Dialog.Close className="secondary-action" type="button" disabled={applyingDeepening}>取消</Dialog.Close>
+              {deepeningCandidateReady ? (
+                <button type="button" className="primary-action" onClick={() => { void applyOutlineDeepening(); }} disabled={applyingDeepening}>
+                  {applyingDeepening ? '正在应用' : '确认应用'}
+                </button>
+              ) : (
+                <button type="button" className="primary-action" onClick={() => { void startOutlineDeepening(); }} disabled={deepeningRunning || applyingDeepening}>
+                  {deepeningRunning ? '正在生成候选' : '生成深化候选'}
+                </button>
+              )}
             </div>
           </Dialog.Content>
         </Dialog.Portal>

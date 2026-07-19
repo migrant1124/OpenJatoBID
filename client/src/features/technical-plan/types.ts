@@ -10,7 +10,7 @@ export type BidAnalysisMode = 'key' | 'full' | 'custom';
 export type BidAnalysisTaskStatus = 'idle' | 'running' | 'success' | 'error';
 export type BidSectionMode = 'single' | 'multiple';
 export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error';
-export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'requirement-matrix-generation' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
+export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'requirement-matrix-generation' | 'outline-generation' | 'outline-deepening' | 'global-facts-generation' | 'content-generation';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
@@ -403,6 +403,7 @@ export interface TechnicalPlanState {
   bidAnalysisTask?: BackgroundTaskState;
   requirementMatrixTask?: BackgroundTaskState;
   outlineGenerationTask?: BackgroundTaskState;
+  outlineDeepeningTask?: BackgroundTaskState;
   globalFactsTask?: BackgroundTaskState;
   globalFacts: GlobalFactGroupState[];
   contentGenerationTask?: BackgroundTaskState;

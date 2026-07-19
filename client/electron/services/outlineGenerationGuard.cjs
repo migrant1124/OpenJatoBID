@@ -1,5 +1,7 @@
 'use strict';
 
+const { validateConditionalOutlineDepth } = require('./outlineQualityRules.cjs');
+
 const {
   appendTaskLog,
   cloneValue,
@@ -42,6 +44,8 @@ const OUTLINE_COMMIT_FIELDS = [
   'outlineMode',
   'outlineExpansionMode',
   'referenceKnowledgeDocumentIds',
+  'requirementResponseMatrix',
+  'outlineQualityReview',
   'outlineData',
   'contentGenerationTask',
   'contentGenerationSections',
@@ -162,7 +166,7 @@ function normalizeAndValidateOutline(outlineData, context = {}) {
       if (seenTitles.has(key)) throw new Error(`${path}[${index}].title 与同级目录重复：${title}`);
       seenTitles.add(key);
       const children = Array.isArray(rawItem.children) ? rawItem.children : [];
-      if (level > 4) throw new Error(`${path}[${index}] 目录层级不能超过四级`);
+      if (level > 5) throw new Error(`${path}[${index}] 目录层级不能超过五级`);
       if (rawItem.manual_input_required === true && children.length) throw new Error(`${path}[${index}] 人工填写节点必须是叶子节点`);
       if (level >= 2 && allowedTitles && !allowedTitles.has(key)) throw new Error(`仅参考原方案模式不允许新增原方案或来源骨架之外的目录：${title}`);
 
@@ -192,7 +196,8 @@ function normalizeAndValidateOutline(outlineData, context = {}) {
   const outline = normalizeItems(sourceOutline.length ? mergeSourceConstraints(outlineData.outline, sourceOutline) : outlineData.outline);
   const depth = outlineDepth(outline);
   if (depth < 3) throw new Error('完整目录至少需要三级结构');
-  if (depth > 4) throw new Error('最终目录层级不能超过四级');
+  if (depth > 5) throw new Error('最终目录层级不能超过五级');
+  validateConditionalOutlineDepth({ outline });
   const missing = [...groupIds].filter((id) => !mappedGroupIds.has(id));
   if (missing.length) throw new Error(`技术评分项未映射到目录：${missing.map((id) => singleLine(groupById.get(id)?.title) || id).join('、')}`);
   return { ...cloneValue(outlineData), outline };
@@ -321,7 +326,7 @@ async function repairOutlineWithAgent(agentService, context) {
   const result = await agentService.runTask({
     title: '技术方案目录安全修复',
     prompt: `请修复 candidate-outline.json，并把最终结果写入 safe-outline-result.json。
-必须保持 source-outline.json 的一级目录和已有格式约束；每个节点必须有非空 title、description；深度为三级或四级；评分项只能映射到二级及以下节点且全部覆盖；${context.outlineExpansionMode === 'original-only' ? '新增标题只能来自 original-outline.json 或 source-outline.json。' : '可按评分项和原方案补充必要下级目录。'}
+必须保持 source-outline.json 的一级目录和已有格式约束；每个节点必须有非空 title、description；普通二级子树最多四级，deep_writing=true 的二级子树必须形成完整五级路径，禁止六级；评分项只能映射到二级及以下节点且全部覆盖；${context.outlineExpansionMode === 'original-only' ? '新增标题只能来自 original-outline.json 或 source-outline.json。' : '可按评分项和原方案补充必要下级目录。'}
 只输出 {"outline":[...]}，不要输出正文或解释。`,
     output_file: 'safe-outline-result.json',
     files: [

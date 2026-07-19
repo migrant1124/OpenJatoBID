@@ -3545,6 +3545,62 @@
   border-left: 1px solid var(--yb-border-soft);
 }
 
+.outline-deepening-panel,
+.outline-deepening-dialog,
+.outline-deepening-diff {
+  display: grid;
+  gap: 10px;
+}
+
+.outline-deepening-panel {
+  padding: 12px;
+  background: rgba(33, 116, 253, 0.06);
+  border: 1px solid rgba(33, 116, 253, 0.16);
+  border-radius: 12px;
+}
+
+.outline-deepening-panel label,
+.outline-deepening-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--yb-text);
+  font-weight: 600;
+}
+
+.outline-deepening-panel small,
+.outline-deepening-diff small,
+.outline-deepening-hint {
+  color: var(--yb-text-soft);
+  line-height: 1.6;
+}
+
+.outline-deepening-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 101;
+  width: min(560px, calc(100vw - 40px));
+  transform: translate(-50%, -50%);
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid rgba(228, 233, 240, 0.9);
+  border-radius: 20px;
+  box-shadow: 0 28px 72px rgba(23, 32, 51, 0.16);
+}
+
+.outline-deepening-diff {
+  padding: 14px;
+  background: #f7faff;
+  border: 1px solid rgba(33, 116, 253, 0.16);
+  border-radius: 12px;
+}
+
+.outline-deepening-error {
+  margin: 0;
+  color: #c43d3d;
+}
+
 .outline-progress-log {
   display: grid;
   align-content: start;

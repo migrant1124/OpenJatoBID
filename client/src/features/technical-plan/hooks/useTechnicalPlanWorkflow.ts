@@ -26,6 +26,7 @@ const initialState: TechnicalPlanState = {
   bidAnalysisTask: undefined,
   requirementMatrixTask: undefined,
   outlineGenerationTask: undefined,
+  outlineDeepeningTask: undefined,
   globalFactsTask: undefined,
   globalFacts: [],
   contentGenerationTask: undefined,

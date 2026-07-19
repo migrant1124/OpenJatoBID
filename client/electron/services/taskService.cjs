@@ -4,6 +4,7 @@ const { runBidAnalysisTask } = require('./bidAnalysisTask.cjs');
 const { runContentGenerationTask } = require('./contentGenerationTask.cjs');
 const { runGlobalFactsTask } = require('./globalFactsTask.cjs');
 const { runOutlineGenerationTask } = require('./outlineGenerationTask.cjs');
+const { runOutlineDeepeningTask } = require('./outlineDeepeningTask.cjs');
 const { runRequirementMatrixTask } = require('./requirementMatrixTask.cjs');
 const { runRejectionCheckTask, runRejectionItemsExtractionTask } = require('./rejectionCheckTask.cjs');
 
@@ -34,6 +35,15 @@ const taskDefinitions = {
     lockPolicy: 'group-exclusive',
     stateKey: 'technicalPlan',
     field: 'outlineGenerationTask',
+  },
+  'outline-deepening': {
+    label: 'AI 深化本节目录',
+    group: 'technical-plan',
+    groupLabel: '技术方案',
+    step: 3,
+    lockPolicy: 'group-exclusive',
+    stateKey: 'technicalPlan',
+    field: 'outlineDeepeningTask',
   },
   'requirement-matrix-generation': {
     label: '评分响应矩阵构建',
@@ -322,6 +332,10 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
           'contentGenerationRuntime',
         ]);
       }
+    }
+
+    if (task.type === 'outline-deepening') {
+      copyPatchFields(patch, state, ['outlineData', 'requirementResponseMatrix', 'outlineQualityReview']);
     }
 
     if (task.type === 'requirement-matrix-generation') {
@@ -763,6 +777,24 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     emit(recoveredTask, buildSnapshot(getTaskDefinition('requirement-matrix-generation'), state, recoveredTask));
   }
 
+  function recoverInterruptedOutlineDeepeningTask() {
+    if (activeTasks.has('outline-deepening')) return;
+    const technicalPlan = technicalPlanStore.loadTechnicalPlan() || {};
+    const task = technicalPlan.outlineDeepeningTask;
+    if (!isActiveTaskStatus(task?.status)) return;
+    const message = '上次 AI 深化本节未完成，原目录未被修改，请重新生成候选';
+    const recoveredTask = {
+      ...task,
+      status: 'error',
+      pause_requested: false,
+      error: message,
+      logs: [...(Array.isArray(task.logs) ? task.logs : []), message],
+      updated_at: now(),
+    };
+    const state = technicalPlanStore.updateTechnicalPlan({ outlineDeepeningTask: recoveredTask });
+    emit(recoveredTask, buildSnapshot(getTaskDefinition('outline-deepening'), state, recoveredTask));
+  }
+
   function recoverInterruptedRejectionCheckTasks() {
     const staleExtractionMessage = '上次解析未完成，请重新解析';
     const staleCheckMessage = '上次检查未完成，请重新检查';
@@ -878,6 +910,9 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         referenceKnowledgeDocumentIds: Array.isArray(payload?.reference_knowledge_document_ids) ? payload.reference_knowledge_document_ids : [],
       });
     },
+    startOutlineDeepening(payload) {
+      return startManagedTask('outline-deepening', payload, runOutlineDeepeningTask);
+    },
     startGlobalFactsGeneration(payload) {
       return startManagedTask('global-facts-generation', payload, runGlobalFactsTask, {
         globalFacts: [],
@@ -924,6 +959,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
       recoverInterruptedBidSectionExtractionTask();
       recoverInterruptedBidAnalysisTask();
       recoverInterruptedRequirementMatrixTask();
+      recoverInterruptedOutlineDeepeningTask();
       recoverInterruptedOutlineGenerationTask();
       recoverInterruptedContentGenerationTask();
       recoverInterruptedGlobalFactsTask();

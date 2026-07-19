@@ -24,7 +24,10 @@ function annotateOutlineQualityMetadata(outline) {
     return (items || []).map((item) => {
       const qualityMetadata = normalizeOutlineQualityMetadata(item);
       const next = { ...item, ...qualityMetadata };
-      if (level === 2 && next.deep_writing_recommended === true && next.deep_writing !== true) {
+      if (level === 2
+        && next.deep_writing_recommended === true
+        && next.deep_writing !== true
+        && next.deep_writing_source !== 'user') {
         next.deep_writing = true;
       }
       if (level === 2 && next.deep_writing === true && !next.deep_writing_source) {

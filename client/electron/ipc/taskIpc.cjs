@@ -17,6 +17,10 @@ function registerTaskIpc({ taskService }) {
     taskService.subscribe(event.sender);
     return taskService.startOutlineGeneration(payload);
   });
+  ipcMain.handle('tasks:start-outline-deepening', (event, payload) => {
+    taskService.subscribe(event.sender);
+    return taskService.startOutlineDeepening(payload);
+  });
   ipcMain.handle('tasks:start-global-facts-generation', (event, payload) => {
     taskService.subscribe(event.sender);
     return taskService.startGlobalFactsGeneration(payload);

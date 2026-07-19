@@ -76,6 +76,7 @@ test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼�
           status: 'accepted',
         }],
       },
+      outlineQualityReview: { can_proceed: true, warnings: [] },
     });
 
     const loaded = store.loadTechnicalPlan();
@@ -84,6 +85,7 @@ test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼�
     assert.equal(item.writing_profile, 'deep');
     assert.deepEqual(item.value_anchor_ids, ['A1']);
     assert.deepEqual(loaded.requirementResponseMatrix.scoring_points[0].mapped_node_ids, ['2']);
+    assert.equal(loaded.outlineQualityReview.can_proceed, true);
 
     const columns = sqlite.db.prepare('PRAGMA table_info(technical_plan_outline_nodes)').all().map((row) => row.name);
     assert.ok(columns.includes('quality_metadata_json'));
