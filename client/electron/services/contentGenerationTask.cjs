@@ -6529,6 +6529,9 @@ workspace 文件说明：
       sections,
       options: generationOptions,
       aiImagesAvailable: imageAvailability.available,
+      contentPlans: storedContentPlans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+      globalFacts,
     });
     contentStats.illustration_planning_step_completed = 1;
     contentStats.illustration_planning_step_label = '正在执行全文图片编排 Agent';

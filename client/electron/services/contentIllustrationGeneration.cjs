@@ -69,14 +69,45 @@ function getPlannedTitle(execution) {
   return title;
 }
 
+function formatCreativeBrief(brief) {
+  if (!brief || typeof brief !== 'object') return '';
+  const list = (value) => (Array.isArray(value) ? value : []).filter(Boolean).join('、') || '无';
+  return `创意简报：
+客户与项目：${brief.client_profile || '待确认'}；${brief.project_goal || '待确认'}
+受众：${list(brief.target_audience)}
+主题与核心信息：${brief.campaign_theme || '待确认'}；${brief.key_message || '待确认'}
+场景：${brief.event_type || '未指定'}；${brief.venue_and_scene || '未指定'}
+必须元素：${list(brief.mandatory_elements)}
+禁止元素：${list(brief.prohibited_elements)}
+风格：${list(brief.style_keywords)}
+品牌色：${list(brief.brand_colors)}
+可用品牌资产：${list(brief.brand_assets)}
+交付类型与比例：${brief.deliverable_type || '创意概念图'}；${brief.aspect_ratio || '16:9'}
+待用户确认：${list(brief.needs_user_confirmation)}`;
+}
+
 function buildAiImagePrompt(execution) {
-  const styleLabel = execution.planItem.image_type === 'realistic_photo' ? '专业实景图片' : '专业工程图示';
+  const type = execution.planItem.image_type;
+  const styleLabels = {
+    realistic_photo: '专业实景图片',
+    campaign_key_visual: '活动或宣传主视觉概念图',
+    event_scene_render: '活动现场或执行场景概念图',
+    spatial_concept_render: '空间与动线概念图',
+    poster_concept: '海报创意方向图',
+    social_media_mockup: '社交媒体传播物料概念图',
+    brand_touchpoint_mockup: '品牌触点物料概念图',
+    storyboard: '宣传片或活动流程分镜图',
+    creative_style_board: '创意风格与视觉情绪板',
+  };
+  const styleLabel = styleLabels[type] || '专业工程图示';
   const title = getPlannedTitle(execution);
+  const creativeBrief = formatCreativeBrief(execution.planItem.creative_brief);
   return `阅读并理解以下技术方案正文，生成一张${styleLabel}。
 最终图题：${title}
 必须围绕最终图题限定的对象、场景和关系重点组织画面，不要生成泛化的章节概览；图题用于限定画面主题，不要求把完整图题作为文字绘制在图片中。
 图片需要准确表达正文中的设备、环境、部署关系或实施场景，不要编造正文中没有的关键对象。
-不要有太多文字，专业、克制，适合投标技术方案。
+不要有太多文字，专业、克制，适合投标技术方案。没有用户提供的品牌资产时不得生成 Logo 或近似 Logo；不得生成关键中文文案、伪造客户/人物/场地/案例。
+${creativeBrief ? `\n${creativeBrief}\n` : ''}
 参考内容如下：
 
 ${execution.reference}`;
