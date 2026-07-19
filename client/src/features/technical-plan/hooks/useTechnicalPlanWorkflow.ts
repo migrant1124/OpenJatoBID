@@ -24,6 +24,7 @@ const initialState: TechnicalPlanState = {
   referenceKnowledgeDocumentIds: [],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
+  requirementMatrixTask: undefined,
   outlineGenerationTask: undefined,
   globalFactsTask: undefined,
   globalFacts: [],

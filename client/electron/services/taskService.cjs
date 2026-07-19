@@ -4,6 +4,7 @@ const { runBidAnalysisTask } = require('./bidAnalysisTask.cjs');
 const { runContentGenerationTask } = require('./contentGenerationTask.cjs');
 const { runGlobalFactsTask } = require('./globalFactsTask.cjs');
 const { runOutlineGenerationTask } = require('./outlineGenerationTask.cjs');
+const { runRequirementMatrixTask } = require('./requirementMatrixTask.cjs');
 const { runRejectionCheckTask, runRejectionItemsExtractionTask } = require('./rejectionCheckTask.cjs');
 
 const taskDefinitions = {
@@ -33,6 +34,15 @@ const taskDefinitions = {
     lockPolicy: 'group-exclusive',
     stateKey: 'technicalPlan',
     field: 'outlineGenerationTask',
+  },
+  'requirement-matrix-generation': {
+    label: '评分响应矩阵构建',
+    group: 'technical-plan',
+    groupLabel: '技术方案',
+    step: 2,
+    lockPolicy: 'group-exclusive',
+    stateKey: 'technicalPlan',
+    field: 'requirementMatrixTask',
   },
   'global-facts-generation': {
     label: '全局事实设定',
@@ -253,6 +263,8 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         'projectOverview',
         'techRequirements',
         'bidAnalysisTasks',
+        'requirementResponseMatrix',
+        'requirementMatrixTask',
       ]);
       if (state.outlineData === null) {
         copyPatchFields(patch, state, [
@@ -310,6 +322,10 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
           'contentGenerationRuntime',
         ]);
       }
+    }
+
+    if (task.type === 'requirement-matrix-generation') {
+      copyPatchFields(patch, state, ['requirementResponseMatrix']);
     }
 
     if (task.type === 'global-facts-generation') {
@@ -728,6 +744,25 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     emit(recoveredTask, buildSnapshot(getTaskDefinition('global-facts-generation'), state, recoveredTask));
   }
 
+  function recoverInterruptedRequirementMatrixTask() {
+    if (activeTasks.has('requirement-matrix-generation')) return;
+    const technicalPlan = technicalPlanStore.loadTechnicalPlan() || {};
+    const task = technicalPlan.requirementMatrixTask;
+    if (!isActiveTaskStatus(task?.status)) return;
+    const message = '上次评分响应矩阵构建未完成，请重新构建';
+    const recoveredTask = {
+      ...task,
+      status: 'error',
+      progress: 100,
+      pause_requested: false,
+      error: message,
+      logs: [...(Array.isArray(task.logs) ? task.logs : []), message],
+      updated_at: now(),
+    };
+    const state = technicalPlanStore.updateTechnicalPlan({ requirementMatrixTask: recoveredTask });
+    emit(recoveredTask, buildSnapshot(getTaskDefinition('requirement-matrix-generation'), state, recoveredTask));
+  }
+
   function recoverInterruptedRejectionCheckTasks() {
     const staleExtractionMessage = '上次解析未完成，请重新解析';
     const staleCheckMessage = '上次检查未完成，请重新检查';
@@ -813,6 +848,8 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         bidAnalysisProgress: 0,
         projectOverview: '',
         techRequirements: '',
+        requirementResponseMatrix: undefined,
+        requirementMatrixTask: undefined,
         outlineData: null,
         outlineGenerationTask: undefined,
         referenceKnowledgeDocumentIds: [],
@@ -826,7 +863,13 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
       });
     },
     startBidAnalysis(payload) {
-      return startManagedTask('bid-analysis', payload, runBidAnalysisTask);
+      return startManagedTask('bid-analysis', payload, runBidAnalysisTask, {
+        requirementResponseMatrix: undefined,
+        requirementMatrixTask: undefined,
+      });
+    },
+    startRequirementMatrixGeneration(payload) {
+      return startManagedTask('requirement-matrix-generation', payload, runRequirementMatrixTask);
     },
     startOutlineGeneration(payload) {
       return startManagedTask('outline-generation', payload, runOutlineGenerationTask, {
@@ -880,6 +923,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     getActiveTasks() {
       recoverInterruptedBidSectionExtractionTask();
       recoverInterruptedBidAnalysisTask();
+      recoverInterruptedRequirementMatrixTask();
       recoverInterruptedOutlineGenerationTask();
       recoverInterruptedContentGenerationTask();
       recoverInterruptedGlobalFactsTask();

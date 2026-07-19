@@ -4,7 +4,7 @@ import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { areRequiredBidAnalysisTasksReady, getBidAnalysisTasks, isBidAnalysisTaskResultValid } from '../services/bidAnalysisWorkflow';
 import { MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
 import BidSectionSelectorDialog from '../components/BidSectionSelectorDialog';
-import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
+import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, RequirementResponseMatrix, TechnicalPlanState } from '../types';
 
 interface BidAnalysisPageProps {
   hasTenderFile: boolean;
@@ -19,6 +19,8 @@ interface BidAnalysisPageProps {
   taskDefinitions: BidAnalysisTaskDefinition[];
   tasks: BidAnalysisTasks;
   task?: BackgroundTaskState;
+  requirementMatrixTask?: BackgroundTaskState;
+  requirementResponseMatrix?: RequirementResponseMatrix;
   progress: number;
   onProgressChange: (progress: number) => void;
   onConfigSaved: (state: TechnicalPlanState) => void;
@@ -202,6 +204,8 @@ function BidAnalysisPage({
   taskDefinitions,
   tasks,
   task,
+  requirementMatrixTask,
+  requirementResponseMatrix,
   progress,
   onProgressChange,
   onConfigSaved,
@@ -262,6 +266,8 @@ function BidAnalysisPage({
   }).length;
   const sectionTaskRunning = bidSectionExtractionTask?.status === 'running' || bidSectionExtractionTask?.status === 'pausing';
   const taskRunning = running || fullRerunLocked || sectionTaskRunning || task?.status === 'running';
+  const matrixRunning = requirementMatrixTask?.status === 'running' || requirementMatrixTask?.status === 'pausing';
+  const matrixReady = Boolean(requirementResponseMatrix);
   const requiredDone = areRequiredBidAnalysisTasksReady(taskDefinitions, tasks);
   const missingRequiredLabels = requiredTasks
     .filter((definition) => !isBidAnalysisTaskResultValid(definition, tasks[definition.id]))
@@ -280,6 +286,19 @@ function BidAnalysisPage({
     ? selectedSectionTitle ? `多标段 · ${selectedSectionTitle}` : '多标段 · 待选择'
     : '单标段';
   const configLabel = `${bidSectionConfigLabel} · ${getModeLabel(mode)}`;
+
+  const startRequirementMatrix = async () => {
+    if (!requiredDone) {
+      showToast('请先完成 7 个关键招标文件解析项', 'info');
+      return;
+    }
+    try {
+      await window.yibiao?.tasks.startRequirementMatrixGeneration({});
+      showToast('评分响应矩阵构建任务已在后台启动', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '启动评分响应矩阵构建失败', 'error');
+    }
+  };
 
   const syncProgressForSelection = (nextTaskIds: string[]) => {
     const selectedIdSet = new Set(normalizeSelectedTaskIds(taskDefinitions, nextTaskIds));
@@ -613,6 +632,9 @@ function BidAnalysisPage({
           </button>
           <button type="button" className="primary-action" onClick={openSettingsDialog} disabled={taskRunning}>
             {sectionTaskRunning ? '识别中...' : taskRunning ? '解析中...' : failedTaskCount > 0 ? `重试失败项(${failedTaskCount})` : progress > 0 ? '重新解析' : '开始解析'}
+          </button>
+          <button type="button" className="secondary-action" onClick={() => { void startRequirementMatrix(); }} disabled={taskRunning || matrixRunning || !requiredDone}>
+            {matrixRunning ? '构建评分矩阵中...' : matrixReady ? '重新构建评分矩阵' : '构建评分响应矩阵'}
           </button>
         </div>
       </section>

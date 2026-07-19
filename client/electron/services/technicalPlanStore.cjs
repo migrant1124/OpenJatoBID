@@ -126,6 +126,7 @@ const initialState = {
   contentIllustrationPlan: undefined,
   contentGenerationRuntime: undefined,
   requirementResponseMatrix: undefined,
+  requirementMatrixTask: undefined,
   outlineQualityReview: undefined,
   outlineData: null,
 };
@@ -135,6 +136,7 @@ const taskFieldTypes = {
   bidAnalysisTask: 'bid-analysis',
   outlineGenerationTask: 'outline-generation',
   globalFactsTask: 'global-facts-generation',
+  requirementMatrixTask: 'requirement-matrix-generation',
   contentGenerationTask: 'content-generation',
 };
 

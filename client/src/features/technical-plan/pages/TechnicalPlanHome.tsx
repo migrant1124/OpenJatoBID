@@ -75,6 +75,7 @@ const resetState = {
   referenceKnowledgeDocumentIds: [] as string[],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
+  requirementMatrixTask: undefined,
   outlineGenerationTask: undefined,
   globalFactsTask: undefined,
   globalFacts: [] as GlobalFactGroupState[],
@@ -146,7 +147,7 @@ function workflowLabel(kind: TechnicalPlanWorkflowKind) {
 }
 
 function hasRunningTechnicalPlanTask(state: TechnicalPlanState) {
-  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.outlineGenerationTask, state.globalFactsTask, state.contentGenerationTask]
+  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.requirementMatrixTask, state.outlineGenerationTask, state.globalFactsTask, state.contentGenerationTask]
     .some((task) => task?.status === 'running' || task?.status === 'pausing');
 }
 
@@ -239,7 +240,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   const requiresOriginalPlan = workflowKind === 'existing-plan-expansion';
   const isNextDisabled = activeIndex >= steps.length - 1
     || (state.step === 'document-analysis' && (!state.tenderFile || (requiresOriginalPlan && !state.originalPlanFile)))
-    || (state.step === 'bid-analysis' && !bidAnalysisReady)
+    || (state.step === 'bid-analysis' && (!bidAnalysisReady || !state.requirementResponseMatrix))
     || (state.step === 'outline-generation' && !state.outlineData)
     || (state.step === 'global-facts' && !globalFactsReady);
   const nextTooltip = state.step === 'document-analysis' && !state.tenderFile
@@ -256,6 +257,10 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
                 ? '招标文件解析任务仍在运行，请等待当前任务结束'
                 : state.step === 'bid-analysis' && !requiredBidAnalysisReady
                   ? '请先完成 7 个关键招标文件解析项'
+                  : state.step === 'bid-analysis' && state.requirementMatrixTask?.status === 'running'
+                    ? '评分响应矩阵正在构建，请等待任务完成'
+                    : state.step === 'bid-analysis' && !state.requirementResponseMatrix
+                      ? '请先构建评分响应矩阵'
                   : state.step === 'outline-generation' && !state.outlineData
                     ? '目录生成完成后才能进入全局事实设定'
                     : state.step === 'global-facts' && !globalFactsReady
@@ -498,6 +503,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
+            requirementResponseMatrix: hasOwnField(technicalPlan, 'requirementResponseMatrix') ? technicalPlan.requirementResponseMatrix : prev.requirementResponseMatrix,
+            requirementMatrixTask: hasOwnField(technicalPlan, 'requirementMatrixTask') ? trimTaskLogs(technicalPlan.requirementMatrixTask) : prev.requirementMatrixTask,
             outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
             outlineGenerationTask: hasOwnField(technicalPlan, 'outlineGenerationTask') ? trimTaskLogs(technicalPlan.outlineGenerationTask) : prev.outlineGenerationTask,
             referenceKnowledgeDocumentIds: Array.isArray(technicalPlan.referenceKnowledgeDocumentIds) ? technicalPlan.referenceKnowledgeDocumentIds : prev.referenceKnowledgeDocumentIds,
@@ -529,6 +536,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
+            requirementResponseMatrix: hasOwnField(technicalPlan, 'requirementResponseMatrix') ? technicalPlan.requirementResponseMatrix : prev.requirementResponseMatrix,
+            requirementMatrixTask: hasOwnField(technicalPlan, 'requirementMatrixTask') ? trimTaskLogs(technicalPlan.requirementMatrixTask) : prev.requirementMatrixTask,
             outlineGenerationTask: outlineDataReset ? undefined : prev.outlineGenerationTask,
             globalFactsTask: outlineDataReset ? undefined : prev.globalFactsTask,
             globalFacts: outlineDataReset ? [] : prev.globalFacts,
@@ -563,6 +572,16 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             contentGenerationPlans: hasOwnField(technicalPlan, 'contentGenerationPlans') ? (technicalPlan.contentGenerationPlans || {}) : (outlineDataChanged ? {} : prev.contentGenerationPlans),
             contentIllustrationPlan: hasOwnField(technicalPlan, 'contentIllustrationPlan') ? technicalPlan.contentIllustrationPlan : (outlineDataChanged ? undefined : prev.contentIllustrationPlan),
             contentGenerationRuntime: hasOwnField(technicalPlan, 'contentGenerationRuntime') ? technicalPlan.contentGenerationRuntime : (outlineDataChanged ? undefined : prev.contentGenerationRuntime),
+          };
+        }
+
+        if (taskType === 'requirement-matrix-generation') {
+          return {
+            ...prev,
+            requirementMatrixTask: trimTaskLogs(technicalPlan.requirementMatrixTask) || latestTask,
+            requirementResponseMatrix: hasOwnField(technicalPlan, 'requirementResponseMatrix')
+              ? technicalPlan.requirementResponseMatrix
+              : prev.requirementResponseMatrix,
           };
         }
 
@@ -972,6 +991,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           taskDefinitions={state.bidAnalysisTaskDefinitions}
           tasks={state.bidAnalysisTasks}
           task={state.bidAnalysisTask}
+          requirementMatrixTask={state.requirementMatrixTask}
+          requirementResponseMatrix={state.requirementResponseMatrix}
           progress={state.bidAnalysisProgress}
           onProgressChange={(progress) => setState((prev) => ({ ...prev, bidAnalysisProgress: progress }))}
           onConfigSaved={(nextState) => setState((prev) => ({ ...prev, ...nextState }))}
