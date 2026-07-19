@@ -1,0 +1,22 @@
+'use strict';
+
+const { createGuardedOutlineRunner } = require('./outlineGenerationGuard.cjs');
+const { createGuardedContentRunner } = require('./contentGenerationGuard.cjs');
+const outlineTaskModule = require('./outlineGenerationTask.cjs');
+const contentTaskModule = require('./contentGenerationTask.cjs');
+
+const OUTLINE_GUARD_FLAG = Symbol.for('openjatobid.outline-generation-guarded');
+const CONTENT_GUARD_FLAG = Symbol.for('openjatobid.content-generation-guarded');
+
+if (!outlineTaskModule[OUTLINE_GUARD_FLAG]) {
+  outlineTaskModule.runOutlineGenerationTask = createGuardedOutlineRunner(outlineTaskModule.runOutlineGenerationTask);
+  Object.defineProperty(outlineTaskModule, OUTLINE_GUARD_FLAG, { value: true });
+}
+if (!contentTaskModule[CONTENT_GUARD_FLAG]) {
+  contentTaskModule.runContentGenerationTask = createGuardedContentRunner(contentTaskModule.runContentGenerationTask);
+  Object.defineProperty(contentTaskModule, CONTENT_GUARD_FLAG, { value: true });
+}
+
+const taskServicePath = require.resolve('./taskService.cjs');
+delete require.cache[taskServicePath];
+module.exports = require(taskServicePath);
