@@ -254,8 +254,31 @@ export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibilit
 export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
 
+export interface ContentPlanFingerprint {
+  outline_node_hash: string;
+  parent_outline_hash: string;
+  scoring_matrix_revision: string;
+  global_facts_revision: string;
+  knowledge_document_revisions: string[];
+  original_plan_hash?: string;
+  prompt_version: string;
+  writing_profile: 'standard' | 'deep' | 'creative-proposal';
+}
+
 export interface ContentGenerationPlanData {
   writing_focus?: string;
+  writing_profile: 'standard' | 'deep' | 'creative-proposal';
+  section_role: string;
+  scoring_point_ids: string[];
+  value_anchor_ids: string[];
+  must_answer_questions: string[];
+  key_claims: string[];
+  implementation_steps: string[];
+  quantitative_details: string[];
+  deliverables: string[];
+  acceptance_criteria: string[];
+  evidence_requirements: string[];
+  cross_section_boundaries: { owns: string[]; excludes: string[]; related_node_ids: string[] };
   knowledge: {
     item_ids: string[];
   };
@@ -266,6 +289,11 @@ export interface ContentGenerationPlanData {
     needed: boolean;
     purpose: string;
   };
+  table_briefs: Array<{ id: string; title: string; purpose: string; columns?: string[] }>;
+  illustration_briefs: Array<{ id: string; title: string; purpose: string; visual_role?: string }>;
+  target_words: { min: number; preferred: number; max: number };
+  forbidden_repetition: string[];
+  chapter_task?: Record<string, unknown>;
   original_material?: {
     restored: boolean;
     optimized: boolean;
@@ -281,6 +309,7 @@ export interface ContentGenerationPlanData {
 export interface ContentGenerationPlanState {
   plan_version: number;
   plan: ContentGenerationPlanData;
+  fingerprint?: ContentPlanFingerprint;
   table_requirement?: 'none' | 'light' | 'moderate' | 'heavy';
   updated_at?: string;
 }

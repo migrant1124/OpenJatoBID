@@ -1560,6 +1560,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         acc[row.node_id] = {
           plan_version: Number(storedPlan.plan_version),
           plan: storedPlan.plan,
+          ...(storedPlan.fingerprint ? { fingerprint: storedPlan.fingerprint } : {}),
           ...(storedPlan.table_requirement ? { table_requirement: storedPlan.table_requirement } : {}),
           updated_at: row.updated_at || undefined,
         };
@@ -1642,6 +1643,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         plan_json: JSON.stringify({
           plan_version: Number(value.plan_version),
           plan: value.plan,
+          ...(value.fingerprint ? { fingerprint: value.fingerprint } : {}),
           ...(value.table_requirement ? { table_requirement: value.table_requirement } : {}),
         }),
         updated_at: value.updated_at || timestamp,
