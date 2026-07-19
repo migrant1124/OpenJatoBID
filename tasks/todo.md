@@ -259,3 +259,19 @@
 - [x] T108 固定 Worker package、lockfile 和 Wrangler 4.111.0，移除普通 Worker deploy 对 setup、回填和部署 helper 的调用。
 - [x] T109 固定现有 KV/D1/R2/Analytics Engine Binding、`bidupdat` 配置、Cron 与 `keep_vars`，新增配置防护和 health Binding 布尔状态测试。
 - [x] T110 完成本地 `npm ci`、11 项测试、配置验证、部署 dry-run、脚本语法检查与差异检查；未执行真实部署、迁移、资源写入或 Git 状态变更。详见 `docs/secondary-development/test-reports/2026-07-18-worker-deployment-boundary-test-report.md`。
+
+## 阶段 13：v1.4.5 投标文件质量增强
+
+> 权威需求与验收依据：`docs/v1.4.5-spec.md`。实施基线为 `main@ac456efcc1e6f2be086a7b6528c26104ddbce2c4`，工作分支为 `codex/v1.4.5-bidq`。保留已合并的目录和正文安全 Guard；未经明确授权不推送、不合并、不发布、不打 Tag。
+
+- [x] T111 Q1-0：已核实 `main` 与 `origin/main` 同步，`bootstrap.cjs`、guarded task service、目录 Guard、正文 Guard 和两组 Guard 回归测试存在；基线 Guard 测试 13/13 通过。
+- [ ] T112 Q1-1：实现公共质量数据模型、技术方案 Store 兼容与旧工作区默认值。
+- [ ] T113 Q1-2：实现招标要求原子化、评分响应策略、否决和隐性要求提取。
+- [ ] T114 Q1-3：实现增值锚点规划、路由、去重及评分/否决/隐性要求三重反查。
+- [ ] T115 Q1-4：实现条件五级目录、深度写作元数据和目录质量 Gate。
+- [ ] T116 Q1-5：实现单二级子树 AI 深化、Patch 校验、候选确认、局部失效和目录 UI。
+- [ ] T117 Q1-6：实现 Content Plan v5、章节写作合同、输入指纹和深度/创意提示词。
+- [ ] T118 Q1-7：实现评分价值驱动扩写、章节统稿和多维质量审核。
+- [ ] T119 Q1-8：实现 Illustration Plan v4、创意图片类型和 Creative Brief。
+- [ ] T120 Q1-9：实现多图段落锚点、30/20/5 配置迁移及视觉 QA 状态。
+- [ ] T121 Q1-10：完成自动化、E2E 证据、版本提升、测试报告和本地质量门禁。
