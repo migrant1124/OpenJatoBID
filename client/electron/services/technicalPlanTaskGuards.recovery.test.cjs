@@ -151,3 +151,9 @@ test('full regeneration keeps the compressed safety backup out of generation opt
   assert.equal(store.state.contentGenerationOptions[CONTENT_SAFETY_BACKUP_KEY], undefined);
   assert.equal(store.state.contentGenerationTask.status, 'success');
 });
+
+test('taskService direct imports receive the guarded factory from the module cache', () => {
+  const guardedTaskService = require('./guardedTaskService.cjs');
+  const directTaskService = require('./taskService.cjs');
+  assert.equal(directTaskService.createTaskService, guardedTaskService.createTaskService);
+});
