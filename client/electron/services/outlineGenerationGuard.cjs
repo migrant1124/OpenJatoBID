@@ -121,14 +121,14 @@ function outlineDepth(items) {
   return items?.length ? 1 + Math.max(...items.map((item) => outlineDepth(item?.children || []))) : 0;
 }
 
-function extractRequirementIds(item, knownGroupIds) {
+function extractRequirementIds(item) {
   const direct = item?.source_requirement_id === undefined || item.source_requirement_id === null
     ? []
     : String(item.source_requirement_id).split(',').map((id) => id.trim()).filter(Boolean);
   if (direct.length) return [...new Set(direct)];
   return [...new Set((Array.isArray(item?.mapped_requirement_ids) ? item.mapped_requirement_ids : [])
     .map((id) => String(id || '').trim())
-    .filter((id) => id && knownGroupIds.has(id)))];
+    .filter(Boolean))];
 }
 
 function normalizeAndValidateOutline(outlineData, context = {}) {
@@ -166,7 +166,7 @@ function normalizeAndValidateOutline(outlineData, context = {}) {
       if (rawItem.manual_input_required === true && children.length) throw new Error(`${path}[${index}] 人工填写节点必须是叶子节点`);
       if (level >= 2 && allowedTitles && !allowedTitles.has(key)) throw new Error(`仅参考原方案模式不允许新增原方案或来源骨架之外的目录：${title}`);
 
-      const requirementIds = extractRequirementIds(rawItem, groupIds);
+      const requirementIds = extractRequirementIds(rawItem);
       if (level === 1 && requirementIds.length) throw new Error(`一级目录不能绑定技术评分项：${title}`);
       for (const requirementId of requirementIds) {
         if (!groupIds.has(requirementId)) throw new Error(`目录绑定了未知技术评分项：${requirementId}`);
