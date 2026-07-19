@@ -356,7 +356,7 @@
 
 /* [2572-3145] bid-analysis-* 全部 (BidAnalysisPage.tsx) */
 .bid-analysis-page {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -420,6 +420,69 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.bid-analysis-risk-panel {
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(228, 233, 240, 0.88);
+  border-radius: 18px;
+  box-shadow: var(--yb-shadow);
+}
+
+.bid-analysis-risk-panel.has-alert {
+  border-color: rgba(218, 113, 47, 0.44);
+}
+
+.bid-analysis-risk-panel-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  color: var(--yb-text);
+  text-align: left;
+  background: rgba(255, 250, 245, 0.72);
+}
+
+.bid-analysis-risk-panel-head span {
+  display: grid;
+  gap: 3px;
+}
+
+.bid-analysis-risk-panel-head small,
+.bid-analysis-risk-panel-head em,
+.bid-analysis-risk-row span {
+  color: var(--yb-text-soft);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.bid-analysis-risk-panel-body {
+  display: grid;
+  gap: 8px;
+  padding: 12px 18px;
+}
+
+.bid-analysis-risk-panel-body p {
+  margin: 0;
+  color: var(--yb-text-soft);
+  font-size: 13px;
+}
+
+.bid-analysis-risk-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--yb-border-soft);
+}
+
+.bid-analysis-risk-row strong {
+  min-width: 0;
+  font-size: 13px;
 }
 
 .bid-analysis-mode-switch {

@@ -24,6 +24,15 @@ const VALUE_ANCHOR_STATUSES = new Set(['candidate', 'accepted', 'rejected', 'nee
 const SOURCE_TYPES = new Set(['tender', 'appendix', 'footnote', 'original-plan', 'knowledge', 'user-input']);
 const WRITING_PROFILES = new Set(['standard', 'deep', 'creative-proposal']);
 const DEEP_WRITING_SOURCES = new Set(['ai', 'user', 'default']);
+const DIRECTORY_GATE_FIELDS = [
+  'scope_relevant',
+  'score_or_delivery_value',
+  'actionable',
+  'section_capacity',
+  'evidence_safe',
+  'non_duplicate',
+  'format_allowed',
+];
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -144,6 +153,8 @@ function normalizeValueAnchor(value, index, scoringPointIds) {
   for (const scoringPointId of baseScoringPointIds) {
     if (!scoringPointIds.has(scoringPointId)) throw new Error(`未知评分点 ID：${scoringPointId}`);
   }
+  const directoryGateSource = isPlainObject(value.directory_gate) ? value.directory_gate : {};
+  const directoryGate = Object.fromEntries(DIRECTORY_GATE_FIELDS.map((field) => [field, directoryGateSource[field] === true]));
   const normalized = {
     anchor_id: requiredString(value.anchor_id, `value_anchors[${index}].anchor_id`),
     title: requiredString(value.title, `value_anchors[${index}].title`),
@@ -159,7 +170,11 @@ function normalizeValueAnchor(value, index, scoringPointIds) {
     risk_notes: uniqueStrings(value.risk_notes, `value_anchors[${index}].risk_notes`),
     route: enumValue(value.route, VALUE_ANCHOR_ROUTES, 'manual-review', `value_anchors[${index}].route`),
     status: enumValue(value.status, VALUE_ANCHOR_STATUSES, 'candidate', `value_anchors[${index}].status`),
+    directory_gate: directoryGate,
   };
+  if (normalized.route === 'directory' && Object.values(directoryGate).some((value) => value !== true)) {
+    throw new Error(`value_anchors[${index}] 未通过目录准入 Gate，不能路由到 directory`);
+  }
   const recommendedParentId = optionalString(value.recommended_parent_id, `value_anchors[${index}].recommended_parent_id`);
   if (recommendedParentId !== undefined) normalized.recommended_parent_id = recommendedParentId;
   return normalized;
@@ -180,16 +195,18 @@ function normalizeRequirementResponseMatrix(value, { knownNodeIds = [] } = {}) {
   const scoringPoints = scoringPointsRaw.map(normalizeAtomicScoringPoint);
   assertUniqueIds(scoringPoints, 'scoring_point_id', 'scoring_points');
   const scoringPointIds = new Set(scoringPoints.map((item) => item.scoring_point_id));
+  const rejectionRisks = (Array.isArray(value.rejection_risks) ? value.rejection_risks : []).map(normalizeRejectionRisk);
+  const hiddenRequirements = (Array.isArray(value.hidden_requirements) ? value.hidden_requirements : []).map(normalizeHiddenRequirement);
   const knownNodes = new Set(knownNodeIds);
   if (knownNodes.size) {
-    for (const point of scoringPoints) {
-      for (const nodeId of point.mapped_node_ids) {
+    for (const collection of [scoringPoints, rejectionRisks, hiddenRequirements]) {
+      for (const item of collection) {
+        for (const nodeId of item.mapped_node_ids) {
         if (!knownNodes.has(nodeId)) throw new Error(`未知目录节点 ID：${nodeId}`);
+        }
       }
     }
   }
-  const rejectionRisks = (Array.isArray(value.rejection_risks) ? value.rejection_risks : []).map(normalizeRejectionRisk);
-  const hiddenRequirements = (Array.isArray(value.hidden_requirements) ? value.hidden_requirements : []).map(normalizeHiddenRequirement);
   const valueAnchors = (Array.isArray(value.value_anchors) ? value.value_anchors : []).map((item, index) => normalizeValueAnchor(item, index, scoringPointIds));
   assertUniqueIds(rejectionRisks, 'risk_id', 'rejection_risks');
   assertUniqueIds(hiddenRequirements, 'hidden_requirement_id', 'hidden_requirements');

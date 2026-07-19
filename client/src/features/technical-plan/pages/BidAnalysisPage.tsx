@@ -226,6 +226,7 @@ function BidAnalysisPage({
     nextTaskIds: string[];
   } | null>(null);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
+  const [riskPanelOpen, setRiskPanelOpen] = useState(true);
   const { showToast } = useToast();
   const bidAnalysisTasks = taskDefinitions;
   const allBidAnalysisTaskIds = useMemo(() => taskDefinitions.map((definition) => definition.id), [taskDefinitions]);
@@ -268,6 +269,18 @@ function BidAnalysisPage({
   const taskRunning = running || fullRerunLocked || sectionTaskRunning || task?.status === 'running';
   const matrixRunning = requirementMatrixTask?.status === 'running' || requirementMatrixTask?.status === 'pausing';
   const matrixReady = Boolean(requirementResponseMatrix);
+  const riskSummary = useMemo(() => {
+    const risks = requirementResponseMatrix?.rejection_risks || [];
+    const hiddenRequirements = requirementResponseMatrix?.hidden_requirements || [];
+    return {
+      total: risks.length,
+      covered: risks.filter((item) => item.status === 'covered').length,
+      pending: risks.filter((item) => item.status === 'needs-confirmation').length,
+      unhandled: risks.filter((item) => item.status === 'unhandled').length,
+      hiddenTotal: hiddenRequirements.length,
+    };
+  }, [requirementResponseMatrix]);
+  const hasHighRiskAlert = riskSummary.unhandled > 0 || riskSummary.pending > 0;
   const requiredDone = areRequiredBidAnalysisTasksReady(taskDefinitions, tasks);
   const missingRequiredLabels = requiredTasks
     .filter((definition) => !isBidAnalysisTaskResultValid(definition, tasks[definition.id]))
@@ -638,6 +651,36 @@ function BidAnalysisPage({
           </button>
         </div>
       </section>
+
+      {requirementResponseMatrix && (
+        <section className={`bid-analysis-risk-panel${hasHighRiskAlert ? ' has-alert' : ''}`}>
+          <button type="button" className="bid-analysis-risk-panel-head" onClick={() => setRiskPanelOpen((value) => !value)} aria-expanded={riskPanelOpen}>
+            <span>
+              <strong>高风险与隐性要求</strong>
+              <small>否决风险 {riskSummary.total} 项：已覆盖 {riskSummary.covered}，待确认 {riskSummary.pending}，未处理 {riskSummary.unhandled}；隐性要求 {riskSummary.hiddenTotal} 项</small>
+            </span>
+            <em>{riskPanelOpen ? '收起' : '展开'}</em>
+          </button>
+          {riskPanelOpen && (
+            <div className="bid-analysis-risk-panel-body">
+              {(requirementResponseMatrix.rejection_risks.length || requirementResponseMatrix.hidden_requirements.length) ? (
+                <>
+                  {requirementResponseMatrix.rejection_risks.map((item) => (
+                    <div className="bid-analysis-risk-row" key={item.risk_id}>
+                      <strong>{item.trigger}</strong><span>否决风险 · {item.handling_route} · {item.status}</span>
+                    </div>
+                  ))}
+                  {requirementResponseMatrix.hidden_requirements.map((item) => (
+                    <div className="bid-analysis-risk-row" key={item.hidden_requirement_id}>
+                      <strong>{item.requirement_text}</strong><span>隐性要求 · {item.handling_route} · {item.status}</span>
+                    </div>
+                  ))}
+                </>
+              ) : <p>本次未识别到需要单独处理的否决风险或隐性要求。</p>}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="bid-analysis-workspace">
         <aside className="bid-analysis-task-pane" aria-label="解析任务列表">

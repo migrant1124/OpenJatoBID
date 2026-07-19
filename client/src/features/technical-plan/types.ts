@@ -186,6 +186,15 @@ export interface ValueAnchor {
   route: 'directory' | 'writing' | 'table' | 'illustration' | 'risk' | 'manual-review';
   status: 'candidate' | 'accepted' | 'rejected' | 'needs-confirmation';
   recommended_parent_id?: string;
+  directory_gate: {
+    scope_relevant: boolean;
+    score_or_delivery_value: boolean;
+    actionable: boolean;
+    section_capacity: boolean;
+    evidence_safe: boolean;
+    non_duplicate: boolean;
+    format_allowed: boolean;
+  };
 }
 
 export interface RequirementResponseMatrix {

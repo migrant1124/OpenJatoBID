@@ -20,6 +20,8 @@ function buildRequirementMatrixPrompt(analysisContext = '') {
 - expected_response_types 只能包含 content、table、illustration、evidence、commitment、manual。
 - rejection_risks 的 handling_route 只能是 outline、fixed-form、evidence、export、submission、manual-review。
 - hidden_requirements 的 handling_route 只能是 outline、content、fixed-form、evidence、export、submission、manual-review。
+- 仅为与项目范围和评分主题直接相关、可写出具体机制且不依赖虚构企业能力的内容生成 value_anchors；无合格项时返回空数组。
+- value_anchors 路由为 directory 时，directory_gate 的 scope_relevant、score_or_delivery_value、actionable、section_capacity、evidence_safe、non_duplicate、format_allowed 必须全部为 true；否则路由到 writing、table、illustration、risk 或 manual-review。
 
 JSON 结构：
 {
@@ -60,7 +62,31 @@ JSON 结构：
     "mapped_node_ids": [],
     "status": "unhandled"
   }],
-  "value_anchors": []
+  "value_anchors": [{
+    "anchor_id": "A1",
+    "title": "进度韧性保障",
+    "category": "schedule-assurance",
+    "base_scoring_point_ids": ["R1.P1"],
+    "business_value": "说明可执行的关键路径控制机制",
+    "directory_recommended": false,
+    "deep_writing_recommended": false,
+    "support_state": "tender-supported",
+    "content_requirements": ["写明机制、责任和产物"],
+    "table_recommendations": [],
+    "visual_recommendations": [],
+    "risk_notes": [],
+    "route": "writing",
+    "status": "candidate",
+    "directory_gate": {
+      "scope_relevant": false,
+      "score_or_delivery_value": false,
+      "actionable": false,
+      "section_capacity": false,
+      "evidence_safe": false,
+      "non_duplicate": false,
+      "format_allowed": false
+    }
+  }]
 }
 
 现有招标解析摘要（仅作辅助，仍以招标原文为准）：
