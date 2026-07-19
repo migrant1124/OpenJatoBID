@@ -23,13 +23,14 @@ if (!contentTaskModule[CONTENT_GUARD_FLAG]) {
 const taskServicePath = require.resolve('./taskService.cjs');
 delete require.cache[taskServicePath];
 const baseTaskServiceModule = require(taskServicePath);
+const baseCreateTaskService = baseTaskServiceModule.createTaskService;
 
 function createTaskService(options) {
   // Restore an interrupted full-regeneration backup before load-state IPC can expose
   // the partially-cleared workspace to the renderer. getActiveTasks keeps a fallback
   // check for older startup sequences and tests that construct services lazily.
   recoverInterruptedContentBackup(options?.technicalPlanStore);
-  const service = baseTaskServiceModule.createTaskService(options);
+  const service = baseCreateTaskService(options);
   const getActiveTasks = service.getActiveTasks.bind(service);
   return {
     ...service,
@@ -40,7 +41,7 @@ function createTaskService(options) {
   };
 }
 
-module.exports = {
-  ...baseTaskServiceModule,
-  createTaskService,
-};
+// ipc/index.cjs imports taskService.cjs directly. Publish the guarded factory through
+// that module's cached exports so both import paths resolve to the same implementation.
+baseTaskServiceModule.createTaskService = createTaskService;
+module.exports = baseTaskServiceModule;
