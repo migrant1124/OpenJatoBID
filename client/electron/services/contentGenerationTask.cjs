@@ -36,6 +36,10 @@ const {
   uniqueStrings,
   validateSectionWritingContract,
 } = require('./sectionWritingContract.cjs');
+const {
+  auditContentQuality,
+  rankContentExpansionCandidates,
+} = require('./contentQualityAudit.cjs');
 
 const DEFAULT_CONTEXT_LENGTH_LIMIT = 400000;
 const AGENT_CONTEXT_THRESHOLD_RATIO = 0.7;
@@ -1557,7 +1561,7 @@ ${formatOutlineExpansionContext(outlineItems || [], 1, [], restoredNodeIds)}`,
   ];
 }
 
-function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords }) {
+function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan }) {
   const { item, parentChapters, siblingChapters } = context;
   const chapterPath = [...(parentChapters || []), item]
     .map((chapter) => `${chapter.id || 'unknown'} ${chapter.title || '未命名章节'}`)
@@ -1587,6 +1591,7 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
 12. 如果本章节需要使用的全局事实变量中包含相关内容，扩写必须优先使用变量值，不得新增前后不一致的时间、地点、人员、设备、标准或服务承诺。
 13. 使用 replace 时，如果目标块是 Markdown 列表、表格、引用、加粗引导块或连续多行结构，target_text 必须包含完整结构，不得只返回第一项、表头、关键句或摘要。
 14. 使用 replace 时，target_text 不得改写标点、空格、换行、列表符号、表格分隔线或 Markdown 标记，也不得选择图片 Markdown、Mermaid 或代码块作为替换目标。
+15. 本次只补强章节写作合同中尚未充分体现的评分响应、实施动作、量化细节、交付与验收、证据要求或增值锚点；不得为了凑字数复述已有内容。
 
 返回格式：
 {
@@ -1598,6 +1603,7 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
     },
     { role: 'user', content: `项目概述：\n${projectOverview || '未提供'}` },
     { role: 'user', content: `完整目录：\n${formatOutlineForPrompt(outlineData.outline || [])}` },
+    ...(contentPlan ? [{ role: 'user', content: `章节写作合同（本次只补强其中缺口）：\n${formatContentPlanForPrompt(contentPlan)}` }] : []),
     ...(String(selectedFactsText || '').trim() ? [{ role: 'user', content: `本章节需要使用的全局事实变量（扩写涉及这些内容时必须参考）：\n${selectedFactsText}` }] : []),
     { role: 'user', content: `当前章节路径：${chapterPath}\n当前章节描述：${item.description || ''}` },
     { role: 'user', content: `同级章节（扩写时避免重复）：\n${siblingLines || '无'}` },
@@ -2947,23 +2953,6 @@ function normalizeContentGenerationRuntime(value) {
   };
 }
 
-function orderExpansionCandidates(candidates) {
-  if (!candidates.length) return [];
-
-  const middle = Math.floor(candidates.length / 2);
-  const ordered = [candidates[middle]];
-  const maxOffset = Math.max(middle, candidates.length - 1 - middle);
-  for (let offset = 1; offset <= maxOffset; offset += 1) {
-    if (middle - offset >= 0) {
-      ordered.push(candidates[middle - offset]);
-    }
-    if (middle + offset < candidates.length) {
-      ordered.push(candidates[middle + offset]);
-    }
-  }
-  return ordered;
-}
-
 async function runWorkerPool({ limit, getNextItem, worker, shouldStop, onItemStart, onItemComplete }) {
   const workerCount = Math.max(1, Math.floor(Number(limit) || 1));
   let activeCount = 0;
@@ -3211,6 +3200,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     audit_agent_step_label: '',
     audit_agent_changed_sections: 0,
     audit_agent_failed_sections: 0,
+    quality_audit_label: '',
+    quality_audit_chapter_total: 0,
+    quality_audit_uncovered_scoring_total: 0,
+    quality_audit_deep_gap_total: 0,
+    quality_audit_duplicate_total: 0,
     table_cleanup_total: 0,
     table_cleanup_completed: 0,
     table_cleanup_rewritten: 0,
@@ -4801,9 +4795,17 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   function createExpansionCycle(currentWords) {
     const candidates = leafWordStats()
-      .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim())
-      .sort((a, b) => a.words - b.words);
-    const orderedIds = orderExpansionCandidates(candidates).map(({ item }) => item.id);
+      .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim());
+    const rankedCandidates = rankContentExpansionCandidates(candidates, {
+      sections,
+      plans: storedContentPlans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+    });
+    const orderedIds = rankedCandidates.map(({ context }) => context.item.id);
+    const leadingCandidate = rankedCandidates[0];
+    if (leadingCandidate) {
+      logs = [...logs, `扩写优先级：${leadingCandidate.context.item.id} ${leadingCandidate.context.item.title || '未命名章节'}（${leadingCandidate.reasons.join('；') || '按评分价值排序'}）。`];
+    }
     syncRuntime({
       expansion_cycle_item_ids: orderedIds,
       expansion_attempted_item_ids: [],
@@ -4963,9 +4965,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   async function expandOneSection(context) {
     const { item, content, words } = context;
-    const targetWords = Math.max(words * 2, words + MIN_SECTION_EXPANSION_INCREMENT);
     const storedContentPlan = getReusableStoredContentPlan(item.id);
     const contentPlan = contentPlans.get(item.id) || storedContentPlan?.plan || normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles);
+    const targetRange = normalizeTargetWords(contentPlan.target_words);
+    const desiredWords = Math.max(words + MIN_SECTION_EXPANSION_INCREMENT, targetRange.min, targetRange.preferred);
+    const targetWords = Math.max(words, Math.min(targetRange.max, desiredWords));
     const selectedFactsText = resolveSelectedFactsText(contentPlan, globalFacts);
     logs = [...logs, `开始扩写：${item.id} ${item.title || '未命名章节'}（当前 ${words} 字，目标 ${targetWords} 字）。`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
@@ -4980,6 +4984,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           currentContent: content,
           currentWords: words,
           targetWords,
+          contentPlan,
         }),
         temperature: 0.7,
         logTitle: `正文扩写-${item.id}-${item.title || '未命名章节'}`,
@@ -5608,6 +5613,40 @@ workspace 文件说明：
         };
       })
       .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim());
+  }
+
+  function runChapterSynthesisAndQualityAudit(options = {}) {
+    const targets = buildConsistencyAuditTargets(options.targetItemId || targetItemId);
+    const plans = {};
+    for (const context of targets) {
+      const plan = getContentPlanForItem(context.item.id);
+      if (plan) plans[context.item.id] = { plan };
+    }
+    const review = auditContentQuality({
+      contexts: targets,
+      sections,
+      plans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+      outlineData,
+    });
+    contentStats.phase = 'quality-auditing';
+    contentStats.quality_audit_label = review.label;
+    contentStats.quality_audit_chapter_total = review.chapter_synthesis.length;
+    contentStats.quality_audit_uncovered_scoring_total = review.scoring_coverage.uncovered_scoring_point_ids.length;
+    contentStats.quality_audit_deep_gap_total = review.executability.deep_gap_node_ids.length;
+    contentStats.quality_audit_duplicate_total = review.editorial.duplicates.length;
+    const findings = review.reviewer_simulation.overall_findings;
+    logs = [...logs, `章节统稿与${review.label}完成：${review.chapter_synthesis.length} 个二级章节，未覆盖评分点 ${contentStats.quality_audit_uncovered_scoring_total} 个，深度要素缺口 ${contentStats.quality_audit_deep_gap_total} 个，重复正文 ${contentStats.quality_audit_duplicate_total} 处。`, ...(findings.length ? findings.map((item) => `质量审核提示：${item}`) : ['质量审核提示：评分点、合规与执行性未发现待补强项。'])];
+    writeDeveloperLog('content.quality.audit.done', {
+      label: review.label,
+      chapter_total: contentStats.quality_audit_chapter_total,
+      uncovered_scoring_point_ids: review.scoring_coverage.uncovered_scoring_point_ids,
+      deep_gap_node_ids: review.executability.deep_gap_node_ids,
+      duplicate_total: contentStats.quality_audit_duplicate_total,
+      can_proceed: review.can_proceed,
+    });
+    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    return review;
   }
 
   function buildConsistencyAuditGroups(targets) {
@@ -6788,12 +6827,16 @@ workspace 文件说明：
       } else {
         await runConsistencyAuditIfEnabled();
       }
+      runChapterSynthesisAndQualityAudit();
+      pauseIfRequested('正文生成已在章节统稿与质量审核后暂停，可导出当前已完成内容，稍后继续。');
       await removeTablesBeforeIllustration();
       pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     } else if (!runOnlyIllustrationStage) {
       await runOriginalPlanCoverageAuditIfEnabled({ targetItemId });
       pauseIfRequested('正文生成已在原方案覆盖审计后暂停，可导出当前已完成内容，稍后继续。');
       await runConsistencyAuditIfEnabled({ targetItemId });
+      runChapterSynthesisAndQualityAudit({ targetItemId });
+      pauseIfRequested('正文生成已在章节统稿与质量审核后暂停，可导出当前已完成内容，稍后继续。');
       await removeTablesBeforeIllustration({ targetItemId });
       pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     } else if (runOnlyIllustrationPlanning) {
@@ -6876,6 +6919,7 @@ workspace 文件说明：
 // 仅供开发者局部测试页复用当前正式正文扩写 patch runtime。
 // 正式业务入口仍然只使用 runContentGenerationTask；测试页不得复制这组逻辑另起实现。
 const __developerContentExpansionPatchRuntime = {
+  buildContentExpansionMessages,
   normalizeContentExpansionPatch,
   validateContentExpansionPatch,
   buildContentExpansionRepairMessages,

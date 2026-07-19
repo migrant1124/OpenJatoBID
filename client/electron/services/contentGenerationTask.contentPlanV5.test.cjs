@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { __contentPlanContractRuntime } = require('./contentGenerationTask.cjs');
+const { __contentPlanContractRuntime, __developerContentExpansionPatchRuntime } = require('./contentGenerationTask.cjs');
 
 function contract() {
   return {
@@ -42,4 +42,16 @@ test('深度写作合同进入正文提示词，编排提示词要求完整合�
   }).map((message) => message.content).join('\n');
   assert.match(planningPrompt, /SectionWritingContract/);
   assert.match(planningPrompt, /"writing_profile": "deep"/);
+});
+
+test('评分价值扩写提示词保留章节合同而非只按字数扩写', () => {
+  const plan = __contentPlanContractRuntime.normalizeContentPlan(contract(), new Set(['K1']), new Set(['项目地点']), { writingProfile: 'deep' });
+  const prompt = __developerContentExpansionPatchRuntime.buildContentExpansionMessages({
+    outlineData: { outline: [{ id: '1', title: '技术方案', children: [{ id: '1.1', title: '实施方案', children: [{ id: '1.1.1', title: '实施步骤' }] }] }] },
+    context: { item: { id: '1.1.1', title: '实施步骤', description: '实施闭环' }, parentChapters: [{ id: '1', title: '技术方案' }, { id: '1.1', title: '实施方案' }], siblingChapters: [] },
+    projectOverview: '', selectedFactsText: '', currentContent: '现有正文', currentWords: 4, targetWords: 500, contentPlan: plan,
+  }).map((message) => message.content).join('\n');
+  assert.match(prompt, /章节写作合同/);
+  assert.match(prompt, /实施闭环/);
+  assert.match(prompt, /不得为了凑字数复述已有内容/);
 });
