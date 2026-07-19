@@ -122,6 +122,82 @@ export interface BidAnalysisTaskState {
 
 export type BidAnalysisTasks = Record<string, BidAnalysisTaskState>;
 
+export interface RequirementSourceReference {
+  source_type: 'tender' | 'appendix' | 'footnote' | 'original-plan' | 'knowledge' | 'user-input';
+  document_id?: string;
+  section?: string;
+  block_id?: string;
+  quote?: string;
+  page?: number;
+}
+
+export interface AtomicScoringPoint {
+  scoring_point_id: string;
+  group_requirement_id: string;
+  title: string;
+  requirement_text: string;
+  scoring_rule: string;
+  score_value?: number;
+  score_text?: string;
+  source_refs: RequirementSourceReference[];
+  mandatory_level: 'normal' | 'important' | 'high' | 'potential-rejection';
+  expected_response_types: Array<'content' | 'table' | 'illustration' | 'evidence' | 'commitment' | 'manual'>;
+  high_score_conditions: string[];
+  mapped_node_ids: string[];
+  primary_node_id?: string;
+  status: 'unmapped' | 'mapped' | 'covered' | 'needs-review';
+}
+
+export interface RejectionRiskItem {
+  risk_id: string;
+  source_refs: RequirementSourceReference[];
+  trigger: string;
+  category: 'technical-response' | 'format' | 'attachment' | 'signature' | 'submission' | 'evidence' | 'other';
+  risk_level: 'high' | 'potential-rejection';
+  handling_route: 'outline' | 'fixed-form' | 'evidence' | 'export' | 'submission' | 'manual-review';
+  mapped_node_ids: string[];
+  mitigation: string;
+  status: 'unhandled' | 'covered' | 'not-applicable' | 'needs-confirmation';
+}
+
+export interface HiddenRequirementItem {
+  hidden_requirement_id: string;
+  source_kind: 'appendix' | 'footnote' | 'table-note' | 'cross-reference' | 'upload-rule' | 'naming-rule' | 'other';
+  requirement_text: string;
+  source_refs: RequirementSourceReference[];
+  handling_route: 'outline' | 'content' | 'fixed-form' | 'evidence' | 'export' | 'submission' | 'manual-review';
+  mapped_node_ids: string[];
+  status: 'unhandled' | 'covered' | 'not-applicable' | 'needs-confirmation';
+}
+
+export interface ValueAnchor {
+  anchor_id: string;
+  title: string;
+  category: 'resilience-emergency' | 'quality-improvement' | 'schedule-assurance' | 'acceptance-readiness' | 'service-capability' | 'risk-governance' | 'data-closed-loop' | 'collaboration-governance' | 'creative-value' | 'visual-expression';
+  base_scoring_point_ids: string[];
+  business_value: string;
+  directory_recommended: boolean;
+  deep_writing_recommended: boolean;
+  support_state: 'tender-supported' | 'original-plan-supported' | 'knowledge-supported' | 'industry-template' | 'needs-confirmation';
+  content_requirements: string[];
+  table_recommendations: string[];
+  visual_recommendations: string[];
+  risk_notes: string[];
+  route: 'directory' | 'writing' | 'table' | 'illustration' | 'risk' | 'manual-review';
+  status: 'candidate' | 'accepted' | 'rejected' | 'needs-confirmation';
+  recommended_parent_id?: string;
+}
+
+export interface RequirementResponseMatrix {
+  schema_version: 1;
+  revision: string;
+  scoring_points: AtomicScoringPoint[];
+  rejection_risks: RejectionRiskItem[];
+  hidden_requirements: HiddenRequirementItem[];
+  value_anchors: ValueAnchor[];
+  updated_at: string;
+}
+
 export interface BidAnalysisTaskAnalysisContext {
   run_id?: string;
   document_id?: string;
@@ -325,5 +401,7 @@ export interface TechnicalPlanState {
   contentGenerationPlans: ContentGenerationPlans;
   contentIllustrationPlan?: ContentIllustrationPlanState;
   contentGenerationRuntime?: ContentGenerationRuntimeState;
+  requirementResponseMatrix?: RequirementResponseMatrix;
+  outlineQualityReview?: Record<string, unknown>;
   outlineData: OutlineData | null;
 }

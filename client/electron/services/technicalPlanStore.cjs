@@ -15,6 +15,10 @@ const {
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { clearMermaidCache } = require('../utils/mermaidCache.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
+const {
+  normalizeOutlineQualityMetadata,
+  normalizeRequirementResponseMatrix,
+} = require('./technicalPlanQualityModel.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
 const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
@@ -67,6 +71,16 @@ const outlineResponseStateFields = [
   'compliance_message',
 ];
 
+const outlineQualityMetadataFields = [
+  'deep_writing',
+  'deep_writing_recommended',
+  'deep_writing_reason',
+  'deep_writing_source',
+  'writing_profile',
+  'value_anchor_ids',
+  'mapped_scoring_point_ids',
+];
+
 const defaultOutlineFormatConstraints = Object.freeze({
   manual_input_required: false,
   numbering_policy: 'auto',
@@ -111,6 +125,8 @@ const initialState = {
   contentGenerationPlans: {},
   contentIllustrationPlan: undefined,
   contentGenerationRuntime: undefined,
+  requirementResponseMatrix: undefined,
+  outlineQualityReview: undefined,
   outlineData: null,
 };
 
@@ -343,11 +359,12 @@ function hasFields(value) {
   return Boolean(value && Object.keys(value).length);
 }
 
-function applyOutlinePersistenceFields(item, formatConstraints, responseState) {
+function applyOutlinePersistenceFields(item, formatConstraints, responseState, qualityMetadata) {
   return {
     ...item,
     ...formatConstraints,
     ...responseState,
+    ...qualityMetadata,
     ...(formatConstraints.manual_input_required === true && !String(item?.content || '').trim()
       ? { response_status: 'needs-manual-input' }
       : {}),
@@ -570,6 +587,7 @@ function flattenOutlineItems(items, parentNodeId = null, level = 1, rows = []) {
     if (!nodeId) return;
     const formatConstraintsPatch = extractOwnFields(item, outlineFormatConstraintFields);
     const responseStatePatch = extractOwnFields(item, outlineResponseStateFields);
+    const qualityMetadataPatch = extractOwnFields(item, outlineQualityMetadataFields);
     rows.push({
       node_id: nodeId,
       parent_node_id: parentNodeId,
@@ -583,6 +601,7 @@ function flattenOutlineItems(items, parentNodeId = null, level = 1, rows = []) {
       has_knowledge_item_ids: hasOwn(item, 'knowledge_item_ids') && item.knowledge_item_ids !== undefined,
       format_constraints_patch: formatConstraintsPatch,
       response_state_patch: responseStatePatch,
+      quality_metadata_patch: qualityMetadataPatch,
       content: String(item?.content || ''),
     });
     if (item?.children?.length) {
@@ -1217,7 +1236,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
 
   function validateStoredOutlineNodeJson(nodeId) {
     const row = db.prepare(`
-      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, content
+      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json, content
       FROM technical_plan_outline_nodes
       WHERE node_id = ?
     `).get(nodeId);
@@ -1232,6 +1251,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content: row.content,
       knowledgeItemIds,
     });
+    normalizeOutlineQualityMetadata(safeJsonParse(row.quality_metadata_json, undefined));
     return row;
   }
 
@@ -1247,6 +1267,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: legacyKnowledgeItemIds,
       });
+      const qualityMetadata = normalizeOutlineQualityMetadata(safeJsonParse(row.quality_metadata_json, undefined));
       map.set(row.node_id, applyOutlinePersistenceFields({
         id: row.node_id,
         title: row.title,
@@ -1255,7 +1276,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         source_requirement_title: row.source_requirement_title || undefined,
         content: row.content || '',
         children: [],
-      }, formatConstraints, responseState));
+      }, formatConstraints, responseState, qualityMetadata));
     }
 
     const roots = [];
@@ -1300,7 +1321,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const rows = flattenOutlineItems(outlineData.outline);
     const nextIds = new Set(rows.map((row) => row.node_id));
     const existingRows = new Map(db.prepare(`
-      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, content
+      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json, content
       FROM technical_plan_outline_nodes
     `).all().map((row) => [row.node_id, row]));
     const existingRowsByFormatNodeId = new Map();
@@ -1316,15 +1337,16 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: existingRow.content,
         knowledgeItemIds: existingKnowledgeItemIds,
       });
+      normalizeOutlineQualityMetadata(safeJsonParse(existingRow.quality_metadata_json, undefined));
     }
     const upsert = db.prepare(`
       INSERT INTO technical_plan_outline_nodes (
         node_id, parent_node_id, sort_order, level, title, description, source_requirement_id,
-        source_requirement_title, knowledge_item_ids_json, format_constraints_json, response_state_json,
+        source_requirement_title, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json,
         content, created_at, updated_at
       ) VALUES (
         @node_id, @parent_node_id, @sort_order, @level, @title, @description, @source_requirement_id,
-        @source_requirement_title, @knowledge_item_ids_json, @format_constraints_json, @response_state_json,
+        @source_requirement_title, @knowledge_item_ids_json, @format_constraints_json, @response_state_json, @quality_metadata_json,
         @content, @created_at, @updated_at
       ) ON CONFLICT(node_id) DO UPDATE SET
         parent_node_id = excluded.parent_node_id,
@@ -1337,6 +1359,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         knowledge_item_ids_json = excluded.knowledge_item_ids_json,
         format_constraints_json = excluded.format_constraints_json,
         response_state_json = excluded.response_state_json,
+        quality_metadata_json = excluded.quality_metadata_json,
         content = excluded.content,
         updated_at = excluded.updated_at
     `);
@@ -1383,6 +1406,13 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: incomingKnowledgeItemIds,
       });
+      const existingQualityMetadata = normalizeOutlineQualityMetadata(
+        safeJsonParse(existingRow?.quality_metadata_json, undefined),
+      );
+      const qualityMetadata = normalizeOutlineQualityMetadata({
+        ...existingQualityMetadata,
+        ...(hasFields(row.quality_metadata_patch) ? row.quality_metadata_patch : {}),
+      });
       if (existingRow && !['freeform-markdown', 'evidence-markdown'].includes(existingFormatConstraints.response_mode)) {
         const existingResponseState = normalizeOutlineResponseState(existingRow.response_state_json, {
           content: existingRow.content,
@@ -1415,6 +1445,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         knowledge_item_ids_json: responseState.knowledge_item_ids.length ? JSON.stringify(responseState.knowledge_item_ids) : null,
         format_constraints_json: JSON.stringify(formatConstraints),
         response_state_json: JSON.stringify(responseState),
+        quality_metadata_json: JSON.stringify(qualityMetadata),
         content: row.content,
         created_at: timestamp,
         updated_at: timestamp,
@@ -1430,6 +1461,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     updateMeta({
       outline_project_name: outlineData.project_name || null,
       outline_project_overview: outlineData.project_overview || null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1636,6 +1668,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      requirement_response_matrix_json: null,
+      outline_quality_review_json: null,
       pending_tender_markdown_path: null,
       pending_tender_file_name: null,
       pending_tender_parser_label: null,
@@ -1667,6 +1701,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      requirement_response_matrix_json: null,
+      outline_quality_review_json: null,
       outline_project_name: null,
       outline_project_overview: null,
       selected_format_profile_id: null,
@@ -1712,7 +1748,11 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
     clearTechnicalPlanMermaidCache();
-    updateMeta({ content_generation_runtime_json: null, content_illustration_plan_json: null });
+    updateMeta({
+      content_generation_runtime_json: null,
+      content_illustration_plan_json: null,
+      outline_quality_review_json: null,
+    });
   }
 
   function clearDownstreamFromOriginalPlan() {
@@ -1729,6 +1769,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       outline_project_overview: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1770,6 +1811,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1905,6 +1947,14 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'contentGenerationOptions')) metaUpdates.content_generation_options_json = jsonOrNull(partial.contentGenerationOptions);
     if (hasOwn(partial, 'contentGenerationRuntime')) metaUpdates.content_generation_runtime_json = jsonOrNull(partial.contentGenerationRuntime);
     if (hasOwn(partial, 'contentIllustrationPlan')) metaUpdates.content_illustration_plan_json = jsonOrNull(partial.contentIllustrationPlan);
+    if (hasOwn(partial, 'requirementResponseMatrix')) {
+      metaUpdates.requirement_response_matrix_json = jsonOrNull(
+        partial.requirementResponseMatrix === null
+          ? null
+          : normalizeRequirementResponseMatrix(partial.requirementResponseMatrix),
+      );
+    }
+    if (hasOwn(partial, 'outlineQualityReview')) metaUpdates.outline_quality_review_json = jsonOrNull(partial.outlineQualityReview);
 
     if (Object.keys(metaUpdates).length) updateMeta(metaUpdates);
 
@@ -1934,7 +1984,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'outlineData')) {
       if (partial.outlineData === null) {
         db.prepare('DELETE FROM technical_plan_outline_nodes').run();
-        updateMeta({ outline_project_name: null, outline_project_overview: null });
+        updateMeta({ outline_project_name: null, outline_project_overview: null, outline_quality_review_json: null });
       } else {
         saveOutlineData(partial.outlineData);
       }
@@ -1961,6 +2011,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const outlineData = loadOutlineData(meta);
     const tasks = loadTasks();
     const bidSections = normalizeBidSections(safeJsonParse(meta.bid_sections_json, []));
+    const requirementResponseMatrix = safeJsonParse(meta.requirement_response_matrix_json, undefined);
     const bidSectionExtractionTask = tasks.bidSectionExtractionTask;
     const tenderFiles = loadTenderSourceFiles(meta);
     const tenderFile = meta.tender_markdown_path ? {
@@ -2015,6 +2066,10 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       contentGenerationOptions: safeJsonParse(meta.content_generation_options_json, undefined),
       contentGenerationRuntime: safeJsonParse(meta.content_generation_runtime_json, undefined),
       contentIllustrationPlan: safeJsonParse(meta.content_illustration_plan_json, undefined),
+      requirementResponseMatrix: requirementResponseMatrix
+        ? normalizeRequirementResponseMatrix(requirementResponseMatrix)
+        : undefined,
+      outlineQualityReview: safeJsonParse(meta.outline_quality_review_json, undefined),
       contentGenerationSections: loadContentSections(outlineData),
       contentGenerationPlans: loadContentPlans(),
       outlineData,
