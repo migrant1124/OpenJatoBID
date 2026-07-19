@@ -4,6 +4,7 @@ const ILLUSTRATION_PLAN_VERSION = 4;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai', 'mermaid'];
 const ILLUSTRATION_KIND_ORDER = new Map(ILLUSTRATION_KINDS.map((kind, index) => [kind, index]));
+const MAX_IMAGES_PER_SECTION = 8;
 const AI_IMAGE_TYPES = new Set([
   'engineering_diagram',
   'realistic_photo',
@@ -88,9 +89,9 @@ function resolveAllowedHtmlTypes(value) {
   return allowedTypes.length ? [...new Set(allowedTypes)] : [...HTML_IMAGE_TYPE_LABELS.values()];
 }
 
-function normalizeLimit(value, fallback, sectionCount) {
+function normalizeLimit(value, fallback, hardMax) {
   const number = Number(value);
-  return Math.max(0, Math.min(Number.isFinite(number) ? Math.round(number) : fallback, sectionCount));
+  return Math.max(0, Math.min(Number.isFinite(number) ? Math.round(number) : fallback, hardMax));
 }
 
 function resolveSectionContent(item, sections) {
@@ -227,24 +228,23 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
   }
 
   const outline = visit(outlineData?.outline || []);
-  const eligibleCount = eligibleSectionIds.length;
   const allowedHtmlTypes = resolveAllowedHtmlTypes(options?.htmlImageTypes);
   const config = {
     ai: {
-      enabled: Boolean(options?.useAiImages) && Boolean(aiImagesAvailable),
-      limit: normalizeLimit(options?.maxAiImages, 6, eligibleCount),
+      enabled: Boolean(options?.useAiImages ?? true) && Boolean(aiImagesAvailable),
+      limit: normalizeLimit(options?.maxAiImages, 20, 20),
       allowed_types: [...AI_IMAGE_TYPES],
       type_descriptions: AI_IMAGE_TYPE_DESCRIPTIONS,
     },
     mermaid: {
-      enabled: Boolean(options?.useMermaidImages),
-      limit: normalizeLimit(options?.maxMermaidImages, 5, eligibleCount),
+      enabled: Boolean(options?.useMermaidImages ?? false),
+      limit: normalizeLimit(options?.maxMermaidImages, 5, 5),
       allowed_types: [...MERMAID_IMAGE_TYPES],
       type_descriptions: MERMAID_IMAGE_TYPE_DESCRIPTIONS,
     },
     html: {
-      enabled: Boolean(options?.useHtmlImages) && allowedHtmlTypes.length > 0,
-      limit: normalizeLimit(options?.maxHtmlImages, 10, eligibleCount),
+      enabled: Boolean(options?.useHtmlImages ?? true) && allowedHtmlTypes.length > 0,
+      limit: normalizeLimit(options?.maxHtmlImages, 30, 30),
       allowed_types: allowedHtmlTypes,
     },
     eligible_section_ids: eligibleSectionIds,
@@ -296,13 +296,14 @@ function buildIllustrationPlanningPrompt() {
 1. 图片有 AI、Mermaid、HTML 三类；每类数量可低于上限，数量上限不是必须填满的目标。
 2. kind 只能是 html、mermaid、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
 3. 每项必须有简洁且不重复的 title、visual_role 和 purpose。图片必须能明确回答“帮助评委更快理解或相信什么”；不能回答时不要编排。
-4. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
-5. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
-6. AI 图片适合工程、现场、创意场景、空间和视觉概念；Mermaid 只用于简单流程、层级和职责关系；HTML 用于精确结构、数据、流程和矩阵。
-7. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
-8. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
-9. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
-10. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
+4. 同一小节允许 0-8 张图片，但每张必须承担不同 visual_role；不要为了填满上限制造重复图意。同一小节的同一信息角色跨类型重复时只保留最合适的一张，优先 HTML、其次 AI、最后 Mermaid。
+5. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
+6. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
+7. AI 图片适合工程、现场、创意场景、空间和视觉概念；Mermaid 只用于简单流程、层级和职责关系；HTML 用于精确结构、数据、流程和矩阵。
+8. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
+9. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
+10. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
+11. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
 
 illustration-plan.json 只能使用以下结构：
 {
@@ -508,10 +509,25 @@ function validateCandidate(candidate, context) {
   if (CREATIVE_AI_IMAGE_TYPES.has(candidate.image_type)) {
     validateCreativeBrief(candidate.creative_brief, candidate);
   }
-  return { ...candidate, firstOrder: sections[0].order };
+  const anchorSection = context.sectionMap.get(candidate.anchor.section_id);
+  const anchorBlock = candidate.anchor.block_id
+    ? anchorSection?.blocks.find((block) => block.id === candidate.anchor.block_id)
+    : null;
+  return {
+    ...candidate,
+    anchor: {
+      ...candidate.anchor,
+      ...(anchorBlock ? { block_hash: anchorBlock.hash } : {}),
+    },
+    firstOrder: anchorSection?.order ?? sections[0].order,
+  };
 }
 
-// 解析和严格校验图片计划；跨类型同节冲突与多图策略由后续选择阶段处理。
+function visualRoleKey(value) {
+  return normalizedTitleKey(value);
+}
+
+// 解析、严格校验并根据全文上限、同节安全上限和信息角色去重选择图片计划。
 function resolveIllustrationPlan(content, context) {
   const parsed = typeof content === 'string' ? extractJsonObject(content) : content;
   if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
@@ -530,27 +546,33 @@ function resolveIllustrationPlan(content, context) {
     return validateCandidate(normalizeCandidate(item, index), context);
   });
 
-  const occupiedSectionIds = new Set();
   const selected = [];
   const candidateStats = { html: 0, ai: 0, mermaid: 0 };
   const selectedStats = { html: 0, ai: 0, mermaid: 0 };
+  const imageCountBySection = new Map();
+  const visualRolesBySection = new Map();
   for (const candidate of candidates) candidateStats[candidate.kind] += 1;
 
-  for (const kind of ILLUSTRATION_KINDS) {
-    const sorted = candidates
-      .filter((candidate) => candidate.kind === kind)
-      .sort((a, b) => b.priority - a.priority || a.firstOrder - b.firstOrder || a.outputIndex - b.outputIndex);
-    for (const candidate of sorted) {
-      if (selectedStats[kind] >= context.config[kind].limit) continue;
-      if (candidate.section_ids.some((id) => occupiedSectionIds.has(id))) continue;
-      selected.push(candidate);
-      selectedStats[kind] += 1;
-      for (const id of candidate.section_ids) occupiedSectionIds.add(id);
+  const sortedCandidates = [...candidates].sort((a, b) => ILLUSTRATION_KIND_ORDER.get(a.kind) - ILLUSTRATION_KIND_ORDER.get(b.kind)
+    || b.priority - a.priority || a.firstOrder - b.firstOrder || a.outputIndex - b.outputIndex);
+  for (const candidate of sortedCandidates) {
+    if (selectedStats[candidate.kind] >= context.config[candidate.kind].limit) continue;
+    const roleKey = visualRoleKey(candidate.visual_role);
+    const exceedsSectionLimit = candidate.section_ids.some((id) => (imageCountBySection.get(id) || 0) >= MAX_IMAGES_PER_SECTION);
+    const repeatsVisualRole = candidate.section_ids.some((id) => visualRolesBySection.get(id)?.has(roleKey));
+    if (exceedsSectionLimit || repeatsVisualRole) continue;
+    selected.push(candidate);
+    selectedStats[candidate.kind] += 1;
+    for (const id of candidate.section_ids) {
+      imageCountBySection.set(id, (imageCountBySection.get(id) || 0) + 1);
+      const roles = visualRolesBySection.get(id) || new Set();
+      roles.add(roleKey);
+      visualRolesBySection.set(id, roles);
     }
   }
 
   selected.sort((a, b) => a.firstOrder - b.firstOrder
-    || ILLUSTRATION_KIND_ORDER.get(a.kind) - ILLUSTRATION_KIND_ORDER.get(b.kind)
+    || a.anchor.sequence - b.anchor.sequence
     || a.outputIndex - b.outputIndex);
   const titleByKey = new Map();
   for (const candidate of selected) {

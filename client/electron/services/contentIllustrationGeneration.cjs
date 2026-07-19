@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const { runWithRemoteImageRetry } = require('../utils/remoteImageRetry.cjs');
 const {
@@ -11,6 +12,7 @@ const { assertValidChartDsl } = require('./chartDslValidator.cjs');
 const HTML_AGENT_THRESHOLD_CHARS = 50000;
 const HTML_DESIGN_WIDTH = 1240;
 const MERMAID_REPAIR_ATTEMPTS = 3;
+const HTML_LAYOUT_REPAIR_ATTEMPTS = 2;
 const GENERATED_ILLUSTRATION_PATTERN = /<!-- yibiao-illustration:start\b[^>]*-->[\s\S]*?<!-- yibiao-illustration:end -->/gi;
 
 function singleLine(value) {
@@ -272,7 +274,14 @@ async function generateAiIllustration(aiService, execution) {
     style: execution.planItem.image_type,
   });
   if (!generated?.asset_url) throw new Error('生图模型未返回本地图片地址');
-  return { asset_url: generated.asset_url, attempts: 1 };
+  return {
+    asset_url: generated.asset_url,
+    attempts: 1,
+    visual_qa: {
+      status: 'needs-manual-review',
+      reason: '当前图片模型未接入视觉审核能力，已完成生成文件状态检查，请人工核对图题、元素和品牌资产。',
+    },
+  };
 }
 
 // 使用文本模型基于最终正文生成并校验 Mermaid。
@@ -286,7 +295,8 @@ async function generateMermaidIllustration(aiService, execution, localImageRende
     normalizer: normalizeMermaidGenerationResult,
     validator: validateMermaidGenerationResult,
   });
-  return prepareRenderableMermaid({ aiService, execution, mermaidPlan: generated, localImageRenderService, isPauseLikeError });
+  const rendered = await prepareRenderableMermaid({ aiService, execution, mermaidPlan: generated, localImageRenderService, isPauseLikeError });
+  return { ...rendered, visual_qa: { status: 'rendered', reason: '已通过 Mermaid 语法白名单和本地渲染检查。' } };
 }
 
 async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pauseControl = {}) {
@@ -312,6 +322,39 @@ async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pau
   return { ...result, attempts: requestAttempts };
 }
 
+function getHtmlLayoutIssues(screenshot) {
+  const width = Number(screenshot?.width) || 0;
+  const height = Number(screenshot?.height) || 0;
+  const issues = [];
+  if (width > HTML_DESIGN_WIDTH + 4) issues.push(`出现横向溢出：实际宽度 ${width}px，设计宽度 ${HTML_DESIGN_WIDTH}px`);
+  if (height <= 0) issues.push('截图高度无效');
+  return issues;
+}
+
+function buildHtmlLayoutRepairPrompt(execution, html, issues, attempt) {
+  return `请修复以下用于投标文件的 HTML 图片布局。\n最终图题：${getPlannedTitle(execution)}\n修复轮次：${attempt}/${HTML_LAYOUT_REPAIR_ATTEMPTS}\n渲染诊断：${issues.join('；')}\n\n要求：保持图题和正文事实不变；宽度固定 ${HTML_DESIGN_WIDTH}px；禁止横向溢出、文字拥挤和截断；保留专业商务风格；输出完整 HTML 文档且不依赖网络或本地文件。\n\n当前 HTML：\n${String(html || '').slice(0, 60000)}`;
+}
+
+async function repairHtmlLayout({ aiService, execution, html, issues, attempt, mode, runAgentHtml }) {
+  const prompt = buildHtmlLayoutRepairPrompt(execution, html, issues, attempt);
+  if (mode === 'agent') {
+    const repaired = await runAgentHtml({
+      title: `HTML配图布局修复-${execution.planItem.item_id}-${getPlannedTitle(execution)}`,
+      prompt,
+      outputFile: 'illustration.html',
+      files: [{ path: 'reference.md', content: execution.reference }],
+      validateOutput: (result) => validateHtmlCode(result?.output_content || ''),
+    });
+    return validateHtmlCode(repaired);
+  }
+  const response = await aiService.chat({
+    messages: [{ role: 'user', content: `${prompt}\n\n仅返回 html 代码，不要返回其他内容。` }],
+    temperature: 0.1,
+    logTitle: `HTML配图布局修复-${execution.planItem.item_id}-${getPlannedTitle(execution)}`,
+  });
+  return validateHtmlCode(response);
+}
+
 async function generateChartIllustration({ aiService, execution, plan, workspaceStore, localImageRenderService }) {
   const sourcePath = execution.planItem.generation?.source_path;
   let spec = sourcePath ? workspaceStore.readIllustrationChart?.(sourcePath) : null;
@@ -331,7 +374,10 @@ async function generateChartIllustration({ aiService, execution, plan, workspace
   const savedChart = workspaceStore.saveIllustrationChart({ revision: plan.revision, itemId: execution.planItem.item_id, spec, reference: execution.reference });
   const rendered = await localImageRenderService.renderChartToPng(spec, { timeoutMs: 120000 });
   const savedPng = workspaceStore.saveIllustrationPng({ revision: plan.revision, itemId: execution.planItem.item_id, buffer: rendered.buffer });
-  return { mode: 'chart', source_path: savedChart.relativePath, asset_url: savedPng.assetUrl, attempts: 1 };
+  return {
+    mode: 'chart', source_path: savedChart.relativePath, asset_url: savedPng.assetUrl, attempts: 1,
+    visual_qa: { status: 'needs-manual-review', reason: '已完成结构化图表本地渲染，请人工核对文字可读性和图文一致性。' },
+  };
 }
 
 // 生成 HTML 源文件并在本地转换为 PNG。
@@ -347,7 +393,7 @@ async function generateHtmlIllustration({ aiService, execution, plan, workspaceS
     }
   }
   const mode = execution.reference.length > HTML_AGENT_THRESHOLD_CHARS ? 'agent' : 'normal';
-  const sourceAlreadyPersisted = Boolean(html && sourcePath && sourcePath === recordedPath);
+  let sourceAlreadyPersisted = Boolean(html && sourcePath && sourcePath === recordedPath);
   if (!html) {
     if (mode === 'agent') {
       html = await runAgentHtml({
@@ -368,26 +414,82 @@ async function generateHtmlIllustration({ aiService, execution, plan, workspaceS
     html = validateHtmlCode(html);
   }
 
-  const savedHtml = workspaceStore.saveIllustrationHtml({ revision: plan.revision, itemId: execution.planItem.item_id, content: html });
-  if (!sourceAlreadyPersisted) onSourceSaved?.({ mode, source_path: savedHtml.relativePath });
+  let savedHtml;
   let screenshot;
-  try {
-    screenshot = await requestHtmlScreenshot(html, localImageRenderService, onRenderRetry, { isPauseRequested, createPauseError });
-  } catch (error) {
-    error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
-    throw error;
+  let layoutIssues = [];
+  let layoutRepairAttempts = 0;
+  while (layoutRepairAttempts <= HTML_LAYOUT_REPAIR_ATTEMPTS) {
+    savedHtml = workspaceStore.saveIllustrationHtml({ revision: plan.revision, itemId: execution.planItem.item_id, content: html });
+    if (!sourceAlreadyPersisted || layoutRepairAttempts > 0) onSourceSaved?.({ mode, source_path: savedHtml.relativePath });
+    try {
+      screenshot = await requestHtmlScreenshot(html, localImageRenderService, onRenderRetry, { isPauseRequested, createPauseError });
+    } catch (error) {
+      error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
+      throw error;
+    }
+    layoutIssues = getHtmlLayoutIssues(screenshot);
+    if (!layoutIssues.length) break;
+    if (layoutRepairAttempts >= HTML_LAYOUT_REPAIR_ATTEMPTS) {
+      const error = new Error(`HTML 图片布局质检未通过：${layoutIssues.join('；')}`);
+      error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
+      throw error;
+    }
+    layoutRepairAttempts += 1;
+    html = await repairHtmlLayout({ aiService, execution, html, issues: layoutIssues, attempt: layoutRepairAttempts, mode, runAgentHtml });
+    sourceAlreadyPersisted = false;
   }
   const savedPng = workspaceStore.saveIllustrationPng({ revision: plan.revision, itemId: execution.planItem.item_id, buffer: screenshot.buffer });
   return {
     mode,
     source_path: savedHtml.relativePath,
     asset_url: savedPng.assetUrl,
-    attempts: screenshot.attempts,
+    attempts: screenshot.attempts + layoutRepairAttempts,
+    visual_qa: {
+      status: 'needs-manual-review',
+      reason: '已完成完整 HTML、PNG 和横向溢出检查；当前本地渲染器不提供文字截断与重叠识别，请人工视觉核对。',
+      width: screenshot.width,
+      height: screenshot.height,
+      layout_repair_attempts: layoutRepairAttempts,
+    },
   };
 }
 
 function stripGeneratedIllustrations(content) {
   return String(content || '').replace(GENERATED_ILLUSTRATION_PATTERN, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function contentBlockHash(content) {
+  return crypto.createHash('sha256').update(JSON.stringify(String(content || '').trim()), 'utf8').digest('hex').slice(0, 16);
+}
+
+function splitContentBlocks(content) {
+  return String(content || '').trim().split(/\n{2,}/u).map((part) => part.trim()).filter(Boolean).map((part) => ({
+    content: part,
+    hash: contentBlockHash(part),
+  }));
+}
+
+function illustrationAnchor(planItem) {
+  const source = planItem?.anchor;
+  if (source?.type && source?.section_id) {
+    return {
+      type: source.type,
+      section_id: String(source.section_id),
+      block_hash: String(source.block_hash || ''),
+      sequence: Number(source.sequence) || 0,
+    };
+  }
+  const legacyBefore = planItem?.placement === 'before';
+  return {
+    type: legacyBefore ? 'after_heading' : 'section_end',
+    section_id: legacyBefore ? planItem?.section_ids?.[0] : planItem?.section_ids?.[planItem.section_ids.length - 1],
+    sequence: 0,
+  };
+}
+
+function buildIllustrationLead(purpose) {
+  const subject = singleLine(purpose).replace(/^帮助评委(?:更快)?理解/u, '').replace(/^说明/u, '');
+  return subject ? `为便于理解${subject}，相关内容如下图所示。` : '相关内容如下图所示。';
 }
 
 function buildGeneratedIllustrationMarkdown(planItem) {
@@ -401,7 +503,7 @@ function buildGeneratedIllustrationMarkdown(planItem) {
     body = `![${caption}](${generation.asset_url})\n\n*图：${caption}*`;
   }
   if (!body) return '';
-  return `<!-- yibiao-illustration:start id="${planItem.item_id}" -->\n${body}\n<!-- yibiao-illustration:end -->`;
+  return `<!-- yibiao-illustration:start id="${planItem.item_id}" -->\n${buildIllustrationLead(planItem.purpose)}\n\n${body}\n<!-- yibiao-illustration:end -->`;
 }
 
 function mapOutlineContent(items, contentById) {
@@ -440,7 +542,34 @@ function stripGeneratedIllustrationsFromDocument(outlineData, sections) {
   };
 }
 
-// 按最终计划顺序把成功图片一次性插入权威正文。
+function compareIllustrationInsertionOrder(left, right) {
+  const leftAnchor = illustrationAnchor(left);
+  const rightAnchor = illustrationAnchor(right);
+  if (leftAnchor.section_id !== rightAnchor.section_id) return leftAnchor.section_id.localeCompare(rightAnchor.section_id, 'zh-CN');
+  if (leftAnchor.type !== rightAnchor.type) return leftAnchor.type.localeCompare(rightAnchor.type, 'zh-CN');
+  if (leftAnchor.type === 'before_block') return leftAnchor.sequence - rightAnchor.sequence;
+  if (leftAnchor.type === 'after_block' || leftAnchor.type === 'after_heading') return rightAnchor.sequence - leftAnchor.sequence;
+  return leftAnchor.sequence - rightAnchor.sequence;
+}
+
+function insertIllustrationAtAnchor(content, block, anchor) {
+  const blocks = splitContentBlocks(content);
+  if (anchor.type === 'section_end') {
+    return { content: [...blocks.map((item) => item.content), block].join('\n\n').trim(), fallback: false };
+  }
+  if (anchor.type === 'after_heading') {
+    return { content: [block, ...blocks.map((item) => item.content)].join('\n\n').trim(), fallback: false };
+  }
+  const blockIndex = blocks.findIndex((item) => item.hash === anchor.block_hash);
+  if (blockIndex < 0) {
+    return { content: [...blocks.map((item) => item.content), block].join('\n\n').trim(), fallback: true };
+  }
+  const index = anchor.type === 'before_block' ? blockIndex : blockIndex + 1;
+  blocks.splice(index, 0, { content: block, hash: '' });
+  return { content: blocks.map((item) => item.content).join('\n\n').trim(), fallback: false };
+}
+
+// 按正文块锚点把成功图片一次性插入权威正文；块哈希变化时退化到章节末尾并要求人工核对。
 function applyGeneratedIllustrationsToDocument(plan, outlineData, sections) {
   const nextSections = { ...(sections || {}) };
   const contentById = new Map();
@@ -452,25 +581,27 @@ function applyGeneratedIllustrationsToDocument(plan, outlineData, sections) {
     contentById.set(itemId, content);
   }
 
-  for (const planItem of plan?.items || []) {
-    if (planItem.generation?.status !== 'success') continue;
+  const anchorFallbackItemIds = [];
+  const items = (plan?.items || []).filter((item) => item.generation?.status === 'success').sort(compareIllustrationInsertionOrder);
+  for (const planItem of items) {
     const block = buildGeneratedIllustrationMarkdown(planItem);
     if (!block) continue;
-    const targetId = (planItem.kind === 'html' || planItem.kind === 'chart') && planItem.placement === 'before'
-      ? planItem.section_ids[0]
-      : planItem.section_ids[planItem.section_ids.length - 1];
+    const anchor = illustrationAnchor(planItem);
+    const targetId = anchor.section_id;
     if (!writableIds.has(targetId)) {
       throw new Error(`配图计划引用了不可写入的受控响应节点：${targetId}`);
     }
     const current = String(nextSections[targetId]?.content || '').trim();
-    const content = planItem.placement === 'before' ? `${block}\n\n${current}`.trim() : `${current}\n\n${block}`.trim();
-    nextSections[targetId] = { ...nextSections[targetId], content, status: 'success', error: undefined, updated_at: new Date().toISOString() };
-    contentById.set(targetId, content);
+    const inserted = insertIllustrationAtAnchor(current, block, anchor);
+    if (inserted.fallback) anchorFallbackItemIds.push(planItem.item_id);
+    nextSections[targetId] = { ...nextSections[targetId], content: inserted.content, status: 'success', error: undefined, updated_at: new Date().toISOString() };
+    contentById.set(targetId, inserted.content);
   }
 
   return {
     sections: nextSections,
     outlineData: outlineData ? { ...outlineData, outline: mapOutlineContent(outlineData.outline, contentById) } : outlineData,
+    anchorFallbackItemIds,
   };
 }
 

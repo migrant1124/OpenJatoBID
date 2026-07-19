@@ -142,6 +142,7 @@ const htmlImageTypeOptions = [
 ];
 
 const DEFAULT_HTML_IMAGE_TYPES = htmlImageTypeOptions.map((option) => option.value).join(', ');
+const IMAGE_HARD_LIMITS = { ai: 20, mermaid: 5, html: 30 } as const;
 
 function resolveSelectedHtmlImageTypes(value: string | undefined) {
   const selected = new Set(String(value || '').split(/[\n,，、;；]+/).map((item) => item.trim()).filter(Boolean));
@@ -153,11 +154,11 @@ function resolveSelectedHtmlImageTypes(value: string | undefined) {
 
 const defaultContentGenerationOptions: ContentGenerationOptions = {
   useAiImages: false,
-  maxAiImages: 6,
+  maxAiImages: IMAGE_HARD_LIMITS.ai,
   useMermaidImages: false,
-  maxMermaidImages: 5,
+  maxMermaidImages: IMAGE_HARD_LIMITS.mermaid,
   useHtmlImages: true,
-  maxHtmlImages: 10,
+  maxHtmlImages: IMAGE_HARD_LIMITS.html,
   htmlImageTypes: DEFAULT_HTML_IMAGE_TYPES,
   tableRequirement: 'heavy',
   minimumWords: 0,
@@ -179,20 +180,15 @@ function isOriginalPlanCoverageRepairMode(value: unknown): value is OriginalPlan
   return originalPlanCoverageRepairModeOptions.some((option) => option.value === value);
 }
 
-function buildDefaultGenerationOptions(imageModelAvailable: boolean, leafCount: number): ContentGenerationOptions {
-  const imageLimit = Math.max(1, leafCount);
+function buildDefaultGenerationOptions(imageModelAvailable: boolean, _leafCount: number): ContentGenerationOptions {
   return {
     ...defaultContentGenerationOptions,
     useAiImages: imageModelAvailable,
-    maxAiImages: Math.min(defaultContentGenerationOptions.maxAiImages, imageLimit),
-    maxMermaidImages: Math.min(defaultContentGenerationOptions.maxMermaidImages, imageLimit),
-    maxHtmlImages: Math.min(defaultContentGenerationOptions.maxHtmlImages, imageLimit),
   };
 }
 
 function normalizeGenerationOptions(options: ContentGenerationOptions | DraftContentGenerationOptions | undefined, imageModelAvailable: boolean, leafCount: number, isExpansionWorkflow = false): ContentGenerationOptions {
   const fallback = buildDefaultGenerationOptions(imageModelAvailable, leafCount);
-  const maxAiImagesLimit = Math.max(1, leafCount);
   const requestedMaxAiImages = Number(options?.maxAiImages ?? fallback.maxAiImages);
   const requestedMaxMermaidImages = Number(options?.maxMermaidImages ?? fallback.maxMermaidImages);
   const requestedMaxHtmlImages = Number(options?.maxHtmlImages ?? fallback.maxHtmlImages);
@@ -201,11 +197,11 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
 
   return {
     useAiImages: Boolean(options?.useAiImages ?? fallback.useAiImages) && imageModelAvailable,
-    maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, maxAiImagesLimit)),
+    maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, IMAGE_HARD_LIMITS.ai)),
     useMermaidImages: Boolean(options?.useMermaidImages ?? fallback.useMermaidImages),
-    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, maxAiImagesLimit)),
+    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, IMAGE_HARD_LIMITS.mermaid)),
     useHtmlImages: Boolean(options?.useHtmlImages ?? fallback.useHtmlImages),
-    maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, maxAiImagesLimit)),
+    maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, IMAGE_HARD_LIMITS.html)),
     htmlImageTypes: String(options?.htmlImageTypes ?? fallback.htmlImageTypes),
     tableRequirement: isContentTableRequirement(tableRequirement) ? tableRequirement : fallback.tableRequirement,
     minimumWords: Math.max(0, Number.isFinite(requestedMinimumWords) ? Math.round(requestedMinimumWords) : fallback.minimumWords),
@@ -1464,12 +1460,12 @@ function ContentEditPage({
                   <input
                     type="number"
                     min="0"
-                    max={Math.max(1, leaves.length)}
+                    max={IMAGE_HARD_LIMITS.ai}
                     value={draftGenerationOptions.maxAiImages}
                     disabled={generationStrategyLocked}
                     onChange={(event) => setDraftGenerationOptions((prev) => ({
                       ...prev,
-                      maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                      maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.ai)),
                     }))}
                   />
                 </label>
@@ -1492,12 +1488,12 @@ function ContentEditPage({
                   <input
                     type="number"
                     min="0"
-                    max={Math.max(1, leaves.length)}
+                    max={IMAGE_HARD_LIMITS.mermaid}
                     value={draftGenerationOptions.maxMermaidImages}
                     disabled={generationStrategyLocked}
                     onChange={(event) => setDraftGenerationOptions((prev) => ({
                       ...prev,
-                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.mermaid)),
                     }))}
                   />
                 </label>
@@ -1532,12 +1528,12 @@ function ContentEditPage({
                     <input
                       type="number"
                       min="0"
-                      max={Math.max(1, leaves.length)}
+                      max={IMAGE_HARD_LIMITS.html}
                       value={draftGenerationOptions.maxHtmlImages}
                       disabled={generationStrategyLocked}
                       onChange={(event) => setDraftGenerationOptions((prev) => ({
                         ...prev,
-                        maxHtmlImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                        maxHtmlImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.html)),
                       }))}
                     />
                   </label>
@@ -1548,6 +1544,7 @@ function ContentEditPage({
                 </>
               )}
             </div>
+            <p className="content-generation-config-note">图片数量是全文上限，AI 会按内容价值决定实际数量，不会强制填满。</p>
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={saveGenerationOptions} disabled={taskInFlight || paused}>

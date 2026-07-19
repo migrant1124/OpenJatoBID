@@ -24,7 +24,7 @@ function candidate(overrides = {}) {
   };
 }
 
-test('prefers AI over legacy Mermaid candidates for the same section', () => {
+test('同一小节同一视觉角色按 AI 优先于 Mermaid 去重', () => {
   const context = buildIllustrationPlanningContext({
     outlineData: {
       outline: [{ id: '1.1', title: '实施方案', description: '', content: '实施方案正文' }],
@@ -47,13 +47,13 @@ test('prefers AI over legacy Mermaid candidates for the same section', () => {
   const result = resolveIllustrationPlan({
     items: [
       candidate({
-        kind: 'mermaid', image_type: 'process', title: '实施流程', visual_role: '流程说明', purpose: '帮助评委理解实施流程',
+        kind: 'mermaid', image_type: 'process', title: '实施流程', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系',
       }),
       candidate({
         kind: 'ai',
         image_type: 'engineering_diagram',
         title: '实施架构',
-        visual_role: '总体概念', purpose: '帮助评委理解实施架构', priority: 1,
+        visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系', priority: 1,
       }),
     ],
   }, context);
@@ -105,7 +105,7 @@ test('limits HTML candidates to the user-selected HTML image types', () => {
   }, context), /image_type 无效/);
 });
 
-test('HTML wins legacy section conflicts and图片计划 v4 要求锚点与评分关联', () => {
+test('HTML 在同一视觉角色的跨类型冲突中优先且图片计划 v4 要求锚点与评分关联', () => {
   const context = buildIllustrationPlanningContext({
     outlineData: {
       outline: [{ id: '1.1', title: '实施方案', description: '', content: '实施方案正文' }],
@@ -127,9 +127,9 @@ test('HTML wins legacy section conflicts and图片计划 v4 要求锚点与评�
 
   const result = resolveIllustrationPlan({
     items: [
-      candidate({ kind: 'mermaid', image_type: 'process', title: '实施流程图', visual_role: '流程说明', purpose: '帮助评委理解实施流程' }),
-      candidate({ kind: 'ai', image_type: 'engineering_diagram', title: '实施工程图', visual_role: '工程结构', purpose: '帮助评委理解工程结构' }),
-      candidate({ kind: 'html', image_type: '进度网络图', title: '实施进度网络图' }),
+      candidate({ kind: 'mermaid', image_type: 'process', title: '实施流程图', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系' }),
+      candidate({ kind: 'ai', image_type: 'engineering_diagram', title: '实施工程图', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系' }),
+      candidate({ kind: 'html', image_type: '进度网络图', title: '实施进度网络图', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系' }),
     ],
   }, context);
 
@@ -166,4 +166,41 @@ test('创意图片必须携带独立 Creative Brief、评分点和正文块锚�
   assert.equal(result.plan.items[0].creative_brief.deliverable_type, '活动现场概念图');
   assert.match(context.files.find((file) => file.path === 'technical-plan.md').content, new RegExp(firstBlockId));
   assert.match(context.files.find((file) => file.path === 'illustration-input.json').content, /creative-proposal/);
+});
+
+test('同一小节可保留不同视觉角色的多张图片，且配置上限不再受叶子数量截断', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [{ id: '1.1', title: '实施方案', content: '实施范围。\n\n实施流程。\n\n质量控制。' }] },
+    sections: { '1.1': { status: 'success', content: '实施范围。\n\n实施流程。\n\n质量控制。' } },
+    options: { useAiImages: true, maxAiImages: 20, useMermaidImages: true, maxMermaidImages: 5, useHtmlImages: true, maxHtmlImages: 30 },
+    aiImagesAvailable: true,
+  });
+  const [firstBlock, secondBlock] = context.sectionMap.get('1.1').blocks;
+  const result = resolveIllustrationPlan({
+    items: [
+      candidate({ kind: 'html', image_type: '流程图', title: '实施总体流程图', visual_role: '流程说明', purpose: '帮助评委理解实施流程', anchor: { type: 'after_block', section_id: '1.1', block_id: firstBlock.id, sequence: 1 } }),
+      candidate({ kind: 'ai', image_type: 'engineering_diagram', title: '实施场景关系图', visual_role: '执行场景', purpose: '帮助评委理解实施场景关系', anchor: { type: 'after_block', section_id: '1.1', block_id: secondBlock.id, sequence: 1 } }),
+      candidate({ kind: 'mermaid', image_type: 'responsibility', title: '实施职责关系图', visual_role: '职责关系', purpose: '帮助评委理解实施职责关系', anchor: { type: 'section_end', section_id: '1.1', sequence: 1 } }),
+    ],
+  }, context);
+  assert.equal(context.config.html.limit, 30);
+  assert.equal(context.config.ai.limit, 20);
+  assert.equal(context.config.mermaid.limit, 5);
+  assert.equal(result.plan.items.length, 3);
+  assert.deepEqual(result.plan.items.map((item) => item.visual_role).sort(), ['执行场景', '流程说明', '职责关系'].sort());
+});
+
+test('未保存配置使用 HTML 30、可用 AI 20、Mermaid 关闭且保留 5 的默认上限', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [{ id: '1.1', title: '实施方案', content: '实施正文' }] },
+    sections: { '1.1': { status: 'success', content: '实施正文' } },
+    aiImagesAvailable: true,
+  });
+  assert.deepEqual(context.config, {
+    ai: { enabled: true, limit: 20, allowed_types: context.config.ai.allowed_types, type_descriptions: context.config.ai.type_descriptions },
+    mermaid: { enabled: false, limit: 5, allowed_types: context.config.mermaid.allowed_types, type_descriptions: context.config.mermaid.type_descriptions },
+    html: { enabled: true, limit: 30, allowed_types: context.config.html.allowed_types },
+    eligible_section_ids: ['1.1'],
+  });
+  assert.equal(context.config.html.allowed_types.length, 17);
 });

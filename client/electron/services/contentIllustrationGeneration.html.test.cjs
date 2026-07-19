@@ -171,3 +171,30 @@ test('HTML render failure keeps the persisted source path for the next run', asy
     return true;
   });
 });
+
+test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => {
+  const prompts = [];
+  let renderCount = 0;
+  const result = await generateHtmlIllustration({
+    aiService: {
+      chat: async ({ messages }) => {
+        prompts.push(messages[0].content);
+        return '<!doctype html><html><head></head><body>布局修复图</body></html>';
+      },
+    },
+    execution: createExecution(),
+    plan: { revision: 'revision' },
+    workspaceStore: createWorkspaceStore(),
+    localImageRenderService: {
+      renderHtmlToPng: async () => {
+        renderCount += 1;
+        return { buffer: Buffer.from('89504e470d0a1a0a', 'hex'), width: renderCount === 1 ? 1300 : 1240, height: 600 };
+      },
+    },
+    runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
+  });
+  assert.equal(renderCount, 2);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /横向溢出/);
+  assert.equal(result.visual_qa.layout_repair_attempts, 1);
+});

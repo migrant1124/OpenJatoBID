@@ -6770,6 +6770,25 @@ workspace 文件说明：
     const applied = applyGeneratedIllustrationsToDocument(illustrationPlan, outlineData, sections);
     outlineData = applied.outlineData;
     sections = applied.sections;
+    if (applied.anchorFallbackItemIds.length) {
+      const fallbackIds = new Set(applied.anchorFallbackItemIds);
+      illustrationPlan = {
+        ...illustrationPlan,
+        items: illustrationPlan.items.map((item) => fallbackIds.has(item.item_id)
+          ? {
+            ...item,
+            generation: {
+              ...(item.generation || {}),
+              visual_qa: {
+                status: 'needs-manual-review',
+                reason: '正文块已变化，图片已退化插入章节末尾，请人工核对图文位置。',
+              },
+            },
+          }
+          : item),
+      };
+      logs = [...logs, `有 ${fallbackIds.size} 张图片的正文块锚点已变化，已退化插入章节末尾并标记人工核对。`];
+    }
     refreshIllustrationGenerationStats('图片生成和正文插入完成');
     const saved = workspaceStore.updateTechnicalPlan({
       outlineData,

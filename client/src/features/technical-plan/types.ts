@@ -253,6 +253,35 @@ export type ContentGenerationSections = Record<string, ContentGenerationSectionS
 export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibility';
 export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
+export type ContentIllustrationAnchorType = 'before_block' | 'after_block' | 'after_heading' | 'section_end';
+
+export interface ContentIllustrationAnchor {
+  type: ContentIllustrationAnchorType;
+  section_id: string;
+  block_id?: string;
+  block_hash?: string;
+  sequence: number;
+}
+
+export interface CreativeBrief {
+  client_profile: string;
+  project_goal: string;
+  target_audience: string[];
+  campaign_theme: string;
+  key_message: string;
+  event_type?: string;
+  venue_and_scene?: string;
+  mandatory_elements: string[];
+  prohibited_elements: string[];
+  style_keywords: string[];
+  brand_colors: string[];
+  brand_assets: string[];
+  deliverable_type: string;
+  aspect_ratio: string;
+  source_scoring_point_ids: string[];
+  source_value_anchor_ids: string[];
+  needs_user_confirmation: string[];
+}
 
 export interface ContentPlanFingerprint {
   outline_node_hash: string;
@@ -322,7 +351,14 @@ export interface ContentIllustrationPlanItem {
   image_type: string;
   title: string;
   section_ids: string[];
-  placement: ContentIllustrationPlacement;
+  placement?: ContentIllustrationPlacement;
+  visual_role?: string;
+  purpose?: string;
+  scoring_point_ids?: string[];
+  value_anchor_ids?: string[];
+  anchor?: ContentIllustrationAnchor;
+  aspect_ratio?: string;
+  creative_brief?: CreativeBrief;
   priority: number;
   generation?: {
     status: 'pending' | 'running' | 'success' | 'error';
@@ -331,6 +367,13 @@ export interface ContentIllustrationPlanItem {
     source_path?: string;
     asset_url?: string;
     attempts?: number;
+    visual_qa?: {
+      status: 'rendered' | 'needs-manual-review';
+      reason: string;
+      width?: number;
+      height?: number;
+      layout_repair_attempts?: number;
+    };
     error?: string;
     updated_at?: string;
   };
