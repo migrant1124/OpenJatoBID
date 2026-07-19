@@ -4,7 +4,7 @@
   "private": true,
   "description": "佳图智能投标助手独立桌面客户端",
   "author": "Jato Digital Technology Co., Ltd.",
-  "main": "electron/main.cjs",
+  "main": "electron/bootstrap.cjs",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
@@ -19,6 +19,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "generate-build-attestation": "node scripts/generate-build-attestation.cjs",
     "test:update": "node --test electron/services/updateService.test.cjs",
+    "test:technical-plan-guards": "node --test electron/services/technicalPlanTaskGuards.test.cjs",
     "prepare-opencode-tools": "node scripts/prepare-opencode-tools.cjs",
     "verify-opencode-tools": "node scripts/verify-opencode-tools.cjs",
     "smoke:electron-native": "electron scripts/electron-native-smoke.cjs",
