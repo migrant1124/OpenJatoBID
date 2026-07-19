@@ -30,7 +30,7 @@ function createKnowledgeTaskInterruptedError() {
 /** 等待服务商写入提示词前缀缓存，并在 fan-out 前复核任务仍可继续 */
 async function waitForPromptCacheWarmup(shouldContinue = () => true) {
   if (!shouldContinue()) throw createKnowledgeTaskInterruptedError();
-  await new Promise((resolve) => setTimeout(resolve, PROMPT_CACHE_WARMUP_DELAY_MS));
+  await new Promise((resolve) => globalThis.setTimeout(resolve, PROMPT_CACHE_WARMUP_DELAY_MS));
   if (!shouldContinue()) throw createKnowledgeTaskInterruptedError();
 }
 

@@ -18,6 +18,25 @@ function createState(formatContent) {
       task,
       task.id === 'responseFileRequirements' ? formatContent : undefined,
     )])),
+    requirementResponseMatrix: {
+      revision: 'format-test',
+      scoring_points: [{
+        scoring_point_id: 'R1.P1',
+        group_requirement_id: 'R1',
+        title: '服务实施方案',
+        requirement_text: '响应服务实施评分要求',
+        scoring_rule: '完整响应得分',
+        source_refs: [],
+        mandatory_level: 'normal',
+        expected_response_types: ['content'],
+        high_score_conditions: ['人员和流程'],
+        mapped_node_ids: [],
+        status: 'unmapped',
+      }],
+      rejection_risks: [],
+      hidden_requirements: [],
+      value_anchors: [],
+    },
     referenceKnowledgeDocumentIds: [],
     tenderFile: null,
   };
@@ -90,6 +109,7 @@ test('explicit format owns all top-level directories and scoring is mapped only 
             title: '实施方案',
             description: '编制实施方案',
             source_requirement_id: 'R1',
+            mapped_scoring_point_ids: ['R1.P1'],
             children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分细项' }],
           },
           { id: '1.2', title: '服务承诺函', description: '人工填写固定承诺函', manual_input_required: true },
@@ -134,7 +154,7 @@ test('unspecified format uses only selected knowledge document headings for top-
         },
         {
           id: '2', title: '实施方案', description: '参考文档一级目录',
-          children: [{ id: '2.1', title: '服务实施', description: '评分响应', source_requirement_id: 'R1', children: [{ id: '2.1.1', title: '人员与流程', description: '覆盖评分细项' }] }],
+          children: [{ id: '2.1', title: '服务实施', description: '评分响应', source_requirement_id: 'R1', mapped_scoring_point_ids: ['R1.P1'], children: [{ id: '2.1.1', title: '人员与流程', description: '覆盖评分细项' }] }],
         },
       ],
     },
@@ -173,7 +193,7 @@ test('multiple selected knowledge documents are combined in one source-outline r
     技术评分大类: groupsResponse,
     目录下级补充: {
       outline: [
-        { id: '1', title: '项目理解', description: '文档一一级目录', children: [{ id: '1.1', title: '需求分析', description: '需求', source_requirement_id: 'R1', children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }] },
+        { id: '1', title: '项目理解', description: '文档一一级目录', children: [{ id: '1.1', title: '需求分析', description: '需求', source_requirement_id: 'R1', mapped_scoring_point_ids: ['R1.P1'], children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }] },
         { id: '2', title: '质量保障', description: '文档二一级目录' },
       ],
     },
@@ -267,7 +287,7 @@ test('existing-plan expansion keeps format-owned roots and uses the old plan onl
         id: '1',
         title: '技术文件',
         description: '格式一级目录',
-        children: [{ id: '1.1', title: '旧实施内容', description: '原方案下级补充', source_requirement_id: 'R1', children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }],
+        children: [{ id: '1.1', title: '旧实施内容', description: '原方案下级补充', source_requirement_id: 'R1', mapped_scoring_point_ids: ['R1.P1'], children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }],
       }],
     },
   }, calls);

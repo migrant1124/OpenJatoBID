@@ -4,6 +4,7 @@ const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { setTimeout: delay } = require('node:timers/promises');
 
 const { createAiRequestQueue } = require('../utils/aiRequestQueue.cjs');
 
@@ -239,9 +240,10 @@ function createAiService(contextLengthLimit, calls) {
 }
 
 async function waitFor(predicate, message) {
-  for (let index = 0; index < 2000; index += 1) {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
+    await delay(5);
   }
   throw new Error(message);
 }
