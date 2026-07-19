@@ -1,5 +1,6 @@
 'use strict';
 
+const { gzipSync, gunzipSync } = require('node:zlib');
 const {
   appendTaskLog,
   cloneValue,
@@ -17,10 +18,55 @@ const {
 const CONTENT_SAFETY_BACKUP_KEY = '__generation_safety_backup_v1';
 const ACTIVE_TASK_STATUSES = new Set(['running', 'pausing']);
 
+function compactContentSafetySnapshot(state) {
+  const snapshot = snapshotPatch(state);
+  snapshot.contentGenerationSections = Object.fromEntries(Object.entries(snapshot.contentGenerationSections || {}).map(([nodeId, section]) => {
+    const next = cloneValue(section || {});
+    delete next.content;
+    return [nodeId, next];
+  }));
+  return snapshot;
+}
+
+function materializeContentSafetySnapshot(snapshot) {
+  const next = cloneValue(snapshot || {});
+  next.contentGenerationSections = Object.fromEntries(Object.entries(next.contentGenerationSections || {}).map(([nodeId, section]) => {
+    const outlineItem = findOutlineItem(next.outlineData?.outline || [], nodeId);
+    return [nodeId, {
+      ...(section || {}),
+      content: String(outlineItem?.content || ''),
+    }];
+  }));
+  return next;
+}
+
+function encodeContentSafetySnapshot(snapshot) {
+  const json = JSON.stringify(snapshot || {});
+  return {
+    version: 2,
+    encoding: 'gzip-base64',
+    data: gzipSync(Buffer.from(json, 'utf8')).toString('base64'),
+  };
+}
+
 function getContentSafetyBackup(state) {
   const value = state?.contentGenerationOptions?.[CONTENT_SAFETY_BACKUP_KEY];
-  if (!value || Number(value.version) !== 1 || !value.snapshot || typeof value.snapshot !== 'object') return null;
-  return cloneValue(value);
+  if (!value || typeof value !== 'object') return null;
+  if (Number(value.version) === 1 && value.snapshot && typeof value.snapshot === 'object') {
+    return { ...cloneValue(value), snapshot: materializeContentSafetySnapshot(value.snapshot) };
+  }
+  if (Number(value.version) !== 2 || value.encoding !== 'gzip-base64' || typeof value.data !== 'string') return null;
+  try {
+    const snapshot = JSON.parse(gunzipSync(Buffer.from(value.data, 'base64')).toString('utf8'));
+    return {
+      version: 2,
+      encoding: value.encoding,
+      created_at: value.created_at,
+      snapshot: materializeContentSafetySnapshot(snapshot),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function withoutContentSafetyBackup(options) {
@@ -33,18 +79,18 @@ function persistContentSafetyBackup(workspaceStore, baseline) {
   const current = workspaceStore.loadTechnicalPlan() || {};
   const existing = getContentSafetyBackup(current);
   if (existing) return existing;
-  const backup = {
-    version: 1,
+  const snapshot = compactContentSafetySnapshot(baseline);
+  const encoded = {
+    ...encodeContentSafetySnapshot(snapshot),
     created_at: new Date().toISOString(),
-    snapshot: snapshotPatch(baseline),
   };
   workspaceStore.updateTechnicalPlan({
     contentGenerationOptions: {
       ...(cloneValue(current.contentGenerationOptions || baseline?.contentGenerationOptions || {})),
-      [CONTENT_SAFETY_BACKUP_KEY]: backup,
+      [CONTENT_SAFETY_BACKUP_KEY]: encoded,
     },
   });
-  return backup;
+  return { ...encoded, snapshot: materializeContentSafetySnapshot(snapshot) };
 }
 
 function recoverInterruptedContentBackup(workspaceStore) {
@@ -61,7 +107,7 @@ function recoverInterruptedContentBackup(workspaceStore) {
     updated_at: new Date().toISOString(),
   };
   return workspaceStore.updateTechnicalPlan({
-    ...cloneValue(backup.snapshot),
+    ...materializeContentSafetySnapshot(backup.snapshot),
     contentGenerationOptions: withoutContentSafetyBackup(state.contentGenerationOptions),
     contentGenerationTask: task,
   });
@@ -107,10 +153,10 @@ function createContentAiGuard(aiService, context, workspaceStore) {
       }),
     };
   }
-  return createServiceProxy(aiService, {
-    collectJsonResponse: (options) => call('collectJsonResponse', options),
-    requestJson: (options) => call('requestJson', options),
-  });
+  const overrides = {};
+  if (typeof aiService?.collectJsonResponse === 'function') overrides.collectJsonResponse = (options) => call('collectJsonResponse', options);
+  if (typeof aiService?.requestJson === 'function') overrides.requestJson = (options) => call('requestJson', options);
+  return createServiceProxy(aiService, overrides);
 }
 
 function createContentAgentGuard(agentService, context) {
@@ -174,13 +220,15 @@ function createGuardedContentRunner(baseRunner) {
     };
     const payload = cloneValue(args.payload || {});
     const workflowKind = baseline.workflowKind || realStore.loadTechnicalPlan()?.workflowKind;
+    const options = withoutContentSafetyBackup(
+      payload.generationOptions || payload.generation_options || baseline.contentGenerationOptions || {},
+    );
     if (workflowKind === 'existing-plan-expansion' && !targetItemId && !retryCorrection && !rerunIllustrations) {
-      const options = cloneValue(payload.generationOptions || payload.generation_options || baseline.contentGenerationOptions || {});
       options.enableOriginalPlanCoverageAudit = true;
       options.enable_original_plan_coverage_audit = true;
-      payload.generationOptions = options;
-      payload.generation_options = options;
     }
+    payload.generationOptions = options;
+    payload.generation_options = options;
 
     try {
       await baseRunner({
@@ -194,7 +242,7 @@ function createGuardedContentRunner(baseRunner) {
       if (restoreSnapshot && hasSubstantiveContent(restoreSnapshot)) {
         const current = realStore.loadTechnicalPlan() || {};
         const restored = realStore.updateTechnicalPlan({
-          ...cloneValue(restoreSnapshot),
+          ...materializeContentSafetySnapshot(restoreSnapshot),
           contentGenerationOptions: withoutContentSafetyBackup(current.contentGenerationOptions),
         });
         appendTaskLog({
@@ -224,6 +272,9 @@ function createGuardedContentRunner(baseRunner) {
         contentGenerationRuntime: undefined,
       };
       if (protectedResult.affected.length) issues.push(`正文编排失败节点：${protectedResult.affected.join('、')}`);
+      const affected = new Set(protectedResult.affected);
+      const unresolved = [...context.planningFailures.keys()].filter((nodeId) => !affected.has(nodeId));
+      if (unresolved.length) issues.push(`正文编排失败但无法定位节点：${unresolved.join('、')}`);
     }
 
     const substantiveSourceIds = [...context.originalSources.values()].filter((item) => item.substantive).map((item) => item.id);
@@ -235,10 +286,10 @@ function createGuardedContentRunner(baseRunner) {
     if (context.blockedExpansionParentIds.size) issues.push(`已阻止在有正文节点下补目录：${[...context.blockedExpansionParentIds].join('、')}`);
 
     const baseFailed = terminalPartial.status === 'error';
-    const qualityFailed = issues.some((issue) => issue.startsWith('正文编排失败节点') || issue.startsWith('原方案实质段未分配'));
+    const qualityFailed = issues.some((issue) => issue.startsWith('正文编排失败') || issue.startsWith('原方案实质段未分配'));
     const finalStatus = baseFailed || qualityFailed ? 'error' : 'success';
     if (restoreSnapshot && finalStatus === 'error' && hasSubstantiveContent(restoreSnapshot)) {
-      patch = { ...patch, ...cloneValue(restoreSnapshot) };
+      patch = { ...patch, ...materializeContentSafetySnapshot(restoreSnapshot) };
       issues.push('整体重生成未通过安全校验，已恢复生成前正文');
     }
     if (safetyBackup) {
