@@ -77,9 +77,10 @@ test('广告活动策划 Fixture：创意章节支持多角色图片与独立 Cr
     items: [
       { kind: 'ai', image_type: 'campaign_key_visual', title: '城市文化活动主视觉', section_ids: ['2.1'], visual_role: '主视觉方案', purpose: '帮助评委理解活动主题与传播主张', scoring_point_ids: ['R2.P1'], value_anchor_ids: [], priority: 5, anchor: { type: 'after_block', section_id: '2.1', block_id: blockId, sequence: 1 }, aspect_ratio: '16:9', creative_brief: brief('主视觉概念图') },
       { kind: 'ai', image_type: 'event_scene_render', title: '活动执行场景概念图', section_ids: ['2.1'], visual_role: '执行场景', purpose: '帮助评委理解活动执行场景', scoring_point_ids: ['R2.P1'], value_anchor_ids: [], priority: 5, anchor: { type: 'section_end', section_id: '2.1', sequence: 1 }, aspect_ratio: '16:9', creative_brief: brief('活动现场概念图') },
+      { kind: 'ai', image_type: 'spatial_concept_render', title: '活动空间概念图', section_ids: ['2.1'], visual_role: '空间概念', purpose: '帮助评委理解活动空间组织与动线', scoring_point_ids: ['R2.P1'], value_anchor_ids: [], priority: 5, anchor: { type: 'after_heading', section_id: '2.1', sequence: 1 }, aspect_ratio: '16:9', creative_brief: brief('空间概念效果图') },
     ],
   }, context);
-  assert.equal(result.plan.items.length, 2);
-  assert.notEqual(result.plan.items[0].visual_role, result.plan.items[1].visual_role);
+  assert.equal(result.plan.items.length, 3);
+  assert.equal(new Set(result.plan.items.map((item) => item.visual_role)).size, 3);
   assert.ok(result.plan.items.every((item) => item.creative_brief && item.creative_brief.needs_user_confirmation.includes('客户品牌资产')));
 });
