@@ -5,6 +5,7 @@ const test = require('node:test');
 const { normalizeAndValidateOutline } = require('./outlineGenerationGuard.cjs');
 const {
   CONTENT_SAFETY_BACKUP_KEY,
+  createGuardedContentRunner,
   recoverInterruptedContentBackup,
 } = require('./contentGenerationGuard.cjs');
 
@@ -106,4 +107,47 @@ test('interrupted full regeneration restores its persisted safety backup on star
   assert.equal(store.state.contentGenerationTask.status, 'error');
   assert.equal(store.state.contentGenerationOptions.minimumWords, 10000);
   assert.equal(store.state.contentGenerationOptions[CONTENT_SAFETY_BACKUP_KEY], undefined);
+});
+
+test('full regeneration keeps the compressed safety backup out of generation options', async () => {
+  const baseline = {
+    workflowKind: 'technical-plan',
+    outlineData: contentOutline('旧正文A', '旧正文B'),
+    contentGenerationSections: {
+      '1.1.1': { id: '1.1.1', title: '组织职责', status: 'success', content: '旧正文A' },
+      '1.1.2': { id: '1.1.2', title: '人员安排', status: 'success', content: '旧正文B' },
+    },
+    contentGenerationPlans: {},
+    contentGenerationTask: { status: 'running', progress: 0, logs: [] },
+    contentGenerationOptions: { minimumWords: 10000 },
+  };
+  const store = createStore(baseline);
+  let task = baseline.contentGenerationTask;
+  const updateTask = (partial = {}) => {
+    task = { ...task, ...clone(partial) };
+    store.updateTechnicalPlan({ contentGenerationTask: task });
+    return clone(task);
+  };
+  const wrapped = createGuardedContentRunner(async ({ payload, workspaceStore, updateTask: update }) => {
+    assert.equal(payload.generationOptions.minimumWords, 10000);
+    assert.equal(payload.generationOptions[CONTENT_SAFETY_BACKUP_KEY], undefined);
+    const state = workspaceStore.loadTechnicalPlan();
+    const storedBackup = state.contentGenerationOptions[CONTENT_SAFETY_BACKUP_KEY];
+    assert.equal(storedBackup.version, 2);
+    assert.equal(storedBackup.encoding, 'gzip-base64');
+    assert.equal(typeof storedBackup.data, 'string');
+    assert.equal(storedBackup.snapshot, undefined);
+    update({ status: 'success', progress: 100, logs: ['完成'], stats: { content: {} } }, state);
+  });
+
+  await wrapped({
+    aiService: {},
+    agentService: {},
+    workspaceStore: store,
+    updateTask,
+    payload: { regenerate: true },
+    previousState: baseline,
+  });
+  assert.equal(store.state.contentGenerationOptions[CONTENT_SAFETY_BACKUP_KEY], undefined);
+  assert.equal(store.state.contentGenerationTask.status, 'success');
 });
