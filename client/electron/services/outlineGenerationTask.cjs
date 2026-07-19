@@ -1,6 +1,9 @@
 const crypto = require('node:crypto');
 const { getBidAnalysisTasks, getResponseFileFormatStatus, isBidAnalysisTaskResultValid } = require('./bidAnalysisTask.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
+const { normalizeOutlineQualityMetadata } = require('./technicalPlanQualityModel.cjs');
+const { getDirectoryEligibleValueAnchors } = require('./technicalPlanQualityValidation.cjs');
+const { applyOutlineQualityRules } = require('./outlineQualityRules.cjs');
 function formatSuggestions(suggestions) {
   if (!suggestions?.length) return '';
   return `\n\n本轮修正建议：\n${suggestions.map((item, index) => `${index + 1}. ${item}`).join('\n')}`;
@@ -1453,6 +1456,18 @@ function normalizeOutlineItem(item, path = 'outline[]', allowedKnowledgeIds) {
     }
     normalized.manual_input_required = raw.manual_input_required;
   }
+  const hasQualityMetadata = [
+    'deep_writing',
+    'deep_writing_recommended',
+    'deep_writing_reason',
+    'deep_writing_source',
+    'writing_profile',
+    'value_anchor_ids',
+    'mapped_scoring_point_ids',
+  ].some((field) => Object.prototype.hasOwnProperty.call(raw, field));
+  if (hasQualityMetadata) {
+    Object.assign(normalized, normalizeOutlineQualityMetadata(raw));
+  }
   const knowledgeItemIds = normalizeKnowledgeItemIds(raw.knowledge_item_ids, allowedKnowledgeIds);
   if (knowledgeItemIds.length) {
     normalized.knowledge_item_ids = knowledgeItemIds;
@@ -2561,6 +2576,23 @@ function validateSourceDrivenOutline(payload, sourceOutline, groups) {
   }
 }
 
+function buildSourceDrivenOutlineQualityPrompt(context) {
+  const matrix = context.requirementResponseMatrix || {};
+  const directoryAnchors = context.directoryValueAnchors || [];
+  return `\n\n目录质量约束（必须同时遵守）：
+1. 下方原子评分点是唯一评分映射依据。每一个 scoring_point_id 必须且只能写入一个二级目录的 mapped_scoring_point_ids；不得遗漏、重复或映射到三级及以下节点。
+2. 仅可使用“已通过目录 Gate 的增值锚点”中的 anchor_id，写入对应二级目录的 value_anchor_ids；未列出的锚点不得写入目录。
+3. 每个二级目录必须返回 deep_writing、deep_writing_recommended、writing_profile、value_anchor_ids、mapped_scoring_point_ids。由 AI 推荐深化时，deep_writing=true、deep_writing_recommended=true、deep_writing_source="ai"，并说明 deep_writing_reason。
+4. 普通二级目录的子树最高只能到第四级；深化二级目录必须完整包含二级、三级、四级、五级，且不得输出第六级及以下目录。creative-proposal 视为深化目录。
+5. 仅在评分复杂、含高分条件、已确认增值锚点或需要方案差异化表达时推荐深化；其余保持 standard。
+
+原子评分矩阵：
+${JSON.stringify(matrix.scoring_points || [], null, 2)}
+
+已通过目录 Gate 的增值锚点：
+${JSON.stringify(directoryAnchors, null, 2)}`;
+}
+
 async function generateSourceDrivenOutline(aiService, context, log) {
   return collectJson(aiService, {
     messages: [
@@ -3159,6 +3191,10 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   const storedPlan = workspaceStore.loadTechnicalPlan() || {};
   const overview = storedPlan.projectOverview || '';
   const requirements = storedPlan.techRequirements || '';
+  const requirementResponseMatrix = storedPlan.requirementResponseMatrix;
+  if (!requirementResponseMatrix) {
+    throw new Error('请先构建评分响应矩阵，再生成目录');
+  }
   const missingRequiredBidAnalysisLabels = getMissingRequiredBidAnalysisLabels(storedPlan);
   if (missingRequiredBidAnalysisLabels.length) {
     throw new Error(`请先完成 7 个关键招标文件解析项：${missingRequiredBidAnalysisLabels.join('、')}`);
@@ -3208,6 +3244,7 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
 
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: null,
+    outlineQualityReview: undefined,
     contentGenerationTask: undefined,
     contentGenerationSections: {},
     contentGenerationPlans: {},
@@ -3229,14 +3266,22 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   const outline = await generateSourceDrivenOutline(aiService, {
     sourceOutline,
     groups,
-    requirements,
+    requirements: `${requirements}${buildSourceDrivenOutlineQualityPrompt({
+      requirementResponseMatrix,
+      directoryValueAnchors: getDirectoryEligibleValueAnchors(requirementResponseMatrix),
+    })}`,
     oldOutline,
+    requirementResponseMatrix,
+    directoryValueAnchors: getDirectoryEligibleValueAnchors(requirementResponseMatrix),
     referenceOutlineContext: sourceKind === 'format' ? referenceOutlineContext : '',
   }, log);
   validateSourceDrivenOutline(outline, sourceOutline, groups);
+  const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
   log('一级目录来源与技术评分下级映射校验通过。', 99);
   technicalPlan = workspaceStore.updateTechnicalPlan({
-    outlineData: { ...outline, project_overview: overview },
+    outlineData: { ...qualityResult.outline, project_overview: overview },
+    requirementResponseMatrix: qualityResult.matrix,
+    outlineQualityReview: qualityResult.review,
     contentGenerationTask: undefined,
     contentGenerationSections: {},
     contentGenerationPlans: {},
