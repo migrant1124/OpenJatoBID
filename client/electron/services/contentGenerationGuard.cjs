@@ -14,6 +14,59 @@ const {
   updateOutlineItemContent,
 } = require('./technicalPlanGuardUtils.cjs');
 
+const CONTENT_SAFETY_BACKUP_KEY = '__generation_safety_backup_v1';
+const ACTIVE_TASK_STATUSES = new Set(['running', 'pausing']);
+
+function getContentSafetyBackup(state) {
+  const value = state?.contentGenerationOptions?.[CONTENT_SAFETY_BACKUP_KEY];
+  if (!value || Number(value.version) !== 1 || !value.snapshot || typeof value.snapshot !== 'object') return null;
+  return cloneValue(value);
+}
+
+function withoutContentSafetyBackup(options) {
+  const next = cloneValue(options || {});
+  delete next[CONTENT_SAFETY_BACKUP_KEY];
+  return next;
+}
+
+function persistContentSafetyBackup(workspaceStore, baseline) {
+  const current = workspaceStore.loadTechnicalPlan() || {};
+  const existing = getContentSafetyBackup(current);
+  if (existing) return existing;
+  const backup = {
+    version: 1,
+    created_at: new Date().toISOString(),
+    snapshot: snapshotPatch(baseline),
+  };
+  workspaceStore.updateTechnicalPlan({
+    contentGenerationOptions: {
+      ...(cloneValue(current.contentGenerationOptions || baseline?.contentGenerationOptions || {})),
+      [CONTENT_SAFETY_BACKUP_KEY]: backup,
+    },
+  });
+  return backup;
+}
+
+function recoverInterruptedContentBackup(workspaceStore) {
+  const state = workspaceStore?.loadTechnicalPlan?.() || {};
+  const backup = getContentSafetyBackup(state);
+  if (!backup || !ACTIVE_TASK_STATUSES.has(state.contentGenerationTask?.status)) return null;
+  const message = '上次正文整体重生成异常中断，已恢复生成前版本，请重新发起正文生成。';
+  const task = {
+    ...(state.contentGenerationTask || {}),
+    status: 'error',
+    pause_requested: false,
+    error: message,
+    logs: [...(Array.isArray(state.contentGenerationTask?.logs) ? state.contentGenerationTask.logs : []), message],
+    updated_at: new Date().toISOString(),
+  };
+  return workspaceStore.updateTechnicalPlan({
+    ...cloneValue(backup.snapshot),
+    contentGenerationOptions: withoutContentSafetyBackup(state.contentGenerationOptions),
+    contentGenerationTask: task,
+  });
+}
+
 function getNodeIdFromMessages(messages) {
   const text = (messages || []).map((message) => String(message?.content || '')).join('\n');
   return /章节ID:\s*([^\s]+)/u.exec(text)?.[1] || '';
@@ -111,6 +164,9 @@ function createGuardedContentRunner(baseRunner) {
     const retryCorrection = Boolean(args.payload?.retryContentCorrection ?? args.payload?.retry_content_correction);
     const rerunIllustrations = Boolean(args.payload?.rerunIllustrations ?? args.payload?.rerun_illustrations);
     const fullRegenerate = !args.payload?.resume && !retryCorrection && !rerunIllustrations && Boolean(args.payload?.regenerate) && !targetItemId;
+    let safetyBackup = getContentSafetyBackup(realStore.loadTechnicalPlan() || {});
+    if (fullRegenerate) safetyBackup = persistContentSafetyBackup(realStore, baseline);
+    const restoreSnapshot = safetyBackup?.snapshot || null;
     const context = {
       planningFailures: new Map(),
       originalSources: new Map(),
@@ -135,8 +191,12 @@ function createGuardedContentRunner(baseRunner) {
         updateTask: terminal.updateTask,
       });
     } catch (error) {
-      if (fullRegenerate && hasSubstantiveContent(baseline)) {
-        const restored = realStore.updateTechnicalPlan(snapshotPatch(baseline));
+      if (restoreSnapshot && hasSubstantiveContent(restoreSnapshot)) {
+        const current = realStore.loadTechnicalPlan() || {};
+        const restored = realStore.updateTechnicalPlan({
+          ...cloneValue(restoreSnapshot),
+          contentGenerationOptions: withoutContentSafetyBackup(current.contentGenerationOptions),
+        });
         appendTaskLog({
           workspaceStore: realStore,
           updateTask: args.updateTask,
@@ -176,13 +236,16 @@ function createGuardedContentRunner(baseRunner) {
 
     const baseFailed = terminalPartial.status === 'error';
     const qualityFailed = issues.some((issue) => issue.startsWith('正文编排失败节点') || issue.startsWith('原方案实质段未分配'));
-    if (fullRegenerate && baseFailed && hasSubstantiveContent(baseline)) {
-      patch = { ...patch, ...snapshotPatch(baseline) };
-      issues.push('整体重生成失败，已恢复生成前正文');
+    const finalStatus = baseFailed || qualityFailed ? 'error' : 'success';
+    if (restoreSnapshot && finalStatus === 'error' && hasSubstantiveContent(restoreSnapshot)) {
+      patch = { ...patch, ...cloneValue(restoreSnapshot) };
+      issues.push('整体重生成未通过安全校验，已恢复生成前正文');
+    }
+    if (safetyBackup) {
+      patch.contentGenerationOptions = withoutContentSafetyBackup(state.contentGenerationOptions);
     }
     if (Object.keys(patch).length) state = realStore.updateTechnicalPlan(patch);
 
-    const finalStatus = baseFailed || qualityFailed ? 'error' : 'success';
     const contentStats = { ...(cloneValue(terminalPartial.stats?.content) || {}) };
     if (context.planningFailures.size) contentStats.planning_failure_node_ids = [...context.planningFailures.keys()];
     if (substantiveSourceIds.length) {
@@ -206,4 +269,8 @@ function createGuardedContentRunner(baseRunner) {
   };
 }
 
-module.exports = { createGuardedContentRunner };
+module.exports = {
+  CONTENT_SAFETY_BACKUP_KEY,
+  createGuardedContentRunner,
+  recoverInterruptedContentBackup,
+};
