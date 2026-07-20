@@ -63,3 +63,15 @@ test('Viewer Header 支持长文件名和三档无横向滚动布局', () => {
   assert.match(stylesSource, /\.knowledge-viewer-page\s*\{[\s\S]*overflow-x:\s*hidden;/);
   assert.doesNotMatch(stylesSource, /\.knowledge-viewer-bar \.knowledge-breadcrumb strong\s*\{[\s\S]*white-space:\s*nowrap;/);
 });
+
+test('文档列表支持当前文件夹多选、全选和批量删除', () => {
+  assert.match(pageSource, /selectedDocumentIds/);
+  assert.match(pageSource, /ref=\{selectAllDocumentsRef\}[\s\S]*type="checkbox"[\s\S]*checked=\{allDocumentsSelected\}/);
+  assert.match(pageSource, /aria-label=\{`选择文档 \$\{document\.file_name\}`\}/);
+  assert.match(pageSource, /setSelectedDocumentIds\(allDocumentsSelected \? new Set\(\) : new Set\(documents\.map/);
+  assert.match(pageSource, /knowledgeBase\.deleteDocuments\(documentIds\)/);
+  assert.match(pageSource, /确定批量删除选中的 \$\{selectedDocuments\.length\} 个文档吗？删除后无法恢复/);
+  assert.match(pageSource, /batchDeleting \? '删除中\.\.\.' : '批量删除'/);
+  assert.match(stylesSource, /\.knowledge-document-card\.is-selected/);
+  assert.match(stylesSource, /\.knowledge-document-title-main\s*\{[\s\S]*grid-template-columns:\s*auto auto minmax\(0, 1fr\);/);
+});

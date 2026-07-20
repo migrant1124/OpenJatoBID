@@ -1226,6 +1226,37 @@ function createKnowledgeBaseService({ app, aiService, configStore, knowledgeBase
     return knowledgeBaseStore.getDocument(documentId);
   }
 
+  function deleteDocumentsById(documentIds) {
+    const uniqueDocumentIds = [...new Set(
+      (Array.isArray(documentIds) ? documentIds : [])
+        .map((documentId) => String(documentId || '').trim())
+        .filter(Boolean),
+    )];
+    if (!uniqueDocumentIds.length) {
+      throw new Error('请选择要删除的文档');
+    }
+
+    const documents = uniqueDocumentIds.map((documentId) => {
+      const document = getDocument(documentId);
+      if (!document) throw new Error('知识库文档不存在');
+      return document;
+    });
+    const runningDocument = documents.find((document) => activePreparations.has(document.id) || activeMatches.has(document.id));
+    if (runningDocument) {
+      throw new Error(`文档“${runningDocument.file_name}”正在处理中，请完成后再删除`);
+    }
+
+    for (const document of documents) {
+      deleteImportedImageBatches(app, `knowledge-${document.id}`);
+      fs.rmSync(fromRelative(baseDir, document.document_dir), { recursive: true, force: true });
+      fs.rmSync(getDebugLogPath(app, document.id), { force: true });
+    }
+    for (const document of documents) {
+      knowledgeBaseStore.deleteDocument(document.id);
+    }
+    return documents;
+  }
+
   function getActiveDocumentIds() {
     return [...new Set([...activePreparations, ...activeMatches])];
   }
@@ -2340,16 +2371,13 @@ function createKnowledgeBaseService({ app, aiService, configStore, knowledgeBase
     },
 
     deleteDocument(documentId) {
-      const document = getDocument(documentId);
-      if (activePreparations.has(documentId) || activeMatches.has(documentId)) {
-        throw new Error('该文档正在处理中，请完成后再删除');
-      }
-
-      deleteImportedImageBatches(app, `knowledge-${documentId}`);
-      fs.rmSync(fromRelative(baseDir, document.document_dir), { recursive: true, force: true });
-      fs.rmSync(getDebugLogPath(app, documentId), { force: true });
-      knowledgeBaseStore.deleteDocument(documentId);
+      const [document] = deleteDocumentsById([documentId]);
       return { success: true, message: `已删除文档“${document.file_name}”` };
+    },
+
+    deleteDocuments(documentIds) {
+      const documents = deleteDocumentsById(documentIds);
+      return { success: true, message: `已批量删除 ${documents.length} 个文档` };
     },
 
     moveDocument(documentId, targetFolderId, targetDocumentId, position) {

@@ -121,6 +121,7 @@ const bridge = {
     reorderFolder: (draggedFolderId, targetFolderId, position) => ipcRenderer.invoke('knowledge-base:reorder-folder', draggedFolderId, targetFolderId, position),
     deleteFolder: (folderId) => ipcRenderer.invoke('knowledge-base:delete-folder', folderId),
     deleteDocument: (documentId) => ipcRenderer.invoke('knowledge-base:delete-document', documentId),
+    deleteDocuments: (documentIds) => ipcRenderer.invoke('knowledge-base:delete-documents', documentIds),
     moveDocument: (documentId, targetFolderId, targetDocumentId, position) => ipcRenderer.invoke('knowledge-base:move-document', documentId, targetFolderId, targetDocumentId, position),
     uploadDocuments: (folderId) => ipcRenderer.invoke('knowledge-base:upload-documents', folderId),
     retryDocument: (documentId) => ipcRenderer.invoke('knowledge-base:retry-document', documentId),
