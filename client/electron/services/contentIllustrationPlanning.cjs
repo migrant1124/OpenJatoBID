@@ -178,9 +178,8 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
       const children = Array.isArray(item?.children) ? item.children : [];
       const isLeaf = children.length === 0;
       const content = isLeaf ? resolveSectionContent(item, sections) : '';
-      const responseMode = item?.response_mode || 'freeform-markdown';
       const eligible = Boolean(isLeaf
-        && responseMode === 'freeform-markdown'
+        && item?.manual_input_required !== true
         && content
         && sections?.[id]?.status !== 'error');
       const order = eligibleSectionIds.length;

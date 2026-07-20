@@ -1787,14 +1787,21 @@ function buildOutlineHeadingParagraph(item, context, level, options = {}) {
   return paragraph([textRun(displayTitle, runOptions)], paraOptions);
 }
 
+function resolveExportLeafContent(item) {
+  const content = String(item?.content || '').trim();
+  if (content) return content;
+  return item?.manual_input_required === true ? String(item?.description || '').trim() : '';
+}
+
 async function addChapterFrameRows(rows, items, context, level = 1) {
   for (const item of items || []) {
     const isLeaf = !item.children?.length;
     const useLeafColumns = isLeaf && context.exportFormat?.heading_border?.min_heading_left_enabled === true;
     if (useLeafColumns) {
       const bodyChildren = [];
-      if (String(item.content || '').trim()) {
-        await addMarkdownContent(bodyChildren, item.content, context);
+      const content = resolveExportLeafContent(item);
+      if (content) {
+        await addMarkdownContent(bodyChildren, content, context);
       }
       rows.push(buildChapterLeafRow(
         context.exportFormat,
@@ -1814,9 +1821,10 @@ async function addChapterFrameRows(rows, items, context, level = 1) {
     ));
 
     if (isLeaf) {
-      if (String(item.content || '').trim()) {
+      const content = resolveExportLeafContent(item);
+      if (content) {
         const bodyChildren = [];
-        await addMarkdownContent(bodyChildren, item.content, context);
+        await addMarkdownContent(bodyChildren, content, context);
         rows.push(buildChapterContentRow(context.exportFormat, bodyChildren));
       }
       context.convertedLeafCount = (context.convertedLeafCount || 0) + 1;
@@ -1844,8 +1852,9 @@ async function addOutlineItems(children, items, context, level = 1) {
     children.push(buildOutlineHeadingParagraph(item, context, level));
 
     if (!item.children?.length) {
-      if (String(item.content || '').trim()) {
-        await addMarkdownContent(children, item.content, context);
+      const content = resolveExportLeafContent(item);
+      if (content) {
+        await addMarkdownContent(children, content, context);
       }
       context.convertedLeafCount = (context.convertedLeafCount || 0) + 1;
       reportConversionProgress(context, `已处理 ${context.convertedLeafCount}/${context.stats?.leafCount || context.convertedLeafCount} 个正文小节。`);

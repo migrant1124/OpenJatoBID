@@ -10,7 +10,7 @@ export type BidAnalysisMode = 'key' | 'full' | 'custom';
 export type BidAnalysisTaskStatus = 'idle' | 'running' | 'success' | 'error';
 export type BidSectionMode = 'single' | 'multiple';
 export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error';
-export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'requirement-matrix-generation' | 'outline-generation' | 'outline-deepening' | 'global-facts-generation' | 'content-generation';
+export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
@@ -143,6 +143,8 @@ export interface AtomicScoringPoint {
   mandatory_level: 'normal' | 'important' | 'high' | 'potential-rejection';
   expected_response_types: Array<'content' | 'table' | 'illustration' | 'evidence' | 'commitment' | 'manual'>;
   high_score_conditions: string[];
+  suggested_section?: string;
+  writing_focus?: string;
   mapped_node_ids: string[];
   primary_node_id?: string;
   status: 'unmapped' | 'mapped' | 'covered' | 'needs-review';
@@ -473,9 +475,7 @@ export interface TechnicalPlanState {
   referenceKnowledgeDocumentIds: string[];
   bidSectionExtractionTask?: BackgroundTaskState;
   bidAnalysisTask?: BackgroundTaskState;
-  requirementMatrixTask?: BackgroundTaskState;
   outlineGenerationTask?: BackgroundTaskState;
-  outlineDeepeningTask?: BackgroundTaskState;
   globalFactsTask?: BackgroundTaskState;
   globalFacts: GlobalFactGroupState[];
   contentGenerationTask?: BackgroundTaskState;

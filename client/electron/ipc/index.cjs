@@ -113,7 +113,6 @@ const workspaceDatabaseChannels = [
   'knowledge-base:read-analysis',
   'tasks:start-bid-section-extraction',
   'tasks:start-bid-analysis',
-  'tasks:start-requirement-matrix-generation',
   'tasks:start-outline-generation',
   'tasks:start-global-facts-generation',
   'tasks:start-content-generation',

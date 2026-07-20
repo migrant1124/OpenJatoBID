@@ -362,13 +362,7 @@ function ContentEditPage({
   const selectedItem = outlineData?.outline && selectedItemId ? findItem(outlineData.outline, selectedItemId) : null;
   const selectedIsLeaf = Boolean(selectedItem && !selectedItem.children?.length);
   const selectedContent = selectedItem && selectedIsLeaf ? getLeafContent(selectedItem, sections) : '';
-  const storedResponseMode = selectedItem?.response_mode || 'freeform-markdown';
-  const selectedResponseMode = selectedItem?.manual_input_required === true
-    || storedResponseMode === 'locked-commitment'
-    || storedResponseMode === 'fixed-markdown-table'
-    ? 'freeform-markdown'
-    : storedResponseMode;
-  const selectedCanEditMarkdown = selectedResponseMode === 'freeform-markdown' || selectedResponseMode === 'evidence-markdown';
+  const selectedCanEditMarkdown = selectedIsLeaf;
   const exportFormatPreviewStyle = useMemo<CSSProperties>(() => buildExportFormatCssVars(exportFormat), [exportFormat]);
   const running = task?.status === 'running';
   const pausing = task?.status === 'pausing' || pausePending;
@@ -952,11 +946,6 @@ function ContentEditPage({
       showToast('当前小节必须人工填写，不允许 AI 重新生成', 'info');
       return;
     }
-    if ((requirementItem.response_mode || 'freeform-markdown') !== 'freeform-markdown') {
-      showToast('当前小节采用受控响应，不允许 AI 重新生成', 'info');
-      return;
-    }
-
     try {
       const config = await window.yibiao?.config.load();
       const nextImageModelStatus = config?.image_model?.status || 'untested';
@@ -1013,11 +1002,6 @@ function ContentEditPage({
       return;
     }
 
-    if (!selectedCanEditMarkdown) {
-      showToast('当前小节采用受控响应，请使用专用表单填写', 'info');
-      return;
-    }
-
     setEditingItemId(selectedItem.id);
     setIsPreviewing(false);
     setDraftContent(selectedContent);
@@ -1043,11 +1027,6 @@ function ContentEditPage({
       return;
     }
 
-    if (!selectedCanEditMarkdown) {
-      showToast('当前小节不允许保存自由 Markdown 正文', 'info');
-      return;
-    }
-
     try {
       await onContentSaved(selectedItem, draftContent);
       setEditingItemId(null);
@@ -1058,21 +1037,12 @@ function ContentEditPage({
     }
   };
 
-  const renderResponseMeta = (item: OutlineItem) => (
-    <div className="controlled-response-meta">
-      <span>响应状态：<strong>{responseStatusLabels[item.response_status || 'pending']}</strong></span>
-      <span className={`is-risk-${item.compliance_risk || 'none'}`}>合规风险：<strong>{complianceRiskLabels[item.compliance_risk || 'none']}</strong></span>
-      {item.compliance_message ? <p>{item.compliance_message}</p> : null}
-    </div>
-  );
-
   const renderTree = (items: OutlineItem[], level = 0): ReactNode => items.map((item) => {
     const meta = outlineMeta.get(item.id);
     const status = meta?.status || 'idle';
     const isLeaf = !item.children?.length;
     const canRegenerate = isLeaf
-      && item.manual_input_required !== true
-      && (item.response_mode || 'freeform-markdown') === 'freeform-markdown';
+      && item.manual_input_required !== true;
     const itemStatusLabel = isLeaf && item.response_status
       ? responseStatusLabels[item.response_status]
       : status === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[status];
@@ -1254,26 +1224,13 @@ function ContentEditPage({
                 </>
               ) : selectedCanEditMarkdown ? (
                 <button type="button" className="secondary-action" onClick={startEditingContent} disabled={!selectedItem || !selectedIsLeaf || taskBlocksGeneration}>
-                  {selectedResponseMode === 'evidence-markdown' ? '手工编辑' : '编辑'}
+                  编辑
                 </button>
               ) : null}
             </div>
           </div>
 
-          {selectedItem && selectedResponseMode === 'explicit-none' ? (
-            <div className="controlled-response-panel explicit-none-response">
-              {renderResponseMeta(selectedItem)}
-              <strong>固定响应</strong>
-              <p>{selectedItem.empty_response_text || selectedContent || '无'}</p>
-              <small>该内容由招标文件响应规则固定，不开放编辑或 AI 改写。</small>
-            </div>
-          ) : selectedItem && selectedResponseMode === 'container' ? (
-            <div className="controlled-response-panel container-response">
-              {renderResponseMeta(selectedItem)}
-              <strong>{selectedItem.title}</strong>
-              <p>该节点仅作为目录容器，不生成或编辑正文。</p>
-            </div>
-          ) : selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
+          {selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
             <MarkdownEditor
               value={draftContent}
               onChange={setDraftContent}
@@ -1288,24 +1245,6 @@ function ContentEditPage({
                 <p className="content-editor-empty">暂无预览内容</p>
               )}
             </MarkdownFullscreenViewer>
-          ) : selectedItem && selectedIsLeaf && selectedResponseMode === 'evidence-markdown' ? (
-            <div className="controlled-response-panel evidence-response-panel">
-              {renderResponseMeta(selectedItem)}
-              <section className="evidence-index">
-                <strong>材料索引</strong>
-                {selectedItem.knowledge_item_ids?.length ? (
-                  <ul>{selectedItem.knowledge_item_ids.map((id) => <li key={id}>{id}</li>)}</ul>
-                ) : (
-                  <p className="is-missing">待人工填写 / 待核对：尚未关联支撑材料。</p>
-                )}
-                {selectedItem.mapped_requirement_ids?.length ? <small>对应需求：{selectedItem.mapped_requirement_ids.join('、')}</small> : null}
-              </section>
-              {selectedContent.trim() ? (
-                <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
-                  <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />
-                </MarkdownFullscreenViewer>
-              ) : <p className="content-editor-empty">待人工填写材料说明。</p>}
-            </div>
           ) : selectedItem && selectedIsLeaf && selectedContent.trim() ? (
             <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
               <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />

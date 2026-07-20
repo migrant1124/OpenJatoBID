@@ -98,6 +98,10 @@ test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼�
     const columns = sqlite.db.prepare('PRAGMA table_info(technical_plan_outline_nodes)').all().map((row) => row.name);
     assert.ok(columns.includes('quality_metadata_json'));
     assert.ok(sqlite.db.prepare('SELECT requirement_response_matrix_json FROM technical_plan_meta WHERE id = 1').get().requirement_response_matrix_json);
+
+    const cleared = store.updateTechnicalPlan({ requirementResponseMatrix: undefined });
+    assert.equal(cleared.requirementResponseMatrix, undefined);
+    assert.equal(sqlite.db.prepare('SELECT requirement_response_matrix_json FROM technical_plan_meta WHERE id = 1').get().requirement_response_matrix_json, null);
   } finally {
     sqlite.close();
     fs.rmSync(userDataPath, { recursive: true, force: true });

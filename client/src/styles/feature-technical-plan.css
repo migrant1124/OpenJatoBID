@@ -422,69 +422,6 @@
   gap: 10px;
 }
 
-.bid-analysis-risk-panel {
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(228, 233, 240, 0.88);
-  border-radius: 18px;
-  box-shadow: var(--yb-shadow);
-}
-
-.bid-analysis-risk-panel.has-alert {
-  border-color: rgba(218, 113, 47, 0.44);
-}
-
-.bid-analysis-risk-panel-head {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 13px 18px;
-  color: var(--yb-text);
-  text-align: left;
-  background: rgba(255, 250, 245, 0.72);
-}
-
-.bid-analysis-risk-panel-head span {
-  display: grid;
-  gap: 3px;
-}
-
-.bid-analysis-risk-panel-head small,
-.bid-analysis-risk-panel-head em,
-.bid-analysis-risk-row span {
-  color: var(--yb-text-soft);
-  font-size: 12px;
-  font-style: normal;
-}
-
-.bid-analysis-risk-panel-body {
-  display: grid;
-  gap: 8px;
-  padding: 12px 18px;
-}
-
-.bid-analysis-risk-panel-body p {
-  margin: 0;
-  color: var(--yb-text-soft);
-  font-size: 13px;
-}
-
-.bid-analysis-risk-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding-top: 8px;
-  border-top: 1px solid var(--yb-border-soft);
-}
-
-.bid-analysis-risk-row strong {
-  min-width: 0;
-  font-size: 13px;
-}
-
 .bid-analysis-mode-switch {
   display: inline-flex;
   gap: 6px;
@@ -873,6 +810,39 @@
 .bid-analysis-structured-fields dd {
   margin: 4px 0 0;
   font-weight: 700;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bid-analysis-procurement-requirements {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--yb-border-soft);
+}
+
+.bid-analysis-procurement-requirements > strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.bid-analysis-procurement-requirements ul,
+.bid-analysis-procurement-rules ul {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.bid-analysis-procurement-requirements li,
+.bid-analysis-procurement-rules li {
+  line-height: 1.7;
+}
+
+.bid-analysis-procurement-requirements li + li,
+.bid-analysis-procurement-rules li + li {
+  margin-top: 7px;
+}
+
+.bid-analysis-procurement-rules-summary {
+  margin-top: 18px;
 }
 
 .bid-analysis-template-review-card {
@@ -3545,62 +3515,6 @@
   border-left: 1px solid var(--yb-border-soft);
 }
 
-.outline-deepening-panel,
-.outline-deepening-dialog,
-.outline-deepening-diff {
-  display: grid;
-  gap: 10px;
-}
-
-.outline-deepening-panel {
-  padding: 12px;
-  background: rgba(33, 116, 253, 0.06);
-  border: 1px solid rgba(33, 116, 253, 0.16);
-  border-radius: 12px;
-}
-
-.outline-deepening-panel label,
-.outline-deepening-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--yb-text);
-  font-weight: 600;
-}
-
-.outline-deepening-panel small,
-.outline-deepening-diff small,
-.outline-deepening-hint {
-  color: var(--yb-text-soft);
-  line-height: 1.6;
-}
-
-.outline-deepening-dialog {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  z-index: 101;
-  width: min(560px, calc(100vw - 40px));
-  transform: translate(-50%, -50%);
-  padding: 24px;
-  background: #ffffff;
-  border: 1px solid rgba(228, 233, 240, 0.9);
-  border-radius: 20px;
-  box-shadow: 0 28px 72px rgba(23, 32, 51, 0.16);
-}
-
-.outline-deepening-diff {
-  padding: 14px;
-  background: #f7faff;
-  border: 1px solid rgba(33, 116, 253, 0.16);
-  border-radius: 12px;
-}
-
-.outline-deepening-error {
-  margin: 0;
-  color: #c43d3d;
-}
-
 .outline-progress-log {
   display: grid;
   align-content: start;
@@ -3708,7 +3622,7 @@
   position: relative;
   display: grid;
   width: 100%;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 6px;
   margin-bottom: 3px;
@@ -3721,7 +3635,7 @@
 }
 
 .outline-tree-item.is-sorting {
-  grid-template-columns: 20px 26px minmax(0, 1fr);
+  grid-template-columns: 20px 26px minmax(0, 1fr) auto;
   cursor: grab;
 }
 
@@ -3832,6 +3746,20 @@
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.outline-tree-manual-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-right: 4px;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.outline-tree-manual-toggle input {
+  margin: 0;
 }
 
 .outline-detail-body {

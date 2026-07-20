@@ -109,6 +109,10 @@ function normalizeAtomicScoringPoint(value, index) {
   }
   const scoreText = optionalString(value.score_text, `scoring_points[${index}].score_text`);
   if (scoreText !== undefined) normalized.score_text = scoreText;
+  const suggestedSection = optionalString(value.suggested_section, `scoring_points[${index}].suggested_section`);
+  if (suggestedSection !== undefined) normalized.suggested_section = suggestedSection;
+  const writingFocus = optionalString(value.writing_focus, `scoring_points[${index}].writing_focus`);
+  if (writingFocus !== undefined) normalized.writing_focus = writingFocus;
   const primaryNodeId = optionalString(value.primary_node_id, `scoring_points[${index}].primary_node_id`);
   if (primaryNodeId !== undefined) {
     if (!normalized.mapped_node_ids.includes(primaryNodeId)) {

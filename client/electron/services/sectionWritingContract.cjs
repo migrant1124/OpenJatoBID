@@ -33,18 +33,17 @@ function outlineNodeSnapshot(item = {}) {
     id: String(item.id || ''),
     title: compactText(item.title),
     description: compactText(item.description),
-    response_mode: String(item.response_mode || 'freeform-markdown'),
     manual_input_required: item.manual_input_required === true,
-    writing_profile: String(item.writing_profile || 'standard'),
-    deep_writing: item.deep_writing === true,
-    mapped_scoring_point_ids: uniqueStrings(item.mapped_scoring_point_ids),
-    value_anchor_ids: uniqueStrings(item.value_anchor_ids),
+    focus_priority: compactText(item.focus_priority),
+    focus_scoring_point_ids: uniqueStrings(item.focus_scoring_point_ids),
   };
 }
 
-function resolveWritingProfile(item = {}) {
-  if (item.writing_profile === 'creative-proposal') return 'creative-proposal';
-  return item.deep_writing === true || item.writing_profile === 'deep' ? 'deep' : 'standard';
+function resolveWritingProfile(item = {}, parents = []) {
+  return [item, ...(Array.isArray(parents) ? parents : [])]
+    .some((node) => Boolean(node?.focus_priority))
+    ? 'deep'
+    : 'standard';
 }
 
 function buildContentPlanFingerprint({ context, requirementResponseMatrix, globalFacts, knowledgeDocumentRevisions, originalPlanMarkdown }) {
@@ -62,7 +61,7 @@ function buildContentPlanFingerprint({ context, requirementResponseMatrix, globa
       .filter(Boolean))].sort(),
     ...(String(originalPlanMarkdown || '').trim() ? { original_plan_hash: hash(String(originalPlanMarkdown || '')) } : {}),
     prompt_version: CONTENT_PLAN_PROMPT_VERSION,
-    writing_profile: resolveWritingProfile(item),
+    writing_profile: resolveWritingProfile(item, parents),
   };
 }
 
@@ -85,21 +84,25 @@ function getSecondLevelChapter(context) {
 function buildChapterWritingTask(contexts, requirementResponseMatrix) {
   const firstContext = contexts?.[0];
   const chapter = getSecondLevelChapter(firstContext);
-  const chapterId = String(chapter?.id || '').trim();
   const matrix = requirementResponseMatrix || {};
-  const scoringPoints = (matrix.scoring_points || []).filter((point) => String(point?.primary_node_id || '') === chapterId);
+  const focusPointIds = uniqueStrings((contexts || []).flatMap((context) => [
+    ...(context?.item?.focus_scoring_point_ids || []),
+    ...((context?.parentChapters || []).flatMap((item) => item?.focus_scoring_point_ids || [])),
+  ]));
+  const scoringPoints = (matrix.scoring_points || [])
+    .filter((point) => focusPointIds.includes(String(point?.scoring_point_id || '')));
   const leafResponsibilities = (contexts || []).map((context) => ({
     node_id: String(context?.item?.id || ''),
     title: compactText(context?.item?.title),
     role: compactText(context?.item?.description) || compactText(context?.item?.title),
   })).filter((item) => item.node_id);
   return {
-    chapter_node_id: chapterId,
+    chapter_node_id: String(chapter?.id || '').trim(),
     chapter_title: compactText(chapter?.title),
     chapter_goal: compactText(chapter?.description) || compactText(chapter?.title),
     scoring_point_ids: scoringPoints.map((point) => String(point.scoring_point_id || '')).filter(Boolean),
     high_score_conditions: uniqueStrings(scoringPoints.flatMap((point) => point.high_score_conditions || [])),
-    value_anchor_ids: uniqueStrings(chapter?.value_anchor_ids),
+    value_anchor_ids: [],
     leaf_responsibilities: leafResponsibilities,
     cross_section_boundaries: {
       owns: [compactText(chapter?.title)].filter(Boolean),

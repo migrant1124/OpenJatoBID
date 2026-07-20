@@ -30,8 +30,13 @@ function validateRequirementResponseMatrix(matrix, outlineData) {
       continue;
     }
     const primaryNode = nodesById.get(point.primary_node_id);
-    if (!primaryNode || primaryNode.level < 2) {
-      errors.push({ kind: 'scoring', id: point.scoring_point_id, message: '原子评分点必须映射至二级及以下目录节点' });
+    const primaryRequirementIds = Array.isArray(primaryNode?.item?.primary_requirement_ids)
+      ? primaryNode.item.primary_requirement_ids.map((value) => String(value || '').trim())
+      : [];
+    const isManualPrimaryResponse = primaryNode?.item?.manual_input_required === true
+      && primaryRequirementIds.includes(point.group_requirement_id);
+    if (!primaryNode || (primaryNode.level < 2 && !isManualPrimaryResponse)) {
+      errors.push({ kind: 'scoring', id: point.scoring_point_id, message: '原子评分点必须映射至二级及以下目录节点，或映射至直接对应的人工固定表格主承载节点' });
     }
     if (!point.high_score_conditions.length) {
       errors.push({ kind: 'scoring', id: point.scoring_point_id, message: '原子评分点缺少高分响应条件' });

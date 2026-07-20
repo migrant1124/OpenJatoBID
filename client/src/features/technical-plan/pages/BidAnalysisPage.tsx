@@ -1,10 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { areRequiredBidAnalysisTasksReady, getBidAnalysisTasks, isBidAnalysisTaskResultValid } from '../services/bidAnalysisWorkflow';
 import { MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
 import BidSectionSelectorDialog from '../components/BidSectionSelectorDialog';
-import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, RequirementResponseMatrix, TechnicalPlanState } from '../types';
+import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
 
 interface BidAnalysisPageProps {
   hasTenderFile: boolean;
@@ -19,8 +19,6 @@ interface BidAnalysisPageProps {
   taskDefinitions: BidAnalysisTaskDefinition[];
   tasks: BidAnalysisTasks;
   task?: BackgroundTaskState;
-  requirementMatrixTask?: BackgroundTaskState;
-  requirementResponseMatrix?: RequirementResponseMatrix;
   progress: number;
   onProgressChange: (progress: number) => void;
   onConfigSaved: (state: TechnicalPlanState) => void;
@@ -84,6 +82,10 @@ const statusLabel: Record<BidAnalysisTaskState['status'], string> = {
 };
 
 const jsonFieldLabels: Record<string, string> = {
+  schema_version: 'Schema 版本',
+  extraction_status: '提取状态',
+  procurement_items: '采购项',
+  quotation_rules: '报价规则',
   project_name: '项目名称',
   project_number: '项目编号',
   project_type: '项目类型',
@@ -142,6 +144,38 @@ const jsonFieldLabels: Record<string, string> = {
   documentation_requirements: '资料/文档交付要求',
 };
 
+const procurementQuotationRuleLabels = {
+  pricing_method: '计价方式',
+  price_limits: '价格限制',
+  tax_and_invoice: '税费与发票',
+  cost_scope: '费用范围',
+  calculation_and_rounding: '计算与取整',
+  quote_documents_and_attachments: '报价文件与附件',
+  submission_method_or_platform: '提交方式与平台',
+  consistency_and_priority: '报价一致性与优先级',
+  invalid_or_abnormal_price: '无效或异常报价',
+  settlement_and_payment: '结算与付款',
+  other_explicit_rules: '其他明确规则',
+} as const;
+
+type ProcurementQuotationRuleKey = keyof typeof procurementQuotationRuleLabels;
+
+interface ProcurementAnalysisResult {
+  extraction_status: {
+    procurement_items: 'found' | 'not_found';
+    quotation_rules: 'found' | 'not_found';
+  };
+  procurement_items: Array<{
+    item_name: string;
+    quantity: string;
+    unit: string;
+    attributes: Array<{ name: string; value: string }>;
+    applicable_scope: string;
+    delivery_or_acceptance_requirements: string[];
+  }>;
+  quotation_rules: Record<ProcurementQuotationRuleKey, string[]>;
+}
+
 function tryParseJsonObject(content: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(content);
@@ -149,6 +183,14 @@ function tryParseJsonObject(content: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function tryParseProcurementAnalysisResult(content: string): ProcurementAnalysisResult | null {
+  const data = tryParseJsonObject(content);
+  if (data?.schema_version !== 1 || !Array.isArray(data.procurement_items) || !data.extraction_status || !data.quotation_rules) {
+    return null;
+  }
+  return data as unknown as ProcurementAnalysisResult;
 }
 
 function formatJsonValue(value: unknown): string {
@@ -191,6 +233,87 @@ function JsonResultTable({ content }: { content: string }) {
   );
 }
 
+function ProcurementAnalysisResultView({ content }: { content: string }) {
+  const result = tryParseProcurementAnalysisResult(content);
+  if (!result) {
+    return <JsonResultTable content={content} />;
+  }
+
+  const quotationRuleGroups = (Object.keys(procurementQuotationRuleLabels) as ProcurementQuotationRuleKey[])
+    .map((key) => ({ key, label: procurementQuotationRuleLabels[key], rules: result.quotation_rules[key] || [] }))
+    .filter((group) => group.rules.length > 0);
+
+  return (
+    <div className="bid-analysis-structured-result bid-analysis-procurement-result">
+      <div className="bid-analysis-structured-summary">
+        <strong>采购项</strong>
+        <span>{result.extraction_status.procurement_items === 'found' ? `已识别 ${result.procurement_items.length} 项` : '未识别到明确采购项'}</span>
+      </div>
+
+      {result.procurement_items.map((item, index) => (
+        <section className="bid-analysis-structured-card bid-analysis-procurement-item" key={`${item.item_name}-${index}`}>
+          <header>
+            <strong>{item.item_name || `采购项 ${index + 1}`}</strong>
+            <em>{item.quantity || '未明确'} {item.unit || ''}</em>
+          </header>
+          <dl className="bid-analysis-structured-fields">
+            <div><dt>适用范围</dt><dd>{item.applicable_scope || '未明确'}</dd></div>
+            {item.attributes.map((attribute, attributeIndex) => (
+              <div key={`${attribute.name}-${attributeIndex}`}>
+                <dt>{attribute.name || '参数'}</dt>
+                <dd>{attribute.value || '未明确'}</dd>
+              </div>
+            ))}
+          </dl>
+          {item.delivery_or_acceptance_requirements.length > 0 && (
+            <div className="bid-analysis-procurement-requirements">
+              <strong>交付与验收要求</strong>
+              <ul>
+                {item.delivery_or_acceptance_requirements.map((requirement, requirementIndex) => <li key={requirementIndex}>{requirement}</li>)}
+              </ul>
+            </div>
+          )}
+        </section>
+      ))}
+
+      <div className="bid-analysis-structured-summary bid-analysis-procurement-rules-summary">
+        <strong>报价规则</strong>
+        <span>{result.extraction_status.quotation_rules === 'found' ? `已识别 ${quotationRuleGroups.reduce((total, group) => total + group.rules.length, 0)} 条` : '未识别到明确报价规则'}</span>
+      </div>
+
+      {quotationRuleGroups.map((group) => (
+        <section className="bid-analysis-structured-card bid-analysis-procurement-rules" key={group.key}>
+          <header><strong>{group.label}</strong><em>{group.rules.length} 条</em></header>
+          <ul>
+            {group.rules.map((rule, index) => <li key={index}>{rule}</li>)}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+const technicalPlanTaskLabels: Record<string, string> = {
+  'bid-section-extraction': '多标段识别',
+  'bid-analysis': '招标文件解析',
+  'outline-generation': '目录生成',
+  'global-facts-generation': '全局事实设定',
+  'content-generation': '正文生成',
+};
+
+function formatTaskStartError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : '';
+  return message.replace(/^Error invoking remote method '[^']+': Error:\s*/u, '').trim() || fallback;
+}
+
+function getActiveTechnicalPlanTask(tasks: unknown[]) {
+  return tasks.find((task) => {
+    if (!task || typeof task !== 'object') return false;
+    const type = (task as { type?: unknown }).type;
+    return typeof type === 'string' && type in technicalPlanTaskLabels;
+  }) as { type?: string } | undefined;
+}
+
 function BidAnalysisPage({
   hasTenderFile,
   mode,
@@ -204,13 +327,13 @@ function BidAnalysisPage({
   taskDefinitions,
   tasks,
   task,
-  requirementMatrixTask,
-  requirementResponseMatrix,
   progress,
   onProgressChange,
   onConfigSaved,
 }: BidAnalysisPageProps) {
   const [running, setRunning] = useState(false);
+  const [launchingTask, setLaunchingTask] = useState<'section' | null>(null);
+  const launchingTaskRef = useRef<'section' | null>(null);
   const [fullRerunLocked, setFullRerunLocked] = useState(false);
   const [fullRerunSeenRunning, setFullRerunSeenRunning] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState('projectOverview');
@@ -226,7 +349,6 @@ function BidAnalysisPage({
     nextTaskIds: string[];
   } | null>(null);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
-  const [riskPanelOpen, setRiskPanelOpen] = useState(true);
   const { showToast } = useToast();
   const bidAnalysisTasks = taskDefinitions;
   const allBidAnalysisTaskIds = useMemo(() => taskDefinitions.map((definition) => definition.id), [taskDefinitions]);
@@ -266,21 +388,7 @@ function BidAnalysisPage({
     return status === 'success' || status === 'error';
   }).length;
   const sectionTaskRunning = bidSectionExtractionTask?.status === 'running' || bidSectionExtractionTask?.status === 'pausing';
-  const taskRunning = running || fullRerunLocked || sectionTaskRunning || task?.status === 'running';
-  const matrixRunning = requirementMatrixTask?.status === 'running' || requirementMatrixTask?.status === 'pausing';
-  const matrixReady = Boolean(requirementResponseMatrix);
-  const riskSummary = useMemo(() => {
-    const risks = requirementResponseMatrix?.rejection_risks || [];
-    const hiddenRequirements = requirementResponseMatrix?.hidden_requirements || [];
-    return {
-      total: risks.length,
-      covered: risks.filter((item) => item.status === 'covered').length,
-      pending: risks.filter((item) => item.status === 'needs-confirmation').length,
-      unhandled: risks.filter((item) => item.status === 'unhandled').length,
-      hiddenTotal: hiddenRequirements.length,
-    };
-  }, [requirementResponseMatrix]);
-  const hasHighRiskAlert = riskSummary.unhandled > 0 || riskSummary.pending > 0;
+  const taskRunning = running || launchingTask === 'section' || fullRerunLocked || sectionTaskRunning || task?.status === 'running';
   const requiredDone = areRequiredBidAnalysisTasksReady(taskDefinitions, tasks);
   const missingRequiredLabels = requiredTasks
     .filter((definition) => !isBidAnalysisTaskResultValid(definition, tasks[definition.id]))
@@ -290,8 +398,12 @@ function BidAnalysisPage({
     && selectedTasks.some((task) => task.id === 'projectOverview')
     && tasks.projectOverview?.status === 'running'
     && doneCount === 0;
+  const isFocusWritingAnalysisRunning = task?.status === 'running'
+    && task.logs?.at(-1)?.includes('重点编写项') === true;
   const progressMessage = isPromptCacheOptimizing
     ? '正在优化提示词缓存'
+    : isFocusWritingAnalysisRunning
+      ? '正在识别重点编写项。'
     : requiredDone && taskRunning
       ? '关键项已解析完成，等待当前解析任务结束后进入下一步。'
       : requiredDone ? '招标文件解析任务已结束，可以进入下一步。' : `等待 7 个关键项解析成功${missingRequiredLabels.length ? `：${missingRequiredLabels.join('、')}` : ''}。`;
@@ -300,17 +412,29 @@ function BidAnalysisPage({
     : '单标段';
   const configLabel = `${bidSectionConfigLabel} · ${getModeLabel(mode)}`;
 
-  const startRequirementMatrix = async () => {
-    if (!requiredDone) {
-      showToast('请先完成 7 个关键招标文件解析项', 'info');
-      return;
-    }
+  const ensureTechnicalPlanTaskIdle = async (nextAction: string) => {
     try {
-      await window.yibiao?.tasks.startRequirementMatrixGeneration({});
-      showToast('评分响应矩阵构建任务已在后台启动', 'success');
+      const activeTask = getActiveTechnicalPlanTask(await window.yibiao?.tasks.getActiveTasks() || []);
+      if (!activeTask?.type) return true;
+      showToast(`当前正在执行“${technicalPlanTaskLabels[activeTask.type]}”，请完成后再${nextAction}`, 'info');
+      return false;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '启动评分响应矩阵构建失败', 'error');
+      showToast(formatTaskStartError(error, '读取后台任务状态失败，请稍后重试'), 'error');
+      return false;
     }
+  };
+
+  const acquireLaunchLock = (type: 'section') => {
+    if (launchingTaskRef.current) return false;
+    launchingTaskRef.current = type;
+    setLaunchingTask(type);
+    return true;
+  };
+
+  const releaseLaunchLock = (type: 'section') => {
+    if (launchingTaskRef.current !== type) return;
+    launchingTaskRef.current = null;
+    setLaunchingTask(null);
   };
 
   const syncProgressForSelection = (nextTaskIds: string[]) => {
@@ -395,6 +519,7 @@ function BidAnalysisPage({
       showToast('请先上传招标文件', 'info');
       return;
     }
+    if (!(await ensureTechnicalPlanTaskIdle('启动招标文件解析'))) return;
 
     const normalizedTaskIds = normalizeSelectedTaskIds(taskDefinitions, nextTaskIds);
     const nextSelectedIdSet = new Set(normalizedTaskIds);
@@ -426,7 +551,7 @@ function BidAnalysisPage({
         setFullRerunLocked(false);
         setFullRerunSeenRunning(false);
       }
-      showToast(error instanceof Error ? error.message : '启动解析任务失败', 'error');
+      showToast(formatTaskStartError(error, '启动解析任务失败'), 'error');
     } finally {
       setRunning(false);
     }
@@ -456,12 +581,14 @@ function BidAnalysisPage({
           return;
         }
       } catch (error) {
-        showToast(error instanceof Error ? error.message : '标段校验失败', 'error');
+        showToast(formatTaskStartError(error, '标段校验失败'), 'error');
         return;
       }
     }
 
     if (nextBidSectionMode === 'multiple' && !selectedSectionTitle) {
+      if (!(await ensureTechnicalPlanTaskIdle('启动多标段识别'))) return;
+      if (!acquireLaunchLock('section')) return;
       try {
         await saveConfig(normalizedTaskIds, false, 'multiple');
         setPendingAnalysisAfterSection({ taskIds, nextTaskIds: normalizedTaskIds });
@@ -475,7 +602,9 @@ function BidAnalysisPage({
         showToast('多标段识别任务已在后台启动', 'success');
       } catch (error) {
         setPendingAnalysisAfterSection(null);
-        showToast(error instanceof Error ? error.message : '启动多标段识别失败', 'error');
+        showToast(formatTaskStartError(error, '启动多标段识别失败'), 'error');
+      } finally {
+        releaseLaunchLock('section');
       }
       return;
     }
@@ -505,13 +634,17 @@ function BidAnalysisPage({
       showToast('请先上传招标文件', 'info');
       return;
     }
+    if (!(await ensureTechnicalPlanTaskIdle('启动多标段识别'))) return;
+    if (!acquireLaunchLock('section')) return;
     try {
       await saveConfig(draftSelectedTaskIds, false, 'multiple');
       setSettingsOpen(false);
       await window.yibiao?.tasks.startBidSectionExtraction({});
       showToast('多标段识别任务已在后台启动', 'success');
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '启动多标段识别失败', 'error');
+      showToast(formatTaskStartError(error, '启动多标段识别失败'), 'error');
+    } finally {
+      releaseLaunchLock('section');
     }
   };
 
@@ -646,41 +779,8 @@ function BidAnalysisPage({
           <button type="button" className="primary-action" onClick={openSettingsDialog} disabled={taskRunning}>
             {sectionTaskRunning ? '识别中...' : taskRunning ? '解析中...' : failedTaskCount > 0 ? `重试失败项(${failedTaskCount})` : progress > 0 ? '重新解析' : '开始解析'}
           </button>
-          <button type="button" className="secondary-action" onClick={() => { void startRequirementMatrix(); }} disabled={taskRunning || matrixRunning || !requiredDone}>
-            {matrixRunning ? '构建评分矩阵中...' : matrixReady ? '重新构建评分矩阵' : '构建评分响应矩阵'}
-          </button>
         </div>
       </section>
-
-      {requirementResponseMatrix && (
-        <section className={`bid-analysis-risk-panel${hasHighRiskAlert ? ' has-alert' : ''}`}>
-          <button type="button" className="bid-analysis-risk-panel-head" onClick={() => setRiskPanelOpen((value) => !value)} aria-expanded={riskPanelOpen}>
-            <span>
-              <strong>高风险与隐性要求</strong>
-              <small>否决风险 {riskSummary.total} 项：已覆盖 {riskSummary.covered}，待确认 {riskSummary.pending}，未处理 {riskSummary.unhandled}；隐性要求 {riskSummary.hiddenTotal} 项</small>
-            </span>
-            <em>{riskPanelOpen ? '收起' : '展开'}</em>
-          </button>
-          {riskPanelOpen && (
-            <div className="bid-analysis-risk-panel-body">
-              {(requirementResponseMatrix.rejection_risks.length || requirementResponseMatrix.hidden_requirements.length) ? (
-                <>
-                  {requirementResponseMatrix.rejection_risks.map((item) => (
-                    <div className="bid-analysis-risk-row" key={item.risk_id}>
-                      <strong>{item.trigger}</strong><span>否决风险 · {item.handling_route} · {item.status}</span>
-                    </div>
-                  ))}
-                  {requirementResponseMatrix.hidden_requirements.map((item) => (
-                    <div className="bid-analysis-risk-row" key={item.hidden_requirement_id}>
-                      <strong>{item.requirement_text}</strong><span>隐性要求 · {item.handling_route} · {item.status}</span>
-                    </div>
-                  ))}
-                </>
-              ) : <p>本次未识别到需要单独处理的否决风险或隐性要求。</p>}
-            </div>
-          )}
-        </section>
-      )}
 
       <section className="bid-analysis-workspace">
         <aside className="bid-analysis-task-pane" aria-label="解析任务列表">
@@ -756,7 +856,9 @@ function BidAnalysisPage({
           </div>
 
           {activeTaskContent ? (
-            activeTask?.output === 'json' ? (
+            activeTask?.id === 'procurementList' ? (
+              <ProcurementAnalysisResultView content={activeTaskContent} />
+            ) : activeTask?.output === 'json' ? (
               <JsonResultTable content={activeTaskContent} />
             ) : (
               <MarkdownFullscreenViewer className="markdown-viewer bid-analysis-output" title={`${activeTask?.label || '解析结果'}全屏预览`}>

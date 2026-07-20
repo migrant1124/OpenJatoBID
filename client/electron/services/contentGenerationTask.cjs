@@ -19,10 +19,7 @@ const {
 const { applyRangeEdits } = require('../utils/textEdit.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
 const {
-  buildDeterministicExplicitNone,
-  buildEvidenceMarkdown,
   deriveResponseCompletion,
-  partitionOutlineResponseTargets,
   protectWriteForResponseMode,
 } = require('./contentResponseModes.cjs');
 const { countReadableWords } = require('../utils/wordCount.cjs');
@@ -1352,7 +1349,6 @@ function isAiExpandableResponseParent(item, level) {
   return level >= 1
     && level <= 3
     && item?.manual_input_required !== true
-    && (item?.response_mode || 'freeform-markdown') === 'freeform-markdown'
     && item?.allow_ai_children === true;
 }
 
@@ -1384,7 +1380,7 @@ function buildOutlineExpansionMessages({ projectOverview, globalFactsText, outli
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown。
 2. 只能新增二级、三级、四级目录，严禁新增、删除、重命名或调整一级目录。
-3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有 response_mode=freeform-markdown 且 allow_ai_children=true 的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
+3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有允许 AI 补充下级目录的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
 4. 只输出新增目录，不要输出完整目录，不要输出正文内容。
 5. 允许补充通用但不违背项目的技术方案内容，例如组织管理、质量控制、安全管理、进度保障、验收交付、运维服务、培训计划、资料管理、风险控制、应急响应等。
 6. 不要重复已有目录，不要输出明显凑字数的空泛标题。
@@ -1547,7 +1543,7 @@ function buildOutlineExpansionRepairMessages({ invalidContent, issues }, outline
 必须满足：
 1. 顶层只能有 additions 数组。
 2. 每条 additions 必须包含 parent_id、title、description，可以包含 children。
-3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有 response_mode=freeform-markdown 且 allow_ai_children=true 的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
+3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有允许 AI 补充下级目录的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
 4. 只能新增二级、三级、四级目录；四级目录不能包含 children。
 5. 禁止输出完整 outline、正文、图片、表格或解释文字。
 6. 如果没有可补充目录，返回 {"additions":[]}。
@@ -2408,8 +2404,7 @@ function collectLeafContexts(items, parents = []) {
 
 function collectFreeformLeafContexts(items) {
   return collectLeafContexts(items)
-    .filter(({ item }) => item.manual_input_required !== true
-      && (item.response_mode || 'freeform-markdown') === 'freeform-markdown');
+    .filter(({ item }) => item.manual_input_required !== true);
 }
 
 function normalizeReferenceDocumentIds(storedPlan) {
@@ -2496,11 +2491,9 @@ function updateOutlineItemContent(items, targetId, content) {
   return (items || []).map((item) => {
     if (item.id === targetId) {
       const next = { ...item, content };
-      if ((item.response_mode || 'freeform-markdown') === 'freeform-markdown') {
-        next.response_status = String(content || '').trim() ? 'responded-substantive' : 'pending';
-        next.compliance_risk = 'none';
-        next.compliance_message = undefined;
-      }
+      next.response_status = String(content || '').trim() ? 'responded-substantive' : 'pending';
+      next.compliance_risk = 'none';
+      next.compliance_message = undefined;
       return next;
     }
 
@@ -2682,7 +2675,6 @@ function createOutlineItemFromExpansion(addition, parent, existingIds, invalidat
     id: nextChildId(parent, existingIds),
     title: addition.title,
     description: addition.description || addition.title,
-    response_mode: 'freeform-markdown',
     allow_ai_children: true,
   };
   const children = Array.isArray(addition.children) ? addition.children : [];
@@ -3081,9 +3073,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   if (!outlineData?.outline?.length) {
     throw new Error('请先生成目录，再生成正文');
   }
-  if (!storedPlan.requirementResponseMatrix) {
-    throw new Error('请先完成评分响应矩阵，再生成正文');
-  }
 
   const globalFacts = Array.isArray(storedPlan.globalFacts) ? storedPlan.globalFacts : [];
   const globalFactsText = formatGlobalFactsForPrompt(globalFacts);
@@ -3143,11 +3132,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   if (!allLeafContexts.length) {
     throw new Error('当前目录没有可生成正文的小节');
   }
-  partitionOutlineResponseTargets(outlineData.outline);
-  const explicitNoneTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
-    && (item.response_mode || 'freeform-markdown') === 'explicit-none');
-  const evidenceTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
-    && item.response_mode === 'evidence-markdown');
   let leaves = collectFreeformLeafContexts(outlineData.outline);
   if (targetItemId) {
     const manualTarget = allLeafContexts.find(({ item }) => item.id === targetItemId && item.manual_input_required === true);
@@ -3255,12 +3239,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     return regenerate || section?.status === 'error' || !String(content).trim() || originalState.needsOptimization || originalState.needsRestoreRepair;
   });
   if (targetItemId) {
-    const targetSpecial = [...explicitNoneTargets, ...evidenceTargets].find(({ item }) => item.id === targetItemId);
     const targetSection = sections[targetItemId];
-    tasksToRun = targetSpecial || (resume && targetSection?.status === 'success' && touchedItemIds.has(targetItemId))
+    tasksToRun = (resume && targetSection?.status === 'success' && touchedItemIds.has(targetItemId))
       ? []
       : leaves.filter(({ item }) => item.id === targetItemId);
-    if (!targetSpecial && !tasksToRun.length && (!resume || targetSection?.status !== 'success')) {
+    if (!tasksToRun.length && (!resume || targetSection?.status !== 'success')) {
       throw new Error('未找到要重新生成的正文小节');
     }
   }
@@ -3665,6 +3648,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
   }
 
+  /* v1.4.5 controlled response-mode branches removed by v1.5.0.
   function applySpecialResponse(item, response) {
     outlineData = {
       ...outlineData,
@@ -3744,6 +3728,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
   }
 
+  */
   async function waitForPromptCacheWarmupBeforeFanout(message) {
     logs = [...logs, message];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
@@ -6806,8 +6791,6 @@ workspace 文件说明：
 
   try {
     if (!runOnlyIllustrationStage) {
-      await runSpecialResponseModes();
-      pauseIfRequested('正文生成已在受控响应分流后暂停，可保留当前结果并稍后继续。');
     }
     if (!runOnlyIllustrationStage && tasksToRun.length) {
       if (targetItemId) {

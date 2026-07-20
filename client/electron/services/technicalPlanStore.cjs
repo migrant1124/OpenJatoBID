@@ -16,10 +16,8 @@ const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { clearMermaidCache } = require('../utils/mermaidCache.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
 const {
-  normalizeOutlineQualityMetadata,
   normalizeRequirementResponseMatrix,
 } = require('./technicalPlanQualityModel.cjs');
-const { applyOutlineDeepeningPatch } = require('./outlineDeepeningPatch.cjs');
 const { applyOutlineQualityRules, validateConditionalOutlineDepth } = require('./outlineQualityRules.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
@@ -74,13 +72,8 @@ const outlineResponseStateFields = [
 ];
 
 const outlineQualityMetadataFields = [
-  'deep_writing',
-  'deep_writing_recommended',
-  'deep_writing_reason',
-  'deep_writing_source',
-  'writing_profile',
-  'value_anchor_ids',
-  'mapped_scoring_point_ids',
+  'focus_priority',
+  'focus_scoring_point_ids',
 ];
 
 const defaultOutlineFormatConstraints = Object.freeze({
@@ -128,8 +121,6 @@ const initialState = {
   contentIllustrationPlan: undefined,
   contentGenerationRuntime: undefined,
   requirementResponseMatrix: undefined,
-  requirementMatrixTask: undefined,
-  outlineDeepeningTask: undefined,
   outlineQualityReview: undefined,
   outlineData: null,
 };
@@ -139,8 +130,6 @@ const taskFieldTypes = {
   bidAnalysisTask: 'bid-analysis',
   outlineGenerationTask: 'outline-generation',
   globalFactsTask: 'global-facts-generation',
-  requirementMatrixTask: 'requirement-matrix-generation',
-  outlineDeepeningTask: 'outline-deepening',
   contentGenerationTask: 'content-generation',
 };
 
@@ -304,11 +293,20 @@ function normalizeStringArray(value, fallback, label) {
   return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
 }
 
+function normalizeOutlineFocusMetadata(value) {
+  const source = isPlainObject(value) ? value : {};
+  const normalized = {};
+  if (['service-plan', 'score-first', 'score-second'].includes(source.focus_priority)) {
+    normalized.focus_priority = source.focus_priority;
+  }
+  const scoringPointIds = normalizeStringArray(source.focus_scoring_point_ids, [], '目录重点评分项');
+  if (scoringPointIds.length) normalized.focus_scoring_point_ids = scoringPointIds;
+  return normalized;
+}
+
 function normalizeOutlineFormatConstraints(value) {
   const source = parseStrictJsonObject(value, '目录格式约束') || {};
-  const storedResponseMode = normalizeEnumField(source, 'response_mode', outlineResponseModes, defaultOutlineFormatConstraints.response_mode, '目录格式约束');
-  const legacyManualMode = storedResponseMode === 'locked-commitment' || storedResponseMode === 'fixed-markdown-table';
-  const manualInputRequired = legacyManualMode || normalizeBooleanField(source, 'manual_input_required', defaultOutlineFormatConstraints.manual_input_required, '目录格式约束');
+  const manualInputRequired = normalizeBooleanField(source, 'manual_input_required', defaultOutlineFormatConstraints.manual_input_required, '目录格式约束');
   const normalized = {
     manual_input_required: manualInputRequired,
     numbering_policy: normalizeEnumField(source, 'numbering_policy', outlineNumberingPolicies, defaultOutlineFormatConstraints.numbering_policy, '目录格式约束'),
@@ -317,7 +315,7 @@ function normalizeOutlineFormatConstraints(value) {
     title_locked: normalizeBooleanField(source, 'title_locked', defaultOutlineFormatConstraints.title_locked, '目录格式约束'),
     order_locked: normalizeBooleanField(source, 'order_locked', defaultOutlineFormatConstraints.order_locked, '目录格式约束'),
     level_locked: normalizeBooleanField(source, 'level_locked', defaultOutlineFormatConstraints.level_locked, '目录格式约束'),
-    response_mode: manualInputRequired ? 'freeform-markdown' : storedResponseMode,
+    response_mode: 'freeform-markdown',
     allow_ai_children: normalizeBooleanField(source, 'allow_ai_children', defaultOutlineFormatConstraints.allow_ai_children, '目录格式约束'),
     mapped_requirement_ids: normalizeStringArray(source.mapped_requirement_ids, defaultOutlineFormatConstraints.mapped_requirement_ids, '目录格式约束.mapped_requirement_ids'),
   };
@@ -371,9 +369,6 @@ function applyOutlinePersistenceFields(item, formatConstraints, responseState, q
     ...formatConstraints,
     ...responseState,
     ...qualityMetadata,
-    ...(formatConstraints.manual_input_required === true && !String(item?.content || '').trim()
-      ? { response_status: 'needs-manual-input' }
-      : {}),
     knowledge_item_ids: [...responseState.knowledge_item_ids],
   };
 }
@@ -1257,7 +1252,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content: row.content,
       knowledgeItemIds,
     });
-    normalizeOutlineQualityMetadata(safeJsonParse(row.quality_metadata_json, undefined));
+    normalizeOutlineFocusMetadata(safeJsonParse(row.quality_metadata_json, undefined));
     return row;
   }
 
@@ -1273,7 +1268,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: legacyKnowledgeItemIds,
       });
-      const qualityMetadata = normalizeOutlineQualityMetadata(safeJsonParse(row.quality_metadata_json, undefined));
+      const qualityMetadata = normalizeOutlineFocusMetadata(safeJsonParse(row.quality_metadata_json, undefined));
       map.set(row.node_id, applyOutlinePersistenceFields({
         id: row.node_id,
         title: row.title,
@@ -1343,7 +1338,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: existingRow.content,
         knowledgeItemIds: existingKnowledgeItemIds,
       });
-      normalizeOutlineQualityMetadata(safeJsonParse(existingRow.quality_metadata_json, undefined));
+      normalizeOutlineFocusMetadata(safeJsonParse(existingRow.quality_metadata_json, undefined));
     }
     const upsert = db.prepare(`
       INSERT INTO technical_plan_outline_nodes (
@@ -1412,33 +1407,13 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: incomingKnowledgeItemIds,
       });
-      const existingQualityMetadata = normalizeOutlineQualityMetadata(
+      const existingQualityMetadata = normalizeOutlineFocusMetadata(
         safeJsonParse(existingRow?.quality_metadata_json, undefined),
       );
-      const qualityMetadata = normalizeOutlineQualityMetadata({
+      const qualityMetadata = normalizeOutlineFocusMetadata({
         ...existingQualityMetadata,
         ...(hasFields(row.quality_metadata_patch) ? row.quality_metadata_patch : {}),
       });
-      if (existingRow && !['freeform-markdown', 'evidence-markdown'].includes(existingFormatConstraints.response_mode)) {
-        const existingResponseState = normalizeOutlineResponseState(existingRow.response_state_json, {
-          content: existingRow.content,
-          knowledgeItemIds: existingKnowledgeItemIds,
-        });
-        const unchanged = String(row.content || '') === String(existingRow.content || '')
-          && JSON.stringify(responseState) === JSON.stringify(existingResponseState);
-        const explicitNoneContent = String(existingFormatConstraints.empty_response_text || '').trim() || '无。';
-        const explicitNoneState = normalizeOutlineResponseState({
-          ...existingResponseState,
-          knowledge_item_ids: [],
-          response_status: 'responded-none',
-        }, { content: explicitNoneContent, knowledgeItemIds: [] });
-        const explicitNoneAllowed = existingFormatConstraints.response_mode === 'explicit-none'
-          && String(row.content || '') === explicitNoneContent
-          && JSON.stringify(responseState) === JSON.stringify(explicitNoneState);
-        if (!unchanged && !explicitNoneAllowed) {
-          throw new Error('受控响应只能通过对应的确定性写入路径更新');
-        }
-      }
       upsert.run({
         node_id: row.node_id,
         parent_node_id: row.parent_node_id,
@@ -1515,11 +1490,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       const row = validateStoredOutlineNodeJson(nodeId);
       storedRows.set(nodeId, row);
       if (!row || !hasOwn(section || {}, 'content')) continue;
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)
-        && String(section.content || '') !== String(row.content || '')) {
-        throw new Error('受控响应不能通过正文 section 写入');
-      }
     }
 
     const nextIds = new Set(entries.map(([nodeId]) => nodeId));
@@ -1541,8 +1511,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         updated_at: section?.updated_at || timestamp,
       });
       const storedRow = storedRows.get(nodeId);
-      const constraints = storedRow ? normalizeOutlineFormatConstraints(storedRow.format_constraints_json) : null;
-      if (hasOwn(section, 'content') && ['freeform-markdown', 'evidence-markdown'].includes(constraints?.response_mode)) {
+      if (hasOwn(section, 'content') && storedRow) {
         updateContent.run({ node_id: nodeId, content: String(section.content || ''), updated_at: timestamp });
       }
     }
@@ -1730,8 +1699,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       WHERE node_id = @node_id
     `);
     for (const row of rows) {
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)) continue;
       normalizeOutlineResponseState(row.response_state_json, {
         content: row.content,
         knowledgeItemIds: normalizeStringArray(
@@ -1745,9 +1712,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         response_state_json: JSON.stringify({
           knowledge_item_ids: [],
           response_status: 'pending',
-          compliance_risk: constraints.response_mode === 'evidence-markdown'
-            ? constraints.missing_evidence_risk || 'none'
-            : 'none',
+          compliance_risk: 'none',
         }),
         updated_at: timestamp,
       });
@@ -1764,7 +1729,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearDownstreamFromOriginalPlan() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
@@ -1797,7 +1762,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearWorkflowSpecificState(workflowKind) {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
@@ -1957,7 +1922,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'contentIllustrationPlan')) metaUpdates.content_illustration_plan_json = jsonOrNull(partial.contentIllustrationPlan);
     if (hasOwn(partial, 'requirementResponseMatrix')) {
       metaUpdates.requirement_response_matrix_json = jsonOrNull(
-        partial.requirementResponseMatrix === null
+        partial.requirementResponseMatrix == null
           ? null
           : normalizeRequirementResponseMatrix(partial.requirementResponseMatrix),
       );
@@ -2186,14 +2151,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         throw new Error(`固定目录顺序不可修改：${stored.title}`);
       }
 
-      if (!['freeform-markdown', 'evidence-markdown'].includes(stored.constraints.response_mode)) {
-        const incomingResponsePatch = incoming.response_state_patch || {};
-        for (const [field, value] of Object.entries(incomingResponsePatch)) {
-          if (JSON.stringify(value ?? null) !== JSON.stringify(stored.responseState[field] ?? null)) {
-            throw new Error(`受控响应状态不能通过目录保存修改：${stored.title}.${field}`);
-          }
-        }
-      }
     }
 
     for (const row of incomingRows) {
@@ -2214,7 +2171,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearDownstreamFromFormatAnalysisChange() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'outline-deepening', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
@@ -2363,14 +2320,15 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return loadTechnicalPlan();
   }
 
+  /* v1.4.5 local deepening path removed by v1.5.0.
   function applyOutlineDeepening({ patch, allowAiValueAdditions = false }) {
     const current = loadTechnicalPlan();
-    if (!current.outlineData || !current.requirementResponseMatrix) {
-      throw new Error('目录或评分响应矩阵不存在，不能应用局部深化');
+    if (!current.outlineData) {
+      throw new Error('目录不存在，不能应用局部深化');
     }
     const result = applyOutlineDeepeningPatch({
       outlineData: current.outlineData,
-      requirementResponseMatrix: current.requirementResponseMatrix,
+      requirementResponseMatrix: current.requirementResponseMatrix || createEmptyFocusWritingMatrix(),
       patch,
       outlineExpansionMode: current.outlineExpansionMode,
       allowAiValueAdditions: allowAiValueAdditions === true,
@@ -2409,8 +2367,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
 
   function setOutlineDeepWriting({ targetNodeId, deepWriting }) {
     const current = loadTechnicalPlan();
-    if (!current.outlineData || !current.requirementResponseMatrix) {
-      throw new Error('目录或评分响应矩阵不存在，不能修改深度写作');
+    if (!current.outlineData) {
+      throw new Error('目录不存在，不能修改深度写作');
     }
     const targetId = String(targetNodeId || '').trim();
     const nextOutline = JSON.parse(JSON.stringify(current.outlineData));
@@ -2463,7 +2421,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         writing_profile: 'standard',
       }));
     }
-    const quality = applyOutlineQualityRules(nextOutline, current.requirementResponseMatrix);
+    const quality = applyOutlineQualityRules(nextOutline, current.requirementResponseMatrix || createEmptyFocusWritingMatrix());
     const transaction = db.transaction(() => {
       assertOutlineMutationAllowed();
       saveOutlineData(quality.outline);
@@ -2482,6 +2440,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return loadTechnicalPlan();
   }
 
+  */
   function saveGlobalFacts(globalFacts) {
     const transaction = db.transaction(() => {
       replaceGlobalFacts(globalFacts);
@@ -2525,19 +2484,12 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: node.content,
         knowledgeItemIds: legacyKnowledgeItemIds,
       });
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)) {
-        throw new Error('该章节使用受控模板，不能覆盖完整 Markdown');
-      }
       const nextContent = String(content || '');
       const nextResponseState = normalizeOutlineResponseState({
         ...responseState,
-        response_status: nextContent.trim()
-          ? 'responded-substantive'
-          : constraints.manual_input_required === true
-            ? 'needs-manual-input'
-            : 'pending',
-        compliance_risk: constraints.response_mode === 'freeform-markdown' ? 'none' : responseState.compliance_risk,
-        ...(constraints.response_mode === 'freeform-markdown' ? { compliance_message: undefined } : {}),
+        response_status: nextContent.trim() ? 'responded-substantive' : 'pending',
+        compliance_risk: 'none',
+        compliance_message: undefined,
       }, {
         content: nextContent,
         knowledgeItemIds: responseState.knowledge_item_ids,
@@ -2778,8 +2730,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveBidAnalysisConfig,
     saveOutlineConfig,
     saveOutline,
-    applyOutlineDeepening,
-    setOutlineDeepWriting,
     saveGlobalFacts,
     saveIllustrationHtml,
     saveIllustrationChart,
