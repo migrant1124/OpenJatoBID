@@ -19,13 +19,24 @@ const {
 const { applyRangeEdits } = require('../utils/textEdit.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
 const {
-  buildDeterministicExplicitNone,
-  buildEvidenceMarkdown,
   deriveResponseCompletion,
-  partitionOutlineResponseTargets,
   protectWriteForResponseMode,
 } = require('./contentResponseModes.cjs');
 const { countReadableWords } = require('../utils/wordCount.cjs');
+const {
+  CONTENT_PLAN_VERSION,
+  buildChapterWritingTask,
+  buildContentPlanFingerprint,
+  isSameContentPlanFingerprint,
+  normalizeTargetWords,
+  resolveWritingProfile,
+  uniqueStrings,
+  validateSectionWritingContract,
+} = require('./sectionWritingContract.cjs');
+const {
+  auditContentQuality,
+  rankContentExpansionCandidates,
+} = require('./contentQualityAudit.cjs');
 
 const DEFAULT_CONTEXT_LENGTH_LIMIT = 400000;
 const AGENT_CONTEXT_THRESHOLD_RATIO = 0.7;
@@ -44,7 +55,6 @@ const ORIGINAL_COVERAGE_REPAIR_MAX_ATTEMPTS = 2;
 const TABLE_CLEANUP_CONTEXT_CHARS = 600;
 const TABLE_CLEANUP_BATCH_CHAR_LIMIT = 30000;
 const CONTENT_GENERATION_PAUSED = 'CONTENT_GENERATION_PAUSED';
-const CONTENT_PLAN_VERSION = 4;
 const PROMPT_CACHE_WARMUP_DELAY_MS = 5000;
 const TABLE_REQUIREMENT_LABELS = {
   none: '不要',
@@ -474,6 +484,7 @@ function clearContentPlanTable(contentPlan) {
       needed: false,
       purpose: '',
     },
+    table_briefs: [],
   };
 }
 
@@ -509,9 +520,32 @@ function normalizeOriginalMaterial(value) {
   };
 }
 
-function normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles) {
+function normalizeContractBriefs(value, kind) {
+  return (Array.isArray(value) ? value : []).map((item, index) => {
+    const source = item && typeof item === 'object' ? item : {};
+    const title = singleLine(source.title || source.name || source.purpose || `${kind}-${index + 1}`);
+    const purpose = singleLine(source.purpose || source.description || source.goal || title);
+    return {
+      id: singleLine(source.id || `${kind}-${index + 1}`),
+      title,
+      purpose,
+      ...(Array.isArray(source.columns) ? { columns: uniqueStrings(source.columns) } : {}),
+      ...(singleLine(source.visual_role || source.visualRole) ? { visual_role: singleLine(source.visual_role || source.visualRole) } : {}),
+    };
+  }).filter((item) => item.title && item.purpose);
+}
+
+function normalizeCrossSectionBoundaries(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    owns: uniqueStrings(source.owns),
+    excludes: uniqueStrings(source.excludes),
+    related_node_ids: uniqueStrings(source.related_node_ids || source.relatedNodeIds),
+  };
+}
+
+function normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles, options = {}) {
   const source = value?.plan && typeof value.plan === 'object' ? value.plan : value || {};
-  const writing = source.writing && typeof source.writing === 'object' && !Array.isArray(source.writing) ? source.writing : {};
   const knowledgeSource = source.knowledge;
   const knowledge = knowledgeSource && typeof knowledgeSource === 'object' && !Array.isArray(knowledgeSource) ? knowledgeSource : {};
   const rawKnowledgeItemIds = Array.isArray(knowledgeSource)
@@ -524,28 +558,41 @@ function normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles)
     : facts.titles ?? facts.fact_titles ?? facts.factTitles ?? source.fact_titles ?? source.factTitles ?? source.global_fact_titles ?? source.globalFactTitles;
   const table = source.table && typeof source.table === 'object' ? source.table : {};
   const tableNeeded = Boolean(table.needed);
+  const sectionRole = singleLine(source.section_role || source.sectionRole);
 
   return {
-    writing_focus: singleLine(source.writing_focus || source.writingFocus || writing.focus || writing.writing_focus || writing.writingFocus),
-    knowledge: {
-      item_ids: normalizeKnowledgeItemIds(rawKnowledgeItemIds, allowedKnowledgeItemIds),
-    },
-    facts: {
-      titles: normalizeFactTitles(rawFactTitles, allowedFactTitles),
-    },
-    table: {
-      needed: tableNeeded,
-      purpose: tableNeeded ? singleLine(table.purpose) : '',
-    },
+    writing_profile: options.writingProfile || resolveWritingProfile(source),
+    section_role: sectionRole,
+    scoring_point_ids: uniqueStrings(source.scoring_point_ids || source.scoringPointIds),
+    value_anchor_ids: uniqueStrings(source.value_anchor_ids || source.valueAnchorIds),
+    must_answer_questions: uniqueStrings(source.must_answer_questions || source.mustAnswerQuestions),
+    key_claims: uniqueStrings(source.key_claims || source.keyClaims),
+    implementation_steps: uniqueStrings(source.implementation_steps || source.implementationSteps),
+    quantitative_details: uniqueStrings(source.quantitative_details || source.quantitativeDetails),
+    deliverables: uniqueStrings(source.deliverables),
+    acceptance_criteria: uniqueStrings(source.acceptance_criteria || source.acceptanceCriteria),
+    evidence_requirements: uniqueStrings(source.evidence_requirements || source.evidenceRequirements),
+    cross_section_boundaries: normalizeCrossSectionBoundaries(source.cross_section_boundaries || source.crossSectionBoundaries),
+    knowledge: { item_ids: normalizeKnowledgeItemIds(rawKnowledgeItemIds, allowedKnowledgeItemIds) },
+    facts: { titles: normalizeFactTitles(rawFactTitles, allowedFactTitles) },
+    table: { needed: tableNeeded, purpose: tableNeeded ? singleLine(table.purpose) : '' },
+    table_briefs: normalizeContractBriefs(source.table_briefs || source.tableBriefs, 'table'),
+    illustration_briefs: normalizeContractBriefs(source.illustration_briefs || source.illustrationBriefs, 'illustration'),
+    target_words: normalizeTargetWords(source.target_words || source.targetWords, options.targetWords),
+    forbidden_repetition: uniqueStrings(source.forbidden_repetition || source.forbiddenRepetition),
+    ...(options.chapterTask ? { chapter_task: options.chapterTask } : source.chapter_task ? { chapter_task: source.chapter_task } : {}),
+    // 保留旧字段作为展示兼容；正文生成只以合同字段为准。
+    writing_focus: sectionRole,
     original_material: normalizeOriginalMaterial(source.original_material || source.originalMaterial),
   };
 }
 
-function createStoredContentPlan(plan, tableRequirement) {
+function createStoredContentPlan(plan, tableRequirement, fingerprint) {
   const normalizedTableRequirement = tableRequirement ? normalizeTableRequirement(tableRequirement) : '';
   return {
     plan_version: CONTENT_PLAN_VERSION,
     plan: normalizeContentPlan(plan),
+    fingerprint,
     ...(normalizedTableRequirement ? { table_requirement: normalizedTableRequirement } : {}),
     updated_at: now(),
   };
@@ -565,7 +612,7 @@ function normalizeStoredContentPlan(value) {
   }
 
   const plan = normalizeContentPlan(value.plan || value.contentPlan || value);
-  if (!plan.writing_focus) {
+  if (!plan.section_role) {
     return null;
   }
   try {
@@ -579,6 +626,7 @@ function normalizeStoredContentPlan(value) {
   return {
     plan_version: CONTENT_PLAN_VERSION,
     plan,
+    fingerprint: value.fingerprint,
     ...(tableRequirement ? { table_requirement: tableRequirement } : {}),
     updated_at: value.updated_at || value.updatedAt || now(),
   };
@@ -595,7 +643,7 @@ function isStoredContentPlanReusableForTableRequirement(storedContentPlan, table
 
 function originalMaterialFromStoredPlan(value) {
   const storedPlan = normalizeStoredContentPlan(value);
-  return normalizeOriginalMaterial(storedPlan?.plan?.original_material);
+  return normalizeOriginalMaterial(storedPlan?.plan?.original_material || value?.plan?.original_material || value?.plan?.originalMaterial);
 }
 
 function needsOriginalMaterialOptimization(value) {
@@ -619,31 +667,40 @@ function pruneContentGenerationPlans(plans, leaves) {
 }
 
 function validateContentPlan(plan) {
-  if (!plan || typeof plan !== 'object') {
-    throw new Error('正文编排决策必须是对象');
-  }
-  if (!plan.knowledge || !Array.isArray(plan.knowledge.item_ids)) {
-    throw new Error('正文编排决策缺少 knowledge.item_ids');
-  }
-  if (!plan.facts || !Array.isArray(plan.facts.titles)) {
-    throw new Error('正文编排决策缺少 facts.titles');
-  }
-  if (typeof plan.writing_focus !== 'string' || !plan.writing_focus.trim()) {
-    throw new Error('正文编排决策缺少 writing_focus');
-  }
-  if (!plan.table || typeof plan.table.needed !== 'boolean') {
-    throw new Error('正文编排决策缺少 table.needed');
-  }
+  validateSectionWritingContract(plan);
+  if (!plan.table || typeof plan.table.needed !== 'boolean') throw new Error('章节写作合同缺少 table.needed');
 }
 
 function formatContentPlanForPrompt(plan) {
   const lines = [
-    `写作重点：${plan.writing_focus || '围绕当前章节标题和描述展开'}`,
+    `写作类型：${plan.writing_profile || 'standard'}`,
+    `章节职责：${plan.section_role || plan.writing_focus || '围绕当前章节标题和描述展开'}`,
+    `评分点：${plan.scoring_point_ids?.join('、') || '无'}`,
+    `增值锚点：${plan.value_anchor_ids?.join('、') || '无'}`,
+    `必须回答：${plan.must_answer_questions?.join('；') || '无'}`,
+    `关键结论：${plan.key_claims?.join('；') || '无'}`,
+    `实施步骤：${plan.implementation_steps?.join('；') || '无'}`,
+    `量化细节：${plan.quantitative_details?.join('；') || '无'}`,
+    `交付与验收：${[...(plan.deliverables || []), ...(plan.acceptance_criteria || [])].join('；') || '无'}`,
+    `证据要求：${plan.evidence_requirements?.join('；') || '无'}`,
+    `章节边界：负责 ${plan.cross_section_boundaries?.owns?.join('、') || '当前章节'}；不重复 ${plan.forbidden_repetition?.join('、') || '其他章节已承担内容'}`,
+    `目标篇幅：${plan.target_words?.min || 0}/${plan.target_words?.preferred || 0}/${plan.target_words?.max || 0} 字`,
     `事实变量：${plan.facts?.titles?.length ? plan.facts.titles.join('；') : '无'}`,
-    `表格：${plan.table.needed ? `需要，目的：${plan.table.purpose || '提升正文表达清晰度'}` : '不需要，本小节不要输出 Markdown 表格'}`,
+    `表格任务：${plan.table_briefs?.map((item) => item.title).join('、') || (plan.table.needed ? plan.table.purpose : '无')}`,
+    `图片任务：${plan.illustration_briefs?.map((item) => item.title).join('、') || '无'}`,
     `原方案还原：${plan.original_material?.restored ? `已还原 ${plan.original_material.restored_chars || 0} 字` : '未还原'}`,
   ];
   return lines.join('\n');
+}
+
+function buildWritingProfileRequirement(plan) {
+  if (plan?.writing_profile === 'creative-proposal') {
+    return '本节为创意策划：必须体现客户特点、目标受众、核心主题、创意策略、执行载体、传播节奏、现场或空间设计及效果评估；未确认的品牌、案例、人员和数量必须标记为待确认。';
+  }
+  if (plan?.writing_profile === 'deep') {
+    return '本节为深度写作：先实质响应招标要求，再展现增值设计；每项措施尽量说明适用场景、执行动作、责任协同、频次或时限、参数/阈值、正常与异常边界、输出记录以及验收关闭方式；流程必须体现输入、处理、判断、升级、输出和闭环。';
+  }
+  return '本节按标准写作合同展开，不得重复其他章节已明确承担的内容。';
 }
 
 function formatTablesForCleanupPrompt(tables) {
@@ -733,7 +790,7 @@ function renderKnowledgeItemsForPrompt(items) {
   })).filter((item) => item.id && item.title && item.resume), null, 2);
 }
 
-function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapters, projectOverview, bidAnalysisFactsText, globalFactTitlesText, regenerateRequirement, tableRequirement, maxTables, tableTotalSections, knowledgeItems }) {
+function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapters, projectOverview, bidAnalysisFactsText, globalFactTitlesText, regenerateRequirement, tableRequirement, maxTables, tableTotalSections, knowledgeItems, chapterWritingTask, writingProfile }) {
   const chapterId = chapter.id || 'unknown';
   const chapterTitle = chapter.title || '未命名章节';
   const chapterDescription = chapter.description || '';
@@ -756,8 +813,10 @@ function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapt
 4. ${tablePlanningAllowed ? '表格仅在能明显提升表达清晰度时使用，例如归纳职责、步骤、参数、风险、措施、成果等。' : '不要为了满足 JSON 格式而编造表格目的。'}
 5. knowledge.item_ids 只能从参考知识库轻量条目的 id 中选择；可以多选，可以为空数组；不要编造 id，不要输出 reason。
 6. facts.titles 只能从全局事实变量标题清单中选择；请选择编写本章节正文时会用到的变量组标题，可以多选，可以为空数组；不要编造标题，不要输出具体变量内容。
-7. writing_focus 用 1-2 句话概括本节正文重点，只围绕当前章节标题和描述，不展开成正文，不编造具体承诺、参数、周期、品牌或型号。
-8. 编排判断必须结合招标文件关键信息和全局事实变量标题，不要规划会造成时间、地点、人员、设备、标准或服务承诺前后不一致的表达。`,
+7. 必须返回完整的 SectionWritingContract：章节职责、评分点、增值锚点、必须回答的问题、实施步骤、量化细节、交付物、验收、证据、边界、表图 Brief 与目标篇幅都不得缺失。
+8. writing_profile 固定为“${writingProfile || 'standard'}”；评分点和增值锚点只能从二级章节任务书提供的 id 中选择；不得把其他章节的职责复制到当前章节。
+9. 深度写作必须把触发条件、动作、责任、时限/频次、边界、产物和验收写入合同；创意策划还必须覆盖客户特点、受众、主题、策略、载体、节奏和效果评估。
+10. 编排判断必须结合招标文件关键信息和全局事实变量标题，不要规划会造成时间、地点、人员、设备、标准或服务承诺前后不一致的表达。`,
     },
   ];
 
@@ -794,6 +853,9 @@ ${renderKnowledgeItemsForPrompt(knowledgeItems)}`,
   if (String(regenerateRequirement || '').trim()) {
     messages.push({ role: 'user', content: `用户对本次重新生成的额外要求：\n${regenerateRequirement}` });
   }
+  if (chapterWritingTask) {
+    messages.push({ role: 'user', content: `二级章节任务书（本章叶子小节共享，必须遵守职责边界）：\n${JSON.stringify(chapterWritingTask, null, 2)}` });
+  }
 
   messages.push({
     role: 'user',
@@ -805,7 +867,18 @@ ${renderKnowledgeItemsForPrompt(knowledgeItems)}`,
 
 JSON 格式：
 {
-  "writing_focus": "1-2 句话说明本节正文重点展开什么，只聚焦当前章节，不写成正文",
+  "writing_profile": "${writingProfile || 'standard'}",
+  "section_role": "当前小节唯一职责",
+  "scoring_point_ids": ["本小节承担的原子评分点 id"],
+  "value_anchor_ids": ["本小节采用的已接受增值锚点 id"],
+  "must_answer_questions": ["评委必须看到的具体回答"],
+  "key_claims": ["可由当前资料支持的核心结论"],
+  "implementation_steps": ["执行步骤、流程或机制"],
+  "quantitative_details": ["参数、频次、阈值或待确认量化项"],
+  "deliverables": ["输出记录、文档或交付物"],
+  "acceptance_criteria": ["检查、验收或关闭方式"],
+  "evidence_requirements": ["需要的证明材料或待确认信息"],
+  "cross_section_boundaries": { "owns": ["本节负责内容"], "excludes": ["其他章节负责内容"], "related_node_ids": ["相关目录 id"] },
   "knowledge": {
     "item_ids": ["从参考知识库轻量条目中选择的 id；没有合适条目时返回空数组"]
   },
@@ -815,7 +888,11 @@ JSON 格式：
   "table": {
     "needed": true,
     "purpose": "说明表格在本小节中要表达什么；不需要表格时留空"
-  }
+  },
+  "table_briefs": [{ "title": "表格名称", "purpose": "独立信息功能", "columns": ["列名"] }],
+  "illustration_briefs": [{ "title": "图片名称", "purpose": "独立信息功能", "visual_role": "图片角色" }],
+  "target_words": { "min": 300, "preferred": 500, "max": 800 },
+  "forbidden_repetition": ["不得与其他章节重复的内容"]
 }`,
   });
 
@@ -854,7 +931,9 @@ function buildChapterContentMessages({ chapter, projectOverview, selectedFactsTe
 13. 只有步骤、流程、时间顺序、操作顺序等连续性非常强的内容，才可以使用有序列表；其他分段一律使用自然段、无编号列表或无编号加粗引导语，禁止使用任何形式的编号。
 14. 直接返回章节内容，不生成标题，不要任何额外说明。
 15. 如果本章节需要使用的全局事实变量中包含相关内容，必须优先使用变量值，不得前后矛盾。
-16. 仅使用本章节提供的全局事实变量；未提供时不要主动编造具体人员、周期、质保、品牌、型号等会影响全文一致性的承诺。`,
+16. 仅使用本章节提供的全局事实变量；未提供时不要主动编造具体人员、周期、质保、品牌、型号等会影响全文一致性的承诺。
+17. ${buildWritingProfileRequirement(contentPlan)}
+18. 表格和图片只承担合同中定义的独立信息功能，不得与正文简单重复；不得重复合同 forbidden_repetition 中的内容。`,
     },
   ];
 
@@ -1270,7 +1349,6 @@ function isAiExpandableResponseParent(item, level) {
   return level >= 1
     && level <= 3
     && item?.manual_input_required !== true
-    && (item?.response_mode || 'freeform-markdown') === 'freeform-markdown'
     && item?.allow_ai_children === true;
 }
 
@@ -1302,7 +1380,7 @@ function buildOutlineExpansionMessages({ projectOverview, globalFactsText, outli
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown。
 2. 只能新增二级、三级、四级目录，严禁新增、删除、重命名或调整一级目录。
-3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有 response_mode=freeform-markdown 且 allow_ai_children=true 的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
+3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有允许 AI 补充下级目录的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
 4. 只输出新增目录，不要输出完整目录，不要输出正文内容。
 5. 允许补充通用但不违背项目的技术方案内容，例如组织管理、质量控制、安全管理、进度保障、验收交付、运维服务、培训计划、资料管理、风险控制、应急响应等。
 6. 不要重复已有目录，不要输出明显凑字数的空泛标题。
@@ -1465,7 +1543,7 @@ function buildOutlineExpansionRepairMessages({ invalidContent, issues }, outline
 必须满足：
 1. 顶层只能有 additions 数组。
 2. 每条 additions 必须包含 parent_id、title、description，可以包含 children。
-3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有 response_mode=freeform-markdown 且 allow_ai_children=true 的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
+3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有允许 AI 补充下级目录的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
 4. 只能新增二级、三级、四级目录；四级目录不能包含 children。
 5. 禁止输出完整 outline、正文、图片、表格或解释文字。
 6. 如果没有可补充目录，返回 {"additions":[]}。
@@ -1479,7 +1557,7 @@ ${formatOutlineExpansionContext(outlineItems || [], 1, [], restoredNodeIds)}`,
   ];
 }
 
-function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords }) {
+function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan }) {
   const { item, parentChapters, siblingChapters } = context;
   const chapterPath = [...(parentChapters || []), item]
     .map((chapter) => `${chapter.id || 'unknown'} ${chapter.title || '未命名章节'}`)
@@ -1509,6 +1587,7 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
 12. 如果本章节需要使用的全局事实变量中包含相关内容，扩写必须优先使用变量值，不得新增前后不一致的时间、地点、人员、设备、标准或服务承诺。
 13. 使用 replace 时，如果目标块是 Markdown 列表、表格、引用、加粗引导块或连续多行结构，target_text 必须包含完整结构，不得只返回第一项、表头、关键句或摘要。
 14. 使用 replace 时，target_text 不得改写标点、空格、换行、列表符号、表格分隔线或 Markdown 标记，也不得选择图片 Markdown、Mermaid 或代码块作为替换目标。
+15. 本次只补强章节写作合同中尚未充分体现的评分响应、实施动作、量化细节、交付与验收、证据要求或增值锚点；不得为了凑字数复述已有内容。
 
 返回格式：
 {
@@ -1520,6 +1599,7 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
     },
     { role: 'user', content: `项目概述：\n${projectOverview || '未提供'}` },
     { role: 'user', content: `完整目录：\n${formatOutlineForPrompt(outlineData.outline || [])}` },
+    ...(contentPlan ? [{ role: 'user', content: `章节写作合同（本次只补强其中缺口）：\n${formatContentPlanForPrompt(contentPlan)}` }] : []),
     ...(String(selectedFactsText || '').trim() ? [{ role: 'user', content: `本章节需要使用的全局事实变量（扩写涉及这些内容时必须参考）：\n${selectedFactsText}` }] : []),
     { role: 'user', content: `当前章节路径：${chapterPath}\n当前章节描述：${item.description || ''}` },
     { role: 'user', content: `同级章节（扩写时避免重复）：\n${siblingLines || '无'}` },
@@ -2324,8 +2404,7 @@ function collectLeafContexts(items, parents = []) {
 
 function collectFreeformLeafContexts(items) {
   return collectLeafContexts(items)
-    .filter(({ item }) => item.manual_input_required !== true
-      && (item.response_mode || 'freeform-markdown') === 'freeform-markdown');
+    .filter(({ item }) => item.manual_input_required !== true);
 }
 
 function normalizeReferenceDocumentIds(storedPlan) {
@@ -2412,11 +2491,9 @@ function updateOutlineItemContent(items, targetId, content) {
   return (items || []).map((item) => {
     if (item.id === targetId) {
       const next = { ...item, content };
-      if ((item.response_mode || 'freeform-markdown') === 'freeform-markdown') {
-        next.response_status = String(content || '').trim() ? 'responded-substantive' : 'pending';
-        next.compliance_risk = 'none';
-        next.compliance_message = undefined;
-      }
+      next.response_status = String(content || '').trim() ? 'responded-substantive' : 'pending';
+      next.compliance_risk = 'none';
+      next.compliance_message = undefined;
       return next;
     }
 
@@ -2598,7 +2675,6 @@ function createOutlineItemFromExpansion(addition, parent, existingIds, invalidat
     id: nextChildId(parent, existingIds),
     title: addition.title,
     description: addition.description || addition.title,
-    response_mode: 'freeform-markdown',
     allow_ai_children: true,
   };
   const children = Array.isArray(addition.children) ? addition.children : [];
@@ -2869,23 +2945,6 @@ function normalizeContentGenerationRuntime(value) {
   };
 }
 
-function orderExpansionCandidates(candidates) {
-  if (!candidates.length) return [];
-
-  const middle = Math.floor(candidates.length / 2);
-  const ordered = [candidates[middle]];
-  const maxOffset = Math.max(middle, candidates.length - 1 - middle);
-  for (let offset = 1; offset <= maxOffset; offset += 1) {
-    if (middle - offset >= 0) {
-      ordered.push(candidates[middle - offset]);
-    }
-    if (middle + offset < candidates.length) {
-      ordered.push(candidates[middle + offset]);
-    }
-  }
-  return ordered;
-}
-
 async function runWorkerPool({ limit, getNextItem, worker, shouldStop, onItemStart, onItemComplete }) {
   const workerCount = Math.max(1, Math.floor(Number(limit) || 1));
   let activeCount = 0;
@@ -3073,11 +3132,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   if (!allLeafContexts.length) {
     throw new Error('当前目录没有可生成正文的小节');
   }
-  partitionOutlineResponseTargets(outlineData.outline);
-  const explicitNoneTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
-    && (item.response_mode || 'freeform-markdown') === 'explicit-none');
-  const evidenceTargets = allLeafContexts.filter(({ item }) => item.manual_input_required !== true
-    && item.response_mode === 'evidence-markdown');
   let leaves = collectFreeformLeafContexts(outlineData.outline);
   if (targetItemId) {
     const manualTarget = allLeafContexts.find(({ item }) => item.id === targetItemId && item.manual_input_required === true);
@@ -3130,6 +3184,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     audit_agent_step_label: '',
     audit_agent_changed_sections: 0,
     audit_agent_failed_sections: 0,
+    quality_audit_label: '',
+    quality_audit_chapter_total: 0,
+    quality_audit_uncovered_scoring_total: 0,
+    quality_audit_deep_gap_total: 0,
+    quality_audit_duplicate_total: 0,
     table_cleanup_total: 0,
     table_cleanup_completed: 0,
     table_cleanup_rewritten: 0,
@@ -3167,6 +3226,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   let knowledgeItems = [];
   let allowedKnowledgeItemIds = new Set();
   let knowledgeContentMap = new Map();
+  let knowledgeDocumentRevisions = [];
+  const contextByItemId = new Map(leaves.map((context) => [context.item.id, context]));
+  const chapterWritingTasks = new Map();
+  const planningFailedItemIds = new Set();
   let sections = createInitialSections(leaves, fullRegenerate ? {} : storedPlan.contentGenerationSections);
   const touchedItemIds = new Set(contentRuntime.touched_item_ids);
   let tasksToRun = leaves.filter(({ item }) => {
@@ -3176,12 +3239,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     return regenerate || section?.status === 'error' || !String(content).trim() || originalState.needsOptimization || originalState.needsRestoreRepair;
   });
   if (targetItemId) {
-    const targetSpecial = [...explicitNoneTargets, ...evidenceTargets].find(({ item }) => item.id === targetItemId);
     const targetSection = sections[targetItemId];
-    tasksToRun = targetSpecial || (resume && targetSection?.status === 'success' && touchedItemIds.has(targetItemId))
+    tasksToRun = (resume && targetSection?.status === 'success' && touchedItemIds.has(targetItemId))
       ? []
       : leaves.filter(({ item }) => item.id === targetItemId);
-    if (!targetSpecial && !tasksToRun.length && (!resume || targetSection?.status !== 'success')) {
+    if (!tasksToRun.length && (!resume || targetSection?.status !== 'success')) {
       throw new Error('未找到要重新生成的正文小节');
     }
   }
@@ -3440,6 +3502,8 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     logs = [...logs, message];
   });
   allowedKnowledgeItemIds = new Set(knowledgeItems.map((item) => item.id));
+  const knowledgeItemsRevision = textHash(knowledgeItems.map((item) => ({ id: item.id, title: item.title, resume: item.resume })));
+  knowledgeDocumentRevisions = referenceKnowledgeDocumentIds.map((documentId) => `${documentId}:${knowledgeItemsRevision}`);
   knowledgeContentMap = loadContentKnowledgeContentMap(knowledgeBaseService, referenceKnowledgeDocumentIds, (message) => {
     logs = [...logs, message];
   });
@@ -3584,6 +3648,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
   }
 
+  /* v1.4.5 controlled response-mode branches removed by v1.5.0.
   function applySpecialResponse(item, response) {
     outlineData = {
       ...outlineData,
@@ -3663,6 +3728,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
   }
 
+  */
   async function waitForPromptCacheWarmupBeforeFanout(message) {
     logs = [...logs, message];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
@@ -3759,14 +3825,52 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     return normalizeStoredContentPlan(storedContentPlans[itemId]);
   }
 
+  function getChapterWritingTask(context) {
+    return chapterWritingTasks.get(context?.item?.id);
+  }
+
+  function prepareChapterWritingTasks(targets) {
+    const groups = new Map();
+    for (const context of targets || []) {
+      const chapter = [...(context.parentChapters || []), context.item]
+        .find((item) => String(item?.id || '').split('.').length === 2);
+      const chapterId = String(chapter?.id || context.item.id || '').trim();
+      const group = groups.get(chapterId) || [];
+      group.push(context);
+      groups.set(chapterId, group);
+    }
+    for (const contexts of groups.values()) {
+      const chapterTask = buildChapterWritingTask(contexts, storedPlan.requirementResponseMatrix);
+      for (const context of contexts) chapterWritingTasks.set(context.item.id, chapterTask);
+    }
+  }
+
+  function getContentPlanFingerprintForItem(itemId) {
+    const context = contextByItemId.get(itemId);
+    if (!context) return undefined;
+    return buildContentPlanFingerprint({
+      context,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+      globalFacts,
+      knowledgeDocumentRevisions,
+      originalPlanMarkdown,
+    });
+  }
+
   function applyCurrentTableRequirementToPlan(plan) {
-    const normalizedPlan = normalizeContentPlan(plan, allowedKnowledgeItemIds, allowedFactTitles);
+    const normalizedPlan = normalizeContentPlan(plan, allowedKnowledgeItemIds, allowedFactTitles, {
+      writingProfile: plan?.writing_profile,
+      chapterTask: plan?.chapter_task,
+      targetWords: plan?.target_words,
+    });
     return tableRequirement === 'none' ? clearContentPlanTable(normalizedPlan) : normalizedPlan;
   }
 
   function getReusableStoredContentPlan(itemId) {
     const storedContentPlan = getStoredContentPlan(itemId);
-    if (!storedContentPlan || !isStoredContentPlanReusableForTableRequirement(storedContentPlan, tableRequirement)) {
+    if (!storedContentPlan
+      || !isStoredContentPlanReusableForTableRequirement(storedContentPlan, tableRequirement)
+      || !isSameContentPlanFingerprint(storedContentPlan.fingerprint, getContentPlanFingerprintForItem(itemId))) {
       return null;
     }
     return {
@@ -3776,7 +3880,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function getContentPlanForItem(itemId) {
-    const plan = contentPlans.get(itemId) || getReusableStoredContentPlan(itemId)?.plan || normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles);
+    const context = contextByItemId.get(itemId);
+    const plan = contentPlans.get(itemId) || getReusableStoredContentPlan(itemId)?.plan || normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles, {
+      writingProfile: resolveWritingProfile(context?.item),
+      chapterTask: getChapterWritingTask(context),
+    });
     contentPlans.set(itemId, plan);
     return plan;
   }
@@ -3785,7 +3893,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     contentPlans.set(itemId, plan);
     storedContentPlans = pruneContentGenerationPlans({
       ...storedContentPlans,
-      [itemId]: createStoredContentPlan(plan, tableRequirement),
+      [itemId]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(itemId)),
     }, leaves);
     const saved = workspaceStore.updateTechnicalPlan({ contentGenerationPlans: storedContentPlans, contentGenerationRuntime: syncRuntime() });
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, saved);
@@ -3860,7 +3968,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     contentPlans.set(item.id, plan);
     storedContentPlans = pruneContentGenerationPlans({
       ...storedContentPlans,
-      [item.id]: createStoredContentPlan(plan, tableRequirement),
+      [item.id]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(item.id)),
     }, leaves);
     const runtime = syncRuntime();
     const saved = workspaceStore.updateTechnicalPlan({
@@ -3902,8 +4010,9 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   function persistContentPlans(targets) {
     const nextPlans = { ...storedContentPlans };
     for (const context of targets) {
+      if (planningFailedItemIds.has(context.item.id)) continue;
       const contentPlan = contentPlans.get(context.item.id) || normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles);
-      nextPlans[context.item.id] = createStoredContentPlan(contentPlan, tableRequirement);
+      nextPlans[context.item.id] = createStoredContentPlan(contentPlan, tableRequirement, getContentPlanFingerprintForItem(context.item.id));
     }
     storedContentPlans = pruneContentGenerationPlans(nextPlans, leaves);
     const saved = workspaceStore.updateTechnicalPlan({ contentGenerationPlans: storedContentPlans, contentGenerationRuntime: syncRuntime() });
@@ -3913,6 +4022,8 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   async function planOne(context) {
     const { item, parentChapters, siblingChapters } = context;
+    const chapterWritingTask = getChapterWritingTask(context);
+    const writingProfile = resolveWritingProfile(item);
     let contentPlan;
 
     try {
@@ -3929,20 +4040,31 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           maxTables,
           tableTotalSections: leaves.length,
           knowledgeItems,
+          chapterWritingTask,
+          writingProfile,
         }),
         temperature: 0.2,
         logTitle: `正文编排-${item.id}-${item.title || '未命名章节'}`,
         progressLabel: '正文编排决策',
         failureMessage: '模型返回的正文编排决策格式无效',
-        normalizer: (value) => normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles),
+        normalizer: (value) => normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles, {
+          chapterTask: chapterWritingTask,
+          writingProfile,
+        }),
         validator: validateContentPlan,
       });
     } catch (error) {
       if (isPauseLikeError(error)) {
         throw error;
       }
-      contentPlan = normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles);
-      logs = [...logs, `编排失败：${item.id} ${item.title || '未命名章节'}，${error.message || '模型返回无效'}，将按纯正文生成。`];
+      planningFailedItemIds.add(item.id);
+      const previousContent = sections[item.id]?.content || item.content || '';
+      const message = `章节写作合同生成失败：${error.message || '模型返回无效'}`;
+      saveSection(item, { status: 'error', content: previousContent, error: message }, previousContent, { logs });
+      contentStats.planning_completed += 1;
+      logs = [...logs, `编排失败：${item.id} ${item.title || '未命名章节'}，已保留旧正文且不会退化为纯正文生成。`];
+      updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+      return false;
     }
 
     if (tableRequirement === 'none') {
@@ -3952,15 +4074,17 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     contentPlans.set(item.id, contentPlan);
     storedContentPlans = pruneContentGenerationPlans({
       ...storedContentPlans,
-      [item.id]: createStoredContentPlan(contentPlan, tableRequirement),
+      [item.id]: createStoredContentPlan(contentPlan, tableRequirement, getContentPlanFingerprintForItem(item.id)),
     }, leaves);
     workspaceStore.updateTechnicalPlan({ contentGenerationPlans: storedContentPlans, contentGenerationRuntime: syncRuntime() });
     contentStats.planning_completed += 1;
     logs = [...logs, `编排完成：${item.id} ${item.title || '未命名章节'}（知识库：${contentPlan.knowledge.item_ids.length} 条，事实变量：${contentPlan.facts.titles.length} 项，表格：${contentPlan.table.needed ? '需要' : '不需要'}）`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    return true;
   }
 
   async function planAll() {
+    prepareChapterWritingTasks(tasksToRun);
     refreshRunLimits(tasksToRun);
     contentStats.phase = 'planning';
     contentStats.planning_total = tasksToRun.length;
@@ -3997,7 +4121,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
     pauseIfRequested('正文生成已在编排阶段暂停，可导出当前已完成内容，稍后继续。');
 
-    const tableCandidates = tasksToRun.filter(({ item }) => contentPlans.get(item.id)?.table.needed);
+    const tableCandidates = tasksToRun.filter(({ item }) => !planningFailedItemIds.has(item.id) && contentPlans.get(item.id)?.table.needed);
     const selectedTableIds = runLimits.maxTablesForRun === null
       ? new Set(tableCandidates.map(({ item }) => item.id))
       : pickDistributedTableTargets(tableCandidates, runLimits.maxTablesForRun);
@@ -4016,11 +4140,12 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   async function restoreOriginalMaterialsIfNeeded(targets) {
-    if (!isExpansionWorkflow || !originalPlanSegments.length || !targets?.length) {
+    const eligibleTargets = (targets || []).filter((context) => !planningFailedItemIds.has(context.item.id));
+    if (!isExpansionWorkflow || !originalPlanSegments.length || !eligibleTargets.length) {
       return;
     }
 
-    const targetStates = targets.map((context) => ({ context, state: getOriginalMaterialRuntimeState(context.item) }));
+    const targetStates = eligibleTargets.map((context) => ({ context, state: getOriginalMaterialRuntimeState(context.item) }));
     const rebuildTargets = targetStates.filter(({ state }) => state.canRebuildRestoredContent || (targetItemId && regenerate && state.validRestored));
     const restoreTargets = targetStates
       .filter(({ state }) => !state.validRestored && !state.canRebuildRestoredContent)
@@ -4154,6 +4279,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   async function prepareSingleSectionPlan() {
     const context = tasksToRun[0];
+    prepareChapterWritingTasks([context]);
     const storedContentPlan = getReusableStoredContentPlan(context.item.id);
     contentStats.phase = 'planning';
     contentStats.planning_total = 1;
@@ -4181,6 +4307,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   async function runOne(context) {
     const { item } = context;
+    if (planningFailedItemIds.has(item.id)) return;
     const previousSection = sections[item.id] || {};
     const previousContent = previousSection.content || item.content || '';
     const previousStatus = previousSection.status && previousSection.status !== 'running'
@@ -4437,6 +4564,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   function pendingContentContexts() {
     return leaves.filter(({ item }) => {
+      if (planningFailedItemIds.has(item.id)) return false;
       const section = sections[item.id];
       const content = section?.content || item.content || '';
       const originalState = getOriginalMaterialRuntimeState(item);
@@ -4652,9 +4780,17 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   function createExpansionCycle(currentWords) {
     const candidates = leafWordStats()
-      .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim())
-      .sort((a, b) => a.words - b.words);
-    const orderedIds = orderExpansionCandidates(candidates).map(({ item }) => item.id);
+      .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim());
+    const rankedCandidates = rankContentExpansionCandidates(candidates, {
+      sections,
+      plans: storedContentPlans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+    });
+    const orderedIds = rankedCandidates.map(({ context }) => context.item.id);
+    const leadingCandidate = rankedCandidates[0];
+    if (leadingCandidate) {
+      logs = [...logs, `扩写优先级：${leadingCandidate.context.item.id} ${leadingCandidate.context.item.title || '未命名章节'}（${leadingCandidate.reasons.join('；') || '按评分价值排序'}）。`];
+    }
     syncRuntime({
       expansion_cycle_item_ids: orderedIds,
       expansion_attempted_item_ids: [],
@@ -4814,9 +4950,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
   async function expandOneSection(context) {
     const { item, content, words } = context;
-    const targetWords = Math.max(words * 2, words + MIN_SECTION_EXPANSION_INCREMENT);
     const storedContentPlan = getReusableStoredContentPlan(item.id);
     const contentPlan = contentPlans.get(item.id) || storedContentPlan?.plan || normalizeContentPlan({}, allowedKnowledgeItemIds, allowedFactTitles);
+    const targetRange = normalizeTargetWords(contentPlan.target_words);
+    const desiredWords = Math.max(words + MIN_SECTION_EXPANSION_INCREMENT, targetRange.min, targetRange.preferred);
+    const targetWords = Math.max(words, Math.min(targetRange.max, desiredWords));
     const selectedFactsText = resolveSelectedFactsText(contentPlan, globalFacts);
     logs = [...logs, `开始扩写：${item.id} ${item.title || '未命名章节'}（当前 ${words} 字，目标 ${targetWords} 字）。`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
@@ -4831,6 +4969,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           currentContent: content,
           currentWords: words,
           targetWords,
+          contentPlan,
         }),
         temperature: 0.7,
         logTitle: `正文扩写-${item.id}-${item.title || '未命名章节'}`,
@@ -5459,6 +5598,40 @@ workspace 文件说明：
         };
       })
       .filter(({ item, content }) => sections[item.id]?.status === 'success' && String(content || '').trim());
+  }
+
+  function runChapterSynthesisAndQualityAudit(options = {}) {
+    const targets = buildConsistencyAuditTargets(options.targetItemId || targetItemId);
+    const plans = {};
+    for (const context of targets) {
+      const plan = getContentPlanForItem(context.item.id);
+      if (plan) plans[context.item.id] = { plan };
+    }
+    const review = auditContentQuality({
+      contexts: targets,
+      sections,
+      plans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+      outlineData,
+    });
+    contentStats.phase = 'quality-auditing';
+    contentStats.quality_audit_label = review.label;
+    contentStats.quality_audit_chapter_total = review.chapter_synthesis.length;
+    contentStats.quality_audit_uncovered_scoring_total = review.scoring_coverage.uncovered_scoring_point_ids.length;
+    contentStats.quality_audit_deep_gap_total = review.executability.deep_gap_node_ids.length;
+    contentStats.quality_audit_duplicate_total = review.editorial.duplicates.length;
+    const findings = review.reviewer_simulation.overall_findings;
+    logs = [...logs, `章节统稿与${review.label}完成：${review.chapter_synthesis.length} 个二级章节，未覆盖评分点 ${contentStats.quality_audit_uncovered_scoring_total} 个，深度要素缺口 ${contentStats.quality_audit_deep_gap_total} 个，重复正文 ${contentStats.quality_audit_duplicate_total} 处。`, ...(findings.length ? findings.map((item) => `质量审核提示：${item}`) : ['质量审核提示：评分点、合规与执行性未发现待补强项。'])];
+    writeDeveloperLog('content.quality.audit.done', {
+      label: review.label,
+      chapter_total: contentStats.quality_audit_chapter_total,
+      uncovered_scoring_point_ids: review.scoring_coverage.uncovered_scoring_point_ids,
+      deep_gap_node_ids: review.executability.deep_gap_node_ids,
+      duplicate_total: contentStats.quality_audit_duplicate_total,
+      can_proceed: review.can_proceed,
+    });
+    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    return review;
   }
 
   function buildConsistencyAuditGroups(targets) {
@@ -6341,6 +6514,9 @@ workspace 文件说明：
       sections,
       options: generationOptions,
       aiImagesAvailable: imageAvailability.available,
+      contentPlans: storedContentPlans,
+      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+      globalFacts,
     });
     contentStats.illustration_planning_step_completed = 1;
     contentStats.illustration_planning_step_label = '正在执行全文图片编排 Agent';
@@ -6579,6 +6755,25 @@ workspace 文件说明：
     const applied = applyGeneratedIllustrationsToDocument(illustrationPlan, outlineData, sections);
     outlineData = applied.outlineData;
     sections = applied.sections;
+    if (applied.anchorFallbackItemIds.length) {
+      const fallbackIds = new Set(applied.anchorFallbackItemIds);
+      illustrationPlan = {
+        ...illustrationPlan,
+        items: illustrationPlan.items.map((item) => fallbackIds.has(item.item_id)
+          ? {
+            ...item,
+            generation: {
+              ...(item.generation || {}),
+              visual_qa: {
+                status: 'needs-manual-review',
+                reason: '正文块已变化，图片已退化插入章节末尾，请人工核对图文位置。',
+              },
+            },
+          }
+          : item),
+      };
+      logs = [...logs, `有 ${fallbackIds.size} 张图片的正文块锚点已变化，已退化插入章节末尾并标记人工核对。`];
+    }
     refreshIllustrationGenerationStats('图片生成和正文插入完成');
     const saved = workspaceStore.updateTechnicalPlan({
       outlineData,
@@ -6596,8 +6791,6 @@ workspace 文件说明：
 
   try {
     if (!runOnlyIllustrationStage) {
-      await runSpecialResponseModes();
-      pauseIfRequested('正文生成已在受控响应分流后暂停，可保留当前结果并稍后继续。');
     }
     if (!runOnlyIllustrationStage && tasksToRun.length) {
       if (targetItemId) {
@@ -6639,12 +6832,16 @@ workspace 文件说明：
       } else {
         await runConsistencyAuditIfEnabled();
       }
+      runChapterSynthesisAndQualityAudit();
+      pauseIfRequested('正文生成已在章节统稿与质量审核后暂停，可导出当前已完成内容，稍后继续。');
       await removeTablesBeforeIllustration();
       pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     } else if (!runOnlyIllustrationStage) {
       await runOriginalPlanCoverageAuditIfEnabled({ targetItemId });
       pauseIfRequested('正文生成已在原方案覆盖审计后暂停，可导出当前已完成内容，稍后继续。');
       await runConsistencyAuditIfEnabled({ targetItemId });
+      runChapterSynthesisAndQualityAudit({ targetItemId });
+      pauseIfRequested('正文生成已在章节统稿与质量审核后暂停，可导出当前已完成内容，稍后继续。');
       await removeTablesBeforeIllustration({ targetItemId });
       pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     } else if (runOnlyIllustrationPlanning) {
@@ -6727,6 +6924,7 @@ workspace 文件说明：
 // 仅供开发者局部测试页复用当前正式正文扩写 patch runtime。
 // 正式业务入口仍然只使用 runContentGenerationTask；测试页不得复制这组逻辑另起实现。
 const __developerContentExpansionPatchRuntime = {
+  buildContentExpansionMessages,
   normalizeContentExpansionPatch,
   validateContentExpansionPatch,
   buildContentExpansionRepairMessages,
@@ -6738,9 +6936,20 @@ const __developerContentExpansionPatchRuntime = {
   normalizeOutlineExpansionResponse,
 };
 
+const __contentPlanContractRuntime = {
+  buildChapterContentPlanMessages,
+  buildChapterContentMessages,
+  createStoredContentPlan,
+  formatContentPlanForPrompt,
+  normalizeContentPlan,
+  normalizeStoredContentPlan,
+  validateContentPlan,
+};
+
 module.exports = {
   runContentGenerationTask,
   stripRepeatedChapterTitle,
   formatBidAnalysisFactsForPrompt,
   __developerContentExpansionPatchRuntime,
+  __contentPlanContractRuntime,
 };

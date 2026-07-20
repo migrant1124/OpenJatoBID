@@ -112,12 +112,6 @@ function normalizeSectionsResponse(value, totalLines) {
   };
 }
 
-function validateSectionsResponse(value) {
-  if (!Array.isArray(value?.sections) || value.sections.length < 2) {
-    throw new Error('未识别到至少两个有效标段');
-  }
-}
-
 function buildExtractMessages(segment, segmentIndex, totalSegments) {
   return [
     {
@@ -249,7 +243,17 @@ async function runBidSectionExtractionTask({ aiService, workspaceStore, updateTa
       })
       : segmentResults[0];
     const merged = normalizeSectionsResponse(mergedRaw, totalLines);
-    validateSectionsResponse(merged);
+    if (merged.sections.length < 2) {
+      const finalState = workspaceStore.updateTechnicalPlan({
+        bidSectionMode: 'single',
+        bidSections: [],
+        bidSectionExtractionStatus: 'success',
+        bidSectionExtractionError: undefined,
+      });
+      const finalLogs = pushLog(logs, '未识别到多个有效标段，已恢复为单标段。');
+      updateTask({ status: 'success', progress: 100, logs: finalLogs }, finalState);
+      return;
+    }
 
     const finalState = workspaceStore.updateTechnicalPlan({
       bidSectionMode: 'multiple',

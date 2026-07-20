@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 19;
+const schemaVersion = 20;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -48,6 +48,8 @@ function createInitialSchema(db) {
       content_generation_options_json TEXT,
       content_generation_runtime_json TEXT,
       content_illustration_plan_json TEXT,
+      requirement_response_matrix_json TEXT,
+      outline_quality_review_json TEXT,
       selected_section_id TEXT,
       selected_section_title TEXT,
       selected_section_head_line TEXT,
@@ -120,6 +122,7 @@ function createInitialSchema(db) {
       knowledge_item_ids_json TEXT,
       format_constraints_json TEXT,
       response_state_json TEXT,
+      quality_metadata_json TEXT,
       content TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -298,6 +301,12 @@ function addTechnicalPlanBidAnalysisDiagnosticContract(db) {
   addColumnIfMissing(db, 'technical_plan_bid_items', 'analysis_context_json', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_bid_items', 'diagnostic_json', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_bid_items', 'requires_manual_review', 'INTEGER NOT NULL DEFAULT 0');
+}
+
+function addTechnicalPlanQualityModel(db) {
+  addColumnIfMissing(db, 'technical_plan_meta', 'requirement_response_matrix_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_meta', 'outline_quality_review_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_outline_nodes', 'quality_metadata_json', 'TEXT');
 }
 
 function removeLegacyTechnicalPlanIllustrationType(db) {
@@ -1199,6 +1208,21 @@ const schemaHealthColumnGroups = [
       requires_manual_review: 'INTEGER NOT NULL DEFAULT 0',
     },
   },
+  {
+    version: 20,
+    table: 'technical_plan_meta',
+    columns: {
+      requirement_response_matrix_json: 'TEXT',
+      outline_quality_review_json: 'TEXT',
+    },
+  },
+  {
+    version: 20,
+    table: 'technical_plan_outline_nodes',
+    columns: {
+      quality_metadata_json: 'TEXT',
+    },
+  },
 ];
 
 function quoteIdentifier(value) {
@@ -1357,6 +1381,11 @@ const migrations = [
     version: 19,
     description: '招标解析项新增诊断数据契约',
     up: addTechnicalPlanBidAnalysisDiagnosticContract,
+  },
+  {
+    version: 20,
+    description: '技术方案新增投标质量模型持久化字段',
+    up: addTechnicalPlanQualityModel,
   },
 ];
 

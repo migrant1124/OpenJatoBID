@@ -34,6 +34,14 @@ const initialState: TechnicalPlanState = {
   outlineData: null,
 };
 
+export function normalizeTechnicalPlanState(state: TechnicalPlanState): TechnicalPlanState {
+  return {
+    ...initialState,
+    ...state,
+    outlineExpansionMode: state.outlineExpansionMode || 'ai-complement',
+  };
+}
+
 export function useTechnicalPlanWorkflow() {
   const [state, setState] = useState<TechnicalPlanState>(initialState);
   const [hydrated, setHydrated] = useState(false);
@@ -45,7 +53,7 @@ export function useTechnicalPlanWorkflow() {
       try {
         const cachedState = await technicalPlanStorage.load();
         if (mounted && cachedState) {
-          setState({ ...initialState, ...cachedState, outlineExpansionMode: cachedState.outlineExpansionMode || 'ai-complement' });
+          setState(normalizeTechnicalPlanState(cachedState));
         }
       } catch (error) {
         console.warn('技术方案缓存读取失败', error);

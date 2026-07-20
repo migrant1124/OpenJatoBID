@@ -122,6 +122,93 @@ export interface BidAnalysisTaskState {
 
 export type BidAnalysisTasks = Record<string, BidAnalysisTaskState>;
 
+export interface RequirementSourceReference {
+  source_type: 'tender' | 'appendix' | 'footnote' | 'original-plan' | 'knowledge' | 'user-input';
+  document_id?: string;
+  section?: string;
+  block_id?: string;
+  quote?: string;
+  page?: number;
+}
+
+export interface AtomicScoringPoint {
+  scoring_point_id: string;
+  group_requirement_id: string;
+  title: string;
+  requirement_text: string;
+  scoring_rule: string;
+  score_value?: number;
+  score_text?: string;
+  source_refs: RequirementSourceReference[];
+  mandatory_level: 'normal' | 'important' | 'high' | 'potential-rejection';
+  expected_response_types: Array<'content' | 'table' | 'illustration' | 'evidence' | 'commitment' | 'manual'>;
+  high_score_conditions: string[];
+  suggested_section?: string;
+  writing_focus?: string;
+  mapped_node_ids: string[];
+  primary_node_id?: string;
+  status: 'unmapped' | 'mapped' | 'covered' | 'needs-review';
+}
+
+export interface RejectionRiskItem {
+  risk_id: string;
+  source_refs: RequirementSourceReference[];
+  trigger: string;
+  category: 'technical-response' | 'format' | 'attachment' | 'signature' | 'submission' | 'evidence' | 'other';
+  risk_level: 'high' | 'potential-rejection';
+  handling_route: 'outline' | 'fixed-form' | 'evidence' | 'export' | 'submission' | 'manual-review';
+  mapped_node_ids: string[];
+  mitigation: string;
+  status: 'unhandled' | 'covered' | 'not-applicable' | 'needs-confirmation';
+}
+
+export interface HiddenRequirementItem {
+  hidden_requirement_id: string;
+  source_kind: 'appendix' | 'footnote' | 'table-note' | 'cross-reference' | 'upload-rule' | 'naming-rule' | 'other';
+  requirement_text: string;
+  source_refs: RequirementSourceReference[];
+  handling_route: 'outline' | 'content' | 'fixed-form' | 'evidence' | 'export' | 'submission' | 'manual-review';
+  mapped_node_ids: string[];
+  status: 'unhandled' | 'covered' | 'not-applicable' | 'needs-confirmation';
+}
+
+export interface ValueAnchor {
+  anchor_id: string;
+  title: string;
+  category: 'resilience-emergency' | 'quality-improvement' | 'schedule-assurance' | 'acceptance-readiness' | 'service-capability' | 'risk-governance' | 'data-closed-loop' | 'collaboration-governance' | 'creative-value' | 'visual-expression';
+  base_scoring_point_ids: string[];
+  business_value: string;
+  directory_recommended: boolean;
+  deep_writing_recommended: boolean;
+  support_state: 'tender-supported' | 'original-plan-supported' | 'knowledge-supported' | 'industry-template' | 'needs-confirmation';
+  content_requirements: string[];
+  table_recommendations: string[];
+  visual_recommendations: string[];
+  risk_notes: string[];
+  route: 'directory' | 'writing' | 'table' | 'illustration' | 'risk' | 'manual-review';
+  status: 'candidate' | 'accepted' | 'rejected' | 'needs-confirmation';
+  recommended_parent_id?: string;
+  directory_gate: {
+    scope_relevant: boolean;
+    score_or_delivery_value: boolean;
+    actionable: boolean;
+    section_capacity: boolean;
+    evidence_safe: boolean;
+    non_duplicate: boolean;
+    format_allowed: boolean;
+  };
+}
+
+export interface RequirementResponseMatrix {
+  schema_version: 1;
+  revision: string;
+  scoring_points: AtomicScoringPoint[];
+  rejection_risks: RejectionRiskItem[];
+  hidden_requirements: HiddenRequirementItem[];
+  value_anchors: ValueAnchor[];
+  updated_at: string;
+}
+
 export interface BidAnalysisTaskAnalysisContext {
   run_id?: string;
   document_id?: string;
@@ -168,9 +255,61 @@ export type ContentGenerationSections = Record<string, ContentGenerationSectionS
 export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibility';
 export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
+export type ContentIllustrationAnchorType = 'before_block' | 'after_block' | 'after_heading' | 'section_end';
+
+export interface ContentIllustrationAnchor {
+  type: ContentIllustrationAnchorType;
+  section_id: string;
+  block_id?: string;
+  block_hash?: string;
+  sequence: number;
+}
+
+export interface CreativeBrief {
+  client_profile: string;
+  project_goal: string;
+  target_audience: string[];
+  campaign_theme: string;
+  key_message: string;
+  event_type?: string;
+  venue_and_scene?: string;
+  mandatory_elements: string[];
+  prohibited_elements: string[];
+  style_keywords: string[];
+  brand_colors: string[];
+  brand_assets: string[];
+  deliverable_type: string;
+  aspect_ratio: string;
+  source_scoring_point_ids: string[];
+  source_value_anchor_ids: string[];
+  needs_user_confirmation: string[];
+}
+
+export interface ContentPlanFingerprint {
+  outline_node_hash: string;
+  parent_outline_hash: string;
+  scoring_matrix_revision: string;
+  global_facts_revision: string;
+  knowledge_document_revisions: string[];
+  original_plan_hash?: string;
+  prompt_version: string;
+  writing_profile: 'standard' | 'deep' | 'creative-proposal';
+}
 
 export interface ContentGenerationPlanData {
   writing_focus?: string;
+  writing_profile: 'standard' | 'deep' | 'creative-proposal';
+  section_role: string;
+  scoring_point_ids: string[];
+  value_anchor_ids: string[];
+  must_answer_questions: string[];
+  key_claims: string[];
+  implementation_steps: string[];
+  quantitative_details: string[];
+  deliverables: string[];
+  acceptance_criteria: string[];
+  evidence_requirements: string[];
+  cross_section_boundaries: { owns: string[]; excludes: string[]; related_node_ids: string[] };
   knowledge: {
     item_ids: string[];
   };
@@ -181,6 +320,11 @@ export interface ContentGenerationPlanData {
     needed: boolean;
     purpose: string;
   };
+  table_briefs: Array<{ id: string; title: string; purpose: string; columns?: string[] }>;
+  illustration_briefs: Array<{ id: string; title: string; purpose: string; visual_role?: string }>;
+  target_words: { min: number; preferred: number; max: number };
+  forbidden_repetition: string[];
+  chapter_task?: Record<string, unknown>;
   original_material?: {
     restored: boolean;
     optimized: boolean;
@@ -196,6 +340,7 @@ export interface ContentGenerationPlanData {
 export interface ContentGenerationPlanState {
   plan_version: number;
   plan: ContentGenerationPlanData;
+  fingerprint?: ContentPlanFingerprint;
   table_requirement?: 'none' | 'light' | 'moderate' | 'heavy';
   updated_at?: string;
 }
@@ -208,7 +353,14 @@ export interface ContentIllustrationPlanItem {
   image_type: string;
   title: string;
   section_ids: string[];
-  placement: ContentIllustrationPlacement;
+  placement?: ContentIllustrationPlacement;
+  visual_role?: string;
+  purpose?: string;
+  scoring_point_ids?: string[];
+  value_anchor_ids?: string[];
+  anchor?: ContentIllustrationAnchor;
+  aspect_ratio?: string;
+  creative_brief?: CreativeBrief;
   priority: number;
   generation?: {
     status: 'pending' | 'running' | 'success' | 'error';
@@ -217,6 +369,13 @@ export interface ContentIllustrationPlanItem {
     source_path?: string;
     asset_url?: string;
     attempts?: number;
+    visual_qa?: {
+      status: 'rendered' | 'needs-manual-review';
+      reason: string;
+      width?: number;
+      height?: number;
+      layout_repair_attempts?: number;
+    };
     error?: string;
     updated_at?: string;
   };
@@ -325,5 +484,7 @@ export interface TechnicalPlanState {
   contentGenerationPlans: ContentGenerationPlans;
   contentIllustrationPlan?: ContentIllustrationPlanState;
   contentGenerationRuntime?: ContentGenerationRuntimeState;
+  requirementResponseMatrix?: RequirementResponseMatrix;
+  outlineQualityReview?: Record<string, unknown>;
   outlineData: OutlineData | null;
 }

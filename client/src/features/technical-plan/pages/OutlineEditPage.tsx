@@ -223,13 +223,11 @@ function getOutlineConstraintLabels(item: OutlineItem) {
     || item.order_locked
     || item.level_locked
     || item.response_required === false
-    || item.allow_ai_children === false
-    || (item.response_mode && item.response_mode !== 'freeform-markdown'),
+    || item.allow_ai_children === false,
   );
   if (!hasFormatConstraints) return [];
 
   const labels: string[] = [];
-  if (item.manual_input_required) labels.push('人工填写');
   if (item.format_node_id) labels.push('固定目录');
   if (item.required_in_outline) labels.push('不可删除');
   if (item.title_locked) labels.push('标题锁定');
@@ -237,16 +235,36 @@ function getOutlineConstraintLabels(item: OutlineItem) {
   if (item.level_locked) labels.push('层级锁定');
   if (item.response_required === false) labels.push('只保留标题');
 
-  const responseModeLabel = item.response_mode && {
-    'freeform-markdown': 'AI 正文',
-    'fixed-markdown-table': '固定表格',
-    'locked-commitment': '固定承诺函',
-    'evidence-markdown': '证明材料',
-    container: '目录容器',
-    'explicit-none': '明确无内容响应',
-  }[item.response_mode];
-  if (responseModeLabel) labels.push(responseModeLabel);
   return labels;
+}
+
+function updateOutlineSubtreeManual(items: OutlineItem[], itemId: string, manualInputRequired: boolean): OutlineItem[] {
+  return items.map((item) => {
+    if (item.id === itemId) {
+      const applyToSubtree = (node: OutlineItem): OutlineItem => ({
+        ...node,
+        manual_input_required: manualInputRequired,
+        children: node.children?.map(applyToSubtree),
+      });
+      return applyToSubtree(item);
+    }
+    return item.children?.length
+      ? { ...item, children: updateOutlineSubtreeManual(item.children, itemId, manualInputRequired) }
+      : item;
+  });
+}
+
+function getOutlineWritingLabel(item: OutlineItem) {
+  return item.manual_input_required ? '人工填写' : 'AI编写';
+}
+
+function getOutlineFocusLabel(item: OutlineItem) {
+  const labels: Record<string, string> = {
+    'service-plan': '重点：服务方案',
+    'score-first': '重点：第一档分值',
+    'score-second': '重点：第二档分值',
+  };
+  return item.focus_priority ? labels[item.focus_priority] : undefined;
 }
 
 function getInitialExpandedKnowledgeFolders(index: KnowledgeBaseIndex) {
@@ -555,6 +573,20 @@ function OutlineEditPage({
     });
   };
 
+  const changeManualAuthoring = async (item: OutlineItem, manualInputRequired: boolean) => {
+    if (!outlineData || outlineMutationLocked || sorting) return;
+    try {
+      await saveOutlineChange(
+        updateOutlineSubtreeManual(outlineData.outline, item.id, manualInputRequired),
+        'edit',
+        [item.id],
+      );
+      showToast(manualInputRequired ? '已设为人工编制，全部下级目录同步更新' : '已设为 AI 编制，全部下级目录同步更新', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '更新编制方式失败', 'error');
+    }
+  };
+
   const startEditing = (item: OutlineItem) => {
     if (sorting || outlineMutationLocked || item.title_locked) {
       return;
@@ -577,18 +609,17 @@ function OutlineEditPage({
       showToast('该节点标题来自招标文件，不能修改', 'info');
       return;
     }
-    if (editManualInputRequired && editingItem?.children?.length) {
-      showToast('只有没有下级目录的叶子节点可以设为人工填写', 'info');
-      return;
-    }
-
     try {
-      await saveOutlineChange(updateOutlineItem(outlineData.outline, editingItemId, (item) => ({
+      const editedOutline = updateOutlineItem(outlineData.outline, editingItemId, (item) => ({
         ...item,
         title: editTitle.trim() || item.title,
         description: editDescription.trim(),
-        manual_input_required: editManualInputRequired,
-      })), 'edit', [editingItemId]);
+      }));
+      await saveOutlineChange(
+        updateOutlineSubtreeManual(editedOutline, editingItemId, editManualInputRequired),
+        'edit',
+        [editingItemId],
+      );
       setEditingItemId(null);
       showToast('目录项已更新，相关正文已清空', 'success');
     } catch (error) {
@@ -624,10 +655,6 @@ function OutlineEditPage({
     }
 
     const parent = findOutlineItem(outlineData.outline, parentId);
-    if (parent?.manual_input_required) {
-      showToast('人工填写节点不能添加子目录', 'info');
-      return;
-    }
     if (parent?.allow_ai_children === false) {
       showToast('该固定目录不允许添加子目录', 'info');
       return;
@@ -637,6 +664,7 @@ function OutlineEditPage({
       id: `${parentId}.${nextIndex}`,
       title: '新目录项',
       description: '请编辑描述',
+      manual_input_required: parent?.manual_input_required === true,
     };
 
     try {
@@ -856,6 +884,8 @@ function OutlineEditPage({
     const heading = exportFormat.headings[Math.min(item.id.split('.').length - 1, 5)];
     const displayTitle = formatOutlineDisplayTitle(item, heading);
     const constraintLabels = getOutlineConstraintLabels(item);
+    const writingLabel = getOutlineWritingLabel(item);
+    const focusLabel = getOutlineFocusLabel(item);
     const positionLocked = isOutlinePositionLocked(item);
     const dropClass = isDropTarget
       ? dropTarget.valid
@@ -890,8 +920,21 @@ function OutlineEditPage({
             onDoubleClick={() => hasChildren && toggleExpanded(item.id)}
           >
             <strong>{displayTitle}</strong>
+            <span className="bid-analysis-section-chip">{writingLabel}</span>
             {constraintLabels.length > 0 && <span className="bid-analysis-section-chip">{constraintLabels.join(' · ')}</span>}
+            {focusLabel && <span className="bid-analysis-section-chip">{focusLabel}</span>}
           </button>
+          {level < 3 && (
+            <label className="outline-tree-manual-toggle" onClick={(event) => event.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={item.manual_input_required === true}
+                disabled={outlineMutationLocked || sorting}
+                onChange={(event) => { void changeManualAuthoring(item, event.target.checked); }}
+              />
+              <span>人工编制</span>
+            </label>
+          )}
         </div>
         {hasChildren && isExpanded && item.children?.map((child) => renderItem(child, level + 1))}
       </div>
@@ -1196,9 +1239,9 @@ function OutlineEditPage({
                     <select
                       value={editManualInputRequired ? 'manual' : 'ai'}
                       onChange={(event) => setEditManualInputRequired(event.target.value === 'manual')}
-                      disabled={outlineMutationLocked || sorting || Boolean(selectedItem.children?.length)}
+                      disabled={outlineMutationLocked || sorting}
                     >
-                      <option value="ai">AI 编写</option>
+                      <option value="ai">AI编写</option>
                       <option value="manual">人工填写</option>
                     </select>
                   </label>
@@ -1212,14 +1255,18 @@ function OutlineEditPage({
                   <h3>{formatOutlineDisplayTitle(selectedItem, exportFormat.headings[Math.min(selectedItem.id.split('.').length - 1, 5)])}</h3>
                   <p>{selectedItem.description || '无描述'}</p>
                   {selectedItem.source_requirement_title && <small>来源评分项：{selectedItem.source_requirement_title}</small>}
-                  {getOutlineConstraintLabels(selectedItem).length > 0 && (
+                   {getOutlineConstraintLabels(selectedItem).length > 0 && (
                     <div className="outline-detail-actions" aria-label="目录约束状态">
                       {getOutlineConstraintLabels(selectedItem).map((label) => <span className="bid-analysis-section-chip" key={label}>{label}</span>)}
                     </div>
-                  )}
+                   )}
+                  <div className="outline-detail-actions" aria-label="正文填写方式">
+                    <span className="bid-analysis-section-chip">{getOutlineWritingLabel(selectedItem)}</span>
+                    {getOutlineFocusLabel(selectedItem) && <span className="bid-analysis-section-chip">{getOutlineFocusLabel(selectedItem)}</span>}
+                  </div>
                   <div className="outline-detail-actions">
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
-                    {selectedItem.allow_ai_children !== false && !selectedItem.manual_input_required && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
+                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
                     {!selectedItem.required_in_outline && <button type="button" className="danger-action" onClick={() => { void removeItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>删除</button>}
                   </div>
                 </>
@@ -1290,6 +1337,7 @@ function OutlineEditPage({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
     </div>
   );
 }

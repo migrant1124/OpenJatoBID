@@ -1,6 +1,7 @@
 const { buildBidSectionContextHint } = require('../utils/bidSectionContext.cjs');
 const { mergeSegmentedAiResults } = require('../utils/segmentedAiResultMerger.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
+const { FOCUS_WRITING_REVISION, runFocusWritingTask: runFocusWritingTaskDefault } = require('./focusWritingTask.cjs');
 
 const PROMPT_CACHE_WARMUP_DELAY_MS = 5000;
 const FORMAT_STATUS_EXPLICIT = '【技术文件目录状态】：明确';
@@ -69,6 +70,69 @@ function buildInvalidBidAndRejectionItemsPrompt() {
 - ...`;
 }
 
+const PROCUREMENT_QUOTATION_RULE_KEYS = [
+  'pricing_method',
+  'price_limits',
+  'tax_and_invoice',
+  'cost_scope',
+  'calculation_and_rounding',
+  'quote_documents_and_attachments',
+  'submission_method_or_platform',
+  'consistency_and_priority',
+  'invalid_or_abnormal_price',
+  'settlement_and_payment',
+  'other_explicit_rules',
+];
+
+function buildProcurementListPrompt() {
+  return `任务：提取招标文件、询比文件或采购文件中的采购清单、采购需求和报价要求。
+
+覆盖要求：
+1. 识别与“采购清单、采购需求、采购内容、货物需求、服务内容、技术参数、规格要求、报价清单、分项报价、工程量清单、预算、限价、报价规则”等含义相近的全部内容。
+2. procurement_items 必须输出文件中可识别的全部采购项，不得只保留重点、不得设置数量上限、不得合并不同采购项。原文未明确的必填字符串填“未明确”。
+3. 每个采购项的 attributes 必须保留数量、单位以外的全部明确字段、参数和原表格列；每个字段使用一条 {"name":"字段名","value":"字段值"}，不要因为字段名称未知而省略。
+4. delivery_or_acceptance_requirements 收集该采购项明确适用的交付、实施、验收、质保或服务要求；applicable_scope 填标段、标包、清单范围等明确适用范围。
+5. quotation_rules 必须覆盖所有明确报价规则。相同规则可以去重，不同规则不得合并或遗漏；规则按最合适的固定分类放入数组，无法归类的放入 other_explicit_rules。
+6. 仅表达信息本身，不要复刻 Markdown 表格、原文长段落或分析过程。
+7. extraction_status.procurement_items：存在至少一项明确采购项时填 found，否则填 not_found。extraction_status.quotation_rules：存在至少一条明确报价规则时填 found，否则填 not_found。
+
+严格输出以下 JSON 结构。禁止新增、删除或改名任何 key：
+{
+  "schema_version": 1,
+  "extraction_status": {
+    "procurement_items": "found",
+    "quotation_rules": "found"
+  },
+  "procurement_items": [
+    {
+      "item_name": "",
+      "quantity": "",
+      "unit": "",
+      "attributes": [
+        { "name": "", "value": "" }
+      ],
+      "applicable_scope": "",
+      "delivery_or_acceptance_requirements": []
+    }
+  ],
+  "quotation_rules": {
+    "pricing_method": [],
+    "price_limits": [],
+    "tax_and_invoice": [],
+    "cost_scope": [],
+    "calculation_and_rounding": [],
+    "quote_documents_and_attachments": [],
+    "submission_method_or_platform": [],
+    "consistency_and_priority": [],
+    "invalid_or_abnormal_price": [],
+    "settlement_and_payment": [],
+    "other_explicit_rules": []
+  }
+}
+
+仅输出 JSON，不要输出其他内容。`;
+}
+
 const taskCatalog = [
   {
     id: 'projectOverview', label: '项目概述', required: true, output: 'markdown', description: '提取项目基本信息、背景目的、规模预算、时间安排、实施内容和技术特点等。',
@@ -127,21 +191,7 @@ const taskCatalog = [
 7. 无明确格式时，在状态行之后说明“未找到明确技术文件目录格式”，并整理可能相关的技术文件编制要求。
 8. 状态行之后只输出整理好的 Markdown，不要输出分析过程。`,
   },
-  {
-    id: 'procurementList', label: '采购与报价', required: true, output: 'markdown', description: '采购内容、数量、规格参数以及完整报价规则。',
-    prompt: () => `任务：提取招标文件、询比文件或采购文件中的采购清单、采购需求和报价要求。
-
-请识别与“采购清单、采购需求、采购内容、货物需求、服务内容、技术参数、规格要求、报价清单、分项报价、工程量清单、预算、限价、报价规则”等含义相近的内容。
-
-提取要求：
-1. 优先保留招标文件中的表格、条目、字段含义和先后顺序，不要自行补充招标文件没有的信息。
-2. 如果原文是表格，请尽量整理为 Markdown 表格；如果表格结构复杂，可以按“清单项 + 要求说明”的方式整理。
-3. 合并整理分散在不同章节的采购内容、技术参数、数量、单位、交付、验收、质保等要求，并保留适用标段、标包或清单项范围。
-4. 报价部分完整覆盖：报价方式，预算与最高/单项/费率限价，税务和发票，价格组成，精度与舍入，计算公式，必交报价表及文件格式，提交平台，文件与平台报价的一致性和优先级，禁止性或无效报价，异常低价审查，结算付款，以及必须配套提交的外部附件。
-5. 字段名称不要求固定，按原文实际信息组织；无法确认的内容写“未明确”，不得编造金额、税率、公式或表单。
-6. 如果没有找到明确采购清单或报价规则，分别说明“未找到明确采购清单”或“未找到明确报价要求”，并列出可能相关段落摘要。
-7. 只输出整理后的 Markdown，不要输出分析过程。`,
-  },
+  { id: 'procurementList', label: '采购与报价', required: true, output: 'json', description: '全量采购项及固定分类的报价规则。', prompt: buildProcurementListPrompt },
   { id: 'projectInfo', label: '项目信息', required: true, output: 'json', description: '项目名称、编号、类型、预算和地址。', prompt: () => jsonTask('提取项目信息', '提取项目名称、项目编号、项目类型、项目预算、项目地址。', `{"project_name":"项目名称","project_number":"项目编号","project_type":"项目类型","project_budget":"项目预算","project_address":"项目地址"}`) },
   { id: 'partAInfo', label: '甲方信息', required: true, output: 'json', description: '招标人公司、地址、联系人和电话。', prompt: () => jsonTask('提取甲方信息', '提取公司名称、地址、联系人、联系电话。', `{"company_name":"公司名称","address":"地址","contact_person":"联系人","contact_phone":"联系电话"}`) },
   { id: 'deliveryAndServiceRequirements', label: '交货和服务要求', required: true, output: 'json', description: '实施周期、交付范围、地点、验收、质保、售后、响应、培训和文档要求。', prompt: () => jsonTask('提取交货和服务要求', '提取实施周期/工期/交付期限、交付范围、交付/实施地点、验收要求、质保期、售后服务要求、响应时限、培训要求、资料/文档交付要求。', `{"implementation_period":"实施周期/工期/交付期限","delivery_scope":"交付范围","delivery_location":"交付/实施地点","acceptance_requirements":"验收要求","warranty_period":"质保期","after_sales_service":"售后服务要求","response_time":"响应时限","training_requirements":"培训要求","documentation_requirements":"资料/文档交付要求"}`) },
@@ -218,7 +268,7 @@ function isBidAnalysisTaskResultValid(task, state) {
     return true;
   }
   try {
-    normalizeJsonObject(JSON.parse(state.content));
+    getBidAnalysisJsonNormalizer(task)(JSON.parse(state.content));
     return true;
   } catch {
     return false;
@@ -251,6 +301,83 @@ function normalizeJsonObject(value) {
   return value;
 }
 
+function assertExactObjectKeys(value, keys, label) {
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...keys].sort();
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw new Error(`${label}字段不符合固定结构`);
+  }
+}
+
+function assertString(value, label) {
+  if (typeof value !== 'string') {
+    throw new Error(`${label}必须是字符串`);
+  }
+}
+
+function assertStringArray(value, label) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${label}必须是字符串数组`);
+  }
+}
+
+function normalizeProcurementAnalysisResult(value) {
+  const result = normalizeJsonObject(value);
+  assertExactObjectKeys(result, ['schema_version', 'extraction_status', 'procurement_items', 'quotation_rules'], '采购与报价解析结果');
+  if (result.schema_version !== 1) {
+    throw new Error('采购与报价解析结果 schema_version 必须为 1');
+  }
+
+  const extractionStatus = normalizeJsonObject(result.extraction_status);
+  assertExactObjectKeys(extractionStatus, ['procurement_items', 'quotation_rules'], '提取状态');
+  for (const key of ['procurement_items', 'quotation_rules']) {
+    if (!['found', 'not_found'].includes(extractionStatus[key])) {
+      throw new Error(`提取状态.${key}必须为 found 或 not_found`);
+    }
+  }
+
+  if (!Array.isArray(result.procurement_items)) {
+    throw new Error('采购项必须是数组');
+  }
+  if ((extractionStatus.procurement_items === 'found') !== (result.procurement_items.length > 0)) {
+    throw new Error('提取状态.procurement_items与采购项内容不一致');
+  }
+  for (const [index, item] of result.procurement_items.entries()) {
+    const itemLabel = `采购项第${index + 1}项`;
+    const procurementItem = normalizeJsonObject(item);
+    assertExactObjectKeys(procurementItem, ['item_name', 'quantity', 'unit', 'attributes', 'applicable_scope', 'delivery_or_acceptance_requirements'], itemLabel);
+    for (const key of ['item_name', 'quantity', 'unit', 'applicable_scope']) {
+      assertString(procurementItem[key], `${itemLabel}.${key}`);
+    }
+    if (!Array.isArray(procurementItem.attributes)) {
+      throw new Error(`${itemLabel}.attributes必须是数组`);
+    }
+    for (const [attributeIndex, attribute] of procurementItem.attributes.entries()) {
+      const attributeLabel = `${itemLabel}.attributes第${attributeIndex + 1}项`;
+      const normalizedAttribute = normalizeJsonObject(attribute);
+      assertExactObjectKeys(normalizedAttribute, ['name', 'value'], attributeLabel);
+      assertString(normalizedAttribute.name, `${attributeLabel}.name`);
+      assertString(normalizedAttribute.value, `${attributeLabel}.value`);
+    }
+    assertStringArray(procurementItem.delivery_or_acceptance_requirements, `${itemLabel}.delivery_or_acceptance_requirements`);
+  }
+
+  const quotationRules = normalizeJsonObject(result.quotation_rules);
+  assertExactObjectKeys(quotationRules, PROCUREMENT_QUOTATION_RULE_KEYS, '报价规则');
+  for (const key of PROCUREMENT_QUOTATION_RULE_KEYS) {
+    assertStringArray(quotationRules[key], `报价规则.${key}`);
+  }
+  const hasQuotationRules = PROCUREMENT_QUOTATION_RULE_KEYS.some((key) => quotationRules[key].length > 0);
+  if ((extractionStatus.quotation_rules === 'found') !== hasQuotationRules) {
+    throw new Error('提取状态.quotation_rules与报价规则内容不一致');
+  }
+  return result;
+}
+
+function getBidAnalysisJsonNormalizer(task) {
+  return task.id === 'procurementList' ? normalizeProcurementAnalysisResult : normalizeJsonObject;
+}
+
 function buildJsonRequest(task, messages, logTitle, normalizer = normalizeJsonObject) {
   return {
     messages,
@@ -263,39 +390,47 @@ function buildJsonRequest(task, messages, logTitle, normalizer = normalizeJsonOb
   };
 }
 
-function serializeJsonResult(value) {
-  return JSON.stringify(normalizeJsonObject(value), null, 2);
+function serializeJsonResult(value, normalizer = normalizeJsonObject) {
+  return JSON.stringify(normalizer(value), null, 2);
 }
 
 async function runSingleBidAnalysisPromptTask({ aiService, fileContent, task, sectionHint, logTitle, jsonNormalizer }) {
   const messages = buildMessages(fileContent, task, sectionHint);
   if (task.output === 'json') {
-    return serializeJsonResult(await aiService.requestJson(buildJsonRequest(task, messages, logTitle, jsonNormalizer)));
+    const normalizer = jsonNormalizer || normalizeJsonObject;
+    return serializeJsonResult(await aiService.requestJson(buildJsonRequest(task, messages, logTitle, normalizer)), normalizer);
   }
   return aiService.chat({ messages, temperature: 0.1, logTitle: logTitle || `招标解析-${task.label}` });
 }
 
-async function runBidAnalysisPromptTask({ aiService, fileContent, fileSegments, task, sectionHint, jsonNormalizer }) {
+async function runBidAnalysisPromptTask({ aiService, fileContent, fileSegments, task, sectionHint, jsonNormalizer, onSegmentProgress }) {
   const segments = Array.isArray(fileSegments) && fileSegments.length
     ? fileSegments
     : splitUserTextByContextLimit(fileContent, typeof aiService.getConfig === 'function' ? aiService.getConfig() : {});
   if (segments.length <= 1) {
-    return runSingleBidAnalysisPromptTask({ aiService, fileContent: segments[0] || fileContent, task, sectionHint, jsonNormalizer });
+    onSegmentProgress?.({ phase: 'segment-started', segmentIndex: 1, totalSegments: 1, completedSegments: 0 });
+    const content = await runSingleBidAnalysisPromptTask({ aiService, fileContent: segments[0] || fileContent, task, sectionHint, jsonNormalizer });
+    onSegmentProgress?.({ phase: 'segment-completed', segmentIndex: 1, totalSegments: 1, completedSegments: 1 });
+    return content;
   }
 
-  const segmentResults = await Promise.all(segments.map(async (segmentContent, index) => ({
-    segmentIndex: index + 1,
-    totalSegments: segments.length,
-    content: await runSingleBidAnalysisPromptTask({
+  let completedSegments = 0;
+  const segmentResults = await Promise.all(segments.map(async (segmentContent, index) => {
+    onSegmentProgress?.({ phase: 'segment-started', segmentIndex: index + 1, totalSegments: segments.length, completedSegments });
+    const content = await runSingleBidAnalysisPromptTask({
       aiService,
       fileContent: segmentContent,
       task,
       sectionHint,
       logTitle: `招标解析-${task.label}-第${index + 1}段`,
       jsonNormalizer,
-    }),
-  })));
+    });
+    completedSegments += 1;
+    onSegmentProgress?.({ phase: 'segment-completed', segmentIndex: index + 1, totalSegments: segments.length, completedSegments });
+    return { segmentIndex: index + 1, totalSegments: segments.length, content };
+  }));
 
+  onSegmentProgress?.({ phase: 'merging', totalSegments: segments.length, completedSegments });
   const mergedContent = await mergeSegmentedAiResults({
     aiService,
     segmentResults,
@@ -310,10 +445,10 @@ async function runBidAnalysisPromptTask({ aiService, fileContent, fileSegments, 
     return mergedContent;
   }
   const parsed = await aiService.parseJsonResponseContent(
-    buildJsonRequest(task, buildMessages(fileContent, task, sectionHint), `招标解析合并-${task.label}`),
+    buildJsonRequest(task, buildMessages(fileContent, task, sectionHint), `招标解析合并-${task.label}`, jsonNormalizer || normalizeJsonObject),
     mergedContent,
   );
-  return serializeJsonResult(jsonNormalizer ? jsonNormalizer(parsed) : parsed);
+  return serializeJsonResult(parsed, jsonNormalizer || normalizeJsonObject);
 }
 
 function runInvalidBidAndRejectionItemsExtraction({ aiService, fileContent, sectionHint }) {
@@ -325,7 +460,7 @@ function runInvalidBidAndRejectionItemsExtraction({ aiService, fileContent, sect
   return runBidAnalysisPromptTask({ aiService, fileContent, task, sectionHint });
 }
 
-async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, payload }) {
+async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, payload, waitForWarmup = waitForPromptCacheWarmup, runFocusWritingTask = runFocusWritingTaskDefault }) {
   const config = normalizeBidAnalysisConfig(payload.mode, payload.selected_task_ids || payload.selectedTaskIds);
   const mode = config.mode;
   const selectedTaskIdSet = new Set(config.taskIds);
@@ -420,6 +555,7 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
       fileSegments,
       task,
       sectionHint,
+      jsonNormalizer: task.output === 'json' ? getBidAnalysisJsonNormalizer(task) : undefined,
     });
     const trimmedContent = String(content || '').trim();
     if (!trimmedContent) {
@@ -485,7 +621,7 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
     const warmupSucceeded = await runOneSafely(projectOverviewTask);
     if (warmupSucceeded && remainingTasks.length) {
       updateTask({ status: 'running', progress: technicalPlan.bidAnalysisProgress || 0, logs: ['提示词缓存预热完成，等待 5 秒后开始并发解析剩余项。'] }, technicalPlan);
-      await waitForPromptCacheWarmup();
+      await waitForWarmup();
     }
   }
   await Promise.all(remainingTasks.map(runOneSafely));
@@ -504,6 +640,32 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
     return;
   }
 
+  const needsFocusWritingAnalysis = tasksToRun.some((task) => task.id === 'techRequirements')
+    || latestPlan.requirementResponseMatrix?.revision !== FOCUS_WRITING_REVISION;
+  if (needsFocusWritingAnalysis) {
+    try {
+      updateTask({ status: 'running', progress: 100, logs: ['技术评分要求已完成，正在识别重点编写项。'] }, latestPlan);
+      const focusWritingMatrix = await runFocusWritingTask({
+        aiService,
+        techRequirements: latestPlan.techRequirements,
+      });
+      if (!isCurrentAnalysisRun()) return;
+      technicalPlan = workspaceStore.updateTechnicalPlan({ requirementResponseMatrix: focusWritingMatrix });
+      updateTask({
+        status: 'running',
+        progress: 100,
+        logs: [`重点编写项识别完成：${focusWritingMatrix.scoring_points.length} 项。`],
+      }, technicalPlan);
+    } catch (error) {
+      technicalPlan = workspaceStore.updateTechnicalPlan({ requirementResponseMatrix: undefined });
+      updateTask({
+        status: 'running',
+        progress: 100,
+        logs: [`重点编写项识别失败，目录将按普通逻辑生成：${error.message || '未知错误'}`],
+      }, technicalPlan);
+    }
+  }
+
   technicalPlan = workspaceStore.updateTechnicalPlan({ bidAnalysisTask: updateTask({ status: 'success', progress: 100, error: undefined, logs: ['招标文件解析完成。'] }) });
   updateTask({ status: 'success', progress: 100, error: undefined }, technicalPlan);
 }
@@ -517,7 +679,9 @@ module.exports = {
   getBidAnalysisTaskById,
   getBidAnalysisTaskDefinitions,
   getBidAnalysisTasks,
+  getBidAnalysisJsonNormalizer,
   isBidAnalysisTaskResultValid,
+  normalizeProcurementAnalysisResult,
   runInvalidBidAndRejectionItemsExtraction,
   runBidAnalysisTask,
   runBidAnalysisPromptTask,
