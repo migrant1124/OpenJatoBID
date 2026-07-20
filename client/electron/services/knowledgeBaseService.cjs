@@ -156,8 +156,22 @@ function isCoverBlock(text, index) {
 
   const coverMarkers = ['投标文件', '投标书', '正本', '副本', '项目名称', '招标编号', '投标人', '编制日期', '日期：', '日期:'];
   const hasMarker = coverMarkers.some((marker) => compact.includes(marker));
-  const hasLongSentence = /[。！？；]/.test(normalized) && normalized.length > 80;
-  return hasMarker && !hasLongSentence;
+  return hasMarker && !hasSubstantiveSentence(normalized);
+}
+
+function hasSubstantiveSentence(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line
+      .trim()
+      .replace(/^#{1,6}\s*/, '')
+      .replace(/^(?:\*\*|__)([\s\S]*)(?:\*\*|__)$/, '$1')
+      .replace(/^[_*>\s]+|[_*>\s]+$/g, '')
+      .replace(/\s+/g, ''))
+    .filter(Boolean)
+    .some((line) => line.length >= 12
+      && /[。！？；]/.test(line)
+      && !/^(?:投标人|供应商|委托人|被委托人|受托人|法定代表人|单位负责人|授权代表|委托代理人|被授权人|代表|日期|时间)[：:]/.test(line));
 }
 
 function isSignatureBlock(text) {
@@ -169,8 +183,10 @@ function isSignatureBlock(text) {
   if (/(签字确认|用户签字|双方责任人.{0,12}签字)/.test(compact)) {
     return false;
   }
-  return /(盖章|签章|签名|法定代表人|授权代表|委托代理人|被授权人|年月日|投标人代表签字|代表签字)/.test(compact)
-    && !/[。！？；].{20,}/.test(normalized);
+  if (hasSubstantiveSentence(normalized)) {
+    return false;
+  }
+  return /(盖章|签章|签名|法定代表人|授权代表|委托代理人|被授权人|年月日|投标人代表签字|代表签字)/.test(compact);
 }
 
 function getContentCharCount(text) {
@@ -384,7 +400,7 @@ function filterBlocks(rawBlocks, segmentLimit = Infinity) {
       ? 'empty'
       : isPageNumberBlock(block.content)
         ? 'page_number'
-        : getContentCharCount(block.content) < 100
+        : getContentCharCount(block.content) < 100 && !hasSubstantiveSentence(block.content)
           ? 'too_short'
           : isCatalogBlock(block.content)
             ? 'catalog'
@@ -408,6 +424,20 @@ function filterBlocks(rawBlocks, segmentLimit = Infinity) {
     blocks: splitBusinessBlocksByPromptBudget(kept, segmentLimit),
     filtered_blocks: filtered,
   };
+}
+
+function summarizeFilteredBlockReasons(filteredBlocks) {
+  const labels = {
+    empty: '空段落',
+    page_number: '页码内容',
+    too_short: '正文过短或仅有标题',
+    catalog: '目录页',
+    repeated_header_footer: '重复页眉页脚',
+    cover: '封面内容',
+    signature_page: '签章/授权页',
+  };
+  const reasons = [...new Set((filteredBlocks || []).map((block) => labels[block.reason] || block.reason).filter(Boolean))];
+  return reasons.length ? `（原因：${reasons.join('、')}）` : '';
 }
 
 function renderBlocksForPrompt(blocks) {
@@ -1394,7 +1424,6 @@ function createKnowledgeBaseService({ app, aiService, configStore, knowledgeBase
           const rawBlocks = createRawBlocks(markdown);
           const semanticBlocks = mergeSemanticBlocks(rawBlocks);
           const filtered = filterBlocks(semanticBlocks, businessBlockBudget.blockSegmentLimit);
-          if (!filtered.blocks.length) throw new Error('筛选后没有可分析的正文内容');
           knowledgeBaseStore.saveBlocks(documentId, filtered.blocks, filtered.filtered_blocks);
           debugLog(documentId, 'prepare:blocks-ready', {
             raw_block_count: rawBlocks.length,
@@ -1413,6 +1442,28 @@ function createKnowledgeBaseService({ app, aiService, configStore, knowledgeBase
         blocks = knowledgeBaseStore.readBlocks(documentId);
         filteredBlocks = knowledgeBaseStore.readFilteredBlocks(documentId);
         updateDocument(documentId, { block_count: result.block_count, filtered_block_count: result.filtered_block_count }, webContents);
+      }
+
+      if (!blocks.length) {
+        const message = `未发现可沉淀的正文内容，已跳过${summarizeFilteredBlockReasons(filteredBlocks)}`;
+        debugLog(documentId, 'prepare:skipped', {
+          filtered_block_count: filteredBlocks.length,
+          filtered_reasons: filteredBlocks.reduce((acc, block) => {
+            acc[block.reason] = (acc[block.reason] || 0) + 1;
+            return acc;
+          }, {}),
+        });
+        updateDocument(documentId, {
+          status: 'skipped',
+          progress: 100,
+          message,
+          error: null,
+          block_count: 0,
+          filtered_block_count: filteredBlocks.length,
+          candidate_item_count: 0,
+          item_count: 0,
+        }, webContents);
+        return;
       }
 
       // 统一 block 分段：提取/补充/匹配共用同一段表，L1 block 前缀跨任务字节级一致

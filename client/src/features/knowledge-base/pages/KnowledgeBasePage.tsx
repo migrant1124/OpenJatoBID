@@ -25,6 +25,7 @@ const statusLabels: Record<KnowledgeDocument['status'], string> = {
   analyzing: 'AI 整理中',
   saving: '保存结果',
   success: '完成',
+  skipped: '已跳过',
   error: '失败',
 };
 
@@ -316,6 +317,7 @@ function KnowledgeBasePage() {
   const [itemsPreview, setItemsPreview] = useState<KnowledgeItem[]>([]);
   const [analysisSnapshot, setAnalysisSnapshot] = useState<KnowledgeAnalysisSnapshot | null>(null);
   const [startingMatching, setStartingMatching] = useState(false);
+  const [batchMatching, setBatchMatching] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -355,6 +357,7 @@ function KnowledgeBasePage() {
   }, [index.documents]);
   const documents = activeFolder ? documentsByFolder.get(activeFolder.id) || emptyDocuments : emptyDocuments;
   const visibleDocuments = documents.slice(0, Math.min(visibleDocumentCount, documents.length));
+  const pendingMatchingDocuments = index.documents.filter((document) => document.status === 'ready_for_matching' && Boolean(document.candidate_item_count));
   const selectedDocumentCount = documents.reduce((count, document) => count + Number(selectedDocumentIds.has(document.id)), 0);
   const allDocumentsSelected = documents.length > 0 && selectedDocumentCount === documents.length;
 
@@ -1014,12 +1017,29 @@ function KnowledgeBasePage() {
       if (developerMode) {
         await loadAnalysis(targetDocument.id, { silent: true });
       }
+      return result?.success !== false;
     } catch (error) {
       if (!options?.silent) {
         showToast(error instanceof Error ? error.message : '启动段落匹配失败', 'error');
       }
+      return false;
     } finally {
       setStartingMatching(false);
+    }
+  };
+
+  const matchPendingDocuments = async () => {
+    if (batchMatching || !pendingMatchingDocuments.length) return;
+    setBatchMatching(true);
+    let matchedCount = 0;
+    try {
+      for (const document of pendingMatchingDocuments) {
+        autoMatchingIdsRef.current.add(document.id);
+        if (await startMatching(document, { silent: true })) matchedCount += 1;
+      }
+      showToast(`已提交 ${matchedCount}/${pendingMatchingDocuments.length} 个文档的匹配任务`, matchedCount === pendingMatchingDocuments.length ? 'success' : 'info');
+    } finally {
+      setBatchMatching(false);
     }
   };
 
@@ -1066,6 +1086,11 @@ function KnowledgeBasePage() {
           <small>{index.folders.length} 个文件夹 / {index.documents.length} 个文档</small>
         </div>
         <div className="knowledge-toolbar-actions">
+          {pendingMatchingDocuments.length > 0 && (
+            <button type="button" className="secondary-action" onClick={() => void matchPendingDocuments()} disabled={migrationRunning || batchMatching}>
+              {batchMatching ? '批量匹配中...' : `匹配待处理（${pendingMatchingDocuments.length}）`}
+            </button>
+          )}
           <button type="button" className="secondary-action" onClick={() => setShowCreateFolder((value) => !value)} disabled={migrationRunning || listLoading}>新建文件夹</button>
           <button type="button" className="primary-action" onClick={uploadDocuments} disabled={loading || migrationRunning || !activeFolder}>
             {migrationRunning ? '迁移中...' : loading ? '处理中...' : '上传文档'}
@@ -1162,6 +1187,7 @@ function KnowledgeBasePage() {
             <div className="knowledge-panel-title">
               <strong>{activeFolder?.name || '未选择文件夹'}</strong>
               <span>{documents.length} 个文档</span>
+              {developerMode && pendingMatchingDocuments.length > 0 && <small>开发者模式已暂停自动匹配，可点击“匹配待处理”批量处理</small>}
             </div>
             {documents.length > 0 && (
               <div className="knowledge-document-selection-actions">

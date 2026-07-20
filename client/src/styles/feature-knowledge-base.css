@@ -659,6 +659,11 @@
   background: rgba(16, 185, 129, 0.12);
 }
 
+.knowledge-status.is-skipped {
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .knowledge-status.is-error {
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.12);

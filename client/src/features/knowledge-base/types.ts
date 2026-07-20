@@ -93,7 +93,7 @@ export interface KnowledgeBaseIndexMutationResult extends KnowledgeBaseMutationR
   document?: KnowledgeDocument;
 }
 
-export type KnowledgeDocumentStatus = 'pending' | 'copying' | 'converting' | 'extracting' | 'ready_for_matching' | 'matching' | 'recovering' | 'analyzing' | 'saving' | 'success' | 'error';
+export type KnowledgeDocumentStatus = 'pending' | 'copying' | 'converting' | 'extracting' | 'ready_for_matching' | 'matching' | 'recovering' | 'analyzing' | 'saving' | 'success' | 'skipped' | 'error';
 
 export interface KnowledgeFolder {
   id: string;

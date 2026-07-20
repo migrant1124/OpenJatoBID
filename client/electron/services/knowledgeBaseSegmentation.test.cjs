@@ -83,6 +83,51 @@ test('packs consecutive blocks without loss, duplication, or ordinary single-blo
   assert.deepEqual(_internals.packBlocksIntoSegments([], 0), []);
 });
 
+test('keeps substantive short templates and leaves empty templates non-analyzable', () => {
+  const substantiveTemplates = [
+    [
+      '# 法定代表人身份证明',
+      '',
+      '投标人名称：示例科技有限公司',
+      '',
+      '姓名：张三，职务：总经理。',
+      '',
+      '系示例科技有限公司的法定代表人。',
+      '',
+      '特此证明。',
+      '',
+      '投标人：示例科技有限公司（盖公章）',
+      '',
+      '2026年7月17日',
+    ].join('\n'),
+    [
+      '总公司授权委托书（如有）',
+      '',
+      '**备注：分支机构应提供合法有效的授权，授权应加盖委托人公章且负责人签字（含签章）。**',
+      '',
+      '**应答：我司属于总公司投标，无需出具总公司授权委托书。**',
+    ].join('\n'),
+  ];
+
+  for (const markdown of substantiveTemplates) {
+    const rawBlocks = _internals.createRawBlocks(markdown);
+    const semanticBlocks = _internals.mergeSemanticBlocks(rawBlocks);
+    const result = _internals.filterBlocks(semanticBlocks);
+    assert.ok(result.blocks.length > 0, `短模板不应被全部过滤：${markdown.slice(0, 30)}`);
+  }
+
+  for (const markdown of [
+    '# 授权委托书（适用于有委托代理人的情况）',
+    '# 四、需要提供的其他报价文件\n\n_根据报价要求提供。_\n\n**应答：无。**',
+  ]) {
+    const rawBlocks = _internals.createRawBlocks(markdown);
+    const semanticBlocks = _internals.mergeSemanticBlocks(rawBlocks);
+    const result = _internals.filterBlocks(semanticBlocks);
+    assert.equal(result.blocks.length, 0, `无正文短模板应进入跳过流程：${markdown.slice(0, 30)}`);
+    assert.ok(result.filtered_blocks.length > 0);
+  }
+});
+
 test('packs item sub-batches by serialized length without loss or duplication', () => {
   const items = [
     { id: 'K000001', title: '一', summary: 'a'.repeat(80) },
