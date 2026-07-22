@@ -25,6 +25,7 @@ const statusLabels: Record<KnowledgeDocument['status'], string> = {
   analyzing: 'AI 整理中',
   saving: '保存结果',
   success: '完成',
+  skipped: '已跳过',
   error: '失败',
 };
 
@@ -316,6 +317,7 @@ function KnowledgeBasePage() {
   const [itemsPreview, setItemsPreview] = useState<KnowledgeItem[]>([]);
   const [analysisSnapshot, setAnalysisSnapshot] = useState<KnowledgeAnalysisSnapshot | null>(null);
   const [startingMatching, setStartingMatching] = useState(false);
+  const [batchMatching, setBatchMatching] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -324,6 +326,8 @@ function KnowledgeBasePage() {
   const [renameFolderBusy, setRenameFolderBusy] = useState(false);
   const [renameFolderError, setRenameFolderError] = useState('');
   const [retryingDocumentIds, setRetryingDocumentIds] = useState<Set<string>>(() => new Set());
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(() => new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [visibleDocumentCount, setVisibleDocumentCount] = useState(documentRenderBatchSize);
   const [dragPayload, setDragPayload] = useState<KnowledgeDragPayload | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
@@ -334,6 +338,7 @@ function KnowledgeBasePage() {
   const viewerRequestIdRef = useRef(0);
   const viewerTraceRef = useRef<RenderDebugTrace | null>(null);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
+  const selectAllDocumentsRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
   const { showDocumentParseNotice } = useDocumentParseNotice();
 
@@ -352,6 +357,9 @@ function KnowledgeBasePage() {
   }, [index.documents]);
   const documents = activeFolder ? documentsByFolder.get(activeFolder.id) || emptyDocuments : emptyDocuments;
   const visibleDocuments = documents.slice(0, Math.min(visibleDocumentCount, documents.length));
+  const pendingMatchingDocuments = index.documents.filter((document) => document.status === 'ready_for_matching' && Boolean(document.candidate_item_count));
+  const selectedDocumentCount = documents.reduce((count, document) => count + Number(selectedDocumentIds.has(document.id)), 0);
+  const allDocumentsSelected = documents.length > 0 && selectedDocumentCount === documents.length;
 
   useEffect(() => {
     trackPageView(viewer ? `knowledge-base/viewer/${viewer.mode}` : 'knowledge-base/library');
@@ -388,6 +396,20 @@ function KnowledgeBasePage() {
   useEffect(() => {
     setVisibleDocumentCount(documentRenderBatchSize);
   }, [activeFolder?.id, documents.length]);
+
+  useEffect(() => {
+    const currentDocumentIds = new Set(documents.map((document) => document.id));
+    setSelectedDocumentIds((current) => {
+      const next = new Set([...current].filter((documentId) => currentDocumentIds.has(documentId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [documents]);
+
+  useEffect(() => {
+    if (selectAllDocumentsRef.current) {
+      selectAllDocumentsRef.current.indeterminate = selectedDocumentCount > 0 && !allDocumentsSelected;
+    }
+  }, [allDocumentsSelected, selectedDocumentCount]);
 
   useEffect(() => {
     if (visibleDocumentCount >= documents.length) return undefined;
@@ -753,7 +775,7 @@ function KnowledgeBasePage() {
   };
 
   const deleteDocument = async (document: KnowledgeDocument) => {
-    if (migrationRunning) {
+    if (migrationRunning || batchDeleting) {
       showToast('知识库迁移中，请稍候', 'info');
       return;
     }
@@ -762,10 +784,56 @@ function KnowledgeBasePage() {
     try {
       const result = await window.yibiao?.knowledgeBase.deleteDocument(document.id);
       setIndex((prev) => ({ ...prev, documents: prev.documents.filter((item) => item.id !== document.id) }));
+      setSelectedDocumentIds((current) => {
+        const next = new Set(current);
+        next.delete(document.id);
+        return next;
+      });
       setViewer((prev) => (prev?.document.id === document.id ? null : prev));
       showToast(result?.message || '文档已删除', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '删除文档失败', 'error');
+    }
+  };
+
+  const toggleDocumentSelection = (documentId: string) => {
+    setSelectedDocumentIds((current) => {
+      const next = new Set(current);
+      if (next.has(documentId)) next.delete(documentId);
+      else next.add(documentId);
+      return next;
+    });
+  };
+
+  const toggleAllDocuments = () => {
+    setSelectedDocumentIds(allDocumentsSelected ? new Set() : new Set(documents.map((document) => document.id)));
+  };
+
+  const deleteSelectedDocuments = async () => {
+    if (migrationRunning || batchDeleting) return;
+    const selectedDocuments = documents.filter((document) => selectedDocumentIds.has(document.id));
+    if (!selectedDocuments.length) {
+      showToast('请先选择要删除的文档', 'info');
+      return;
+    }
+    if (!window.confirm(`确定批量删除选中的 ${selectedDocuments.length} 个文档吗？删除后无法恢复。`)) return;
+
+    const documentIds = selectedDocuments.map((document) => document.id);
+    const deletedDocumentIds = new Set(documentIds);
+    try {
+      setBatchDeleting(true);
+      const result = await window.yibiao?.knowledgeBase.deleteDocuments(documentIds);
+      setIndex((prev) => ({
+        ...prev,
+        documents: prev.documents.filter((document) => !deletedDocumentIds.has(document.id)),
+      }));
+      setSelectedDocumentIds(new Set());
+      setViewer((prev) => (prev && deletedDocumentIds.has(prev.document.id) ? null : prev));
+      showToast(result?.message || `已批量删除 ${documentIds.length} 个文档`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '批量删除文档失败', 'error');
+    } finally {
+      setBatchDeleting(false);
     }
   };
 
@@ -949,12 +1017,29 @@ function KnowledgeBasePage() {
       if (developerMode) {
         await loadAnalysis(targetDocument.id, { silent: true });
       }
+      return result?.success !== false;
     } catch (error) {
       if (!options?.silent) {
         showToast(error instanceof Error ? error.message : '启动段落匹配失败', 'error');
       }
+      return false;
     } finally {
       setStartingMatching(false);
+    }
+  };
+
+  const matchPendingDocuments = async () => {
+    if (batchMatching || !pendingMatchingDocuments.length) return;
+    setBatchMatching(true);
+    let matchedCount = 0;
+    try {
+      for (const document of pendingMatchingDocuments) {
+        autoMatchingIdsRef.current.add(document.id);
+        if (await startMatching(document, { silent: true })) matchedCount += 1;
+      }
+      showToast(`已提交 ${matchedCount}/${pendingMatchingDocuments.length} 个文档的匹配任务`, matchedCount === pendingMatchingDocuments.length ? 'success' : 'info');
+    } finally {
+      setBatchMatching(false);
     }
   };
 
@@ -1001,6 +1086,11 @@ function KnowledgeBasePage() {
           <small>{index.folders.length} 个文件夹 / {index.documents.length} 个文档</small>
         </div>
         <div className="knowledge-toolbar-actions">
+          {pendingMatchingDocuments.length > 0 && (
+            <button type="button" className="secondary-action" onClick={() => void matchPendingDocuments()} disabled={migrationRunning || batchMatching}>
+              {batchMatching ? '批量匹配中...' : `匹配待处理（${pendingMatchingDocuments.length}）`}
+            </button>
+          )}
           <button type="button" className="secondary-action" onClick={() => setShowCreateFolder((value) => !value)} disabled={migrationRunning || listLoading}>新建文件夹</button>
           <button type="button" className="primary-action" onClick={uploadDocuments} disabled={loading || migrationRunning || !activeFolder}>
             {migrationRunning ? '迁移中...' : loading ? '处理中...' : '上传文档'}
@@ -1094,8 +1184,33 @@ function KnowledgeBasePage() {
 
         <main className="knowledge-document-panel">
           <div className="knowledge-panel-head">
-            <strong>{activeFolder?.name || '未选择文件夹'}</strong>
-            <span>{documents.length} 个文档</span>
+            <div className="knowledge-panel-title">
+              <strong>{activeFolder?.name || '未选择文件夹'}</strong>
+              <span>{documents.length} 个文档</span>
+              {developerMode && pendingMatchingDocuments.length > 0 && <small>开发者模式已暂停自动匹配，可点击“匹配待处理”批量处理</small>}
+            </div>
+            {documents.length > 0 && (
+              <div className="knowledge-document-selection-actions">
+                <label className="knowledge-select-all">
+                  <input
+                    ref={selectAllDocumentsRef}
+                    type="checkbox"
+                    checked={allDocumentsSelected}
+                    onChange={toggleAllDocuments}
+                    disabled={migrationRunning || batchDeleting}
+                  />
+                  <span>{selectedDocumentCount > 0 ? `已选 ${selectedDocumentCount} 项` : '全选'}</span>
+                </label>
+                <button
+                  type="button"
+                  className="knowledge-batch-delete"
+                  onClick={() => void deleteSelectedDocuments()}
+                  disabled={migrationRunning || batchDeleting || selectedDocumentCount === 0}
+                >
+                  {batchDeleting ? '删除中...' : '批量删除'}
+                </button>
+              </div>
+            )}
           </div>
 
           {listLoading ? (
@@ -1107,18 +1222,28 @@ function KnowledgeBasePage() {
             <div className="knowledge-document-list">
               {visibleDocuments.map((document) => {
                 const retrying = retryingDocumentIds.has(document.id);
-                const canDragDocument = canMoveKnowledgeDocument(document) && !migrationRunning && !dragSaving;
+                const selected = selectedDocumentIds.has(document.id);
+                const canDragDocument = canMoveKnowledgeDocument(document) && !migrationRunning && !dragSaving && !batchDeleting;
                 const dragging = dragPayload?.kind === 'document' && dragPayload.documentId === document.id;
                 const dropTarget = documentDropTarget?.documentId === document.id ? ` is-drop-${documentDropTarget.position}` : '';
                 return (
                   <article
-                    className={`knowledge-document-card${dragging ? ' is-dragging' : ''}${dropTarget}`}
+                    className={`knowledge-document-card${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${dropTarget}`}
                     key={document.id}
                     onDragOver={(event) => handleDocumentDragOver(event, document)}
                     onDrop={(event) => { void handleDocumentDrop(event, document); }}
                   >
                     <div className="knowledge-document-title">
                       <div className="knowledge-document-title-main">
+                        <label className="knowledge-document-checkbox" title={`选择文档 ${document.file_name}`}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleDocumentSelection(document.id)}
+                            disabled={migrationRunning || batchDeleting}
+                            aria-label={`选择文档 ${document.file_name}`}
+                          />
+                        </label>
                         <span
                           className="knowledge-drag-handle"
                           draggable={canDragDocument}
@@ -1144,15 +1269,15 @@ function KnowledgeBasePage() {
                       <span>{document.block_count || 0} 个 block</span>
                     </div>
                     <div className="knowledge-document-actions">
-                      {developerMode && <button type="button" onClick={() => void openDocument(document, 'analysis')} disabled={migrationRunning || !canOpenAnalysis(document)}>分析调试</button>}
-                      <button type="button" onClick={() => void openDocument(document, 'items')} disabled={migrationRunning || document.status !== 'success'}>查看条目</button>
-                      <button type="button" onClick={() => void openDocument(document, 'markdown')} disabled={migrationRunning || !canOpenMarkdown(document)}>查看 Markdown</button>
+                      {developerMode && <button type="button" onClick={() => void openDocument(document, 'analysis')} disabled={migrationRunning || batchDeleting || !canOpenAnalysis(document)}>分析调试</button>}
+                      <button type="button" onClick={() => void openDocument(document, 'items')} disabled={migrationRunning || batchDeleting || document.status !== 'success'}>查看条目</button>
+                      <button type="button" onClick={() => void openDocument(document, 'markdown')} disabled={migrationRunning || batchDeleting || !canOpenMarkdown(document)}>查看 Markdown</button>
                       {document.status === 'error' && (
-                        <button type="button" className="is-retry" onClick={() => void retryDocument(document)} disabled={migrationRunning || retrying}>
+                        <button type="button" className="is-retry" onClick={() => void retryDocument(document)} disabled={migrationRunning || batchDeleting || retrying}>
                           {retrying ? '重试中...' : '重试'}
                         </button>
                       )}
-                      <button type="button" className="is-danger" onClick={() => void deleteDocument(document)} disabled={migrationRunning}>删除</button>
+                      <button type="button" className="is-danger" onClick={() => void deleteDocument(document)} disabled={migrationRunning || batchDeleting}>删除</button>
                     </div>
                   </article>
                 );

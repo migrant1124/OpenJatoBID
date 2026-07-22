@@ -506,6 +506,7 @@ export interface YibiaoBridge {
     reorderFolder: (draggedFolderId: string, targetFolderId: string, position: 'before' | 'after') => Promise<KnowledgeBaseIndexMutationResult>;
     deleteFolder: (folderId: string) => Promise<KnowledgeBaseMutationResult>;
     deleteDocument: (documentId: string) => Promise<KnowledgeBaseMutationResult>;
+    deleteDocuments: (documentIds: string[]) => Promise<KnowledgeBaseMutationResult>;
     moveDocument: (documentId: string, targetFolderId: string, targetDocumentId?: string | null, position?: 'before' | 'after') => Promise<KnowledgeBaseIndexMutationResult>;
     uploadDocuments: (folderId: string) => Promise<KnowledgeBaseUploadResult>;
     retryDocument: (documentId: string) => Promise<KnowledgeBaseRetryDocumentResult>;
