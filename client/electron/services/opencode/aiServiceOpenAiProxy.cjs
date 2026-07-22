@@ -10,7 +10,6 @@ const {
   writeAiLog,
 } = require('../../utils/aiLog.cjs');
 const {
-  getAiRequestErrorMessage,
   markAiRequestError,
   runWithAiRetry,
 } = require('../../utils/aiRetry.cjs');
@@ -861,8 +860,7 @@ async function requestOpenCodeChatCompletion({ app, configStore, textQueue, open
     meta: { request_id: requestId },
   });
 
-  try {
-    return await textQueue.enqueue(async () => {
+  return textQueue.enqueue(async () => {
     const config = configStore.load();
     assertTextModelConfig(config);
 
@@ -976,22 +974,7 @@ async function requestOpenCodeChatCompletion({ app, configStore, textQueue, open
         }
       }
     }, { signal });
-    }, { signal });
-  } catch (error) {
-    const message = getAiRequestErrorMessage(error, {
-      serviceLabel: 'Agent 模型服务',
-      endpointHost: normalizeEndpointHost(queuedConfig?.base_url),
-      timeoutMessage: error?.message || 'Agent 模型请求超时',
-      fallbackMessage: 'Agent 模型请求失败',
-    });
-    if (message === error?.message) throw error;
-    const wrapped = new Error(message, { cause: error });
-    if (error?.status || error?.statusCode) {
-      wrapped.status = error.status || error.statusCode;
-      wrapped.statusCode = error.status || error.statusCode;
-    }
-    throw wrapped;
-  }
+  }, { signal });
 }
 
 function copyUpstreamHeaders(upstream, res) {

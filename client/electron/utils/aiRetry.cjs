@@ -85,37 +85,6 @@ function isFetchNetworkError(error) {
   });
 }
 
-function getNetworkErrorCode(error) {
-  let code = '';
-  walkErrorChain(error, (item) => {
-    const candidate = String(item?.code || '').trim().toUpperCase();
-    if (!candidate) return false;
-    code = candidate;
-    return true;
-  });
-  return code;
-}
-
-function getAiRequestErrorMessage(error, options = {}) {
-  const fallbackMessage = String(options.fallbackMessage || 'AI 请求失败');
-  if (!error) return fallbackMessage;
-
-  if (isAbortLikeError(error)) {
-    return String(options.timeoutMessage || error.message || fallbackMessage);
-  }
-
-  if (!hasRetryableNetworkCode(error) && !isFetchNetworkError(error)) {
-    return String(error.message || fallbackMessage);
-  }
-
-  const serviceLabel = String(options.serviceLabel || 'AI 模型服务').trim() || 'AI 模型服务';
-  const endpointHost = String(options.endpointHost || '').trim();
-  const errorCode = getNetworkErrorCode(error);
-  const detailParts = [endpointHost, errorCode].filter(Boolean);
-  const detail = detailParts.length ? `（${detailParts.join('，')}）` : '';
-  return `${serviceLabel}连接失败${detail}。请检查网络或代理状态以及 Base URL，恢复后重试。`;
-}
-
 function markAiRequestError(error, options = {}) {
   const target = error instanceof Error ? error : new Error(String(error || 'AI 请求失败'));
   target.isAiRequestError = true;
@@ -246,7 +215,6 @@ async function runWithAiRetry(runner, options = {}) {
 module.exports = {
   AI_REQUEST_MAX_ATTEMPTS,
   copyAiRequestErrorMeta,
-  getAiRequestErrorMessage,
   getAiRetryDelayMs,
   isRetryableAiRequestError,
   isRetryableHttpStatus,
