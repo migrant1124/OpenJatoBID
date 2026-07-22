@@ -106,6 +106,7 @@ const workspaceDatabaseChannels = [
   'knowledge-base:rename-folder',
   'knowledge-base:delete-folder',
   'knowledge-base:delete-document',
+  'knowledge-base:delete-documents',
   'knowledge-base:upload-documents',
   'knowledge-base:start-matching',
   'knowledge-base:read-markdown',

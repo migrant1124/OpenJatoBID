@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { getKnowledgeBaseDir } = require('../utils/paths.cjs');
 
-const documentStatuses = ['pending', 'copying', 'converting', 'extracting', 'ready_for_matching', 'matching', 'recovering', 'analyzing', 'saving', 'success', 'error'];
+const documentStatuses = ['pending', 'copying', 'converting', 'extracting', 'ready_for_matching', 'matching', 'recovering', 'analyzing', 'saving', 'success', 'skipped', 'error'];
 const documentStepKeys = ['copy_source', 'convert_markdown', 'build_blocks', 'extract_first_items', 'extract_supplement_items', 'merge_candidates', 'match_batches', 'recover_missing', 'save_result'];
 const stepStatuses = ['idle', 'running', 'success', 'error'];
 const legacyResultJsonFiles = [

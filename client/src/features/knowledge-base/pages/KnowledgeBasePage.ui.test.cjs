@@ -63,3 +63,27 @@ test('Viewer Header 支持长文件名和三档无横向滚动布局', () => {
   assert.match(stylesSource, /\.knowledge-viewer-page\s*\{[\s\S]*overflow-x:\s*hidden;/);
   assert.doesNotMatch(stylesSource, /\.knowledge-viewer-bar \.knowledge-breadcrumb strong\s*\{[\s\S]*white-space:\s*nowrap;/);
 });
+
+test('文档列表支持当前文件夹多选、全选和批量删除', () => {
+  assert.match(pageSource, /selectedDocumentIds/);
+  assert.match(pageSource, /ref=\{selectAllDocumentsRef\}[\s\S]*type="checkbox"[\s\S]*checked=\{allDocumentsSelected\}/);
+  assert.match(pageSource, /aria-label=\{`选择文档 \$\{document\.file_name\}`\}/);
+  assert.match(pageSource, /setSelectedDocumentIds\(allDocumentsSelected \? new Set\(\) : new Set\(documents\.map/);
+  assert.match(pageSource, /knowledgeBase\.deleteDocuments\(documentIds\)/);
+  assert.match(pageSource, /确定批量删除选中的 \$\{selectedDocuments\.length\} 个文档吗？删除后无法恢复/);
+  assert.match(pageSource, /batchDeleting \? '删除中\.\.\.' : '批量删除'/);
+  assert.match(stylesSource, /\.knowledge-document-card\.is-selected/);
+  assert.match(stylesSource, /\.knowledge-document-title-main\s*\{[\s\S]*grid-template-columns:\s*auto auto minmax\(0, 1fr\);/);
+});
+
+test('无可沉淀正文使用中性的已跳过状态，不显示为失败', () => {
+  assert.match(pageSource, /skipped:\s*'已跳过'/);
+  assert.match(stylesSource, /\.knowledge-status\.is-skipped\s*\{/);
+});
+
+test('开发者模式可一次提交全部待匹配文档，并说明匹配对象', () => {
+  assert.match(pageSource, /pendingMatchingDocuments = index\.documents\.filter/);
+  assert.match(pageSource, /匹配待处理（\$\{pendingMatchingDocuments\.length\}）/);
+  assert.match(pageSource, /for \(const document of pendingMatchingDocuments\)/);
+  assert.match(pageSource, /开发者模式已暂停自动匹配，可点击“匹配待处理”批量处理/);
+});

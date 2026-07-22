@@ -2807,8 +2807,8 @@
   z-index: 101;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  width: min(860px, calc(100vw - 40px));
-  height: min(780px, calc(100vh - 40px));
+  width: min(1040px, calc(100vw - 40px));
+  height: min(820px, calc(100vh - 40px));
   transform: translate(-50%, -50%);
   gap: 18px;
   padding: 24px;
@@ -2844,22 +2844,22 @@
 
 .outline-generation-config-body {
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
   min-height: 0;
   overflow: hidden;
 }
 
 .outline-generation-config-body.has-expansion-mode {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .outline-generation-config-body.has-dev-tools {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .outline-generation-config-body.has-expansion-mode.has-dev-tools {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 
 .outline-expansion-mode-section {
@@ -2917,9 +2917,9 @@
 .outline-agent-debug-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
-  padding: 14px;
+  padding: 10px 12px;
   background: rgba(255, 248, 230, 0.72);
   border: 1px solid rgba(224, 164, 57, 0.34);
   border-radius: 16px;
@@ -2927,7 +2927,7 @@
 
 .outline-agent-debug-option > span:first-child {
   display: grid;
-  gap: 5px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -2939,7 +2939,7 @@
 .outline-agent-debug-option small {
   color: #8b6a31;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
 .outline-knowledge-picker {
@@ -2950,8 +2950,13 @@
 
 .outline-generation-config-card .content-regenerate-actions {
   align-items: center;
-  padding-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid rgba(228, 233, 240, 0.74);
+}
+
+.outline-generation-config-card .content-regenerate-actions > button {
+  min-width: 104px;
+  min-height: 40px;
 }
 
 .bid-section-selector-card {
@@ -3256,7 +3261,7 @@
 
 .outline-knowledge-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
   gap: 10px;
   height: 100%;
   min-height: 0;

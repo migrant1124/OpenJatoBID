@@ -83,6 +83,7 @@ function waitForPromptCacheWarmup() {
 }
 const FINAL_AGENT_OUTPUT_FILE = 'outline-agent-result.json';
 const FINAL_AGENT_TIMEOUT_MS = 15 * 60 * 1000;
+const FINAL_AGENT_MAX_RETRIES = 3;
 const RECOVERABLE_REQUIREMENT_GROUP_ERRORS = ['模型返回的技术评分大类格式无效'];
 const RECOVERABLE_ALIGNED_OUTLINE_ERRORS = [
   '模型返回的目录数据格式无效',
@@ -594,11 +595,18 @@ ${String(invalidContent || '').slice(0, 60000)}
 }
 
 function getFinalOutlineModeLabel(context) {
+  if (context.sourceOutline?.outline?.length) return '目录来源约束模式（一级目录冻结）';
   if (context.workflowKind !== 'existing-plan-expansion') return '普通技术方案目录生成';
   return context.outlineExpansionMode === 'original-only' ? '已有方案扩写-仅使用原方案目录' : '已有方案扩写-AI补充目录';
 }
 
 function getFinalOutlineConstraintText(context) {
+  if (context.sourceOutline?.outline?.length) {
+    return `硬性约束：
+1. 一级目录数量、顺序和标题必须与 source-outline.json 完全一致，不得新增、删除、改名或移动。
+2. source-outline.json 已有的下级目录必须按原顺序保留；manual_input_required=true 的节点必须保持叶子节点。
+3. 技术评分项只能映射到二级及以下节点，每个 requirement_id 必须至少映射一次。`;
+  }
   if (context.workflowKind !== 'existing-plan-expansion') {
     return `硬性约束：
 1. 一级目录必须与提供的 groups 数量一致、顺序一致、标题完全一致。
@@ -641,6 +649,7 @@ function buildFinalOutlineReviewMessages(context) {
 }
 
 function getFinalAgentOutputShape(context) {
+  const isSourceDriven = Boolean(context.sourceOutline?.outline?.length);
   const isAligned = context.workflowKind !== 'existing-plan-expansion';
   const outlineShape = `[
     {
@@ -663,7 +672,28 @@ function getFinalAgentOutputShape(context) {
       ]
     }
   ]`;
-  return isAligned
+  const sourceDrivenOutlineShape = `[
+    {
+      "id": "1",
+      "title": "冻结一级目录标题",
+      "description": "一级目录说明",
+      "children": [
+        {
+          "id": "1.1",
+          "title": "技术评分响应目录",
+          "description": "目录说明",
+          "source_requirement_id": "R1"
+        },
+        {
+          "id": "1.2",
+          "title": "冻结人工填写节点",
+          "description": "目录说明",
+          "manual_input_required": true
+        }
+      ]
+    }
+  ]`;
+  return isAligned && !isSourceDriven
     ? `{
   "groups": [
     {
@@ -676,7 +706,7 @@ function getFinalAgentOutputShape(context) {
   "outline": ${outlineShape}
 }`
     : `{
-  "outline": ${outlineShape}
+  "outline": ${isSourceDriven ? sourceDrivenOutlineShape : outlineShape}
 }`;
 }
 
@@ -776,6 +806,19 @@ function buildOutlineAgentRecoveryPrompt(context) {
   const outputFile = context.outputFile;
   const outputShape = getFinalAgentOutputShape(context);
   const reason = String(context.recoveryReason || '').trim();
+  const sourceDriven = Boolean(context.sourceOutline?.outline?.length);
+  const requirementGroupsDescription = sourceDriven
+    ? '- requirement-groups.json：如果存在，记录必须映射到冻结骨架二级及以下节点的技术评分项；不得据此改变一级目录。'
+    : '- requirement-groups.json：如果存在，记录技术评分项大类及细项，通常用于约束一级目录。';
+  const modeSpecificRequirements = sourceDriven
+    ? `- source-outline.json 是目录来源的权威冻结骨架；一级目录的数量、顺序和标题不得改变，骨架中已有的下级目录也必须按原顺序保留。
+- requirement-groups.json 仅用于在冻结骨架的二级及以下节点映射技术评分项；每个评分项节点必须输出 source_requirement_id，值必须等于对应 requirement_id；不得修改或输出 groups，不得让技术评分项创建、替换或占用一级目录。
+- source-outline.json 中 manual_input_required 的值是权威元数据；人工填写节点必须保持叶子节点，其他冻结节点不得改为人工填写节点。
+- current-outline.json 为空或不完整时，也只能在冻结骨架允许的下级范围内补充和定向修复。`
+    : `- technical-requirements.md 中如果存在“技术评分项”和“技术评分要求”，一级目录只能基于“技术评分项”生成；“技术评分要求”只能作为评分约束、扣分口径、判定标准或注意事项参考。
+- 如果 technical-requirements.md 未明确分区，也必须按语义区分：要求投标人在技术方案中一一响应、展开编写的具体评分内容才可作为一级目录依据；解释评分、约束评分、定义扣分或判定规则的内容不得作为一级目录。
+- 如果 current-outline.json 为空或不完整，可以直接构建完整目录；如果已有目录可用，优先做定向修复。
+- 如果 requirement-groups.json 存在，最终一级目录和 groups 应保持可校验的一致关系；如果你判断 groups 本身误把评分要求纳入，应同步修正 groups 和目录。`;
   return `请在当前工作目录中完成技术标目录生成或修复，并把可供程序读取的结果保存到 ${outputFile}。
 
 当前目录生成模式：${getFinalOutlineModeLabel(context)}
@@ -787,18 +830,16 @@ workspace 文件说明：
 - technical-requirements.md：技术评分要求、招标需求和需要覆盖的响应点。
 - workflow.json：本次目录模式、恢复类型和程序后续校验会使用的 hard_constraints。
 - current-outline.json：当前候选目录，可能为空、不完整或存在审核指出的问题。
+- source-outline.json：如果存在，记录目录来源冻结骨架；其一级目录和已有下级目录必须按 workflow.json 约束保留。
 - final-review.json：程序或模型对当前目录的审核结论、问题和修改建议。
-- requirement-groups.json：如果存在，记录技术评分项大类及细项，通常用于约束一级目录。
+${requirementGroupsDescription}
 - original-outline.json：如果存在，记录用户原方案旧目录，已有方案扩写时应尽量承接其结构。
 
 工作方式由你自行决定。可以搜索、分段读取、建立索引、创建草稿或中间 JSON，并逐步编辑 ${outputFile}；不需要按固定顺序读取文件，也不需要在单次模型输出中完成全部目录。
 
 最终需要的结果：
 - 生成一份可以直接保存为技术方案目录的 JSON，目录覆盖技术评分项，并处理 final-review.json 中指出的问题。
-- technical-requirements.md 中如果存在“技术评分项”和“技术评分要求”，一级目录只能基于“技术评分项”生成；“技术评分要求”只能作为评分约束、扣分口径、判定标准或注意事项参考。
-- 如果 technical-requirements.md 未明确分区，也必须按语义区分：要求投标人在技术方案中一一响应、展开编写的具体评分内容才可作为一级目录依据；解释评分、约束评分、定义扣分或判定规则的内容不得作为一级目录。
-- 如果 current-outline.json 为空或不完整，可以直接构建完整目录；如果已有目录可用，优先做定向修复。
-- 如果 requirement-groups.json 存在，最终一级目录和 groups 应保持可校验的一致关系；如果你判断 groups 本身误把评分要求纳入，应同步修正 groups 和目录。
+${modeSpecificRequirements}
 - 如果 original-outline.json 存在，优先在原目录基础上补充和修复，避免无目的全量重写。
 - 修复可包括删除重复项、迁移错位目录、补充缺失评分项目录、移除误作为目录主题的评分要求、合并明显重复目录和重新编号。
 - 任务结束时，${outputFile} 是可被 JSON.parse 直接解析的纯 JSON 文件，不包含 Markdown 代码块或解释文字。
@@ -807,7 +848,9 @@ ${outputShape}
 - 程序校验要求：outline 内每一个目录节点（一级、二级、三级、四级）都必须包含非空字符串 id、title、description，不能省略 description。
 - children 只在确实存在下级目录时输出；只要输出 children，children 内每个下级节点也必须包含 id、title、description。
 - 新增、迁移、合并或修改目录时必须同步填写 description；保留 current-outline.json 或 original-outline.json 中已有目录时，优先沿用原有 description。
-- 不输出正文 content、图片、表格、Mermaid、审查说明或额外字段。
+${sourceDriven
+    ? '- 除评分节点必需的 source_requirement_id 和 source-outline.json 原有的 manual_input_required 外，不输出正文 content、图片、表格、Mermaid、审查说明或其他额外字段。'
+    : '- 不输出正文 content、图片、表格、Mermaid、审查说明或额外字段。'}
 - 编号可以自行整理，程序会再次统一编号；但层级关系需要正确，并满足 workflow.json 中的 hard_constraints。
 - id 字段用于承载目录编号；所有 title 字段只能写纯标题，不得包含“第一章”“第一节”“一、”“（一）”“1.1.1”等任何原文编号或 Markdown #。`;
 }
@@ -840,6 +883,9 @@ function buildOutlineAgentRecoveryFiles(context) {
   }
   if (context.originalOutline?.outline?.length) {
     files.push({ path: 'original-outline.json', content: JSON.stringify(context.originalOutline, null, 2) });
+  }
+  if (context.sourceOutline?.outline?.length) {
+    files.push({ path: 'source-outline.json', content: JSON.stringify(context.sourceOutline, null, 2) });
   }
   return files;
 }
@@ -955,7 +1001,7 @@ function normalizeFinalAgentRepairResult(value, context) {
   const raw = Array.isArray(value) ? { outline: value } : requireObject(value, 'FinalAgentRepairResult');
   const rawGroups = raw.groups ?? raw.requirement_groups ?? raw.requirementGroups;
   let groups = context.groups || [];
-  if (rawGroups !== undefined) {
+  if (!context.sourceOutline?.outline?.length && rawGroups !== undefined) {
     groups = normalizeRequirementGroupsResponse({ groups: rawGroups }).groups || [];
     validateRequirementGroups({ groups });
   }
@@ -968,12 +1014,18 @@ function normalizeFinalAgentRepairResult(value, context) {
     : Array.isArray(raw.outline)
       ? { outline: raw.outline }
       : raw.outline;
-  const parsedOutline = normalizeOutlineResponse(outlineSource, new Set());
+  const parsedOutline = context.sourceOutline?.outline?.length
+    ? normalizeSourceDrivenOutlineResponse(outlineSource, context.sourceOutline, context.outline)
+    : normalizeOutlineResponse(outlineSource, new Set());
   const renumberedOutline = normalizeOutlineResponse({ outline: renumber(parsedOutline.outline || []) }, new Set());
-  const outline = context.workflowKind === 'existing-plan-expansion'
+  const outline = context.workflowKind === 'existing-plan-expansion' || context.sourceOutline?.outline?.length
     ? renumberedOutline
     : attachAlignedTopLevelMetadata(renumberedOutline, groups);
-  validateFinalOutline({ ...context, outline, groups });
+  if (context.sourceOutline?.outline?.length) {
+    validateSourceDrivenOutline(outline, context.sourceOutline, groups);
+  } else {
+    validateFinalOutline({ ...context, outline, groups });
+  }
   return { groups, outline };
 }
 
@@ -1035,7 +1087,7 @@ async function runOutlineAgentRecovery(agentService, context, log) {
     output_file: outputFile,
     files: buildOutlineAgentRecoveryFiles(agentContext),
     timeout_ms: FINAL_AGENT_TIMEOUT_MS,
-    max_retries: 1,
+    max_retries: FINAL_AGENT_MAX_RETRIES,
     validateOutput: (resultForValidation) => {
       const contentForValidation = String(resultForValidation?.output_content || resultForValidation?.assistant_text || '').trim();
       if (!contentForValidation) {
@@ -2503,31 +2555,7 @@ function normalizeSourceOutlineResponse(payload) {
   return normalized;
 }
 
-function normalizeSourceDrivenOutlineResponse(payload) {
-  const normalized = normalizeSourceOutlineResponse(payload);
-  function clearLegacyQualityFields(items) {
-    return (items || []).map((item) => {
-      const {
-        deep_writing,
-        deep_writing_recommended,
-        deep_writing_reason,
-        deep_writing_source,
-        writing_profile,
-        value_anchor_ids,
-        mapped_scoring_point_ids,
-        primary_requirement_ids,
-        supplemental_requirement_ids,
-        source_requirement_id,
-        source_requirement_title,
-        ...next
-      } = item;
-      if (item.children?.length) {
-        next.children = clearLegacyQualityFields(item.children);
-      }
-      return next;
-    });
-  }
-  return { ...normalized, outline: clearLegacyQualityFields(normalized.outline) };
+
 }
 
 function validateSourceOutline(payload, sourceContent) {
@@ -2670,13 +2698,11 @@ ${formatOldOutlineForPrompt(context.oldOutline) || '未提供'}
 ${context.referenceOutlineContext || '未提供'}`,
       },
     ],
-    normalizer: normalizeSourceDrivenOutlineResponse,
-    validator: (value) => {
-      validateSourceDrivenOutline(value, context.sourceOutline);
-    },
+
     progressCallback: (message) => log(message, 90),
     progressLabel: '目录下级补充',
     failureMessage: '目录下级补充结果格式无效',
+    max_retries: context.forceAgentRepair ? 0 : undefined,
   });
 }
 async function extractOriginalOutlineOnce(aiService, originalPlanMarkdown, log) {
@@ -3326,16 +3352,14 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   log('目录来源骨架已固定，开始提取技术评分项。', 28);
   const groups = await extractRequirementGroups(aiService, taskPayload, undefined, log);
   log('技术评分项已提取，开始在一级目录内部补充下级目录。', 52);
-  const outline = await generateSourceDrivenOutline(aiService, {
+  const sourceDrivenContext = {
     sourceOutline,
     groups,
     requirements,
     oldOutline,
     requirementResponseMatrix,
     referenceOutlineContext: sourceKind === 'format' ? referenceOutlineContext : '',
-  }, log);
-  validateSourceDrivenOutline(outline, sourceOutline);
-  const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
+
   log('一级目录来源与技术评分下级映射校验通过。', 99);
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...qualityResult.outline, project_overview: overview },

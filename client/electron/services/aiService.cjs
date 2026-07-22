@@ -11,6 +11,7 @@ const {
 } = require('../utils/aiHttpError.cjs');
 const {
   copyAiRequestErrorMeta,
+  getAiRequestErrorMessage,
   markAiRequestError,
   runWithAiRetry,
 } = require('../utils/aiRetry.cjs');
@@ -1319,9 +1320,12 @@ async function chatWithConfig(app, config, request, analyticsService) {
     });
     return content;
   } catch (error) {
-    errorMessage = error.name === 'AbortError'
-      ? request.timeout_message || `AI 请求超时（${timeoutMs / 1000} 秒）`
-      : error.message;
+    errorMessage = getAiRequestErrorMessage(error, {
+      serviceLabel: '文本模型服务',
+      endpointHost: normalizeAnalyticsEndpointHost(config.base_url),
+      timeoutMessage: request.timeout_message || `AI 请求超时（${timeoutMs / 1000} 秒）`,
+      fallbackMessage: 'AI 请求失败',
+    });
     if (!analyticsTracked) {
       recordTextTokenStats(config, null);
       trackAiRequest(app, config, { ai_request_type: 'text' }, analyticsService);
