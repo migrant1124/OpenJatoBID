@@ -142,6 +142,7 @@ const htmlImageTypeOptions = [
 ];
 
 const DEFAULT_HTML_IMAGE_TYPES = htmlImageTypeOptions.map((option) => option.value).join(', ');
+const IMAGE_HARD_LIMITS = { ai: 20, mermaid: 5, html: 30 } as const;
 
 function resolveSelectedHtmlImageTypes(value: string | undefined) {
   const selected = new Set(String(value || '').split(/[\n,，、;；]+/).map((item) => item.trim()).filter(Boolean));
@@ -153,11 +154,11 @@ function resolveSelectedHtmlImageTypes(value: string | undefined) {
 
 const defaultContentGenerationOptions: ContentGenerationOptions = {
   useAiImages: false,
-  maxAiImages: 6,
+  maxAiImages: IMAGE_HARD_LIMITS.ai,
   useMermaidImages: false,
-  maxMermaidImages: 5,
+  maxMermaidImages: IMAGE_HARD_LIMITS.mermaid,
   useHtmlImages: true,
-  maxHtmlImages: 10,
+  maxHtmlImages: IMAGE_HARD_LIMITS.html,
   htmlImageTypes: DEFAULT_HTML_IMAGE_TYPES,
   tableRequirement: 'heavy',
   minimumWords: 0,
@@ -179,20 +180,15 @@ function isOriginalPlanCoverageRepairMode(value: unknown): value is OriginalPlan
   return originalPlanCoverageRepairModeOptions.some((option) => option.value === value);
 }
 
-function buildDefaultGenerationOptions(imageModelAvailable: boolean, leafCount: number): ContentGenerationOptions {
-  const imageLimit = Math.max(1, leafCount);
+function buildDefaultGenerationOptions(imageModelAvailable: boolean, _leafCount: number): ContentGenerationOptions {
   return {
     ...defaultContentGenerationOptions,
     useAiImages: imageModelAvailable,
-    maxAiImages: Math.min(defaultContentGenerationOptions.maxAiImages, imageLimit),
-    maxMermaidImages: Math.min(defaultContentGenerationOptions.maxMermaidImages, imageLimit),
-    maxHtmlImages: Math.min(defaultContentGenerationOptions.maxHtmlImages, imageLimit),
   };
 }
 
 function normalizeGenerationOptions(options: ContentGenerationOptions | DraftContentGenerationOptions | undefined, imageModelAvailable: boolean, leafCount: number, isExpansionWorkflow = false): ContentGenerationOptions {
   const fallback = buildDefaultGenerationOptions(imageModelAvailable, leafCount);
-  const maxAiImagesLimit = Math.max(1, leafCount);
   const requestedMaxAiImages = Number(options?.maxAiImages ?? fallback.maxAiImages);
   const requestedMaxMermaidImages = Number(options?.maxMermaidImages ?? fallback.maxMermaidImages);
   const requestedMaxHtmlImages = Number(options?.maxHtmlImages ?? fallback.maxHtmlImages);
@@ -201,11 +197,11 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
 
   return {
     useAiImages: Boolean(options?.useAiImages ?? fallback.useAiImages) && imageModelAvailable,
-    maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, maxAiImagesLimit)),
+    maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, IMAGE_HARD_LIMITS.ai)),
     useMermaidImages: Boolean(options?.useMermaidImages ?? fallback.useMermaidImages),
-    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, maxAiImagesLimit)),
+    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, IMAGE_HARD_LIMITS.mermaid)),
     useHtmlImages: Boolean(options?.useHtmlImages ?? fallback.useHtmlImages),
-    maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, maxAiImagesLimit)),
+    maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, IMAGE_HARD_LIMITS.html)),
     htmlImageTypes: String(options?.htmlImageTypes ?? fallback.htmlImageTypes),
     tableRequirement: isContentTableRequirement(tableRequirement) ? tableRequirement : fallback.tableRequirement,
     minimumWords: Math.max(0, Number.isFinite(requestedMinimumWords) ? Math.round(requestedMinimumWords) : fallback.minimumWords),
@@ -366,13 +362,7 @@ function ContentEditPage({
   const selectedItem = outlineData?.outline && selectedItemId ? findItem(outlineData.outline, selectedItemId) : null;
   const selectedIsLeaf = Boolean(selectedItem && !selectedItem.children?.length);
   const selectedContent = selectedItem && selectedIsLeaf ? getLeafContent(selectedItem, sections) : '';
-  const storedResponseMode = selectedItem?.response_mode || 'freeform-markdown';
-  const selectedResponseMode = selectedItem?.manual_input_required === true
-    || storedResponseMode === 'locked-commitment'
-    || storedResponseMode === 'fixed-markdown-table'
-    ? 'freeform-markdown'
-    : storedResponseMode;
-  const selectedCanEditMarkdown = selectedResponseMode === 'freeform-markdown' || selectedResponseMode === 'evidence-markdown';
+  const selectedCanEditMarkdown = selectedIsLeaf;
   const exportFormatPreviewStyle = useMemo<CSSProperties>(() => buildExportFormatCssVars(exportFormat), [exportFormat]);
   const running = task?.status === 'running';
   const pausing = task?.status === 'pausing' || pausePending;
@@ -956,11 +946,6 @@ function ContentEditPage({
       showToast('当前小节必须人工填写，不允许 AI 重新生成', 'info');
       return;
     }
-    if ((requirementItem.response_mode || 'freeform-markdown') !== 'freeform-markdown') {
-      showToast('当前小节采用受控响应，不允许 AI 重新生成', 'info');
-      return;
-    }
-
     try {
       const config = await window.yibiao?.config.load();
       const nextImageModelStatus = config?.image_model?.status || 'untested';
@@ -1017,11 +1002,6 @@ function ContentEditPage({
       return;
     }
 
-    if (!selectedCanEditMarkdown) {
-      showToast('当前小节采用受控响应，请使用专用表单填写', 'info');
-      return;
-    }
-
     setEditingItemId(selectedItem.id);
     setIsPreviewing(false);
     setDraftContent(selectedContent);
@@ -1047,11 +1027,6 @@ function ContentEditPage({
       return;
     }
 
-    if (!selectedCanEditMarkdown) {
-      showToast('当前小节不允许保存自由 Markdown 正文', 'info');
-      return;
-    }
-
     try {
       await onContentSaved(selectedItem, draftContent);
       setEditingItemId(null);
@@ -1062,21 +1037,12 @@ function ContentEditPage({
     }
   };
 
-  const renderResponseMeta = (item: OutlineItem) => (
-    <div className="controlled-response-meta">
-      <span>响应状态：<strong>{responseStatusLabels[item.response_status || 'pending']}</strong></span>
-      <span className={`is-risk-${item.compliance_risk || 'none'}`}>合规风险：<strong>{complianceRiskLabels[item.compliance_risk || 'none']}</strong></span>
-      {item.compliance_message ? <p>{item.compliance_message}</p> : null}
-    </div>
-  );
-
   const renderTree = (items: OutlineItem[], level = 0): ReactNode => items.map((item) => {
     const meta = outlineMeta.get(item.id);
     const status = meta?.status || 'idle';
     const isLeaf = !item.children?.length;
     const canRegenerate = isLeaf
-      && item.manual_input_required !== true
-      && (item.response_mode || 'freeform-markdown') === 'freeform-markdown';
+      && item.manual_input_required !== true;
     const itemStatusLabel = isLeaf && item.response_status
       ? responseStatusLabels[item.response_status]
       : status === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[status];
@@ -1258,26 +1224,13 @@ function ContentEditPage({
                 </>
               ) : selectedCanEditMarkdown ? (
                 <button type="button" className="secondary-action" onClick={startEditingContent} disabled={!selectedItem || !selectedIsLeaf || taskBlocksGeneration}>
-                  {selectedResponseMode === 'evidence-markdown' ? '手工编辑' : '编辑'}
+                  编辑
                 </button>
               ) : null}
             </div>
           </div>
 
-          {selectedItem && selectedResponseMode === 'explicit-none' ? (
-            <div className="controlled-response-panel explicit-none-response">
-              {renderResponseMeta(selectedItem)}
-              <strong>固定响应</strong>
-              <p>{selectedItem.empty_response_text || selectedContent || '无'}</p>
-              <small>该内容由招标文件响应规则固定，不开放编辑或 AI 改写。</small>
-            </div>
-          ) : selectedItem && selectedResponseMode === 'container' ? (
-            <div className="controlled-response-panel container-response">
-              {renderResponseMeta(selectedItem)}
-              <strong>{selectedItem.title}</strong>
-              <p>该节点仅作为目录容器，不生成或编辑正文。</p>
-            </div>
-          ) : selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
+          {selectedItem && selectedIsLeaf && editing && !isPreviewing ? (
             <MarkdownEditor
               value={draftContent}
               onChange={setDraftContent}
@@ -1292,24 +1245,6 @@ function ContentEditPage({
                 <p className="content-editor-empty">暂无预览内容</p>
               )}
             </MarkdownFullscreenViewer>
-          ) : selectedItem && selectedIsLeaf && selectedResponseMode === 'evidence-markdown' ? (
-            <div className="controlled-response-panel evidence-response-panel">
-              {renderResponseMeta(selectedItem)}
-              <section className="evidence-index">
-                <strong>材料索引</strong>
-                {selectedItem.knowledge_item_ids?.length ? (
-                  <ul>{selectedItem.knowledge_item_ids.map((id) => <li key={id}>{id}</li>)}</ul>
-                ) : (
-                  <p className="is-missing">待人工填写 / 待核对：尚未关联支撑材料。</p>
-                )}
-                {selectedItem.mapped_requirement_ids?.length ? <small>对应需求：{selectedItem.mapped_requirement_ids.join('、')}</small> : null}
-              </section>
-              {selectedContent.trim() ? (
-                <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
-                  <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />
-                </MarkdownFullscreenViewer>
-              ) : <p className="content-editor-empty">待人工填写材料说明。</p>}
-            </div>
           ) : selectedItem && selectedIsLeaf && selectedContent.trim() ? (
             <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
               <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />
@@ -1464,12 +1399,12 @@ function ContentEditPage({
                   <input
                     type="number"
                     min="0"
-                    max={Math.max(1, leaves.length)}
+                    max={IMAGE_HARD_LIMITS.ai}
                     value={draftGenerationOptions.maxAiImages}
                     disabled={generationStrategyLocked}
                     onChange={(event) => setDraftGenerationOptions((prev) => ({
                       ...prev,
-                      maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                      maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.ai)),
                     }))}
                   />
                 </label>
@@ -1492,12 +1427,12 @@ function ContentEditPage({
                   <input
                     type="number"
                     min="0"
-                    max={Math.max(1, leaves.length)}
+                    max={IMAGE_HARD_LIMITS.mermaid}
                     value={draftGenerationOptions.maxMermaidImages}
                     disabled={generationStrategyLocked}
                     onChange={(event) => setDraftGenerationOptions((prev) => ({
                       ...prev,
-                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.mermaid)),
                     }))}
                   />
                 </label>
@@ -1532,12 +1467,12 @@ function ContentEditPage({
                     <input
                       type="number"
                       min="0"
-                      max={Math.max(1, leaves.length)}
+                      max={IMAGE_HARD_LIMITS.html}
                       value={draftGenerationOptions.maxHtmlImages}
                       disabled={generationStrategyLocked}
                       onChange={(event) => setDraftGenerationOptions((prev) => ({
                         ...prev,
-                        maxHtmlImages: Math.max(0, Math.min(Number(event.target.value) || 0, Math.max(1, leaves.length))),
+                        maxHtmlImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.html)),
                       }))}
                     />
                   </label>
@@ -1548,6 +1483,7 @@ function ContentEditPage({
                 </>
               )}
             </div>
+            <p className="content-generation-config-note">图片数量是全文上限，AI 会按内容价值决定实际数量，不会强制填满。</p>
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={saveGenerationOptions} disabled={taskInFlight || paused}>

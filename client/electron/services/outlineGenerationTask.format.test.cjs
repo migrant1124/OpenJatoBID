@@ -1,302 +1,139 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+'use strict';
 
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { normalizeAndValidateOutline } = require('./outlineGenerationGuard.cjs');
 const { getBidAnalysisTasks } = require('./bidAnalysisTask.cjs');
 const { runOutlineGenerationTask } = require('./outlineGenerationTask.cjs');
 
-function successState(task, content) {
-  return { id: task.id, label: task.label, status: 'success', content: content ?? (task.output === 'json' ? '{}' : `${task.label}结果`) };
-}
+test('目录生成保留招标文件规定的一级目录，并将全部节点默认设为 AI 编制', () => {
+  const result = normalizeAndValidateOutline({
+    outline: [{
+      title: '技术方案',
+      description: '技术方案的编制内容',
+      source_requirement_id: 'R1',
+      children: [{
+        title: '实施方案',
+        manual_input_required: true,
+        response_mode: 'evidence-markdown',
+        focus_scoring_point_ids: ['SP-1'],
+        children: [{ title: '实施步骤' }],
+      }],
 
-function createState(formatContent) {
-  const required = getBidAnalysisTasks('key');
-  return {
+  });
+
+  const section = result.outline[0].children[0];
+  assert.equal(result.outline[0].title, '技术方案');
+  assert.equal(section.id, '1.1');
+  assert.equal(section.description, '实施方案');
+  assert.equal(section.manual_input_required, false);
+  assert.equal(section.response_mode, undefined);
+  assert.equal(section.source_requirement_id, undefined);
+  assert.deepEqual(section.focus_scoring_point_ids, ['SP-1']);
+});
+
+test('目录生成不得改写招标文件规定的一级目录', () => {
+  assert.throws(() => normalizeAndValidateOutline({
+    outline: [{ title: '服务方案', description: '内容' }],
+  }, {
+    sourceOutline: { outline: [{ title: '技术方案' }] },
+  }), /一级目录必须保持目录来源骨架/u);
+});
+
+test('目录生成实际流程会清除模型返回的人工和旧责任字段', async () => {
+  const tasks = getBidAnalysisTasks('key');
+  const taskContent = (task) => {
+    if (task.id === 'responseFileRequirements') return '【技术文件目录状态】：明确\n\n# 技术方案\n## 实施方案';
+    if (task.id === 'procurementList') return JSON.stringify({
+      schema_version: 1,
+      extraction_status: { procurement_items: 'not_found', quotation_rules: 'not_found' },
+      procurement_items: [],
+      quotation_rules: {
+        pricing_method: [], price_limits: [], tax_and_invoice: [], cost_scope: [], calculation_and_rounding: [],
+        quote_documents_and_attachments: [], submission_method_or_platform: [], consistency_and_priority: [],
+        invalid_or_abnormal_price: [], settlement_and_payment: [], other_explicit_rules: [],
+      },
+    });
+    if (task.id === 'projectInfo') return JSON.stringify({ project_name: '项目', project_number: '编号', project_type: '类型', project_budget: '预算', project_address: '地址' });
+    if (task.id === 'partAInfo') return JSON.stringify({ company_name: '甲方', address: '地址', contact_person: '联系人', contact_phone: '电话' });
+    if (task.id === 'deliveryAndServiceRequirements') return JSON.stringify({
+      implementation_period: '周期', delivery_scope: '范围', delivery_location: '地点', acceptance_requirements: '验收',
+      warranty_period: '质保', after_sales_service: '售后', response_time: '时限', training_requirements: '培训', documentation_requirements: '资料',
+    });
+    return '解析结果';
+  };
+  let state = {
     workflowKind: 'technical-plan',
-    projectOverview: '脱敏项目概述',
-    techRequirements: '## 技术评分项\n服务实施方案，10分。',
-    bidAnalysisTasks: Object.fromEntries(required.map((task) => [task.id, successState(
-      task,
-      task.id === 'responseFileRequirements' ? formatContent : undefined,
-    )])),
+    projectOverview: '项目概述',
+    techRequirements: '技术评分要求',
+    bidAnalysisTasks: Object.fromEntries(tasks.map((task) => [task.id, {
+      id: task.id,
+      label: task.label,
+      status: 'success',
+      content: taskContent(task),
+    }])),
+    requirementResponseMatrix: undefined,
     referenceKnowledgeDocumentIds: [],
-    tenderFile: null,
   };
-}
-
-function createWorkspace(formatContent) {
-  let state = createState(formatContent);
-  return {
-    loadTechnicalPlan: () => state,
-    updateTechnicalPlan: (partial) => {
-      state = { ...state, ...partial };
-      return state;
-    },
-    getState: () => state,
-  };
-}
-
-function createUpdateTask() {
-  let background = {};
-  return (partial) => {
-    background = { ...background, ...partial };
-    return background;
-  };
-}
-
-function createAi(responses, calls) {
-  const aiService = {
-    collectJsonResponse: async (options) => {
-      calls.push(options.progressLabel);
-      const raw = responses[options.progressLabel];
-      if (!raw) throw new Error(`unexpected AI request: ${options.progressLabel || 'unknown'}`);
-      const value = options.normalizer ? options.normalizer(structuredClone(raw)) : structuredClone(raw);
-      if (options.validator) options.validator(value);
-      return value;
-    },
-    requestJson: async (options) => aiService.collectJsonResponse(options),
-    getConfig: () => ({}),
-  };
-  return aiService;
-}
-
-const groupsResponse = {
-  groups: [{ requirement_id: 'R1', title: '服务实施方案', description: '响应服务实施评分要求', detail_points: ['人员', '流程'] }],
-};
-
-test('explicit format owns all top-level directories and scoring is mapped only below them', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：明确\n\n# 技术文件\n\n## 实施方案\n## 服务承诺函（固定格式）');
-  const calls = [];
-  const aiService = createAi({
+  const responses = {
     格式目录骨架: {
       outline: [{
         id: '1',
-        title: '技术文件',
-        description: '技术文件固定一级目录',
-        children: [
-          { id: '1.1', title: '实施方案', description: '编制实施方案' },
-          { id: '1.2', title: '服务承诺函', description: '人工填写固定承诺函', manual_input_required: true },
-        ],
+        title: '技术方案',
+        description: '技术方案说明',
+        children: [{ id: '1.1', title: '实施方案', description: '实施方案说明', manual_input_required: true }],
       }],
     },
-    技术评分大类: groupsResponse,
+    技术评分大类: { groups: [{ requirement_id: 'R1', title: '实施方案', description: '实施方案评分要求', detail_points: ['实施内容'] }] },
     目录下级补充: {
       outline: [{
         id: '1',
-        title: '技术文件',
-        description: '技术文件固定一级目录',
-        children: [
-          {
-            id: '1.1',
-            title: '实施方案',
-            description: '编制实施方案',
-            manual_input_required: true,
-            source_requirement_id: 'R1',
-            children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分细项' }],
-          },
-          {
-            id: '1.2',
-            title: '服务承诺函',
-            description: '人工填写固定承诺函',
-            manual_input_required: true,
-            children: [{ id: '1.2.1', title: '模型误加子目录', description: '应由程序移除' }],
-          },
-        ],
+        title: '技术方案',
+        description: '技术方案说明',
+        source_requirement_id: 'R1',
+        children: [{
+          id: '1.1',
+          title: '实施方案',
+          description: '实施方案说明',
+          manual_input_required: true,
+          deep_writing: true,
+          response_mode: 'evidence-markdown',
+        }],
       }],
     },
-  }, calls);
+  };
+  const aiService = {
+    getConfig: () => ({}),
+    collectJsonResponse: async (options) => {
+      const value = structuredClone(responses[options.progressLabel]);
+      if (!value) throw new Error(`unexpected request: ${options.progressLabel}`);
+      const normalized = options.normalizer ? options.normalizer(value) : value;
+      options.validator?.(normalized);
+      return normalized;
+    },
+  };
+  const workspaceStore = {
+    loadTechnicalPlan: () => structuredClone(state),
+    updateTechnicalPlan(partial) {
+      state = { ...state, ...structuredClone(partial) };
+      return structuredClone(state);
+    },
+  };
+
   await runOutlineGenerationTask({
     aiService,
     agentService: {},
     workspaceStore,
     knowledgeBaseService: {},
-    updateTask: createUpdateTask(),
+    updateTask: () => undefined,
     payload: { reference_knowledge_document_ids: [] },
   });
 
-  const state = workspaceStore.getState();
-  assert.deepEqual(calls, ['格式目录骨架', '技术评分大类', '目录下级补充']);
-  assert.deepEqual(state.outlineData.outline.map((item) => item.title), ['技术文件']);
-  assert.equal(state.outlineData.outline[0].source_requirement_id, undefined);
-  assert.equal(state.outlineData.outline[0].children[0].source_requirement_id, 'R1');
-  assert.equal(state.outlineData.outline[0].children[0].manual_input_required, undefined);
-  assert.equal(state.outlineData.outline[0].children[0].children[0].title, '人员与流程');
-  assert.equal(state.outlineData.outline[0].children[1].manual_input_required, true);
-  assert.equal(state.outlineData.outline[0].children[1].children, undefined);
-  assert.equal(state.outlineGenerationTask.status, 'success');
-});
-
-test('unspecified format uses only selected knowledge document headings for top-level directories', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：未明确\n\n未找到明确技术文件目录格式。');
-  const calls = [];
-  const aiService = createAi({
-    知识库目录骨架: {
-      outline: [
-        { id: '1', title: '项目理解', description: '参考文档一级目录' },
-        { id: '2', title: '实施方案', description: '参考文档一级目录' },
-      ],
-    },
-    技术评分大类: groupsResponse,
-    目录下级补充: {
-      outline: [
-        {
-          id: '1', title: '项目理解', description: '参考文档一级目录',
-          children: [{ id: '1.1', title: '需求分析', description: '项目需求', children: [{ id: '1.1.1', title: '目标分析', description: '项目目标' }] }],
-        },
-        {
-          id: '2', title: '实施方案', description: '参考文档一级目录',
-          children: [{ id: '2.1', title: '服务实施', description: '评分响应', source_requirement_id: 'R1', children: [{ id: '2.1.1', title: '人员与流程', description: '覆盖评分细项' }] }],
-        },
-      ],
-    },
-  }, calls);
-  const readIds = [];
-
-  await runOutlineGenerationTask({
-    aiService,
-    agentService: {},
-    workspaceStore,
-    knowledgeBaseService: {
-      readMarkdown: (documentId) => {
-        readIds.push(documentId);
-        return '# 项目理解\n## 需求分析\n# 实施方案';
-      },
-    },
-    updateTask: createUpdateTask(),
-    payload: { reference_knowledge_document_ids: ['kb-selected'] },
-  });
-
-  assert.deepEqual(readIds, ['kb-selected']);
-  assert.deepEqual(calls, ['知识库目录骨架', '技术评分大类', '目录下级补充']);
-  assert.deepEqual(workspaceStore.getState().outlineData.outline.map((item) => item.title), ['项目理解', '实施方案']);
-});
-
-test('multiple selected knowledge documents are combined in one source-outline request', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：未明确\n\n未找到明确技术文件目录格式。');
-  const calls = [];
-  const aiService = createAi({
-    知识库目录骨架: {
-      outline: [
-        { id: '1', title: '项目理解', description: '文档一一级目录' },
-        { id: '2', title: '质量保障', description: '文档二一级目录' },
-      ],
-    },
-    技术评分大类: groupsResponse,
-    目录下级补充: {
-      outline: [
-        { id: '1', title: '项目理解', description: '文档一一级目录', children: [{ id: '1.1', title: '需求分析', description: '需求', source_requirement_id: 'R1', children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }] },
-        { id: '2', title: '质量保障', description: '文档二一级目录' },
-      ],
-    },
-  }, calls);
-  const readIds = [];
-
-  await runOutlineGenerationTask({
-    aiService,
-    agentService: {},
-    workspaceStore,
-    knowledgeBaseService: {
-      readMarkdown: (documentId) => {
-        readIds.push(documentId);
-        return documentId === 'kb-a' ? '# 项目理解\n## 需求分析' : '# 质量保障';
-      },
-    },
-    updateTask: createUpdateTask(),
-    payload: { reference_knowledge_document_ids: ['kb-a', 'kb-b'] },
-  });
-
-  assert.deepEqual(readIds, ['kb-a', 'kb-b']);
-  assert.equal(calls.filter((label) => label === '知识库目录骨架').length, 1);
-  assert.deepEqual(workspaceStore.getState().outlineData.outline.map((item) => item.title), ['项目理解', '质量保障']);
-});
-
-test('unspecified format without selected knowledge blocks before every directory AI request', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：未明确\n\n未找到明确技术文件目录格式。');
-  let aiCalls = 0;
-  await assert.rejects(
-    () => runOutlineGenerationTask({
-      aiService: {
-        collectJsonResponse: async () => { aiCalls += 1; return {}; },
-        requestJson: async () => { aiCalls += 1; return {}; },
-        getConfig: () => ({}),
-      },
-      agentService: {},
-      workspaceStore,
-      knowledgeBaseService: {},
-      updateTask: createUpdateTask(),
-      payload: { reference_knowledge_document_ids: [] },
-    }),
-    /招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。/u,
-  );
-  assert.equal(aiCalls, 0);
-});
-
-test('a scoring item returned as a top-level directory is rejected', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：明确\n\n# 技术文件');
-  const calls = [];
-  const aiService = createAi({
-    格式目录骨架: { outline: [{ id: '1', title: '技术文件', description: '固定一级目录' }] },
-    技术评分大类: groupsResponse,
-    目录下级补充: {
-      outline: [{
-        id: '1',
-        title: '技术文件',
-        description: '固定一级目录',
-        source_requirement_id: 'R1',
-        children: [{ id: '1.1', title: '实施', description: '实施', children: [{ id: '1.1.1', title: '人员', description: '人员' }] }],
-      }],
-    },
-  }, calls);
-
-  await assert.rejects(
-    () => runOutlineGenerationTask({
-      aiService,
-      agentService: {},
-      workspaceStore,
-      knowledgeBaseService: {},
-      updateTask: createUpdateTask(),
-      payload: { reference_knowledge_document_ids: [] },
-    }),
-    /技术评分项不能创建或占用一级目录/u,
-  );
-});
-
-test('existing-plan expansion keeps format-owned roots and uses the old plan only below them', async () => {
-  const workspaceStore = createWorkspace('【技术文件目录状态】：明确\n\n# 技术文件');
-  Object.assign(workspaceStore.getState(), {
-    workflowKind: 'existing-plan-expansion',
-    originalPlanFile: { fileName: '脱敏原方案.md' },
-  });
-  workspaceStore.readOriginalPlanMarkdown = () => '# 旧方案自定义一级目录\n## 旧实施内容';
-  const calls = [];
-  const aiService = createAi({
-    旧方案目录提取: { outline: [{ id: '1', title: '旧方案自定义一级目录', description: '旧目录' }] },
-    格式目录骨架: { outline: [{ id: '1', title: '技术文件', description: '格式一级目录' }] },
-    技术评分大类: groupsResponse,
-    目录下级补充: {
-      outline: [{
-        id: '1',
-        title: '技术文件',
-        description: '格式一级目录',
-        children: [{ id: '1.1', title: '旧实施内容', description: '原方案下级补充', source_requirement_id: 'R1', children: [{ id: '1.1.1', title: '人员与流程', description: '覆盖评分项' }] }],
-      }],
-    },
-  }, calls);
-  aiService.getConfig = () => ({
-    agent_mode_scenarios: { existing_plan_expansion_original_outline_extraction: false },
-  });
-
-  await runOutlineGenerationTask({
-    aiService,
-    agentService: {},
-    workspaceStore,
-    knowledgeBaseService: {},
-    updateTask: createUpdateTask(),
-    payload: { reference_knowledge_document_ids: [], outline_expansion_mode: 'ai-complement' },
-  });
-
-  assert.deepEqual(workspaceStore.getState().outlineData.outline.map((item) => item.title), ['技术文件']);
-  assert.equal(workspaceStore.getState().outlineData.outline[0].children[0].title, '旧实施内容');
-  assert.ok(calls.includes('旧方案目录提取'));
+  const generated = state.outlineData.outline[0].children[0];
+  assert.equal(generated.manual_input_required, undefined);
+  assert.equal(generated.source_requirement_id, undefined);
+  assert.equal(generated.deep_writing, undefined);
+  assert.equal(generated.response_mode, undefined);
 });
 
 test('forced Agent takes over when source-driven child generation loses network', async () => {

@@ -6,7 +6,7 @@ import OutlineEditPage from './OutlineEditPage';
 import GlobalFactsPage from './GlobalFactsPage';
 import ContentEditPage from './ContentEditPage';
 import { TemplatePreview } from '../../export-format/pages/ExportFormatPage';
-import { useTechnicalPlanWorkflow } from '../hooks/useTechnicalPlanWorkflow';
+import { normalizeTechnicalPlanState, useTechnicalPlanWorkflow } from '../hooks/useTechnicalPlanWorkflow';
 import { areRequiredBidAnalysisTasksReady } from '../services/bidAnalysisWorkflow';
 import { trackPageView } from '../../../shared/analytics/analytics';
 import { FloatingToolbar, ToolbarArrowLeftIcon, ToolbarArrowRightIcon, ToolbarDocumentIcon, useToast } from '../../../shared/ui';
@@ -498,6 +498,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
+            requirementResponseMatrix: hasOwnField(technicalPlan, 'requirementResponseMatrix') ? technicalPlan.requirementResponseMatrix : prev.requirementResponseMatrix,
             outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
             outlineGenerationTask: hasOwnField(technicalPlan, 'outlineGenerationTask') ? trimTaskLogs(technicalPlan.outlineGenerationTask) : prev.outlineGenerationTask,
             referenceKnowledgeDocumentIds: Array.isArray(technicalPlan.referenceKnowledgeDocumentIds) ? technicalPlan.referenceKnowledgeDocumentIds : prev.referenceKnowledgeDocumentIds,
@@ -529,6 +530,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             bidAnalysisProgress: technicalPlan.bidAnalysisProgress ?? prev.bidAnalysisProgress,
             projectOverview: technicalPlan.projectOverview ?? prev.projectOverview,
             techRequirements: technicalPlan.techRequirements ?? prev.techRequirements,
+            requirementResponseMatrix: hasOwnField(technicalPlan, 'requirementResponseMatrix') ? technicalPlan.requirementResponseMatrix : prev.requirementResponseMatrix,
             outlineGenerationTask: outlineDataReset ? undefined : prev.outlineGenerationTask,
             globalFactsTask: outlineDataReset ? undefined : prev.globalFactsTask,
             globalFacts: outlineDataReset ? [] : prev.globalFacts,
@@ -613,7 +615,12 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
         return prev;
       });
     });
-    window.yibiao.tasks.getActiveTasks().catch((error) => {
+    window.yibiao.tasks.getActiveTasks().then(async () => {
+      const latestState = await window.yibiao?.technicalPlan.loadState();
+      if (latestState) {
+        setState(normalizeTechnicalPlanState(latestState));
+      }
+    }).catch((error) => {
       console.warn('获取后台任务状态失败', error);
     });
 
@@ -948,11 +955,11 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           originalPlanFile={state.originalPlanFile}
           originalPlanMarkdown={originalPlanMarkdown}
           onFileImported={(nextState, markdown) => {
-            setState((prev) => ({ ...prev, ...nextState }));
+            setState(normalizeTechnicalPlanState(nextState));
             setTenderMarkdown(markdown);
           }}
           onOriginalPlanImported={(nextState, markdown) => {
-            setState((prev) => ({ ...prev, ...nextState }));
+            setState(normalizeTechnicalPlanState(nextState));
             setOriginalPlanMarkdown(markdown);
           }}
         />
@@ -974,7 +981,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           task={state.bidAnalysisTask}
           progress={state.bidAnalysisProgress}
           onProgressChange={(progress) => setState((prev) => ({ ...prev, bidAnalysisProgress: progress }))}
-          onConfigSaved={(nextState) => setState((prev) => ({ ...prev, ...nextState }))}
+          onConfigSaved={(nextState) => setState(normalizeTechnicalPlanState(nextState))}
         />
       )}
       {state.step === 'outline-generation' && (

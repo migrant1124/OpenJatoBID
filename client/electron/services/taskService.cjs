@@ -253,6 +253,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         'projectOverview',
         'techRequirements',
         'bidAnalysisTasks',
+        'requirementResponseMatrix',
       ]);
       if (state.outlineData === null) {
         copyPatchFields(patch, state, [
@@ -813,6 +814,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         bidAnalysisProgress: 0,
         projectOverview: '',
         techRequirements: '',
+        requirementResponseMatrix: undefined,
         outlineData: null,
         outlineGenerationTask: undefined,
         referenceKnowledgeDocumentIds: [],
@@ -826,7 +828,9 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
       });
     },
     startBidAnalysis(payload) {
-      return startManagedTask('bid-analysis', payload, runBidAnalysisTask);
+      return startManagedTask('bid-analysis', payload, runBidAnalysisTask, {
+        requirementResponseMatrix: undefined,
+      });
     },
     startOutlineGeneration(payload) {
       return startManagedTask('outline-generation', payload, runOutlineGenerationTask, {

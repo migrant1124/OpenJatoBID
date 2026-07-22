@@ -260,6 +260,4 @@
 - [x] T109 固定现有 KV/D1/R2/Analytics Engine Binding、`bidupdat` 配置、Cron 与 `keep_vars`，新增配置防护和 health Binding 布尔状态测试。
 - [x] T110 完成本地 `npm ci`、11 项测试、配置验证、部署 dry-run、脚本语法检查与差异检查；未执行真实部署、迁移、资源写入或 Git 状态变更。详见 `docs/secondary-development/test-reports/2026-07-18-worker-deployment-boundary-test-report.md`。
 
-## 阶段 13：知识库文档批量删除
 
-- [x] T111 为当前知识库文件夹增加文档复选框、全选和批量删除；批量服务先全量预检再清理文档目录、调试日志与导入图片。新增聚焦测试 7/7、相关 CJS 语法检查、客户端构建、`git diff --check` 和当前仓库 Electron 知识库页面启动验证通过；本地文件夹为空，未为视觉验收写入用户测试数据。

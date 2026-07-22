@@ -43,6 +43,19 @@ export interface OutlineResponseState {
   compliance_message?: string;
 }
 
+export type OutlineWritingProfile = 'standard' | 'deep' | 'creative-proposal';
+export type OutlineFocusPriority = 'service-plan' | 'score-first' | 'score-second';
+
+export interface OutlineQualityMetadata {
+  deep_writing: boolean;
+  deep_writing_recommended: boolean;
+  deep_writing_reason?: string;
+  deep_writing_source?: 'ai' | 'user' | 'default';
+  writing_profile: OutlineWritingProfile;
+  value_anchor_ids: string[];
+  mapped_scoring_point_ids: string[];
+}
+
 export interface OutlineItem {
   id: string;
   title: string;
@@ -66,6 +79,15 @@ export interface OutlineItem {
   response_status?: ResponseStatus;
   compliance_risk?: ComplianceRisk;
   compliance_message?: string;
+  deep_writing?: boolean;
+  deep_writing_recommended?: boolean;
+  deep_writing_reason?: string;
+  deep_writing_source?: 'ai' | 'user' | 'default';
+  writing_profile?: OutlineWritingProfile;
+  value_anchor_ids?: string[];
+  mapped_scoring_point_ids?: string[];
+  focus_priority?: OutlineFocusPriority;
+  focus_scoring_point_ids?: string[];
   source_requirement_id?: string;
   source_requirement_title?: string;
   knowledge_item_ids?: string[];

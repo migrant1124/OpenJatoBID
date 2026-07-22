@@ -15,6 +15,10 @@ const {
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { clearMermaidCache } = require('../utils/mermaidCache.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
+const {
+  normalizeRequirementResponseMatrix,
+} = require('./technicalPlanQualityModel.cjs');
+const { applyOutlineQualityRules, validateConditionalOutlineDepth } = require('./outlineQualityRules.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
 const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
@@ -67,6 +71,11 @@ const outlineResponseStateFields = [
   'compliance_message',
 ];
 
+const outlineQualityMetadataFields = [
+  'focus_priority',
+  'focus_scoring_point_ids',
+];
+
 const defaultOutlineFormatConstraints = Object.freeze({
   manual_input_required: false,
   numbering_policy: 'auto',
@@ -111,6 +120,8 @@ const initialState = {
   contentGenerationPlans: {},
   contentIllustrationPlan: undefined,
   contentGenerationRuntime: undefined,
+  requirementResponseMatrix: undefined,
+  outlineQualityReview: undefined,
   outlineData: null,
 };
 
@@ -282,11 +293,20 @@ function normalizeStringArray(value, fallback, label) {
   return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
 }
 
+function normalizeOutlineFocusMetadata(value) {
+  const source = isPlainObject(value) ? value : {};
+  const normalized = {};
+  if (['service-plan', 'score-first', 'score-second'].includes(source.focus_priority)) {
+    normalized.focus_priority = source.focus_priority;
+  }
+  const scoringPointIds = normalizeStringArray(source.focus_scoring_point_ids, [], '目录重点评分项');
+  if (scoringPointIds.length) normalized.focus_scoring_point_ids = scoringPointIds;
+  return normalized;
+}
+
 function normalizeOutlineFormatConstraints(value) {
   const source = parseStrictJsonObject(value, '目录格式约束') || {};
-  const storedResponseMode = normalizeEnumField(source, 'response_mode', outlineResponseModes, defaultOutlineFormatConstraints.response_mode, '目录格式约束');
-  const legacyManualMode = storedResponseMode === 'locked-commitment' || storedResponseMode === 'fixed-markdown-table';
-  const manualInputRequired = legacyManualMode || normalizeBooleanField(source, 'manual_input_required', defaultOutlineFormatConstraints.manual_input_required, '目录格式约束');
+  const manualInputRequired = normalizeBooleanField(source, 'manual_input_required', defaultOutlineFormatConstraints.manual_input_required, '目录格式约束');
   const normalized = {
     manual_input_required: manualInputRequired,
     numbering_policy: normalizeEnumField(source, 'numbering_policy', outlineNumberingPolicies, defaultOutlineFormatConstraints.numbering_policy, '目录格式约束'),
@@ -295,7 +315,7 @@ function normalizeOutlineFormatConstraints(value) {
     title_locked: normalizeBooleanField(source, 'title_locked', defaultOutlineFormatConstraints.title_locked, '目录格式约束'),
     order_locked: normalizeBooleanField(source, 'order_locked', defaultOutlineFormatConstraints.order_locked, '目录格式约束'),
     level_locked: normalizeBooleanField(source, 'level_locked', defaultOutlineFormatConstraints.level_locked, '目录格式约束'),
-    response_mode: manualInputRequired ? 'freeform-markdown' : storedResponseMode,
+    response_mode: 'freeform-markdown',
     allow_ai_children: normalizeBooleanField(source, 'allow_ai_children', defaultOutlineFormatConstraints.allow_ai_children, '目录格式约束'),
     mapped_requirement_ids: normalizeStringArray(source.mapped_requirement_ids, defaultOutlineFormatConstraints.mapped_requirement_ids, '目录格式约束.mapped_requirement_ids'),
   };
@@ -343,14 +363,12 @@ function hasFields(value) {
   return Boolean(value && Object.keys(value).length);
 }
 
-function applyOutlinePersistenceFields(item, formatConstraints, responseState) {
+function applyOutlinePersistenceFields(item, formatConstraints, responseState, qualityMetadata) {
   return {
     ...item,
     ...formatConstraints,
     ...responseState,
-    ...(formatConstraints.manual_input_required === true && !String(item?.content || '').trim()
-      ? { response_status: 'needs-manual-input' }
-      : {}),
+    ...qualityMetadata,
     knowledge_item_ids: [...responseState.knowledge_item_ids],
   };
 }
@@ -570,6 +588,7 @@ function flattenOutlineItems(items, parentNodeId = null, level = 1, rows = []) {
     if (!nodeId) return;
     const formatConstraintsPatch = extractOwnFields(item, outlineFormatConstraintFields);
     const responseStatePatch = extractOwnFields(item, outlineResponseStateFields);
+    const qualityMetadataPatch = extractOwnFields(item, outlineQualityMetadataFields);
     rows.push({
       node_id: nodeId,
       parent_node_id: parentNodeId,
@@ -583,6 +602,7 @@ function flattenOutlineItems(items, parentNodeId = null, level = 1, rows = []) {
       has_knowledge_item_ids: hasOwn(item, 'knowledge_item_ids') && item.knowledge_item_ids !== undefined,
       format_constraints_patch: formatConstraintsPatch,
       response_state_patch: responseStatePatch,
+      quality_metadata_patch: qualityMetadataPatch,
       content: String(item?.content || ''),
     });
     if (item?.children?.length) {
@@ -1217,7 +1237,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
 
   function validateStoredOutlineNodeJson(nodeId) {
     const row = db.prepare(`
-      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, content
+      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json, content
       FROM technical_plan_outline_nodes
       WHERE node_id = ?
     `).get(nodeId);
@@ -1232,6 +1252,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content: row.content,
       knowledgeItemIds,
     });
+    normalizeOutlineFocusMetadata(safeJsonParse(row.quality_metadata_json, undefined));
     return row;
   }
 
@@ -1247,6 +1268,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: legacyKnowledgeItemIds,
       });
+      const qualityMetadata = normalizeOutlineFocusMetadata(safeJsonParse(row.quality_metadata_json, undefined));
       map.set(row.node_id, applyOutlinePersistenceFields({
         id: row.node_id,
         title: row.title,
@@ -1255,7 +1277,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         source_requirement_title: row.source_requirement_title || undefined,
         content: row.content || '',
         children: [],
-      }, formatConstraints, responseState));
+      }, formatConstraints, responseState, qualityMetadata));
     }
 
     const roots = [];
@@ -1300,7 +1322,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const rows = flattenOutlineItems(outlineData.outline);
     const nextIds = new Set(rows.map((row) => row.node_id));
     const existingRows = new Map(db.prepare(`
-      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, content
+      SELECT node_id, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json, content
       FROM technical_plan_outline_nodes
     `).all().map((row) => [row.node_id, row]));
     const existingRowsByFormatNodeId = new Map();
@@ -1316,15 +1338,16 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: existingRow.content,
         knowledgeItemIds: existingKnowledgeItemIds,
       });
+      normalizeOutlineFocusMetadata(safeJsonParse(existingRow.quality_metadata_json, undefined));
     }
     const upsert = db.prepare(`
       INSERT INTO technical_plan_outline_nodes (
         node_id, parent_node_id, sort_order, level, title, description, source_requirement_id,
-        source_requirement_title, knowledge_item_ids_json, format_constraints_json, response_state_json,
+        source_requirement_title, knowledge_item_ids_json, format_constraints_json, response_state_json, quality_metadata_json,
         content, created_at, updated_at
       ) VALUES (
         @node_id, @parent_node_id, @sort_order, @level, @title, @description, @source_requirement_id,
-        @source_requirement_title, @knowledge_item_ids_json, @format_constraints_json, @response_state_json,
+        @source_requirement_title, @knowledge_item_ids_json, @format_constraints_json, @response_state_json, @quality_metadata_json,
         @content, @created_at, @updated_at
       ) ON CONFLICT(node_id) DO UPDATE SET
         parent_node_id = excluded.parent_node_id,
@@ -1337,6 +1360,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         knowledge_item_ids_json = excluded.knowledge_item_ids_json,
         format_constraints_json = excluded.format_constraints_json,
         response_state_json = excluded.response_state_json,
+        quality_metadata_json = excluded.quality_metadata_json,
         content = excluded.content,
         updated_at = excluded.updated_at
     `);
@@ -1383,26 +1407,13 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: row.content,
         knowledgeItemIds: incomingKnowledgeItemIds,
       });
-      if (existingRow && !['freeform-markdown', 'evidence-markdown'].includes(existingFormatConstraints.response_mode)) {
-        const existingResponseState = normalizeOutlineResponseState(existingRow.response_state_json, {
-          content: existingRow.content,
-          knowledgeItemIds: existingKnowledgeItemIds,
-        });
-        const unchanged = String(row.content || '') === String(existingRow.content || '')
-          && JSON.stringify(responseState) === JSON.stringify(existingResponseState);
-        const explicitNoneContent = String(existingFormatConstraints.empty_response_text || '').trim() || '无。';
-        const explicitNoneState = normalizeOutlineResponseState({
-          ...existingResponseState,
-          knowledge_item_ids: [],
-          response_status: 'responded-none',
-        }, { content: explicitNoneContent, knowledgeItemIds: [] });
-        const explicitNoneAllowed = existingFormatConstraints.response_mode === 'explicit-none'
-          && String(row.content || '') === explicitNoneContent
-          && JSON.stringify(responseState) === JSON.stringify(explicitNoneState);
-        if (!unchanged && !explicitNoneAllowed) {
-          throw new Error('受控响应只能通过对应的确定性写入路径更新');
-        }
-      }
+      const existingQualityMetadata = normalizeOutlineFocusMetadata(
+        safeJsonParse(existingRow?.quality_metadata_json, undefined),
+      );
+      const qualityMetadata = normalizeOutlineFocusMetadata({
+        ...existingQualityMetadata,
+        ...(hasFields(row.quality_metadata_patch) ? row.quality_metadata_patch : {}),
+      });
       upsert.run({
         node_id: row.node_id,
         parent_node_id: row.parent_node_id,
@@ -1415,6 +1426,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         knowledge_item_ids_json: responseState.knowledge_item_ids.length ? JSON.stringify(responseState.knowledge_item_ids) : null,
         format_constraints_json: JSON.stringify(formatConstraints),
         response_state_json: JSON.stringify(responseState),
+        quality_metadata_json: JSON.stringify(qualityMetadata),
         content: row.content,
         created_at: timestamp,
         updated_at: timestamp,
@@ -1430,6 +1442,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     updateMeta({
       outline_project_name: outlineData.project_name || null,
       outline_project_overview: outlineData.project_overview || null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1477,11 +1490,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       const row = validateStoredOutlineNodeJson(nodeId);
       storedRows.set(nodeId, row);
       if (!row || !hasOwn(section || {}, 'content')) continue;
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)
-        && String(section.content || '') !== String(row.content || '')) {
-        throw new Error('受控响应不能通过正文 section 写入');
-      }
     }
 
     const nextIds = new Set(entries.map(([nodeId]) => nodeId));
@@ -1503,8 +1511,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         updated_at: section?.updated_at || timestamp,
       });
       const storedRow = storedRows.get(nodeId);
-      const constraints = storedRow ? normalizeOutlineFormatConstraints(storedRow.format_constraints_json) : null;
-      if (hasOwn(section, 'content') && ['freeform-markdown', 'evidence-markdown'].includes(constraints?.response_mode)) {
+      if (hasOwn(section, 'content') && storedRow) {
         updateContent.run({ node_id: nodeId, content: String(section.content || ''), updated_at: timestamp });
       }
     }
@@ -1522,6 +1529,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         acc[row.node_id] = {
           plan_version: Number(storedPlan.plan_version),
           plan: storedPlan.plan,
+          ...(storedPlan.fingerprint ? { fingerprint: storedPlan.fingerprint } : {}),
           ...(storedPlan.table_requirement ? { table_requirement: storedPlan.table_requirement } : {}),
           updated_at: row.updated_at || undefined,
         };
@@ -1604,6 +1612,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         plan_json: JSON.stringify({
           plan_version: Number(value.plan_version),
           plan: value.plan,
+          ...(value.fingerprint ? { fingerprint: value.fingerprint } : {}),
           ...(value.table_requirement ? { table_requirement: value.table_requirement } : {}),
         }),
         updated_at: value.updated_at || timestamp,
@@ -1636,6 +1645,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      requirement_response_matrix_json: null,
+      outline_quality_review_json: null,
       pending_tender_markdown_path: null,
       pending_tender_file_name: null,
       pending_tender_parser_label: null,
@@ -1667,6 +1678,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      requirement_response_matrix_json: null,
+      outline_quality_review_json: null,
       outline_project_name: null,
       outline_project_overview: null,
       selected_format_profile_id: null,
@@ -1686,8 +1699,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       WHERE node_id = @node_id
     `);
     for (const row of rows) {
-      const constraints = normalizeOutlineFormatConstraints(row.format_constraints_json);
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)) continue;
       normalizeOutlineResponseState(row.response_state_json, {
         content: row.content,
         knowledgeItemIds: normalizeStringArray(
@@ -1701,9 +1712,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         response_state_json: JSON.stringify({
           knowledge_item_ids: [],
           response_status: 'pending',
-          compliance_risk: constraints.response_mode === 'evidence-markdown'
-            ? constraints.missing_evidence_risk || 'none'
-            : 'none',
+          compliance_risk: 'none',
         }),
         updated_at: timestamp,
       });
@@ -1712,7 +1721,11 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
     clearTechnicalPlanMermaidCache();
-    updateMeta({ content_generation_runtime_json: null, content_illustration_plan_json: null });
+    updateMeta({
+      content_generation_runtime_json: null,
+      content_illustration_plan_json: null,
+      outline_quality_review_json: null,
+    });
   }
 
   function clearDownstreamFromOriginalPlan() {
@@ -1729,6 +1742,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       outline_project_overview: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1770,6 +1784,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_options_json: null,
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
+      outline_quality_review_json: null,
     });
   }
 
@@ -1905,6 +1920,14 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'contentGenerationOptions')) metaUpdates.content_generation_options_json = jsonOrNull(partial.contentGenerationOptions);
     if (hasOwn(partial, 'contentGenerationRuntime')) metaUpdates.content_generation_runtime_json = jsonOrNull(partial.contentGenerationRuntime);
     if (hasOwn(partial, 'contentIllustrationPlan')) metaUpdates.content_illustration_plan_json = jsonOrNull(partial.contentIllustrationPlan);
+    if (hasOwn(partial, 'requirementResponseMatrix')) {
+      metaUpdates.requirement_response_matrix_json = jsonOrNull(
+        partial.requirementResponseMatrix == null
+          ? null
+          : normalizeRequirementResponseMatrix(partial.requirementResponseMatrix),
+      );
+    }
+    if (hasOwn(partial, 'outlineQualityReview')) metaUpdates.outline_quality_review_json = jsonOrNull(partial.outlineQualityReview);
 
     if (Object.keys(metaUpdates).length) updateMeta(metaUpdates);
 
@@ -1934,10 +1957,13 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     if (hasOwn(partial, 'outlineData')) {
       if (partial.outlineData === null) {
         db.prepare('DELETE FROM technical_plan_outline_nodes').run();
-        updateMeta({ outline_project_name: null, outline_project_overview: null });
+        updateMeta({ outline_project_name: null, outline_project_overview: null, outline_quality_review_json: null });
       } else {
         saveOutlineData(partial.outlineData);
       }
+    }
+    if (hasOwn(partial, 'outlineQualityReview')) {
+      updateMeta({ outline_quality_review_json: jsonOrNull(partial.outlineQualityReview) });
     }
 
     if (hasOwn(partial, 'contentGenerationSections')) saveContentSections(partial.contentGenerationSections);
@@ -1961,6 +1987,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const outlineData = loadOutlineData(meta);
     const tasks = loadTasks();
     const bidSections = normalizeBidSections(safeJsonParse(meta.bid_sections_json, []));
+    const requirementResponseMatrix = safeJsonParse(meta.requirement_response_matrix_json, undefined);
     const bidSectionExtractionTask = tasks.bidSectionExtractionTask;
     const tenderFiles = loadTenderSourceFiles(meta);
     const tenderFile = meta.tender_markdown_path ? {
@@ -2015,6 +2042,10 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       contentGenerationOptions: safeJsonParse(meta.content_generation_options_json, undefined),
       contentGenerationRuntime: safeJsonParse(meta.content_generation_runtime_json, undefined),
       contentIllustrationPlan: safeJsonParse(meta.content_illustration_plan_json, undefined),
+      requirementResponseMatrix: requirementResponseMatrix
+        ? normalizeRequirementResponseMatrix(requirementResponseMatrix)
+        : undefined,
+      outlineQualityReview: safeJsonParse(meta.outline_quality_review_json, undefined),
       contentGenerationSections: loadContentSections(outlineData),
       contentGenerationPlans: loadContentPlans(),
       outlineData,
@@ -2120,14 +2151,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         throw new Error(`固定目录顺序不可修改：${stored.title}`);
       }
 
-      if (!['freeform-markdown', 'evidence-markdown'].includes(stored.constraints.response_mode)) {
-        const incomingResponsePatch = incoming.response_state_patch || {};
-        for (const [field, value] of Object.entries(incomingResponsePatch)) {
-          if (JSON.stringify(value ?? null) !== JSON.stringify(stored.responseState[field] ?? null)) {
-            throw new Error(`受控响应状态不能通过目录保存修改：${stored.title}.${field}`);
-          }
-        }
-      }
     }
 
     for (const row of incomingRows) {
@@ -2281,6 +2304,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       assertFormatConstrainedOutlineMutation(outlineData);
       const snapshot = loadOutlinePersistenceSnapshot();
       const outlineToSave = buildOutlineWithPersistedContent(outlineData, { snapshot, reverseMap, affectedIds, clearAll });
+      validateConditionalOutlineDepth(outlineToSave);
       saveOutlineData(outlineToSave);
       const rows = flattenOutlineItems(outlineToSave?.outline || []);
       const nextIds = new Set(rows.map((row) => row.node_id));
@@ -2296,6 +2320,127 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return loadTechnicalPlan();
   }
 
+  /* v1.4.5 local deepening path removed by v1.5.0.
+  function applyOutlineDeepening({ patch, allowAiValueAdditions = false }) {
+    const current = loadTechnicalPlan();
+    if (!current.outlineData) {
+      throw new Error('目录不存在，不能应用局部深化');
+    }
+    const result = applyOutlineDeepeningPatch({
+      outlineData: current.outlineData,
+      requirementResponseMatrix: current.requirementResponseMatrix || createEmptyFocusWritingMatrix(),
+      patch,
+      outlineExpansionMode: current.outlineExpansionMode,
+      allowAiValueAdditions: allowAiValueAdditions === true,
+    });
+    const affectedNodeIds = result.diff.affected_node_ids;
+    const targetNodeId = result.diff.target_node_id;
+    const transaction = db.transaction(() => {
+      assertOutlineMutationAllowed();
+      saveOutlineData(result.outlineData);
+      updateMeta({
+        requirement_response_matrix_json: jsonOrNull(result.requirementResponseMatrix),
+        outline_quality_review_json: jsonOrNull(result.outlineQualityReview),
+      });
+      const placeholders = affectedNodeIds.map(() => '?').join(', ');
+      if (placeholders) {
+        db.prepare(`DELETE FROM technical_plan_content_sections WHERE node_id IN (${placeholders})`).run(...affectedNodeIds);
+        db.prepare(`DELETE FROM technical_plan_content_plans WHERE node_id IN (${placeholders})`).run(...affectedNodeIds);
+      }
+      const meta = ensureMetaRow();
+      const illustrationPlan = safeJsonParse(meta.content_illustration_plan_json, undefined);
+      const illustrationItems = Array.isArray(illustrationPlan?.items)
+        ? illustrationPlan.items
+        : Array.isArray(illustrationPlan?.plan?.items) ? illustrationPlan.plan.items : null;
+      if (illustrationItems) {
+        const filteredItems = illustrationItems.filter((item) => !item?.section_ids?.some((id) => String(id) === targetNodeId || String(id).startsWith(`${targetNodeId}.`)));
+        if (Array.isArray(illustrationPlan?.items)) illustrationPlan.items = filteredItems;
+        else illustrationPlan.plan.items = filteredItems;
+        updateMeta({ content_illustration_plan_json: jsonOrNull(illustrationPlan) });
+      }
+      saveTask('outline-deepening', undefined);
+      clearTechnicalPlanMermaidCache();
+    });
+    transaction();
+    return { ...loadTechnicalPlan(), outlineDeepeningDiff: result.diff };
+  }
+
+  function setOutlineDeepWriting({ targetNodeId, deepWriting }) {
+    const current = loadTechnicalPlan();
+    if (!current.outlineData) {
+      throw new Error('目录不存在，不能修改深度写作');
+    }
+    const targetId = String(targetNodeId || '').trim();
+    const nextOutline = JSON.parse(JSON.stringify(current.outlineData));
+    const rows = flattenOutlineItems(nextOutline.outline || []);
+    const targetRow = rows.find((row) => row.node_id === targetId);
+    if (!targetRow || targetRow.level !== 2) {
+      throw new Error('深度写作只能设置在真实的二级目录上');
+    }
+    const findItem = (items, nodeId) => {
+      for (const item of items || []) {
+        if (String(item.id) === nodeId) return item;
+        const child = findItem(item.children, nodeId);
+        if (child) return child;
+      }
+      return null;
+    };
+    const target = findItem(nextOutline.outline, targetId);
+    const depthRows = flattenOutlineItems([target], null, 2);
+    const maxDepth = Math.max(...depthRows.map((row) => row.level));
+    const removedIds = [];
+    if (deepWriting === true) {
+      if (maxDepth !== 5) {
+        throw new Error('请先使用“AI 深化本节”生成完整五级目录，再开启深度写作');
+      }
+      Object.assign(target, normalizeOutlineQualityMetadata({
+        ...target,
+        deep_writing: true,
+        deep_writing_source: 'user',
+        writing_profile: target.writing_profile === 'creative-proposal' ? 'creative-proposal' : 'deep',
+      }));
+    } else {
+      const removeLevelFiveChildren = (item, level) => {
+        if (level === 4) {
+          for (const child of item.children || []) {
+            if (String(child.content || '').trim()) {
+              throw new Error('第五级目录已有正文，请先保留或迁移正文后再取消深度写作');
+            }
+            removedIds.push(String(child.id));
+          }
+          item.children = [];
+          return;
+        }
+        for (const child of item.children || []) removeLevelFiveChildren(child, level + 1);
+      };
+      removeLevelFiveChildren(target, 2);
+      Object.assign(target, normalizeOutlineQualityMetadata({
+        ...target,
+        deep_writing: false,
+        deep_writing_source: 'user',
+        writing_profile: 'standard',
+      }));
+    }
+    const quality = applyOutlineQualityRules(nextOutline, current.requirementResponseMatrix || createEmptyFocusWritingMatrix());
+    const transaction = db.transaction(() => {
+      assertOutlineMutationAllowed();
+      saveOutlineData(quality.outline);
+      updateMeta({
+        requirement_response_matrix_json: jsonOrNull(quality.matrix),
+        outline_quality_review_json: jsonOrNull(quality.review),
+      });
+      if (removedIds.length) {
+        const placeholders = removedIds.map(() => '?').join(', ');
+        db.prepare(`DELETE FROM technical_plan_content_sections WHERE node_id IN (${placeholders})`).run(...removedIds);
+        db.prepare(`DELETE FROM technical_plan_content_plans WHERE node_id IN (${placeholders})`).run(...removedIds);
+      }
+      clearTechnicalPlanMermaidCache();
+    });
+    transaction();
+    return loadTechnicalPlan();
+  }
+
+  */
   function saveGlobalFacts(globalFacts) {
     const transaction = db.transaction(() => {
       replaceGlobalFacts(globalFacts);
@@ -2339,19 +2484,12 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         content: node.content,
         knowledgeItemIds: legacyKnowledgeItemIds,
       });
-      if (!['freeform-markdown', 'evidence-markdown'].includes(constraints.response_mode)) {
-        throw new Error('该章节使用受控模板，不能覆盖完整 Markdown');
-      }
       const nextContent = String(content || '');
       const nextResponseState = normalizeOutlineResponseState({
         ...responseState,
-        response_status: nextContent.trim()
-          ? 'responded-substantive'
-          : constraints.manual_input_required === true
-            ? 'needs-manual-input'
-            : 'pending',
-        compliance_risk: constraints.response_mode === 'freeform-markdown' ? 'none' : responseState.compliance_risk,
-        ...(constraints.response_mode === 'freeform-markdown' ? { compliance_message: undefined } : {}),
+        response_status: nextContent.trim() ? 'responded-substantive' : 'pending',
+        compliance_risk: 'none',
+        compliance_message: undefined,
       }, {
         content: nextContent,
         knowledgeItemIds: responseState.knowledge_item_ids,

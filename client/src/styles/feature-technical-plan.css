@@ -356,7 +356,7 @@
 
 /* [2572-3145] bid-analysis-* 全部 (BidAnalysisPage.tsx) */
 .bid-analysis-page {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -810,6 +810,39 @@
 .bid-analysis-structured-fields dd {
   margin: 4px 0 0;
   font-weight: 700;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bid-analysis-procurement-requirements {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--yb-border-soft);
+}
+
+.bid-analysis-procurement-requirements > strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.bid-analysis-procurement-requirements ul,
+.bid-analysis-procurement-rules ul {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.bid-analysis-procurement-requirements li,
+.bid-analysis-procurement-rules li {
+  line-height: 1.7;
+}
+
+.bid-analysis-procurement-requirements li + li,
+.bid-analysis-procurement-rules li + li {
+  margin-top: 7px;
+}
+
+.bid-analysis-procurement-rules-summary {
+  margin-top: 18px;
 }
 
 .bid-analysis-template-review-card {
@@ -3594,7 +3627,7 @@
   position: relative;
   display: grid;
   width: 100%;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 6px;
   margin-bottom: 3px;
@@ -3607,7 +3640,7 @@
 }
 
 .outline-tree-item.is-sorting {
-  grid-template-columns: 20px 26px minmax(0, 1fr);
+  grid-template-columns: 20px 26px minmax(0, 1fr) auto;
   cursor: grab;
 }
 
@@ -3718,6 +3751,20 @@
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.outline-tree-manual-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-right: 4px;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.outline-tree-manual-toggle input {
+  margin: 0;
 }
 
 .outline-detail-body {
