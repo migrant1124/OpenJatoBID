@@ -83,6 +83,7 @@ function waitForPromptCacheWarmup() {
 }
 const FINAL_AGENT_OUTPUT_FILE = 'outline-agent-result.json';
 const FINAL_AGENT_TIMEOUT_MS = 15 * 60 * 1000;
+const FINAL_AGENT_MAX_RETRIES = 3;
 const RECOVERABLE_REQUIREMENT_GROUP_ERRORS = ['模型返回的技术评分大类格式无效'];
 const RECOVERABLE_ALIGNED_OUTLINE_ERRORS = [
   '模型返回的目录数据格式无效',
@@ -1035,7 +1036,7 @@ async function runOutlineAgentRecovery(agentService, context, log) {
     output_file: outputFile,
     files: buildOutlineAgentRecoveryFiles(agentContext),
     timeout_ms: FINAL_AGENT_TIMEOUT_MS,
-    max_retries: 1,
+    max_retries: FINAL_AGENT_MAX_RETRIES,
     validateOutput: (resultForValidation) => {
       const contentForValidation = String(resultForValidation?.output_content || resultForValidation?.assistant_text || '').trim();
       if (!contentForValidation) {
