@@ -149,11 +149,8 @@ jobs:
       - name: Build renderer
         run: npm run build
 
-      - name: Build Windows NSIS and ZIP
-        run: npx electron-builder --win nsis zip --publish never
-
-      - name: Build Windows MSI
-        run: npx electron-builder --win msi --publish never
+      - name: Build Windows NSIS EXE
+        run: npx electron-builder --win nsis --publish never
 
       - name: Verify packaged OpenCode binary
         run: node scripts/verify-packaged-opencode-binary.cjs --platform win32 --arch x64 --release release
@@ -237,8 +234,6 @@ jobs:
           fi
           files=(
             "Jato-AI-BID-${RELEASE_VERSION}-win-x64.exe"
-            "Jato-AI-BID-${RELEASE_VERSION}-win-x64.msi"
-            "Jato-AI-BID-${RELEASE_VERSION}-win-x64.zip"
             "manifest.json"
           )
           mapfile -t existing_assets < <(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')

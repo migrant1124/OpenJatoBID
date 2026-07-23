@@ -44,11 +44,13 @@ test('client release accepts stable semantic-version tags only', async () => {
   assert.doesNotMatch(workflow, /\(-\[0-9A-Za-z\.\-\]\+\)\?/);
 });
 
-test('client release publishes only the normalized four-file whitelist', async () => {
+test('client release publishes only the normalized EXE whitelist', async () => {
   const workflow = await fs.readFile(path.join(root, '.github/workflows/release.yml'), 'utf8');
   assert.match(workflow, /Jato-AI-BID-\$\{RELEASE_VERSION\}-win-x64\.exe/);
-  assert.match(workflow, /Jato-AI-BID-\$\{RELEASE_VERSION\}-win-x64\.msi/);
-  assert.match(workflow, /Jato-AI-BID-\$\{RELEASE_VERSION\}-win-x64\.zip/);
+  assert.doesNotMatch(workflow, /Jato-AI-BID-\$\{RELEASE_VERSION\}-win-x64\.msi/);
+  assert.doesNotMatch(workflow, /Jato-AI-BID-\$\{RELEASE_VERSION\}-win-x64\.zip/);
+  assert.doesNotMatch(workflow, /electron-builder --win msi/);
+  assert.doesNotMatch(workflow, /electron-builder --win nsis zip/);
   assert.doesNotMatch(workflow, /latest\*?\.yml|\.blockmap/);
 });
 

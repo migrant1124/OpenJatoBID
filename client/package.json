@@ -71,12 +71,6 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
         }
       ]
     },
@@ -86,14 +80,6 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
-    },
-    "msi": {
-      "artifactName": "Jato-AI-BID-${version}-win-${arch}.${ext}",
-      "shortcutName": "Jato AI BID",
-      "oneClick": false,
-      "perMachine": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
     },
     "mac": {
       "icon": "assets/icon.icns",

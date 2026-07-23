@@ -17,12 +17,12 @@ test('verifies latest metadata and a full Header-authenticated EXE download', as
       return new Response(JSON.stringify({
         release: {
           version: '1.3.2',
-          files: ['exe', 'msi', 'zip'].map((format) => ({
-            name: `Jato-AI-BID-1.3.2-win-x64.${format}`,
-            url: `https://updates.example.test/updates/download?key=release%2F1.3.2%2FJato-AI-BID-1.3.2-win-x64.${format}`,
-            size: format === 'exe' ? body.length : 1,
-            sha256: format === 'exe' ? sha256(body) : 'a'.repeat(64),
-          })),
+          files: [{
+            name: 'Jato-AI-BID-1.3.2-win-x64.exe',
+            url: 'https://updates.example.test/updates/download?key=release%2F1.3.2%2FJato-AI-BID-1.3.2-win-x64.exe',
+            size: body.length,
+            sha256: sha256(body),
+          }],
         },
       }), { headers: { 'Content-Type': 'application/json' } });
     }
@@ -47,12 +47,12 @@ test('rejects a download whose bytes do not match the manifest', async () => {
       return new Response(JSON.stringify({
         release: {
           version: '1.3.2',
-          files: ['exe', 'msi', 'zip'].map((format) => ({
-            name: `Jato-AI-BID-1.3.2-win-x64.${format}`,
-            url: `https://updates.example.test/updates/download?key=${format}`,
+          files: [{
+            name: 'Jato-AI-BID-1.3.2-win-x64.exe',
+            url: 'https://updates.example.test/updates/download?key=exe',
             size: 4,
             sha256: '0'.repeat(64),
-          })),
+          }],
         },
       }));
     }

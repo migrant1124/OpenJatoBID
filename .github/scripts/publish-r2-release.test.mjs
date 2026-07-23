@@ -17,9 +17,7 @@ async function createReleaseFixture(t) {
   const inputDir = path.join(root, 'input');
   const outputDir = path.join(root, 'output');
   await fs.mkdir(inputDir);
-  for (const format of ['exe', 'msi', 'zip']) {
-    await fs.writeFile(path.join(inputDir, `Jato-AI-BID-1.3.2-win-x64.${format}`), `artifact-${format}`);
-  }
+  await fs.writeFile(path.join(inputDir, 'Jato-AI-BID-1.3.2-win-x64.exe'), 'artifact-exe');
   await prepareClientRelease({
     inputDir,
     outputDir,
@@ -63,7 +61,7 @@ test('keeps the new version and previous stable latest after an emergency rollba
   assert.deepEqual(result.deletedKeys, ['release/1.3.3/manifest.json']);
 });
 
-test('accepts only the exact four-file publish whitelist and matching SHA-256 values', async (t) => {
+test('accepts only the exact EXE publish whitelist and matching SHA-256 values', async (t) => {
   const assetsDir = await createReleaseFixture(t);
   const manifest = await readAndValidateManifest(assetsDir, 'v1.3.2');
   const latest = buildLatestJson(manifest, {
@@ -71,7 +69,7 @@ test('accepts only the exact four-file publish whitelist and matching SHA-256 va
     body: 'release notes',
     url: 'https://github.example/releases/v1.3.2',
   });
-  assert.equal(latest.files.length, 3);
+  assert.equal(latest.files.length, 1);
   assert.ok(latest.files.every((file) => file.key.startsWith('release/1.3.2/')));
   assert.ok(latest.files.every((file) => !Object.hasOwn(file, 'url')));
 

@@ -52,15 +52,15 @@ function createRelease() {
     tagName: `v${version}`,
     gitCommitSha: 'a'.repeat(40),
     generatedAt: '2026-07-15T00:00:00.000Z',
-    files: ['exe', 'msi', 'zip'].map((format) => ({
-      name: `Jato-AI-BID-${version}-win-x64.${format}`,
-      key: `release/${version}/Jato-AI-BID-${version}-win-x64.${format}`,
+    files: [{
+      name: `Jato-AI-BID-${version}-win-x64.exe`,
+      key: `release/${version}/Jato-AI-BID-${version}-win-x64.exe`,
       platform: 'win32',
       arch: 'x64',
-      format,
+      format: 'exe',
       size: 13,
       sha256: 'b'.repeat(64),
-    })),
+    }],
   };
 }
 
@@ -89,6 +89,8 @@ function encodeLicenseHeader(license) {
 
 test('accepts only canonical version-directory release keys', () => {
   assert.equal(isAllowedReleaseKey('release/1.3.2/Jato-AI-BID-1.3.2-win-x64.exe', 'release'), true);
+  assert.equal(isAllowedReleaseKey('release/1.3.2/Jato-AI-BID-1.3.2-win-x64.msi', 'release'), false);
+  assert.equal(isAllowedReleaseKey('release/1.3.2/Jato-AI-BID-1.3.2-win-x64.zip', 'release'), false);
   assert.equal(isAllowedReleaseKey('release/Jato-AI-BID-1.3.2-win-x64.exe', 'release'), false);
   assert.equal(isAllowedReleaseKey('release/1.3.2/../secret', 'release'), false);
   assert.equal(isAllowedReleaseKey('other/1.3.2/Jato-AI-BID-1.3.2-win-x64.exe', 'release'), false);
@@ -171,7 +173,7 @@ test('rejects a signed license with a missing required field or expired offline 
   }), false);
 });
 
-test('latest returns three private Worker URLs without embedding the license', async () => {
+test('latest returns a private Worker EXE URL without embedding the license', async () => {
   const fixture = await createLicenseFixture();
   const release = createRelease();
   const env = { ...fixture.env, RELEASE_BUCKET: createBucket(release) };
@@ -185,7 +187,7 @@ test('latest returns three private Worker URLs without embedding the license', a
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
-  assert.equal(body.release.files.length, 3);
+  assert.equal(body.release.files.length, 1);
   assert.ok(body.release.files.every((file) => file.url.includes('/updates/download?key=')));
   assert.ok(body.release.files.every((file) => !file.url.includes('license=')));
 });

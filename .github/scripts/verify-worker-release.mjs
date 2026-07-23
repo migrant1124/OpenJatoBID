@@ -33,7 +33,7 @@ export async function verifyWorkerRelease({ baseUrl, license, version, fetchImpl
   if (!latestResponse.ok) throw new Error(`Worker latest check failed: ${latestResponse.status}`);
   const latest = await latestResponse.json();
   const release = latest?.release;
-  if (release?.version !== version || !Array.isArray(release?.files) || release.files.length !== 3) {
+  if (release?.version !== version || !Array.isArray(release?.files) || release.files.length !== 1) {
     throw new Error(`Worker latest version does not match ${version}.`);
   }
   const exe = release.files.find((file) => file.name === `Jato-AI-BID-${version}-win-x64.exe`);

@@ -17,7 +17,7 @@ async function createFixture(t) {
   return { inputDir, outputDir };
 }
 
-test('stages only the three normalized Windows artifacts and a SHA-256 manifest', async (t) => {
+test('stages only the normalized Windows EXE and a SHA-256 manifest', async (t) => {
   const fixture = await createFixture(t);
   await fs.writeFile(path.join(fixture.inputDir, 'latest.yml'), 'not published');
   const manifest = await prepareClientRelease({
@@ -30,12 +30,10 @@ test('stages only the three normalized Windows artifacts and a SHA-256 manifest'
 
   assert.deepEqual((await fs.readdir(fixture.outputDir)).sort(), [
     'Jato-AI-BID-1.3.2-win-x64.exe',
-    'Jato-AI-BID-1.3.2-win-x64.msi',
-    'Jato-AI-BID-1.3.2-win-x64.zip',
     'manifest.json',
   ]);
-  assert.equal(manifest.files.length, 3);
-  assert.deepEqual(manifest.files.map((file) => file.format), ['exe', 'msi', 'zip']);
+  assert.equal(manifest.files.length, 1);
+  assert.deepEqual(manifest.files.map((file) => file.format), ['exe']);
   assert.ok(manifest.files.every((file) => /^[0-9a-f]{64}$/.test(file.sha256)));
   assert.ok(manifest.files.every((file) => file.key.startsWith('release/1.3.2/')));
   assert.equal(manifest.gitCommitSha, 'a'.repeat(40));

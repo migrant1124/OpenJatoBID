@@ -124,7 +124,7 @@ export function isAllowedReleaseKey(key, prefix) {
   const fileName = segments[prefixSegments.length + 1];
   if (!VERSION_PATTERN.test(version)) return false;
   return fileName === 'manifest.json'
-    || ['exe', 'msi', 'zip'].some((format) => fileName === `Jato-AI-BID-${version}-win-x64.${format}`);
+    || fileName === `Jato-AI-BID-${version}-win-x64.exe`;
 }
 
 function getTrustedPublicKey(env) {
@@ -223,12 +223,10 @@ function buildDownloadUrl(url, key) {
 }
 
 function isValidReleaseMetadata(release, prefix) {
-  if (!VERSION_PATTERN.test(String(release?.version || '')) || !Array.isArray(release?.files) || release.files.length !== 3) {
+  if (!VERSION_PATTERN.test(String(release?.version || '')) || !Array.isArray(release?.files) || release.files.length !== 1) {
     return false;
   }
-  const expectedNames = new Set(['exe', 'msi', 'zip'].map(
-    (format) => `Jato-AI-BID-${release.version}-win-x64.${format}`,
-  ));
+  const expectedNames = new Set([`Jato-AI-BID-${release.version}-win-x64.exe`]);
   for (const file of release.files) {
     if (!expectedNames.delete(file?.name)) return false;
     if (!isAllowedReleaseKey(file?.key, prefix)) return false;

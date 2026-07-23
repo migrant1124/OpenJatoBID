@@ -14,8 +14,6 @@ export function getClientArtifactDefinitions(version) {
   const baseName = `Jato-AI-BID-${version}-win-x64`;
   return [
     { name: `${baseName}.exe`, type: 'installer', format: 'exe' },
-    { name: `${baseName}.msi`, type: 'installer', format: 'msi' },
-    { name: `${baseName}.zip`, type: 'archive', format: 'zip' },
   ];
 }
 

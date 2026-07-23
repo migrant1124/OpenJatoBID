@@ -96,7 +96,7 @@ export function compareVersions(a, b) {
 }
 
 function expectedArtifactNames(version) {
-  return ['exe', 'msi', 'zip'].map((format) => `Jato-AI-BID-${version}-win-x64.${format}`);
+  return [`Jato-AI-BID-${version}-win-x64.exe`];
 }
 
 export async function readAndValidateManifest(assetsDir, tagName) {
@@ -117,8 +117,8 @@ export async function readAndValidateManifest(assetsDir, tagName) {
   if (entries.length !== expectedPublishedFiles.length || entries.some((entry, index) => entry !== expectedPublishedFiles[index])) {
     throw new Error(`Release directory must contain exactly: ${expectedPublishedFiles.join(', ')}`);
   }
-  if (!Array.isArray(manifest.files) || manifest.files.length !== 3) {
-    throw new Error('manifest must contain exactly three client files.');
+  if (!Array.isArray(manifest.files) || manifest.files.length !== 1) {
+    throw new Error('manifest must contain exactly one client file.');
   }
 
   for (const name of expectedNames) {
