@@ -13,6 +13,7 @@ export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error
 export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
+export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-generating' | 'done';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
 export type ConsistencyRepairMode = 'agent' | 'normal';
 export type OriginalPlanCoverageRepairMode = 'agent' | 'normal';
@@ -41,18 +42,29 @@ export interface ContentGenerationOptions {
   originalPlanCoverageRepairMode: OriginalPlanCoverageRepairMode;
 }
 
+export interface ContentGenerationProgressDetail {
+  phase: ContentGenerationPhase;
+  phase_label: string;
+  phase_progress: number;
+  completed: number;
+  total: number;
+  step: string;
+  step_label: string;
+}
+
 export interface BackgroundTaskState {
   task_id: string;
   type: BackgroundTaskType;
   status: BackgroundTaskStatus;
   progress: number;
+  progress_detail?: ContentGenerationProgressDetail;
   logs: string[];
   started_at: string;
   updated_at: string;
   error?: string;
   stats?: {
     content?: {
-      phase: 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-generating' | 'done';
+      phase: ContentGenerationPhase;
       planning_total: number;
       planning_completed: number;
       generation_total: number;

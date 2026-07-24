@@ -3038,6 +3038,99 @@ function progressFor(leaves, sections) {
   return Math.round((done / leaves.length) * 100);
 }
 
+const CONTENT_PHASE_LABELS = {
+  planning: '正文编排',
+  restoring: '原方案还原',
+  generating: '正文生成',
+  'outline-expanding': '补充目录',
+  expanding: '正文扩写',
+  'original-auditing': '原方案覆盖检查',
+  auditing: '全文一致性检查',
+  'table-cleaning': '表格清理',
+  'illustration-planning': '全文图片编排',
+  'illustration-generating': '全文图片生成',
+  done: '已完成',
+};
+
+const CONTENT_PROGRESS_RANGES = {
+  planning: [0, 12],
+  restoring: [12, 18],
+  generating: [18, 58],
+  'outline-expanding': [58, 68],
+  expanding: [68, 76],
+  'original-auditing': [76, 82],
+  auditing: [82, 88],
+  'table-cleaning': [88, 91],
+  'illustration-planning': [91, 96],
+  'illustration-generating': [96, 99],
+  done: [100, 100],
+};
+
+function clampPercentage(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function percentageFor(completed, total) {
+  const normalizedTotal = Math.max(0, Number(total) || 0);
+  return normalizedTotal ? clampPercentage((Math.max(0, Number(completed) || 0) / normalizedTotal) * 100) : 0;
+}
+
+function buildContentProgressDetail(stats, latestLog = '') {
+  const phase = stats?.phase || 'planning';
+  let completed = 0;
+  let total = 0;
+  let phaseProgress = 0;
+  let step = phase;
+  let stepLabel = latestLog || CONTENT_PHASE_LABELS[phase] || '正文生成';
+  if (phase === 'planning') {
+    completed = stats.planning_completed;
+    total = stats.planning_total;
+  } else if (phase === 'generating') {
+    completed = stats.generation_completed;
+    total = stats.generation_total;
+  } else if (phase === 'outline-expanding') {
+    completed = stats.outline_expansion_step_completed;
+    total = stats.outline_expansion_step_total;
+    stepLabel = stats.outline_expansion_step_label || stepLabel;
+  } else if (phase === 'expanding') {
+    completed = stats.current_words;
+    total = stats.minimum_words;
+  } else if (phase === 'table-cleaning') {
+    completed = stats.table_cleanup_completed;
+    total = stats.table_cleanup_total;
+  } else if (phase === 'illustration-planning') {
+    completed = stats.illustration_planning_step_completed;
+    total = stats.illustration_planning_step_total;
+    stepLabel = stats.illustration_planning_step_label || stepLabel;
+  } else if (phase === 'illustration-generating') {
+    completed = stats.illustration_generation_completed;
+    total = stats.illustration_generation_total;
+    stepLabel = stats.illustration_generation_step_label || stepLabel;
+  } else if (phase === 'original-auditing' || phase === 'auditing') {
+    completed = stats.audit_fix_total ? stats.audit_fix_completed : stats.audit_group_completed;
+    total = stats.audit_fix_total || stats.audit_group_total;
+  } else if (phase === 'done') {
+    completed = 1;
+    total = 1;
+  }
+  phaseProgress = phase === 'done' ? 100 : percentageFor(completed, total);
+  return {
+    phase,
+    phase_label: CONTENT_PHASE_LABELS[phase] || '正文生成',
+    phase_progress: phaseProgress,
+    completed: Math.max(0, Number(completed) || 0),
+    total: Math.max(0, Number(total) || 0),
+    step,
+    step_label: stepLabel,
+  };
+}
+
+function buildContentOverallProgress(detail, status) {
+  if (status === 'success' || detail.phase === 'done') return 100;
+  const range = CONTENT_PROGRESS_RANGES[detail.phase] || [0, 0];
+  return Math.min(99, Math.round(range[0] + ((range[1] - range[0]) * detail.phase_progress) / 100));
+}
+
 function taskStatusFor(leaves, sections) {
   if (leaves.some(({ item }) => sections[item.id]?.status === 'error')) {
     return 'error';
@@ -3065,7 +3158,7 @@ function withSection(sections, item, partial) {
   };
 }
 
-async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, localImageRenderService, updateTask, payload, taskControl, previousState }) {
+async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, localImageRenderService, updateTask: updateManagedTask, payload, taskControl, previousState }) {
   const resume = Boolean(payload.resume);
   const storedPlan = resume ? (previousState || {}) : (workspaceStore.loadTechnicalPlan() || {});
   let outlineData = storedPlan.outlineData;
@@ -3216,6 +3309,19 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     illustration_generation_html_completed: 0,
     illustration_generation_step_label: '',
   };
+  let lastTaskProgress = resume ? Math.max(0, Number(storedPlan.contentGenerationTask?.progress) || 0) : 0;
+
+  function updateTask(partial = {}, workspaceState, eventPatch, options) {
+    const latestLog = (partial.logs || logs || []).at(-1) || '';
+    const progressDetail = buildContentProgressDetail(contentStats, latestLog);
+    const calculatedProgress = buildContentOverallProgress(progressDetail, partial.status);
+    lastTaskProgress = partial.status === 'success' ? 100 : Math.max(lastTaskProgress, calculatedProgress);
+    return updateManagedTask({
+      ...partial,
+      progress: lastTaskProgress,
+      progress_detail: progressDetail,
+    }, workspaceState, eventPatch, options);
+  }
   contentRuntime = normalizeContentGenerationRuntime({
     ...contentRuntime,
     target_item_id: targetItemId,
@@ -3323,6 +3429,15 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         ? '原方案覆盖审计已启用，本次将使用普通模式检查并修复当前小节的原文保留情况。'
         : `原方案覆盖审计已启用，本次将使用${originalPlanCoverageRepairMode === 'agent' ? ' Agent' : '普通模式'}检查并补回原文保留情况。`
       : '原方案覆盖审计未启用。'];
+  }
+
+  function publishTaskUpdate(partial, eventPatch) {
+    return updateManagedTask(
+      partial,
+      { contentGenerationRuntime: contentRuntime },
+      eventPatch,
+      { skipWorkspaceReload: true },
+    );
   }
 
   const developerLogger = createContentDeveloperLogger(aiService, {
@@ -3495,7 +3610,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       return;
     }
     logs = [...logs, message];
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
   }
 
   knowledgeItems = loadContentKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, (message) => {
@@ -3575,7 +3690,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
 
     function updateContentAgentProgress(_step, label) {
-      updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+      publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
     }
 
     const agentAbortController = new AbortController();
@@ -3731,7 +3846,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   */
   async function waitForPromptCacheWarmupBeforeFanout(message) {
     logs = [...logs, message];
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
     await waitForPromptCacheWarmup();
     pauseIfRequested('正文生成已在提示词缓存预热等待后暂停，可导出当前已完成内容，稍后继续。');
   }
@@ -3773,15 +3888,14 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function saveSection(item, partial, contentForOutline, taskPartial = {}) {
-    const prev = workspaceStore.loadTechnicalPlan() || {};
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
     if (hasPartialContent) {
       nextPartial.content = normalizeLeafContentForSave(nextPartial.content, item);
     }
-    sections = withSection(prev.contentGenerationSections || sections, item, nextPartial);
-    const currentOutlineData = prev.outlineData || outlineData;
+    sections = withSection(sections, item, nextPartial);
+    const currentOutlineData = outlineData;
     const outlineContent = hasOutlineContent || hasPartialContent
       ? normalizeLeafContentForSave(contentForOutline ?? (sections[item.id].content || ''), item)
       : (sections[item.id].content || '');
@@ -3800,10 +3914,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     };
     outlineData = nextOutlineData;
     const runtime = syncRuntime();
-    const saved = workspaceStore.updateTechnicalPlan({
-      contentGenerationSections: sections,
-      outlineData: nextOutlineData,
-      contentGenerationRuntime: runtime,
+    workspaceStore.saveContentGenerationItem({
+      nodeId: item.id,
+      section: sections[item.id],
+      runtime,
     });
     if (hasOutlineContent || hasPartialContent) {
       writeDeveloperLog('content.section.saved', {
@@ -3813,12 +3927,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         content_metrics: textMetrics(outlineContent),
       });
     }
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, saved, {
-      outlineData: nextOutlineData,
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, {
       contentSection: sections[item.id],
       contentRuntime: runtime,
     });
-    return saved;
+    return sections[item.id];
   }
 
   function getStoredContentPlan(itemId) {
@@ -3895,9 +4008,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       ...storedContentPlans,
       [itemId]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(itemId)),
     }, leaves);
-    const saved = workspaceStore.updateTechnicalPlan({ contentGenerationPlans: storedContentPlans, contentGenerationRuntime: syncRuntime() });
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, saved);
-    return saved;
+    const runtime = syncRuntime();
+    workspaceStore.saveContentGenerationItem({ nodeId: itemId, storedPlan: storedContentPlans[itemId], runtime });
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, { contentRuntime: runtime });
+    return storedContentPlans[itemId];
   }
 
   function getOriginalMaterialRuntimeState(itemOrId) {
@@ -3939,15 +4053,14 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function saveSectionAndContentPlan(item, partial, contentForOutline, plan, taskPartial = {}) {
-    const prev = workspaceStore.loadTechnicalPlan() || {};
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
     if (hasPartialContent) {
       nextPartial.content = normalizeLeafContentForSave(nextPartial.content, item);
     }
-    sections = withSection(prev.contentGenerationSections || sections, item, nextPartial);
-    const currentOutlineData = prev.outlineData || outlineData;
+    sections = withSection(sections, item, nextPartial);
+    const currentOutlineData = outlineData;
     const outlineContent = hasOutlineContent || hasPartialContent
       ? normalizeLeafContentForSave(contentForOutline ?? (sections[item.id].content || ''), item)
       : (sections[item.id].content || '');
@@ -3971,11 +4084,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       [item.id]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(item.id)),
     }, leaves);
     const runtime = syncRuntime();
-    const saved = workspaceStore.updateTechnicalPlan({
-      contentGenerationSections: sections,
-      outlineData: nextOutlineData,
-      contentGenerationPlans: storedContentPlans,
-      contentGenerationRuntime: runtime,
+    workspaceStore.saveContentGenerationItem({
+      nodeId: item.id,
+      section: sections[item.id],
+      storedPlan: storedContentPlans[item.id],
+      runtime,
     });
     if (hasOutlineContent || hasPartialContent) {
       writeDeveloperLog('content.section.saved', {
@@ -3985,8 +4098,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         content_metrics: textMetrics(outlineContent),
       });
     }
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, saved, {
-      outlineData: nextOutlineData,
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, {
       contentSection: sections[item.id],
       contentRuntime: runtime,
       technicalPlanPatch: {
@@ -3994,7 +4106,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         contentGenerationRuntime: runtime,
       },
     });
-    return saved;
+    return sections[item.id];
   }
 
   function getRestoredNodeIds() {
@@ -6459,7 +6571,7 @@ workspace 文件说明：
       return { ran: true, rewrittenCount: 0, skippedCount: 0 };
     }
 
-    logs = [...logs, `开始正文去表格：发现 ${targets.length} 个小节、${tableTotal} 个表格，将转换为普通文字描述。`];
+    logs = [...logs, `开始正文去表格：发现 ${targets.length} 个小节、${tableTotal} 个表格，将按小节并发转换为普通文字描述。`];
     writeDeveloperLog('table_cleanup.start', {
       target_item_id: options.targetItemId || targetItemId || '',
       section_count: targets.length,
@@ -6470,13 +6582,14 @@ workspace 文件说明：
 
     let rewrittenCount = 0;
     let skippedCount = 0;
-    for (const target of targets) {
-      pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
+    pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
+    await runItemsWithWorkerPool(targets, contentConcurrency, async (target) => {
       const result = await cleanupTablesForSection(target);
       rewrittenCount += result.rewrittenCount;
       skippedCount += result.skippedCount;
       contentStats.table_cleanup_skipped = skippedCount;
-    }
+      publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
+    }, isPauseRequested);
 
     pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     logs = [...logs, `正文去表格完成：成功转换 ${rewrittenCount} 个表格，跳过 ${skippedCount} 个。`];
