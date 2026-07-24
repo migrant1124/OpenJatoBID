@@ -65,6 +65,11 @@ const imageModelStatusLabels: Record<ImageModelStatus, string> = {
   unavailable: '不可用',
 };
 
+function formatTenThousandWords(value: number) {
+  const normalized = Math.max(0, Number(value) || 0) / 10000;
+  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
+}
+
 const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: string }> = [
   { value: 'none', label: '不要' },
   { value: 'light', label: '少量' },
@@ -1301,7 +1306,7 @@ function ContentEditPage({
               </label>
               {outlineWordControlSnapshot?.enabled ? (
                 <div className="content-generation-config-row">
-                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords || '不限制'} 字，最多 {outlineWordControlSnapshot.maximumWords || '不限制'} 字{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${outlineWordControlSnapshot.sectionWords} 字` : ''}</small></span>
+                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.minimumWords)} 万字` : '不限制'}，最多 {outlineWordControlSnapshot.maximumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.maximumWords)} 万字` : '不限制'}{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${formatTenThousandWords(outlineWordControlSnapshot.sectionWords)} 万字` : ''}</small></span>
                   <span>请在目录生成步骤修改</span>
                 </div>
               ) : (

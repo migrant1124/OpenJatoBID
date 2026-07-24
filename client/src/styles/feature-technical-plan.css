@@ -2837,34 +2837,59 @@
   font-size: 15px;
 }
 
+.outline-config-section-title {
+  font-size: 28px !important;
+  line-height: 1.15;
+}
+
+.outline-generation-config-head > div {
+  display: grid;
+  gap: 5px;
+}
+
+.outline-generation-config-head > div > small {
+  color: var(--yb-text-muted);
+  font-size: 15px;
+}
+
 .outline-generation-config-head span {
   color: var(--yb-text-muted);
   font-size: 13px;
 }
 
+.outline-word-control-section {
+  gap: 16px;
+  padding: 18px;
+  background: #f7f9fd;
+  border: 1px solid #e5ebf5;
+  border-radius: 22px;
+}
+
 .outline-word-control-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .outline-word-control-grid > label {
   display: grid;
   gap: 5px;
   color: var(--yb-text);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .outline-word-control-grid input {
-  width: 100%;
+  width: min(100%, 180px);
+  min-height: 36px;
+  padding: 7px 10px;
 }
 
 .outline-word-control-switch {
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  padding: 8px 10px;
-  border: 1px solid var(--yb-border);
-  border-radius: 8px;
+  justify-content: space-between;
+  max-width: 300px;
+  gap: 12px;
 }
 
 .outline-word-control-switch > span:first-child {
@@ -2873,13 +2898,36 @@
 }
 
 .outline-word-control-switch strong {
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .outline-word-control-grid small,
 .outline-generation-config-section > small {
   color: var(--yb-text-muted);
-  font-size: 12px;
+  font-size: 14px;
+}
+
+.outline-word-control-pages {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--yb-text-soft);
+  font-size: 15px;
+}
+
+.outline-word-control-pages strong {
+  color: var(--yb-text);
+}
+
+.outline-word-control-pages span {
+  color: var(--yb-primary);
+  font-weight: 700;
+}
+
+.outline-word-control-pages small {
+  color: var(--yb-text-muted);
+  font-size: 13px;
 }
 
 .outline-generation-config-body {
@@ -4135,6 +4183,14 @@
 
   .outline-expansion-mode-switch {
     grid-template-columns: 1fr;
+  }
+
+  .outline-word-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .outline-word-control-grid input {
+    width: 100%;
   }
 
   .outline-knowledge-search-row {

@@ -72,6 +72,19 @@ const outlineExpansionModeOptions: Array<{ value: OutlineExpansionMode; title: s
   },
 ];
 
+const WORDS_PER_TEN_THOUSAND = 10000;
+
+function formatTenThousandWords(value: number) {
+  const normalized = Math.max(0, Number(value) || 0) / WORDS_PER_TEN_THOUSAND;
+  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
+}
+
+function parseTenThousandWords(value: string) {
+  if (!/^\d*(?:\.\d{0,2})?$/u.test(value)) return null;
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number >= 0 ? Math.round(number * WORDS_PER_TEN_THOUSAND) : null;
+}
+
 function normalizeWordControlDraft({ enabled, minimumWords, maximumWords, sectionWords, strictSectionWords }: {
   enabled: boolean;
   minimumWords: string;
@@ -79,12 +92,11 @@ function normalizeWordControlDraft({ enabled, minimumWords, maximumWords, sectio
   sectionWords: string;
   strictSectionWords: boolean;
 }): OutlineWordControlOptions {
-  const parse = (value: string) => /^\d*$/u.test(value) ? Number(value || 0) : NaN;
-  const minimum = parse(minimumWords);
-  const maximum = parse(maximumWords);
-  const section = parse(sectionWords);
-  if (![minimum, maximum, section].every(Number.isSafeInteger)) {
-    throw new Error('字数设置只允许填写非负整数');
+  const minimum = parseTenThousandWords(minimumWords);
+  const maximum = parseTenThousandWords(maximumWords);
+  const section = parseTenThousandWords(sectionWords);
+  if (minimum === null || maximum === null || section === null) {
+    throw new Error('字数设置只允许填写最多两位小数的非负万字数');
   }
   if (enabled && minimum > 0 && maximum > 0 && maximum < minimum) {
     throw new Error('最多字数不能低于最少字数');
@@ -334,9 +346,9 @@ function OutlineEditPage({
   const [draftOutlineExpansionMode, setDraftOutlineExpansionMode] = useState<OutlineExpansionMode>(outlineExpansionMode);
   const [draftKnowledgeDocumentIds, setDraftKnowledgeDocumentIds] = useState<string[]>(referenceKnowledgeDocumentIds);
   const [draftWordControlEnabled, setDraftWordControlEnabled] = useState(outlineWordControlOptions.enabled);
-  const [draftMinimumWords, setDraftMinimumWords] = useState(String(outlineWordControlOptions.minimumWords));
-  const [draftMaximumWords, setDraftMaximumWords] = useState(String(outlineWordControlOptions.maximumWords));
-  const [draftSectionWords, setDraftSectionWords] = useState(String(outlineWordControlOptions.sectionWords));
+  const [draftMinimumWords, setDraftMinimumWords] = useState(formatTenThousandWords(outlineWordControlOptions.minimumWords));
+  const [draftMaximumWords, setDraftMaximumWords] = useState(formatTenThousandWords(outlineWordControlOptions.maximumWords));
+  const [draftSectionWords, setDraftSectionWords] = useState(formatTenThousandWords(outlineWordControlOptions.sectionWords));
   const [draftStrictSectionWords, setDraftStrictSectionWords] = useState(outlineWordControlOptions.strictSectionWords);
   const [developerMode, setDeveloperMode] = useState(false);
   const [draftForceOutlineAgentRepair, setDraftForceOutlineAgentRepair] = useState(false);
@@ -389,17 +401,23 @@ function OutlineEditPage({
   const wordControlChanged = Boolean(outlineData && (
     !outlineWordControlSnapshot
     || draftWordControlEnabled !== outlineWordControlSnapshot.enabled
-    || Number(draftMinimumWords || 0) !== outlineWordControlSnapshot.minimumWords
-    || Number(draftMaximumWords || 0) !== outlineWordControlSnapshot.maximumWords
-    || Number(draftSectionWords || 0) !== outlineWordControlSnapshot.sectionWords
-    || (Number(draftSectionWords || 0) > 0 && draftStrictSectionWords) !== outlineWordControlSnapshot.strictSectionWords
+    || parseTenThousandWords(draftMinimumWords) !== outlineWordControlSnapshot.minimumWords
+    || parseTenThousandWords(draftMaximumWords) !== outlineWordControlSnapshot.maximumWords
+    || parseTenThousandWords(draftSectionWords) !== outlineWordControlSnapshot.sectionWords
+    || (Boolean(parseTenThousandWords(draftSectionWords)) && draftStrictSectionWords) !== outlineWordControlSnapshot.strictSectionWords
   ));
+  const draftMinimumWordsValue = parseTenThousandWords(draftMinimumWords) || 0;
+  const draftMaximumWordsValue = parseTenThousandWords(draftMaximumWords) || 0;
+  const estimatedPageWords = draftMinimumWordsValue > 0 && draftMaximumWordsValue > 0
+    ? (draftMinimumWordsValue + draftMaximumWordsValue) / 2
+    : draftMinimumWordsValue || draftMaximumWordsValue;
+  const estimatedPages = draftWordControlEnabled && estimatedPageWords > 0 ? Math.ceil(estimatedPageWords / 650) : null;
 
   const resetWordControlDraft = () => {
     setDraftWordControlEnabled(outlineWordControlOptions.enabled);
-    setDraftMinimumWords(String(outlineWordControlOptions.minimumWords));
-    setDraftMaximumWords(String(outlineWordControlOptions.maximumWords));
-    setDraftSectionWords(String(outlineWordControlOptions.sectionWords));
+    setDraftMinimumWords(formatTenThousandWords(outlineWordControlOptions.minimumWords));
+    setDraftMaximumWords(formatTenThousandWords(outlineWordControlOptions.maximumWords));
+    setDraftSectionWords(formatTenThousandWords(outlineWordControlOptions.sectionWords));
     setDraftStrictSectionWords(outlineWordControlOptions.strictSectionWords);
   };
 
@@ -1043,23 +1061,6 @@ function OutlineEditPage({
     );
   };
 
-  const renderDirectorySource = () => (
-    <section className="outline-generation-config-section">
-      <div className="outline-generation-config-head">
-        <strong>一级目录来源</strong>
-        <span>{hasExplicitFormat ? '格式要求' : hasUnspecifiedFormat ? '参考知识库' : '格式状态无效'}</span>
-      </div>
-      <small>
-        {hasExplicitFormat
-          ? '一级目录严格按格式要求生成，技术评分项和知识库只能补充二级及以下目录。'
-          : hasUnspecifiedFormat
-            ? '一级目录按本次选择的知识库文档目录生成，技术评分项只能补充二级及以下目录。'
-            : '格式要求解析结果缺少有效状态，请返回 Step02 重新解析。'}
-      </small>
-      {missingRequiredKnowledge && <small>招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。</small>}
-    </section>
-  );
-
   const renderKnowledgePicker = () => {
     if (loadingKnowledge) {
       return <div className="outline-knowledge-empty">正在读取知识库...</div>;
@@ -1358,7 +1359,6 @@ function OutlineEditPage({
             <Dialog.Description className="sr-only">选择本次目录生成方式和参考知识库。</Dialog.Description>
 
             <div className={`outline-generation-config-body${isExpansionWorkflow ? ' has-expansion-mode' : ''}${developerMode ? ' has-dev-tools' : ''}`}>
-              {renderDirectorySource()}
               {renderOutlineExpansionModePicker()}
               {developerMode && (
                 <section className="outline-generation-config-section outline-agent-debug-section">
@@ -1380,28 +1380,33 @@ function OutlineEditPage({
                   </label>
                 </section>
               )}
-              <section className="outline-generation-config-section">
+              <section className="outline-generation-config-section outline-word-control-section">
                 <div className="outline-generation-config-head">
-                  <strong>字数控制</strong>
+                  <div>
+                    <strong className="outline-config-section-title">控制字数</strong>
+                    <small>在目录生成阶段，预先设定全文生成的字数（单位：万字）</small>
+                  </div>
                   <label className="yb-switch-control">
                     <input type="checkbox" checked={draftWordControlEnabled} onChange={(event) => setDraftWordControlEnabled(event.target.checked)} />
                     <span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span>
                   </label>
                 </div>
-                <small>目录阶段按目标小节数规划；正文生成后会复核全文和 AI 小节字数。人工填写小节只计入全文，不会被 AI 改写。</small>
                 {draftWordControlEnabled && (
-                  <div className="outline-word-control-grid">
-                    <label><span>最少字数</span><input inputMode="numeric" value={draftMinimumWords} onChange={(event) => /^\d*$/u.test(event.target.value) && setDraftMinimumWords(event.target.value)} /><small>0 表示不限制</small></label>
-                    <label><span>最多字数</span><input inputMode="numeric" value={draftMaximumWords} onChange={(event) => /^\d*$/u.test(event.target.value) && setDraftMaximumWords(event.target.value)} /><small>0 表示不限制</small></label>
-                    <label><span>每小节字数</span><input inputMode="numeric" value={draftSectionWords} onChange={(event) => /^\d*$/u.test(event.target.value) && setDraftSectionWords(event.target.value)} /><small>0 表示不控制小节</small></label>
-                    <label className="outline-word-control-switch"><span><strong>严格控制单节字数</strong><small>允许范围为目标字数上下 20%</small></span><span className="yb-switch-control"><input type="checkbox" checked={draftStrictSectionWords} disabled={!Number(draftSectionWords)} onChange={(event) => setDraftStrictSectionWords(event.target.checked)} /><span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span></span></label>
-                  </div>
+                  <>
+                    <div className="outline-word-control-grid">
+                      <label><span>最少字数（万）</span><input inputMode="decimal" value={draftMinimumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMinimumWords(event.target.value)} /><small>0 表示不限制</small></label>
+                      <label><span>最多字数（万）</span><input inputMode="decimal" value={draftMaximumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMaximumWords(event.target.value)} /><small>0 表示不限制</small></label>
+                      <label><span>每小节字数（万）</span><input inputMode="decimal" value={draftSectionWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftSectionWords(event.target.value)} /><small>0 表示不控制小节</small></label>
+                    </div>
+                    <label className="outline-word-control-switch"><span><strong>强控小节字数</strong><small>允许范围为目标字数上下 20%</small></span><span className="yb-switch-control"><input type="checkbox" checked={draftStrictSectionWords} disabled={!Boolean(parseTenThousandWords(draftSectionWords))} onChange={(event) => setDraftStrictSectionWords(event.target.checked)} /><span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span></span></label>
+                    <div className="outline-word-control-pages"><strong>预估页数</strong>{estimatedPages ? <span>约 {estimatedPages} 页</span> : <span>填写最少或最多字数后显示</span>}<small>页数和排版有关，无法精确预估。</small></div>
+                  </>
                 )}
                 {wordControlChanged && <small>当前目录仍使用上次生效的字数规则；重新生成目录后才会应用新设置。</small>}
               </section>
               <section className="outline-generation-config-section outline-knowledge-picker">
                 <div className="outline-generation-config-head">
-                  <strong>参考知识库</strong>
+                  <strong className="outline-config-section-title">参考知识库</strong>
                   <span>已选择 {draftKnowledgeDocumentIds.length} 个文档</span>
                 </div>
                 {renderKnowledgePicker()}
