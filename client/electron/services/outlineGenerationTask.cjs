@@ -94,6 +94,42 @@ const RECOVERABLE_ALIGNED_OUTLINE_ERRORS = [
   '一级目录映射的技术评分大类ID不正确',
 ];
 const RECOVERABLE_FINAL_REVIEW_ERRORS = ['模型返回的最终目录审核结果格式无效'];
+const DEFAULT_EFFECTIVE_SECTION_WORDS = 3000;
+const MAX_WORD_CONTROL_OUTLINE_ADJUSTMENTS = 2;
+
+function normalizeOutlineWordControlOptions(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const normalizeInteger = (input) => {
+    const number = Number(input);
+    return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
+  };
+  const sectionWords = normalizeInteger(source.sectionWords);
+  return {
+    enabled: Boolean(source.enabled),
+    minimumWords: normalizeInteger(source.minimumWords),
+    maximumWords: normalizeInteger(source.maximumWords),
+    sectionWords,
+    strictSectionWords: sectionWords > 0 && Boolean(source.strictSectionWords),
+  };
+}
+
+function deriveWordControlLeafRange(options) {
+  const effectiveSectionWords = options.sectionWords || DEFAULT_EFFECTIVE_SECTION_WORDS;
+  return {
+    effectiveSectionWords,
+    minimumLeafCount: options.enabled && options.minimumWords > 0 ? Math.ceil(options.minimumWords / effectiveSectionWords) : null,
+    maximumLeafCount: options.enabled && options.maximumWords > 0 ? Math.floor(options.maximumWords / effectiveSectionWords) : null,
+  };
+}
+
+function countOutlineLeaves(items) {
+  return (items || []).reduce((sum, item) => sum + (item?.children?.length ? countOutlineLeaves(item.children) : 1), 0);
+}
+
+function wordControlLeafCountMessage(wordControl) {
+  if (wordControl.minimumLeafCount === null && wordControl.maximumLeafCount === null) return '未设置叶子小节数量限制。';
+  return `叶子小节数量必须保持在 ${wordControl.minimumLeafCount ?? '不限制'} 至 ${wordControl.maximumLeafCount ?? '不限制'} 个之间（按每小节约 ${wordControl.effectiveSectionWords} 字折算）。`;
+}
 
 function renderKnowledgeItemForPrompt(item, index) {
   return [
@@ -2652,6 +2688,7 @@ async function generateSourceDrivenOutline(aiService, context, log) {
 5. 每个目录节点都必须返回 id、title、description；description 必须面向该节点内容。不要把通用一致性、格式原则或编写注意事项写进 title 或 description。
 6. 不要返回 source_requirement_id、primary_requirement_ids、supplemental_requirement_ids、mapped_scoring_point_ids、value_anchor_ids、deep_writing、writing_profile 或 response_mode。
 7. 服务方案类节点返回 service_plan_section=true；如能明确判断某节点对应下方评分项，可返回 focus_scoring_point_ids（评分项 ID 数组）。不能明确判断时留空，不得猜测。
+8. ${wordControlLeafCountMessage(context.wordControl)} 如需调整数量，只能在不改变冻结目录及人工填写节点的前提下增减 AI 编制的二级及以下节点。
 
 输出格式：{"outline":[{"id":"1","title":"一级目录","description":"该章应编制的具体内容","service_plan_section":true,"focus_scoring_point_ids":["SP-1"],"children":[{"id":"1.1","title":"小节","description":"该小节应编制的具体内容"}]}]}
 
@@ -2678,6 +2715,33 @@ ${context.referenceOutlineContext || '未提供'}`,
     progressCallback: (message) => log(message, 90),
     progressLabel: '目录下级补充',
     failureMessage: '目录下级补充结果格式无效',
+  });
+}
+
+async function adjustSourceDrivenOutlineWordCount(aiService, context, log) {
+  return collectJson(aiService, {
+    messages: [
+      { role: 'system', content: '你是投标技术文件目录校正助手。只返回 JSON；不得改变冻结来源目录或人工填写节点。' },
+      { role: 'user', content: `请调整当前目录的 AI 编制下级节点数量，使其满足字数规划折算的叶子小节范围。
+
+硬性规则：
+1. 一级目录及冻结目录来源中的全部节点必须保留原顺序和标题。
+2. 所有 manual_input_required=true 的节点必须原样保留，不得改写、删除或新增人工标记。
+3. 只能增减 AI 编制的二级及以下节点；保持目录至少三级。
+4. ${wordControlLeafCountMessage(context.wordControl)}
+5. 当前叶子小节数：${countOutlineLeaves(context.outline.outline || [])}。
+
+冻结目录来源骨架：
+${JSON.stringify(context.sourceOutline, null, 2)}
+
+当前目录：
+${JSON.stringify(context.outline, null, 2)}` },
+    ],
+    normalizer: normalizeSourceDrivenOutlineResponse,
+    validator: (value) => validateSourceDrivenOutline(value, context.sourceOutline),
+    progressCallback: (message) => log(message, 94),
+    progressLabel: '目录字数规划',
+    failureMessage: '目录字数规划调整结果无效',
   });
 }
 async function extractOriginalOutlineOnce(aiService, originalPlanMarkdown, log) {
@@ -3256,6 +3320,11 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
 
   const referenceKnowledgeDocumentIds = normalizeReferenceDocumentIds(payload);
   const storedPlan = workspaceStore.loadTechnicalPlan() || {};
+  const wordControlOptions = normalizeOutlineWordControlOptions(payload?.word_control_options || storedPlan.outlineWordControlOptions);
+  const wordControl = deriveWordControlLeafRange(wordControlOptions);
+  if (wordControl.minimumLeafCount !== null && wordControl.maximumLeafCount !== null && wordControl.minimumLeafCount > wordControl.maximumLeafCount) {
+    throw new Error('当前最少字数、最多字数和每小节字数无法形成有效目录范围，请调整后重试');
+  }
   const overview = storedPlan.projectOverview || '';
   const requirements = storedPlan.techRequirements || '';
   const requirementResponseMatrix = storedPlan.requirementResponseMatrix || createEmptyFocusWritingMatrix();
@@ -3279,11 +3348,13 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     overview,
     requirements,
     outlineExpansionMode,
+    wordControlOptions,
     reference_knowledge_document_ids: referenceKnowledgeDocumentIds,
   };
   let technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineMode: 'aligned',
     outlineExpansionMode,
+    outlineWordControlOptions: wordControlOptions,
     referenceKnowledgeDocumentIds,
     outlineGenerationTask: updateTask({ status: 'running', progress: 5, logs }),
   });
@@ -3308,6 +3379,7 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
 
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: null,
+    outlineWordControlSnapshot: undefined,
     outlineQualityReview: undefined,
     contentGenerationTask: undefined,
     contentGenerationSections: {},
@@ -3327,19 +3399,40 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   log('目录来源骨架已固定，开始提取技术评分项。', 28);
   const groups = await extractRequirementGroups(aiService, taskPayload, undefined, log);
   log('技术评分项已提取，开始在一级目录内部补充下级目录。', 52);
-  const outline = await generateSourceDrivenOutline(aiService, {
+  let outline = await generateSourceDrivenOutline(aiService, {
     sourceOutline,
     groups,
     requirements,
     oldOutline,
     requirementResponseMatrix,
     referenceOutlineContext: sourceKind === 'format' ? referenceOutlineContext : '',
+    wordControl,
   }, log);
   validateSourceDrivenOutline(outline, sourceOutline);
+  if (wordControlOptions.enabled && (wordControl.minimumLeafCount !== null || wordControl.maximumLeafCount !== null)) {
+    for (let attempt = 1; attempt <= MAX_WORD_CONTROL_OUTLINE_ADJUSTMENTS; attempt += 1) {
+      const leafCount = countOutlineLeaves(outline.outline || []);
+      const belowMinimum = wordControl.minimumLeafCount !== null && leafCount < wordControl.minimumLeafCount;
+      const aboveMaximum = wordControl.maximumLeafCount !== null && leafCount > wordControl.maximumLeafCount;
+      if (!belowMinimum && !aboveMaximum) break;
+      log(`目录当前有 ${leafCount} 个叶子小节，正在进行第 ${attempt}/${MAX_WORD_CONTROL_OUTLINE_ADJUSTMENTS} 次字数规划调整。`, 92);
+      outline = await adjustSourceDrivenOutlineWordCount(aiService, { outline, sourceOutline, wordControl }, log);
+      validateSourceDrivenOutline(outline, sourceOutline);
+    }
+    const finalLeafCount = countOutlineLeaves(outline.outline || []);
+    const belowMinimum = wordControl.minimumLeafCount !== null && finalLeafCount < wordControl.minimumLeafCount;
+    const aboveMaximum = wordControl.maximumLeafCount !== null && finalLeafCount > wordControl.maximumLeafCount;
+    if (belowMinimum || aboveMaximum) {
+      logs = [...logs, `目录字数规划未完全达到目标：当前 ${finalLeafCount} 个叶子小节，${wordControlLeafCountMessage(wordControl)}`];
+    } else {
+      logs = [...logs, `目录字数规划完成：${finalLeafCount} 个叶子小节，${wordControlLeafCountMessage(wordControl)}`];
+    }
+  }
   const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
   log('一级目录来源与技术评分下级映射校验通过。', 99);
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...qualityResult.outline, project_overview: overview },
+    outlineWordControlSnapshot: wordControlOptions,
     requirementResponseMatrix: qualityResult.matrix,
     outlineQualityReview: qualityResult.review,
     contentGenerationTask: undefined,

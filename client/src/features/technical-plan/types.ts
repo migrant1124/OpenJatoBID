@@ -2,6 +2,7 @@ import type {
   OutlineData,
   OutlineExpansionMode,
   OutlineMode,
+  OutlineWordControlOptions,
 } from '../../shared/types/outline';
 
 export type TechnicalPlanStep = 'document-analysis' | 'bid-analysis' | 'outline-generation' | 'global-facts' | 'content-edit' | 'expand';
@@ -484,6 +485,8 @@ export interface TechnicalPlanState {
   bidSectionExtractionError?: string;
   outlineMode: OutlineMode;
   outlineExpansionMode: OutlineExpansionMode;
+  outlineWordControlOptions: OutlineWordControlOptions;
+  outlineWordControlSnapshot?: OutlineWordControlOptions;
   referenceKnowledgeDocumentIds: string[];
   bidSectionExtractionTask?: BackgroundTaskState;
   bidAnalysisTask?: BackgroundTaskState;

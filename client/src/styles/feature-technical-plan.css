@@ -2842,6 +2842,46 @@
   font-size: 13px;
 }
 
+.outline-word-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.outline-word-control-grid > label {
+  display: grid;
+  gap: 5px;
+  color: var(--yb-text);
+  font-size: 13px;
+}
+
+.outline-word-control-grid input {
+  width: 100%;
+}
+
+.outline-word-control-switch {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--yb-border);
+  border-radius: 8px;
+}
+
+.outline-word-control-switch > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.outline-word-control-switch strong {
+  font-size: 13px;
+}
+
+.outline-word-control-grid small,
+.outline-generation-config-section > small {
+  color: var(--yb-text-muted);
+  font-size: 12px;
+}
+
 .outline-generation-config-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);

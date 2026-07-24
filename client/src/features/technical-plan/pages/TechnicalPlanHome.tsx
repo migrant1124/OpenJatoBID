@@ -11,7 +11,7 @@ import { areRequiredBidAnalysisTasksReady } from '../services/bidAnalysisWorkflo
 import { trackPageView } from '../../../shared/analytics/analytics';
 import { FloatingToolbar, ToolbarArrowLeftIcon, ToolbarArrowRightIcon, ToolbarDocumentIcon, useToast } from '../../../shared/ui';
 import type { BackgroundTaskState, ContentGenerationOptions, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../types';
-import type { OutlineData, OutlineItem, WordExportProgressEvent } from '../../../shared/types';
+import { DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS, type OutlineData, type OutlineItem, type WordExportProgressEvent } from '../../../shared/types';
 import type { ExportFormatConfig, ExportTemplateRecord } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
 import type { SectionId } from '../../../shared/types/navigation';
@@ -72,6 +72,8 @@ const resetState = {
   bidSectionExtractionError: undefined,
   outlineMode: 'aligned' as const,
   outlineExpansionMode: 'ai-complement' as const,
+  outlineWordControlOptions: DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS,
+  outlineWordControlSnapshot: undefined,
   referenceKnowledgeDocumentIds: [] as string[],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
@@ -554,6 +556,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             outlineGenerationTask: trimTaskLogs(technicalPlan.outlineGenerationTask) || latestTask,
             outlineMode: technicalPlan.outlineMode ?? prev.outlineMode,
             outlineExpansionMode: technicalPlan.outlineExpansionMode ?? prev.outlineExpansionMode,
+            outlineWordControlOptions: technicalPlan.outlineWordControlOptions ?? prev.outlineWordControlOptions,
+            outlineWordControlSnapshot: hasOwnField(technicalPlan, 'outlineWordControlSnapshot') ? technicalPlan.outlineWordControlSnapshot : prev.outlineWordControlSnapshot,
             referenceKnowledgeDocumentIds: Array.isArray(technicalPlan.referenceKnowledgeDocumentIds)
               ? technicalPlan.referenceKnowledgeDocumentIds
               : prev.referenceKnowledgeDocumentIds,
@@ -990,18 +994,18 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           projectOverview={state.projectOverview}
           techRequirements={state.techRequirements}
           outlineExpansionMode={state.outlineExpansionMode || 'ai-complement'}
+          outlineWordControlOptions={state.outlineWordControlOptions}
+          outlineWordControlSnapshot={state.outlineWordControlSnapshot}
           formatRequirementsContent={state.bidAnalysisTasks.responseFileRequirements?.content || ''}
           referenceKnowledgeDocumentIds={state.referenceKnowledgeDocumentIds}
           outlineData={state.outlineData}
           task={state.outlineGenerationTask}
           contentTaskStatus={state.contentGenerationTask?.status}
-          onOutlineConfigChange={({ referenceKnowledgeDocumentIds, outlineExpansionMode }) => {
-            setState((prev) => ({ ...prev, outlineMode: 'aligned', outlineExpansionMode, referenceKnowledgeDocumentIds }));
-            window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode }).then((saved) => {
+          onOutlineConfigChange={async ({ referenceKnowledgeDocumentIds, outlineExpansionMode, wordControlOptions }) => {
+            const saved = await window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode, wordControlOptions });
+            if (saved) {
               setState((prev) => ({ ...prev, ...saved }));
-            }).catch((error) => {
-              showToast(error instanceof Error ? error.message : '保存目录配置失败', 'error');
-            });
+            }
           }}
           onOutlineSaved={saveOutline}
           onSortGuardChange={(guard) => {
@@ -1023,6 +1027,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           outlineData={state.outlineData}
           task={state.contentGenerationTask}
           contentGenerationOptions={state.contentGenerationOptions}
+          outlineWordControlSnapshot={state.outlineWordControlSnapshot}
           contentIllustrationPlan={state.contentIllustrationPlan}
           sections={state.contentGenerationSections}
           onContentGenerationOptionsChange={saveContentGenerationOptions}

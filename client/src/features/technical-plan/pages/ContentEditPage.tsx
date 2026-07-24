@@ -4,7 +4,7 @@ import * as Switch from '@radix-ui/react-switch';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { MarkdownEditor, MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
-import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem } from '../../../shared/types';
+import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem, OutlineWordControlOptions } from '../../../shared/types';
 import type { ComplianceRisk, ResponseStatus } from '../../../shared/types/outline';
 import { countReadableWords } from '../../../shared/utils/wordCount';
 import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, TechnicalPlanWorkflowKind } from '../types';
@@ -20,6 +20,7 @@ interface ContentEditPageProps {
   outlineData: OutlineData | null;
   task?: BackgroundTaskState;
   contentGenerationOptions?: ContentGenerationOptions;
+  outlineWordControlSnapshot?: OutlineWordControlOptions;
   contentIllustrationPlan?: ContentIllustrationPlanState;
   sections: ContentGenerationSections;
   onContentGenerationOptionsChange: (options: ContentGenerationOptions) => Promise<void> | void;
@@ -331,6 +332,7 @@ function ContentEditPage({
   outlineData,
   task,
   contentGenerationOptions,
+  outlineWordControlSnapshot,
   contentIllustrationPlan,
   sections,
   onContentGenerationOptionsChange,
@@ -1297,22 +1299,17 @@ function ContentEditPage({
                   {tableRequirementOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                 </select>
               </label>
-              <label className="content-generation-config-row">
-                <span>
-                  <strong>最低字数</strong>
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={draftGenerationOptions.minimumWords}
-                  disabled={generationStrategyLocked}
-                  onChange={(event) => setDraftGenerationOptions((prev) => ({
-                    ...prev,
-                    minimumWords: parseMinimumWordsInput(event.target.value),
-                  }))}
-                />
-              </label>
+              {outlineWordControlSnapshot?.enabled ? (
+                <div className="content-generation-config-row">
+                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords || '不限制'} 字，最多 {outlineWordControlSnapshot.maximumWords || '不限制'} 字{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${outlineWordControlSnapshot.sectionWords} 字` : ''}</small></span>
+                  <span>请在目录生成步骤修改</span>
+                </div>
+              ) : (
+                <label className="content-generation-config-row">
+                  <span><strong>最低字数</strong></span>
+                  <input type="number" min="0" step="1000" value={draftGenerationOptions.minimumWords} disabled={generationStrategyLocked} onChange={(event) => setDraftGenerationOptions((prev) => ({ ...prev, minimumWords: parseMinimumWordsInput(event.target.value) }))} />
+                </label>
+              )}
               <label className="content-generation-config-row">
                 <span>
                   <strong>全文一致性审计</strong>

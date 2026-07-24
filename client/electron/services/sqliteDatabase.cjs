@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 20;
+const schemaVersion = 21;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -43,6 +43,8 @@ function createInitialSchema(db) {
       bid_section_extraction_error TEXT,
       outline_mode TEXT NOT NULL DEFAULT 'aligned',
       outline_expansion_mode TEXT NOT NULL DEFAULT 'ai-complement',
+      outline_word_control_options_json TEXT,
+      outline_word_control_snapshot_json TEXT,
       outline_project_name TEXT,
       outline_project_overview TEXT,
       content_generation_options_json TEXT,
@@ -248,6 +250,11 @@ function addTechnicalPlanBidAnalysisSelection(db) {
 
 function addTechnicalPlanOutlineExpansionMode(db) {
   addColumnIfMissing(db, 'technical_plan_meta', 'outline_expansion_mode', "TEXT NOT NULL DEFAULT 'ai-complement'");
+}
+
+function addTechnicalPlanOutlineWordControl(db) {
+  addColumnIfMissing(db, 'technical_plan_meta', 'outline_word_control_options_json', 'TEXT');
+  addColumnIfMissing(db, 'technical_plan_meta', 'outline_word_control_snapshot_json', 'TEXT');
 }
 
 function addTechnicalPlanBidSectionOptimization(db) {
@@ -1223,6 +1230,14 @@ const schemaHealthColumnGroups = [
       quality_metadata_json: 'TEXT',
     },
   },
+  {
+    version: 21,
+    table: 'technical_plan_meta',
+    columns: {
+      outline_word_control_options_json: 'TEXT',
+      outline_word_control_snapshot_json: 'TEXT',
+    },
+  },
 ];
 
 function quoteIdentifier(value) {
@@ -1386,6 +1401,11 @@ const migrations = [
     version: 20,
     description: '技术方案新增投标质量模型持久化字段',
     up: addTechnicalPlanQualityModel,
+  },
+  {
+    version: 21,
+    description: '技术方案新增目录字数控制配置和生效快照',
+    up: addTechnicalPlanOutlineWordControl,
   },
 ];
 
