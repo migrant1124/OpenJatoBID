@@ -4,7 +4,7 @@ import * as Switch from '@radix-ui/react-switch';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { MarkdownEditor, MarkdownFullscreenViewer, MarkdownRenderer, useToast } from '../../../shared/ui';
-import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem } from '../../../shared/types';
+import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem, OutlineWordControlOptions } from '../../../shared/types';
 import type { ComplianceRisk, ResponseStatus } from '../../../shared/types/outline';
 import { countReadableWords } from '../../../shared/utils/wordCount';
 import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, TechnicalPlanWorkflowKind } from '../types';
@@ -20,6 +20,7 @@ interface ContentEditPageProps {
   outlineData: OutlineData | null;
   task?: BackgroundTaskState;
   contentGenerationOptions?: ContentGenerationOptions;
+  outlineWordControlSnapshot?: OutlineWordControlOptions;
   contentIllustrationPlan?: ContentIllustrationPlanState;
   sections: ContentGenerationSections;
   onContentGenerationOptionsChange: (options: ContentGenerationOptions) => Promise<void> | void;
@@ -63,6 +64,11 @@ const imageModelStatusLabels: Record<ImageModelStatus, string> = {
   available: '可用',
   unavailable: '不可用',
 };
+
+function formatTenThousandWords(value: number) {
+  const normalized = Math.max(0, Number(value) || 0) / 10000;
+  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
+}
 
 const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: string }> = [
   { value: 'none', label: '不要' },
@@ -331,6 +337,7 @@ function ContentEditPage({
   outlineData,
   task,
   contentGenerationOptions,
+  outlineWordControlSnapshot,
   contentIllustrationPlan,
   sections,
   onContentGenerationOptionsChange,
@@ -373,6 +380,7 @@ function ContentEditPage({
   const taskBlocksGeneration = taskInFlight || paused;
   const generationStrategyLocked = paused;
   const contentStats = task?.stats?.content;
+  const progressDetail = task?.progress_detail;
   const illustrationStats = useMemo(() => {
     const stats: Record<ContentIllustrationKind, { planned: number; success: number }> = {
       chart: { planned: 0, success: 0 },
@@ -490,9 +498,12 @@ function ContentEditPage({
   const illustrationGenerationProgress = illustrationGenerationTotal ? Math.round((illustrationGenerationCompleted / illustrationGenerationTotal) * 100) : 0;
   const illustrationGenerationStepLabel = contentStats?.illustration_generation_step_label || '';
   const illustrationGenerationCount = `HTML ${contentStats?.illustration_generation_html_completed || 0}/${contentStats?.illustration_generation_html_total || 0}，Mermaid ${contentStats?.illustration_generation_mermaid_completed || 0}/${contentStats?.illustration_generation_mermaid_total || 0}，AI ${contentStats?.illustration_generation_ai_completed || 0}/${contentStats?.illustration_generation_ai_total || 0}`;
-  const displayProgress = planning ? planningProgress : outlineExpanding ? outlineExpansionProgress : expanding ? wordExpansionProgress : contentCorrecting ? contentCorrectionProgress : illustrationPlanning ? illustrationPlanningProgress : illustrationGenerating ? illustrationGenerationProgress : progress;
-  const displayProgressLabel = planning ? '编排统计' : restoring ? '原方案还原' : outlineExpanding ? '补目录' : expanding ? '扩写进度' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '图片编排' : illustrationGenerating ? '图片生成' : '生成统计';
-  const displayProgressCount = planning
+  const currentProgressDetail = phaseVisible && progressDetail?.phase === contentStats?.phase ? progressDetail : undefined;
+  const displayProgress = currentProgressDetail ? currentProgressDetail.phase_progress : planning ? planningProgress : outlineExpanding ? outlineExpansionProgress : expanding ? wordExpansionProgress : contentCorrecting ? contentCorrectionProgress : illustrationPlanning ? illustrationPlanningProgress : illustrationGenerating ? illustrationGenerationProgress : progress;
+  const displayProgressLabel = currentProgressDetail ? currentProgressDetail.phase_label : planning ? '编排统计' : restoring ? '原方案还原' : outlineExpanding ? '补目录' : expanding ? '扩写进度' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '图片编排' : illustrationGenerating ? '图片生成' : '生成统计';
+  const displayProgressCount = currentProgressDetail
+    ? `${currentProgressDetail.completed}/${currentProgressDetail.total}`
+    : planning
     ? `${planningCompleted}/${planningTotal}`
     : outlineExpanding
       ? `${outlineExpansionStepCompleted}/${outlineExpansionStepTotal}`
@@ -505,12 +516,14 @@ function ContentEditPage({
             : illustrationGenerating
               ? `${illustrationGenerationCompleted}/${illustrationGenerationTotal}`
             : `${completedCount}/${leaves.length}`;
-  const progressPhaseLabel = planning ? '正文编排' : restoring ? '原方案还原' : outlineExpanding ? '正文补目录' : expanding ? '正文扩写' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '全文图片编排' : illustrationGenerating ? '全文图片生成' : '正文生成';
+  const progressPhaseLabel = currentProgressDetail ? currentProgressDetail.phase_label : planning ? '正文编排' : restoring ? '原方案还原' : outlineExpanding ? '正文补目录' : expanding ? '正文扩写' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '全文图片编排' : illustrationGenerating ? '全文图片生成' : '正文生成';
   const progressTrackClass = `content-generation-progress-track${planning ? ' is-planning' : ''}${outlineExpanding ? ' is-outline-expanding' : ''}${contentCorrecting ? ' is-auditing' : ''}${illustrationPlanning || illustrationGenerating ? ' is-illustration-planning' : ''}${taskInFlight && (planning || outlineExpanding || expanding || contentCorrecting || illustrationPlanning || illustrationGenerating) ? ' is-active' : ''}`;
   const progressDescription = taskFailed
     ? minimumWordsUnmet
       ? `正文扩写失败：当前 ${currentWords}/${minimumWords} 字。${taskErrorMessage}`
       : taskErrorMessage
+    : currentProgressDetail
+      ? `${currentProgressDetail.step_label || currentProgressDetail.phase_label}，已完成 ${currentProgressDetail.completed}/${currentProgressDetail.total}。`
     : planning
     ? paused ? `正文生成已暂停在编排阶段，已完成 ${planningCompleted}/${planningTotal} 个小节。` : `正在编排正文结构，已完成 ${planningCompleted}/${planningTotal} 个小节。`
     : outlineExpanding
@@ -1291,22 +1304,17 @@ function ContentEditPage({
                   {tableRequirementOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                 </select>
               </label>
-              <label className="content-generation-config-row">
-                <span>
-                  <strong>最低字数</strong>
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={draftGenerationOptions.minimumWords}
-                  disabled={generationStrategyLocked}
-                  onChange={(event) => setDraftGenerationOptions((prev) => ({
-                    ...prev,
-                    minimumWords: parseMinimumWordsInput(event.target.value),
-                  }))}
-                />
-              </label>
+              {outlineWordControlSnapshot?.enabled ? (
+                <div className="content-generation-config-row">
+                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.minimumWords)} 万字` : '不限制'}，最多 {outlineWordControlSnapshot.maximumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.maximumWords)} 万字` : '不限制'}{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${formatTenThousandWords(outlineWordControlSnapshot.sectionWords)} 万字` : ''}</small></span>
+                  <span>请在目录生成步骤修改</span>
+                </div>
+              ) : (
+                <label className="content-generation-config-row">
+                  <span><strong>最低字数</strong></span>
+                  <input type="number" min="0" step="1000" value={draftGenerationOptions.minimumWords} disabled={generationStrategyLocked} onChange={(event) => setDraftGenerationOptions((prev) => ({ ...prev, minimumWords: parseMinimumWordsInput(event.target.value) }))} />
+                </label>
+              )}
               <label className="content-generation-config-row">
                 <span>
                   <strong>全文一致性审计</strong>

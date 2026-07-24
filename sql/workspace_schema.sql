@@ -70,6 +70,9 @@ CREATE TABLE IF NOT EXISTS technical_plan_meta (
   outline_mode TEXT NOT NULL DEFAULT 'aligned',
   -- v13 已有方案扩写目录使用方式：original-only / ai-complement。
   outline_expansion_mode TEXT NOT NULL DEFAULT 'ai-complement',
+  -- v21 目录阶段保存的字数控制设置，以及生成目录时冻结的生效快照。
+  outline_word_control_options_json TEXT,
+  outline_word_control_snapshot_json TEXT,
   outline_project_name TEXT,
   outline_project_overview TEXT,
   content_generation_options_json TEXT,

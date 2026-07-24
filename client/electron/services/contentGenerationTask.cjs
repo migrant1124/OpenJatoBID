@@ -470,6 +470,24 @@ function countContentWords(content) {
   return countReadableWords(String(content || ''));
 }
 
+function normalizeOutlineWordControlSnapshot(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const normalizeInteger = (input) => {
+    const number = Number(input);
+    return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
+  };
+  const sectionWords = normalizeInteger(source.sectionWords);
+  return {
+    enabled: Boolean(source.enabled),
+    minimumWords: normalizeInteger(source.minimumWords),
+    maximumWords: normalizeInteger(source.maximumWords),
+    sectionWords,
+    strictSectionWords: sectionWords > 0 && Boolean(source.strictSectionWords),
+    sectionMinimumWords: sectionWords > 0 ? Math.ceil(sectionWords * 0.8) : 0,
+    sectionMaximumWords: sectionWords > 0 ? Math.floor(sectionWords * 1.2) : 0,
+  };
+}
+
 function maxTablesForRequirement(requirement, leafCount) {
   if (requirement === 'none') return 0;
   if (requirement === 'light') return Math.floor(Math.max(0, leafCount) * 0.2);
@@ -3038,6 +3056,99 @@ function progressFor(leaves, sections) {
   return Math.round((done / leaves.length) * 100);
 }
 
+const CONTENT_PHASE_LABELS = {
+  planning: '正文编排',
+  restoring: '原方案还原',
+  generating: '正文生成',
+  'outline-expanding': '补充目录',
+  expanding: '正文扩写',
+  'original-auditing': '原方案覆盖检查',
+  auditing: '全文一致性检查',
+  'table-cleaning': '表格清理',
+  'illustration-planning': '全文图片编排',
+  'illustration-generating': '全文图片生成',
+  done: '已完成',
+};
+
+const CONTENT_PROGRESS_RANGES = {
+  planning: [0, 12],
+  restoring: [12, 18],
+  generating: [18, 58],
+  'outline-expanding': [58, 68],
+  expanding: [68, 76],
+  'original-auditing': [76, 82],
+  auditing: [82, 88],
+  'table-cleaning': [88, 91],
+  'illustration-planning': [91, 96],
+  'illustration-generating': [96, 99],
+  done: [100, 100],
+};
+
+function clampPercentage(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function percentageFor(completed, total) {
+  const normalizedTotal = Math.max(0, Number(total) || 0);
+  return normalizedTotal ? clampPercentage((Math.max(0, Number(completed) || 0) / normalizedTotal) * 100) : 0;
+}
+
+function buildContentProgressDetail(stats, latestLog = '') {
+  const phase = stats?.phase || 'planning';
+  let completed = 0;
+  let total = 0;
+  let phaseProgress = 0;
+  let step = phase;
+  let stepLabel = latestLog || CONTENT_PHASE_LABELS[phase] || '正文生成';
+  if (phase === 'planning') {
+    completed = stats.planning_completed;
+    total = stats.planning_total;
+  } else if (phase === 'generating') {
+    completed = stats.generation_completed;
+    total = stats.generation_total;
+  } else if (phase === 'outline-expanding') {
+    completed = stats.outline_expansion_step_completed;
+    total = stats.outline_expansion_step_total;
+    stepLabel = stats.outline_expansion_step_label || stepLabel;
+  } else if (phase === 'expanding') {
+    completed = stats.current_words;
+    total = stats.minimum_words;
+  } else if (phase === 'table-cleaning') {
+    completed = stats.table_cleanup_completed;
+    total = stats.table_cleanup_total;
+  } else if (phase === 'illustration-planning') {
+    completed = stats.illustration_planning_step_completed;
+    total = stats.illustration_planning_step_total;
+    stepLabel = stats.illustration_planning_step_label || stepLabel;
+  } else if (phase === 'illustration-generating') {
+    completed = stats.illustration_generation_completed;
+    total = stats.illustration_generation_total;
+    stepLabel = stats.illustration_generation_step_label || stepLabel;
+  } else if (phase === 'original-auditing' || phase === 'auditing') {
+    completed = stats.audit_fix_total ? stats.audit_fix_completed : stats.audit_group_completed;
+    total = stats.audit_fix_total || stats.audit_group_total;
+  } else if (phase === 'done') {
+    completed = 1;
+    total = 1;
+  }
+  phaseProgress = phase === 'done' ? 100 : percentageFor(completed, total);
+  return {
+    phase,
+    phase_label: CONTENT_PHASE_LABELS[phase] || '正文生成',
+    phase_progress: phaseProgress,
+    completed: Math.max(0, Number(completed) || 0),
+    total: Math.max(0, Number(total) || 0),
+    step,
+    step_label: stepLabel,
+  };
+}
+
+function buildContentOverallProgress(detail, status) {
+  if (status === 'success' || detail.phase === 'done') return 100;
+  const range = CONTENT_PROGRESS_RANGES[detail.phase] || [0, 0];
+  return Math.min(99, Math.round(range[0] + ((range[1] - range[0]) * detail.phase_progress) / 100));
+}
+
 function taskStatusFor(leaves, sections) {
   if (leaves.some(({ item }) => sections[item.id]?.status === 'error')) {
     return 'error';
@@ -3065,9 +3176,10 @@ function withSection(sections, item, partial) {
   };
 }
 
-async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, localImageRenderService, updateTask, payload, taskControl, previousState }) {
+async function runContentGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, localImageRenderService, updateTask: updateManagedTask, payload, taskControl, previousState }) {
   const resume = Boolean(payload.resume);
   const storedPlan = resume ? (previousState || {}) : (workspaceStore.loadTechnicalPlan() || {});
+  const wordControl = normalizeOutlineWordControlSnapshot(storedPlan.outlineWordControlSnapshot);
   let outlineData = storedPlan.outlineData;
 
   if (!outlineData?.outline?.length) {
@@ -3128,7 +3240,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     outlineData = { ...outlineData, outline: clearOutlineContent(outlineData.outline) };
   }
 
-  const allLeafContexts = collectLeafContexts(outlineData.outline);
+  let allLeafContexts = collectLeafContexts(outlineData.outline);
   if (!allLeafContexts.length) {
     throw new Error('当前目录没有可生成正文的小节');
   }
@@ -3147,7 +3259,14 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   const developerModeEnabled = isDeveloperModeEnabled(aiService);
   const tableRequirement = normalizeTableRequirement(generationOptions.tableRequirement ?? generationOptions.table_requirement);
   let maxTables = maxTablesForRequirement(tableRequirement, leaves.length);
-  const minimumWords = targetItemId ? 0 : normalizeMinimumWords(generationOptions.minimumWords ?? generationOptions.minimum_words);
+  const minimumWords = targetItemId ? 0 : wordControl.enabled
+    ? wordControl.minimumWords
+    : normalizeMinimumWords(generationOptions.minimumWords ?? generationOptions.minimum_words);
+  const maximumWords = targetItemId || !wordControl.enabled ? 0 : wordControl.maximumWords;
+  const enforceSectionWords = !targetItemId && wordControl.enabled && wordControl.strictSectionWords;
+  if (minimumWords > 0 && maximumWords > 0 && maximumWords < minimumWords) {
+    throw new Error('目录字数控制中的最多字数不能低于最少字数，请返回目录步骤调整后重新生成。');
+  }
   const referenceKnowledgeDocumentIds = normalizeReferenceDocumentIds(storedPlan);
   const enableConsistencyAudit = Boolean(generationOptions.enableConsistencyAudit ?? generationOptions.enable_consistency_audit ?? true);
   const requestedConsistencyRepairMode = normalizeConsistencyRepairMode(generationOptions.consistencyRepairMode ?? generationOptions.consistency_repair_mode);
@@ -3171,6 +3290,9 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     outline_expansion_round_total: MAX_OUTLINE_EXPANSION_ROUNDS,
     outline_expansion_step_label: '',
     minimum_words: minimumWords,
+    maximum_words: maximumWords,
+    section_words: wordControl.sectionWords,
+    strict_section_words: enforceSectionWords,
     current_words: 0,
     audit_group_total: 0,
     audit_group_completed: 0,
@@ -3216,6 +3338,31 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     illustration_generation_html_completed: 0,
     illustration_generation_step_label: '',
   };
+  let lastTaskProgress = resume ? Math.max(0, Number(storedPlan.contentGenerationTask?.progress) || 0) : 0;
+
+  function applyWordControlTarget(contentPlan) {
+    if (!enforceSectionWords) return contentPlan;
+    return {
+      ...contentPlan,
+      target_words: {
+        min: wordControl.sectionMinimumWords,
+        preferred: wordControl.sectionWords,
+        max: wordControl.sectionMaximumWords,
+      },
+    };
+  }
+
+  function updateTask(partial = {}, workspaceState, eventPatch, options) {
+    const latestLog = (partial.logs || logs || []).at(-1) || '';
+    const progressDetail = buildContentProgressDetail(contentStats, latestLog);
+    const calculatedProgress = buildContentOverallProgress(progressDetail, partial.status);
+    lastTaskProgress = partial.status === 'success' ? 100 : Math.max(lastTaskProgress, calculatedProgress);
+    return updateManagedTask({
+      ...partial,
+      progress: lastTaskProgress,
+      progress_detail: progressDetail,
+    }, workspaceState, eventPatch, options);
+  }
   contentRuntime = normalizeContentGenerationRuntime({
     ...contentRuntime,
     target_item_id: targetItemId,
@@ -3323,6 +3470,15 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         ? '原方案覆盖审计已启用，本次将使用普通模式检查并修复当前小节的原文保留情况。'
         : `原方案覆盖审计已启用，本次将使用${originalPlanCoverageRepairMode === 'agent' ? ' Agent' : '普通模式'}检查并补回原文保留情况。`
       : '原方案覆盖审计未启用。'];
+  }
+
+  function publishTaskUpdate(partial, eventPatch) {
+    return updateManagedTask(
+      partial,
+      { contentGenerationRuntime: contentRuntime },
+      eventPatch,
+      { skipWorkspaceReload: true },
+    );
   }
 
   const developerLogger = createContentDeveloperLogger(aiService, {
@@ -3495,7 +3651,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       return;
     }
     logs = [...logs, message];
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
   }
 
   knowledgeItems = loadContentKnowledgeItems(knowledgeBaseService, referenceKnowledgeDocumentIds, (message) => {
@@ -3513,7 +3669,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function countTotalContentWords() {
-    return leaves.reduce((sum, { item }) => sum + countContentWords(getLeafContentForWords(item)), 0);
+    return allLeafContexts.reduce((sum, { item }) => sum + countContentWords(getLeafContentForWords(item)), 0);
   }
 
   function leafWordStats() {
@@ -3575,7 +3731,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
 
     function updateContentAgentProgress(_step, label) {
-      updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+      publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
     }
 
     const agentAbortController = new AbortController();
@@ -3731,7 +3887,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   */
   async function waitForPromptCacheWarmupBeforeFanout(message) {
     logs = [...logs, message];
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
     await waitForPromptCacheWarmup();
     pauseIfRequested('正文生成已在提示词缓存预热等待后暂停，可导出当前已完成内容，稍后继续。');
   }
@@ -3773,15 +3929,14 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function saveSection(item, partial, contentForOutline, taskPartial = {}) {
-    const prev = workspaceStore.loadTechnicalPlan() || {};
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
     if (hasPartialContent) {
       nextPartial.content = normalizeLeafContentForSave(nextPartial.content, item);
     }
-    sections = withSection(prev.contentGenerationSections || sections, item, nextPartial);
-    const currentOutlineData = prev.outlineData || outlineData;
+    sections = withSection(sections, item, nextPartial);
+    const currentOutlineData = outlineData;
     const outlineContent = hasOutlineContent || hasPartialContent
       ? normalizeLeafContentForSave(contentForOutline ?? (sections[item.id].content || ''), item)
       : (sections[item.id].content || '');
@@ -3800,10 +3955,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     };
     outlineData = nextOutlineData;
     const runtime = syncRuntime();
-    const saved = workspaceStore.updateTechnicalPlan({
-      contentGenerationSections: sections,
-      outlineData: nextOutlineData,
-      contentGenerationRuntime: runtime,
+    workspaceStore.saveContentGenerationItem({
+      nodeId: item.id,
+      section: sections[item.id],
+      runtime,
     });
     if (hasOutlineContent || hasPartialContent) {
       writeDeveloperLog('content.section.saved', {
@@ -3813,12 +3968,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         content_metrics: textMetrics(outlineContent),
       });
     }
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, saved, {
-      outlineData: nextOutlineData,
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, {
       contentSection: sections[item.id],
       contentRuntime: runtime,
     });
-    return saved;
+    return sections[item.id];
   }
 
   function getStoredContentPlan(itemId) {
@@ -3895,9 +4049,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       ...storedContentPlans,
       [itemId]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(itemId)),
     }, leaves);
-    const saved = workspaceStore.updateTechnicalPlan({ contentGenerationPlans: storedContentPlans, contentGenerationRuntime: syncRuntime() });
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, saved);
-    return saved;
+    const runtime = syncRuntime();
+    workspaceStore.saveContentGenerationItem({ nodeId: itemId, storedPlan: storedContentPlans[itemId], runtime });
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, { contentRuntime: runtime });
+    return storedContentPlans[itemId];
   }
 
   function getOriginalMaterialRuntimeState(itemOrId) {
@@ -3939,15 +4094,14 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function saveSectionAndContentPlan(item, partial, contentForOutline, plan, taskPartial = {}) {
-    const prev = workspaceStore.loadTechnicalPlan() || {};
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
     if (hasPartialContent) {
       nextPartial.content = normalizeLeafContentForSave(nextPartial.content, item);
     }
-    sections = withSection(prev.contentGenerationSections || sections, item, nextPartial);
-    const currentOutlineData = prev.outlineData || outlineData;
+    sections = withSection(sections, item, nextPartial);
+    const currentOutlineData = outlineData;
     const outlineContent = hasOutlineContent || hasPartialContent
       ? normalizeLeafContentForSave(contentForOutline ?? (sections[item.id].content || ''), item)
       : (sections[item.id].content || '');
@@ -3971,11 +4125,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       [item.id]: createStoredContentPlan(plan, tableRequirement, getContentPlanFingerprintForItem(item.id)),
     }, leaves);
     const runtime = syncRuntime();
-    const saved = workspaceStore.updateTechnicalPlan({
-      contentGenerationSections: sections,
-      outlineData: nextOutlineData,
-      contentGenerationPlans: storedContentPlans,
-      contentGenerationRuntime: runtime,
+    workspaceStore.saveContentGenerationItem({
+      nodeId: item.id,
+      section: sections[item.id],
+      storedPlan: storedContentPlans[item.id],
+      runtime,
     });
     if (hasOutlineContent || hasPartialContent) {
       writeDeveloperLog('content.section.saved', {
@@ -3985,8 +4139,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         content_metrics: textMetrics(outlineContent),
       });
     }
-    updateTask({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, saved, {
-      outlineData: nextOutlineData,
+    publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), stats: statsSnapshot(), ...taskPartial }, {
       contentSection: sections[item.id],
       contentRuntime: runtime,
       technicalPlanPatch: {
@@ -3994,7 +4147,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         contentGenerationRuntime: runtime,
       },
     });
-    return saved;
+    return sections[item.id];
   }
 
   function getRestoredNodeIds() {
@@ -4067,6 +4220,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       return false;
     }
 
+    contentPlan = applyWordControlTarget(contentPlan);
     if (tableRequirement === 'none') {
       contentPlan = clearContentPlanTable(contentPlan);
     }
@@ -4514,6 +4668,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       delete storedContentPlans[itemId];
       contentPlans.delete(itemId);
     }
+    allLeafContexts = collectLeafContexts(outlineData.outline);
     leaves = collectFreeformLeafContexts(outlineData.outline);
     sections = createInitialSections(leaves, sections);
     storedContentPlans = pruneContentGenerationPlans(storedContentPlans, leaves);
@@ -5034,6 +5189,87 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
     logs = [...logs, `最低字数已达成：${currentWords}/${minimumWords} 字，准备进入后续阶段。`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+  }
+
+  async function adjustSectionWordCount(context, targetWords, label) {
+    const currentContent = getLeafContentForWords(context.item);
+    const currentWords = countContentWords(currentContent);
+    if (!currentContent.trim() || currentWords === targetWords) return false;
+    const patch = await aiService.collectJsonResponse({
+      messages: [
+        { role: 'system', content: '你是投标技术文件正文编辑。只返回 JSON，不得删除事实、承诺、参数、表格或 Markdown 结构。' },
+        { role: 'user', content: `请${targetWords > currentWords ? '扩写' : '精简'}以下 AI 编制小节，使正文接近 ${targetWords} 字。保留原有标题层级、事实变量、评分响应和表格；只调整叙述详略，不要添加编造信息。\n\n返回格式：{"content":"完整 Markdown 正文"}\n\n小节：${context.item.id} ${context.item.title || ''}\n当前字数：${currentWords}\n目标字数：${targetWords}\n\n当前正文：\n${currentContent}` },
+      ],
+      temperature: 0.35,
+      logTitle: `${label}-${context.item.id}-${context.item.title || '未命名章节'}`,
+      progressLabel: label,
+      failureMessage: `${label}结果格式无效`,
+      normalizer: (value) => ({ content: String(value?.content || '').trim() }),
+      validator: (value) => {
+        if (!value.content) throw new Error('调整后的正文不能为空');
+      },
+    });
+    const nextContent = patch.content;
+    const nextWords = countContentWords(nextContent);
+    if (nextWords === currentWords) return false;
+    rememberTouchedItem(context.item.id);
+    saveSection(context.item, { status: 'success', content: nextContent, error: undefined }, nextContent, { logs });
+    logs = [...logs, `${label}完成：${context.item.id} ${currentWords} → ${nextWords} 字。`];
+    return true;
+  }
+
+  async function runSectionWordAdjustments(stage) {
+    if (!enforceSectionWords) return;
+    const candidates = leaves.filter((context) => {
+      if (sections[context.item.id]?.status !== 'success') return false;
+      const words = countContentWords(getLeafContentForWords(context.item));
+      return words > 0 && (words < wordControl.sectionMinimumWords || words > wordControl.sectionMaximumWords);
+    });
+    if (!candidates.length) return;
+    contentStats.phase = 'expanding';
+    logs = [...logs, `${stage}：发现 ${candidates.length} 个 AI 小节超出 ${wordControl.sectionMinimumWords}-${wordControl.sectionMaximumWords} 字范围，开始调整。`];
+    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    await runItemsWithWorkerPool(candidates, contentConcurrency, async (context) => {
+      const words = countContentWords(getLeafContentForWords(context.item));
+      await adjustSectionWordCount(context, wordControl.sectionWords, stage);
+    }, isPauseRequested);
+  }
+
+  async function runTotalWordAdjustments() {
+    if (targetItemId || (!minimumWords && !maximumWords)) return;
+    const currentWords = countTotalContentWords();
+    const targetWords = minimumWords > 0 && currentWords < minimumWords
+      ? minimumWords
+      : maximumWords > 0 && currentWords > maximumWords
+        ? maximumWords
+        : 0;
+    if (!targetWords) return;
+    const increasing = currentWords < targetWords;
+    const candidates = leafWordStats()
+      .filter(({ item, words }) => sections[item.id]?.status === 'success' && words > 0)
+      .sort((left, right) => increasing ? left.words - right.words : right.words - left.words);
+    if (!candidates.length) {
+      logs = [...logs, `全文字数当前 ${currentWords} 字，无法通过 AI 小节调整到 ${targetWords} 字；人工填写内容只计入总数，不会被改写。`];
+      return;
+    }
+    contentStats.phase = 'expanding';
+    logs = [...logs, `开始全文${increasing ? '补足' : '精简'}：当前 ${currentWords} 字，目标 ${targetWords} 字；人工填写小节不会参与调整。`];
+    updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+    let remaining = Math.abs(targetWords - currentWords);
+    for (const context of candidates) {
+      if (remaining <= 0 || isPauseRequested()) break;
+      const words = countContentWords(getLeafContentForWords(context.item));
+      const adjustment = Math.max(120, Math.ceil(remaining / Math.max(1, candidates.length)));
+      const nextTarget = increasing ? words + adjustment : Math.max(120, words - adjustment);
+      await adjustSectionWordCount(context, nextTarget, `全文字数${increasing ? '补足' : '精简'}`);
+      remaining = Math.abs(targetWords - countTotalContentWords());
+    }
+    const finalWords = countTotalContentWords();
+    const stillOutsideRange = (minimumWords > 0 && finalWords < minimumWords)
+      || (maximumWords > 0 && finalWords > maximumWords);
+    logs = [...logs, stillOutsideRange
+      ? `全文字数调整后仍为 ${finalWords} 字，未进入 ${minimumWords || '不限制'}-${maximumWords || '不限制'} 字范围；人工填写内容未被改写，请人工确认。`
+      : `全文字数调整完成：${finalWords} 字。`];
   }
 
   function buildOriginalCoverageAuditTargets(auditTargetItemId = '') {
@@ -6459,7 +6695,7 @@ workspace 文件说明：
       return { ran: true, rewrittenCount: 0, skippedCount: 0 };
     }
 
-    logs = [...logs, `开始正文去表格：发现 ${targets.length} 个小节、${tableTotal} 个表格，将转换为普通文字描述。`];
+    logs = [...logs, `开始正文去表格：发现 ${targets.length} 个小节、${tableTotal} 个表格，将按小节并发转换为普通文字描述。`];
     writeDeveloperLog('table_cleanup.start', {
       target_item_id: options.targetItemId || targetItemId || '',
       section_count: targets.length,
@@ -6470,13 +6706,14 @@ workspace 文件说明：
 
     let rewrittenCount = 0;
     let skippedCount = 0;
-    for (const target of targets) {
-      pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
+    pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
+    await runItemsWithWorkerPool(targets, contentConcurrency, async (target) => {
       const result = await cleanupTablesForSection(target);
       rewrittenCount += result.rewrittenCount;
       skippedCount += result.skippedCount;
       contentStats.table_cleanup_skipped = skippedCount;
-    }
+      publishTaskUpdate({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() });
+    }, isPauseRequested);
 
     pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
     logs = [...logs, `正文去表格完成：成功转换 ${rewrittenCount} 个表格，跳过 ${skippedCount} 个。`];
@@ -6836,6 +7073,10 @@ workspace 文件说明：
       pauseIfRequested('正文生成已在章节统稿与质量审核后暂停，可导出当前已完成内容，稍后继续。');
       await removeTablesBeforeIllustration();
       pauseIfRequested('正文生成已在去表格阶段暂停，可导出当前已完成内容，稍后继续。');
+      await runSectionWordAdjustments('正文小节字数复核');
+      await runTotalWordAdjustments();
+      runChapterSynthesisAndQualityAudit();
+      pauseIfRequested('正文生成已在字数控制复核后暂停，可导出当前已完成内容，稍后继续。');
     } else if (!runOnlyIllustrationStage) {
       await runOriginalPlanCoverageAuditIfEnabled({ targetItemId });
       pauseIfRequested('正文生成已在原方案覆盖审计后暂停，可导出当前已完成内容，稍后继续。');

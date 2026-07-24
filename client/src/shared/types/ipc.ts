@@ -4,12 +4,25 @@ import type { ClientConfig, ConfigSaveResult, ImageModelTestResult, ModelListRes
 import type { DiagnosticsSnapshot } from './diagnostics';
 import type { KnowledgeAnalysisSnapshot, KnowledgeBaseEvent, KnowledgeBaseIndex, KnowledgeBaseIndexMutationResult, KnowledgeBaseMigrationResult, KnowledgeBaseMigrationStatus, KnowledgeBaseMutationResult, KnowledgeBaseRetryDocumentResult, KnowledgeBaseStartMatchingResult, KnowledgeBaseUploadResult, KnowledgeDocument, KnowledgeFolder, KnowledgeItem } from '../../features/knowledge-base/types';
 import type { RejectionCheckWorkspaceState, RejectionDocumentRole } from '../../features/rejection-check/types';
-import type { BidAnalysisMode, BidAnalysisTaskState, BidSectionMode, ContentGenerationOptions, ContentGenerationPlanState, ContentGenerationRuntimeState, ContentGenerationSectionState, DetectedBidSection, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../../features/technical-plan/types';
+import type { BidAnalysisMode, BidAnalysisTaskState, BidSectionMode, ContentGenerationOptions, ContentGenerationPlanState, ContentGenerationProgressDetail, ContentGenerationRuntimeState, ContentGenerationSectionState, DetectedBidSection, GlobalFactGroupState, SaveOutlineRequest, TechnicalPlanState, TechnicalPlanStep, TechnicalPlanWorkflowKind } from '../../features/technical-plan/types';
 import type { ExportFormatConfig, ExportTemplateRecord } from './exportFormat';
-import type { OutlineData, OutlineExpansionMode } from './outline';
+import type { OutlineData, OutlineExpansionMode, OutlineWordControlOptions } from './outline';
+
+export interface TaskEventTask {
+  task_id: string;
+  type: string;
+  status: string;
+  progress: number;
+  progress_detail?: ContentGenerationProgressDetail;
+  logs: string[];
+  started_at: string;
+  updated_at: string;
+  error?: string;
+  stats?: unknown;
+}
 
 export interface TaskEvent<TState = unknown, TRejectionCheckState = unknown, TDuplicateCheckState = unknown> {
-  task: unknown;
+  task: TaskEventTask;
   technicalPlan?: TState;
   technicalPlanPatch?: Partial<TechnicalPlanState>;
   bidItem?: BidAnalysisTaskState;
@@ -541,7 +554,7 @@ export interface YibiaoBridge {
     setWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     switchWorkflowKind: (workflowKind: TechnicalPlanWorkflowKind) => Promise<TechnicalPlanState>;
     saveBidAnalysisConfig: (payload: { mode: BidAnalysisMode; selectedTaskIds: string[]; bidSectionMode?: BidSectionMode }) => Promise<TechnicalPlanState>;
-    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode }) => Promise<TechnicalPlanState>;
+    saveOutlineConfig: (payload: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode?: OutlineExpansionMode; wordControlOptions?: OutlineWordControlOptions }) => Promise<TechnicalPlanState>;
     saveOutline: (payload: SaveOutlineRequest) => Promise<TechnicalPlanState>;
     saveGlobalFacts: (globalFacts: GlobalFactGroupState[]) => Promise<TechnicalPlanState>;
     saveContentGenerationOptions: (options: ContentGenerationOptions) => Promise<TechnicalPlanState>;
@@ -581,7 +594,7 @@ export interface YibiaoBridge {
     startRejectionItemsExtraction: (payload: unknown) => Promise<unknown>;
     startRejectionCheck: (payload: unknown) => Promise<unknown>;
     startDuplicateAnalysis: (payload: unknown) => Promise<unknown>;
-    getActiveTasks: () => Promise<unknown[]>;
+    getActiveTasks: () => Promise<TaskEventTask[]>;
     onTaskEvent: <TState = unknown, TRejectionCheckState = unknown, TDuplicateCheckState = unknown>(callback: (event: TaskEvent<TState, TRejectionCheckState, TDuplicateCheckState>) => void) => () => void;
   };
   export: {

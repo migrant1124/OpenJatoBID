@@ -1,6 +1,4 @@
-import type { SectionId } from '../../../shared/types/navigation';
-
-type DeveloperDemoSectionId = 'developer-prompt-lab' | 'developer-parser-sandbox' | 'developer-export-preview';
+import type { DeveloperDemoSectionId } from '../developerDemoSections';
 
 interface DeveloperDemoPageProps {
   sectionId: DeveloperDemoSectionId;
@@ -69,10 +67,6 @@ const demoConfigs: Record<DeveloperDemoSectionId, DeveloperDemoConfig> = {
     preview: ['章节正文', 'Mermaid 图表', '图片资源', '导出进度事件'],
   },
 };
-
-export function isDeveloperDemoSection(sectionId: SectionId): sectionId is DeveloperDemoSectionId {
-  return sectionId === 'developer-prompt-lab' || sectionId === 'developer-parser-sandbox' || sectionId === 'developer-export-preview';
-}
 
 function DeveloperDemoPage({ sectionId }: DeveloperDemoPageProps) {
   const config = demoConfigs[sectionId];

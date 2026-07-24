@@ -9,6 +9,9 @@ const {
 const { isPathInsideAnyRoot } = require('./opencodeEnvironment.cjs');
 
 const ISOLATION_CHECK_TIMEOUT_MS = 15 * 1000;
+const DEBUG_PATHS_READY_TIMEOUT_MS = 5 * 1000;
+const DEBUG_PATHS_READY_RETRY_MS = 250;
+const REQUIRED_DEBUG_PATH_KEYS = ['home', 'data', 'bin', 'log', 'repos', 'cache', 'config', 'state', 'tmp'];
 
 function normalizePath(value) {
   const resolved = path.resolve(String(value || ''));
@@ -126,6 +129,35 @@ function parseDebugPaths(output) {
   return result;
 }
 
+function missingDebugPathKeys(debugPaths) {
+  return REQUIRED_DEBUG_PATH_KEYS.filter((key) => !debugPaths[key]);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForDebugPathsReady({ opencodeBin, workspaceDir, env, runCli }) {
+  const startedAt = Date.now();
+  let lastResult = null;
+  let lastPaths = {};
+  let lastMissingKeys = [...REQUIRED_DEBUG_PATH_KEYS];
+
+  while (Date.now() - startedAt <= DEBUG_PATHS_READY_TIMEOUT_MS) {
+    lastResult = await runCli(
+      opencodeBin,
+      ['debug', 'paths', '--pure'],
+      { cwd: workspaceDir, env, timeoutMs: ISOLATION_CHECK_TIMEOUT_MS },
+    );
+    lastPaths = parseDebugPaths(lastResult.stdout);
+    lastMissingKeys = missingDebugPathKeys(lastPaths);
+    if (!lastMissingKeys.length) return { pathsResult: lastResult, debugPaths: lastPaths };
+    await delay(DEBUG_PATHS_READY_RETRY_MS);
+  }
+
+  return { pathsResult: lastResult, debugPaths: lastPaths, missingKeys: lastMissingKeys };
+}
+
 function parseDebugSkills(output) {
   try {
     const value = JSON.parse(String(output || '').trim() || '[]');
@@ -145,19 +177,19 @@ async function runOpenCodeCliIsolationPreflight({
 }) {
   const isolationCheck = createIsolationCheck(environmentInfo);
   try {
-    const pathsResult = await runCli(
+    const pathsReady = await waitForDebugPathsReady({
       opencodeBin,
-      ['debug', 'paths', '--pure'],
-      { cwd: workspaceDir, env, timeoutMs: ISOLATION_CHECK_TIMEOUT_MS },
-    );
+      workspaceDir,
+      env,
+      runCli,
+    });
     const skillsResult = await runCli(
       opencodeBin,
       ['debug', 'skill', '--pure'],
       { cwd: workspaceDir, env, timeoutMs: ISOLATION_CHECK_TIMEOUT_MS },
     );
-    const debugPaths = parseDebugPaths(pathsResult.stdout);
-    const requiredPaths = ['home', 'data', 'bin', 'log', 'repos', 'cache', 'config', 'state', 'tmp'];
-    requiredPaths.forEach((key) => {
+    const debugPaths = pathsReady.debugPaths;
+    REQUIRED_DEBUG_PATH_KEYS.forEach((key) => {
       const value = debugPaths[key];
       if (!value) {
         isolationCheck.violations.push(`opencode debug paths 缺少 ${key} 路径`);

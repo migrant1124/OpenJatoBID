@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { technicalPlanStorage } from '../services/technicalPlanStorage';
 import type { TechnicalPlanState } from '../types';
+import { DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS } from '../../../shared/types/outline';
 
 const initialState: TechnicalPlanState = {
   workflowKind: 'technical-plan',
@@ -21,6 +22,8 @@ const initialState: TechnicalPlanState = {
   bidSectionExtractionError: undefined,
   outlineMode: 'aligned',
   outlineExpansionMode: 'ai-complement',
+  outlineWordControlOptions: DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS,
+  outlineWordControlSnapshot: undefined,
   referenceKnowledgeDocumentIds: [],
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
@@ -39,6 +42,7 @@ export function normalizeTechnicalPlanState(state: TechnicalPlanState): Technica
     ...initialState,
     ...state,
     outlineExpansionMode: state.outlineExpansionMode || 'ai-complement',
+    outlineWordControlOptions: state.outlineWordControlOptions || DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS,
   };
 }
 

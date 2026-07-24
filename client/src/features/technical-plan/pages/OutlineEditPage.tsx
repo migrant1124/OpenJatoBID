@@ -5,7 +5,7 @@ import { trackConfigUsage } from '../../../shared/analytics/analytics';
 import { useToast } from '../../../shared/ui';
 import type { BackgroundTaskState, SaveOutlineRequest, TechnicalPlanWorkflowKind } from '../types';
 import type { KnowledgeBaseIndex, KnowledgeDocument } from '../../knowledge-base/types';
-import type { OutlineData, OutlineExpansionMode, OutlineItem } from '../../../shared/types';
+import type { OutlineData, OutlineExpansionMode, OutlineItem, OutlineWordControlOptions } from '../../../shared/types';
 import type { ExportFormatConfig } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
 import {
@@ -19,12 +19,14 @@ interface OutlineEditPageProps {
   projectOverview: string;
   techRequirements: string;
   outlineExpansionMode: OutlineExpansionMode;
+  outlineWordControlOptions: OutlineWordControlOptions;
+  outlineWordControlSnapshot?: OutlineWordControlOptions;
   formatRequirementsContent: string;
   referenceKnowledgeDocumentIds: string[];
   outlineData: OutlineData | null;
   task?: BackgroundTaskState;
   contentTaskStatus?: BackgroundTaskState['status'];
-  onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode }) => void;
+  onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode; wordControlOptions: OutlineWordControlOptions }) => Promise<void>;
   onOutlineSaved: (request: SaveOutlineRequest) => Promise<void>;
   onSortGuardChange?: (guard: OutlineSortGuard | null) => void;
 }
@@ -69,6 +71,44 @@ const outlineExpansionModeOptions: Array<{ value: OutlineExpansionMode; title: s
     description: '一级目录仍按格式要求或所选知识库生成，并由 AI 综合评分项和原方案补充二级及以下目录。',
   },
 ];
+
+const WORDS_PER_TEN_THOUSAND = 10000;
+
+function formatTenThousandWords(value: number) {
+  const normalized = Math.max(0, Number(value) || 0) / WORDS_PER_TEN_THOUSAND;
+  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
+}
+
+function parseTenThousandWords(value: string) {
+  if (!/^\d*(?:\.\d{0,2})?$/u.test(value)) return null;
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number >= 0 ? Math.round(number * WORDS_PER_TEN_THOUSAND) : null;
+}
+
+function normalizeWordControlDraft({ enabled, minimumWords, maximumWords, sectionWords, strictSectionWords }: {
+  enabled: boolean;
+  minimumWords: string;
+  maximumWords: string;
+  sectionWords: string;
+  strictSectionWords: boolean;
+}): OutlineWordControlOptions {
+  const minimum = parseTenThousandWords(minimumWords);
+  const maximum = parseTenThousandWords(maximumWords);
+  const section = parseTenThousandWords(sectionWords);
+  if (minimum === null || maximum === null || section === null) {
+    throw new Error('字数设置只允许填写最多两位小数的非负万字数');
+  }
+  if (enabled && minimum > 0 && maximum > 0 && maximum < minimum) {
+    throw new Error('最多字数不能低于最少字数');
+  }
+  return {
+    enabled,
+    minimumWords: minimum,
+    maximumWords: maximum,
+    sectionWords: section,
+    strictSectionWords: section > 0 && strictSectionWords,
+  };
+}
 
 function collectOutlineIds(items: OutlineItem[], ids = new Set<string>()) {
   items.forEach((item) => {
@@ -283,6 +323,8 @@ function OutlineEditPage({
   projectOverview,
   techRequirements,
   outlineExpansionMode,
+  outlineWordControlOptions,
+  outlineWordControlSnapshot,
   formatRequirementsContent,
   referenceKnowledgeDocumentIds,
   outlineData,
@@ -303,6 +345,11 @@ function OutlineEditPage({
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [draftOutlineExpansionMode, setDraftOutlineExpansionMode] = useState<OutlineExpansionMode>(outlineExpansionMode);
   const [draftKnowledgeDocumentIds, setDraftKnowledgeDocumentIds] = useState<string[]>(referenceKnowledgeDocumentIds);
+  const [draftWordControlEnabled, setDraftWordControlEnabled] = useState(outlineWordControlOptions.enabled);
+  const [draftMinimumWords, setDraftMinimumWords] = useState(formatTenThousandWords(outlineWordControlOptions.minimumWords));
+  const [draftMaximumWords, setDraftMaximumWords] = useState(formatTenThousandWords(outlineWordControlOptions.maximumWords));
+  const [draftSectionWords, setDraftSectionWords] = useState(formatTenThousandWords(outlineWordControlOptions.sectionWords));
+  const [draftStrictSectionWords, setDraftStrictSectionWords] = useState(outlineWordControlOptions.strictSectionWords);
   const [developerMode, setDeveloperMode] = useState(false);
   const [draftForceOutlineAgentRepair, setDraftForceOutlineAgentRepair] = useState(false);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
@@ -351,6 +398,28 @@ function OutlineEditPage({
   const effectiveStartedAt = Number.isFinite(startedAt) ? startedAt : localStartAt;
   const elapsedText = generating && effectiveStartedAt ? `已运行 ${formatDuration(nowTick - effectiveStartedAt)}` : '';
   const staleText = generating && Number.isFinite(updatedAt) ? `最近更新 ${Math.floor(Math.max(0, nowTick - updatedAt) / 1000)} 秒前` : '';
+  const wordControlChanged = Boolean(outlineData && (
+    !outlineWordControlSnapshot
+    || draftWordControlEnabled !== outlineWordControlSnapshot.enabled
+    || parseTenThousandWords(draftMinimumWords) !== outlineWordControlSnapshot.minimumWords
+    || parseTenThousandWords(draftMaximumWords) !== outlineWordControlSnapshot.maximumWords
+    || parseTenThousandWords(draftSectionWords) !== outlineWordControlSnapshot.sectionWords
+    || (Boolean(parseTenThousandWords(draftSectionWords)) && draftStrictSectionWords) !== outlineWordControlSnapshot.strictSectionWords
+  ));
+  const draftMinimumWordsValue = parseTenThousandWords(draftMinimumWords) || 0;
+  const draftMaximumWordsValue = parseTenThousandWords(draftMaximumWords) || 0;
+  const estimatedPageWords = draftMinimumWordsValue > 0 && draftMaximumWordsValue > 0
+    ? (draftMinimumWordsValue + draftMaximumWordsValue) / 2
+    : draftMinimumWordsValue || draftMaximumWordsValue;
+  const estimatedPages = draftWordControlEnabled && estimatedPageWords > 0 ? Math.ceil(estimatedPageWords / 650) : null;
+
+  const resetWordControlDraft = () => {
+    setDraftWordControlEnabled(outlineWordControlOptions.enabled);
+    setDraftMinimumWords(formatTenThousandWords(outlineWordControlOptions.minimumWords));
+    setDraftMaximumWords(formatTenThousandWords(outlineWordControlOptions.maximumWords));
+    setDraftSectionWords(formatTenThousandWords(outlineWordControlOptions.sectionWords));
+    setDraftStrictSectionWords(outlineWordControlOptions.strictSectionWords);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -413,10 +482,11 @@ function OutlineEditPage({
 
     setDraftOutlineExpansionMode(isExpansionWorkflow ? outlineExpansionMode : 'ai-complement');
     setDraftKnowledgeDocumentIds(referenceKnowledgeDocumentIds);
+    resetWordControlDraft();
     setDraftForceOutlineAgentRepair(false);
     setKnowledgeSearch('');
     void loadKnowledgeIndex();
-  }, [generationDialogOpen, isExpansionWorkflow, outlineExpansionMode, referenceKnowledgeDocumentIds]);
+  }, [generationDialogOpen, isExpansionWorkflow, outlineExpansionMode, outlineWordControlOptions, referenceKnowledgeDocumentIds]);
 
   const loadKnowledgeIndex = async () => {
     try {
@@ -450,17 +520,31 @@ function OutlineEditPage({
 
     setDraftOutlineExpansionMode(isExpansionWorkflow ? outlineExpansionMode : 'ai-complement');
     setDraftKnowledgeDocumentIds(referenceKnowledgeDocumentIds);
+    resetWordControlDraft();
     setKnowledgeSearch('');
     setGenerationDialogOpen(true);
   };
 
-  const saveOutlineConfig = () => {
-    onOutlineConfigChange({
-      referenceKnowledgeDocumentIds: draftKnowledgeDocumentIds,
-      outlineExpansionMode: isExpansionWorkflow ? draftOutlineExpansionMode : 'ai-complement',
-    });
-    setGenerationDialogOpen(false);
-    showToast('目录生成配置已保存', 'success');
+  const getWordControlOptions = () => normalizeWordControlDraft({
+    enabled: draftWordControlEnabled,
+    minimumWords: draftMinimumWords,
+    maximumWords: draftMaximumWords,
+    sectionWords: draftSectionWords,
+    strictSectionWords: draftStrictSectionWords,
+  });
+
+  const saveOutlineConfig = async () => {
+    try {
+      await onOutlineConfigChange({
+        referenceKnowledgeDocumentIds: draftKnowledgeDocumentIds,
+        outlineExpansionMode: isExpansionWorkflow ? draftOutlineExpansionMode : 'ai-complement',
+        wordControlOptions: getWordControlOptions(),
+      });
+      setGenerationDialogOpen(false);
+      showToast('目录生成配置已保存', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存目录配置失败', 'error');
+    }
   };
 
   const generateOutline = async () => {
@@ -478,19 +562,22 @@ function OutlineEditPage({
     }
 
     try {
+      const wordControlOptions = getWordControlOptions();
       const startedNow = Date.now();
       setStartingOutline(true);
       setLocalStartAt(startedNow);
       setNowTick(startedNow);
       const nextOutlineExpansionMode = isExpansionWorkflow ? draftOutlineExpansionMode : 'ai-complement';
-      onOutlineConfigChange({
+      await onOutlineConfigChange({
         referenceKnowledgeDocumentIds: draftKnowledgeDocumentIds,
         outlineExpansionMode: nextOutlineExpansionMode,
+        wordControlOptions,
       });
       setGenerationDialogOpen(false);
       await window.yibiao?.tasks.startOutlineGeneration({
         reference_knowledge_document_ids: draftKnowledgeDocumentIds,
         outline_expansion_mode: nextOutlineExpansionMode,
+        word_control_options: wordControlOptions,
         debug_force_outline_agent_repair: developerMode && draftForceOutlineAgentRepair,
       });
       trackConfigUsage({ outline_mode: isExpansionWorkflow ? nextOutlineExpansionMode : 'aligned' });
@@ -974,23 +1061,6 @@ function OutlineEditPage({
     );
   };
 
-  const renderDirectorySource = () => (
-    <section className="outline-generation-config-section">
-      <div className="outline-generation-config-head">
-        <strong>一级目录来源</strong>
-        <span>{hasExplicitFormat ? '格式要求' : hasUnspecifiedFormat ? '参考知识库' : '格式状态无效'}</span>
-      </div>
-      <small>
-        {hasExplicitFormat
-          ? '一级目录严格按格式要求生成，技术评分项和知识库只能补充二级及以下目录。'
-          : hasUnspecifiedFormat
-            ? '一级目录按本次选择的知识库文档目录生成，技术评分项只能补充二级及以下目录。'
-            : '格式要求解析结果缺少有效状态，请返回 Step02 重新解析。'}
-      </small>
-      {missingRequiredKnowledge && <small>招标文件未规定明确目录格式，请至少选择一份参考知识库文档后生成目录。</small>}
-    </section>
-  );
-
   const renderKnowledgePicker = () => {
     if (loadingKnowledge) {
       return <div className="outline-knowledge-empty">正在读取知识库...</div>;
@@ -1289,7 +1359,6 @@ function OutlineEditPage({
             <Dialog.Description className="sr-only">选择本次目录生成方式和参考知识库。</Dialog.Description>
 
             <div className={`outline-generation-config-body${isExpansionWorkflow ? ' has-expansion-mode' : ''}${developerMode ? ' has-dev-tools' : ''}`}>
-              {renderDirectorySource()}
               {renderOutlineExpansionModePicker()}
               {developerMode && (
                 <section className="outline-generation-config-section outline-agent-debug-section">
@@ -1311,9 +1380,33 @@ function OutlineEditPage({
                   </label>
                 </section>
               )}
+              <section className="outline-generation-config-section outline-word-control-section">
+                <div className="outline-generation-config-head">
+                  <div>
+                    <strong className="outline-config-section-title">控制字数</strong>
+                    <small>在目录生成阶段，预先设定全文生成的字数（单位：万字）</small>
+                  </div>
+                  <label className="yb-switch-control">
+                    <input type="checkbox" checked={draftWordControlEnabled} onChange={(event) => setDraftWordControlEnabled(event.target.checked)} />
+                    <span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span>
+                  </label>
+                </div>
+                {draftWordControlEnabled && (
+                  <>
+                    <div className="outline-word-control-grid">
+                      <label><span>最少字数（万）</span><input inputMode="decimal" value={draftMinimumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMinimumWords(event.target.value)} /><small>0 表示不限制</small></label>
+                      <label><span>最多字数（万）</span><input inputMode="decimal" value={draftMaximumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMaximumWords(event.target.value)} /><small>0 表示不限制</small></label>
+                      <label><span>每小节字数（万）</span><input inputMode="decimal" value={draftSectionWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftSectionWords(event.target.value)} /><small>0 表示不控制小节</small></label>
+                    </div>
+                    <label className="outline-word-control-switch"><span><strong>强控小节字数</strong><small>允许范围为目标字数上下 20%</small></span><span className="yb-switch-control"><input type="checkbox" checked={draftStrictSectionWords} disabled={!Boolean(parseTenThousandWords(draftSectionWords))} onChange={(event) => setDraftStrictSectionWords(event.target.checked)} /><span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span></span></label>
+                    <div className="outline-word-control-pages"><strong>预估页数</strong>{estimatedPages ? <span>约 {estimatedPages} 页</span> : <span>填写最少或最多字数后显示</span>}<small>页数和排版有关，无法精确预估。</small></div>
+                  </>
+                )}
+                {wordControlChanged && <small>当前目录仍使用上次生效的字数规则；重新生成目录后才会应用新设置。</small>}
+              </section>
               <section className="outline-generation-config-section outline-knowledge-picker">
                 <div className="outline-generation-config-head">
-                  <strong>参考知识库</strong>
+                  <strong className="outline-config-section-title">参考知识库</strong>
                   <span>已选择 {draftKnowledgeDocumentIds.length} 个文档</span>
                 </div>
                 {renderKnowledgePicker()}
@@ -1322,7 +1415,7 @@ function OutlineEditPage({
 
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
-              <button type="button" className="secondary-action" onClick={saveOutlineConfig} disabled={generating || contentMutationLocked}>
+              <button type="button" className="secondary-action" onClick={() => { void saveOutlineConfig(); }} disabled={generating || contentMutationLocked}>
                 保存配置
               </button>
               <button

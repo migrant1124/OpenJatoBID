@@ -5,7 +5,7 @@ import { useToast } from '../../../shared/ui';
 import type { ExportTemplateRecord } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
 import { buildExportFormatCssVars } from '../../../shared/utils/exportFormatCss';
-import { TemplatePreview } from './ExportFormatPage';
+import { TemplatePreview } from '../components/TemplatePreview';
 
 interface MyTemplatesPageProps {
   onCreateTemplate: () => void;
