@@ -5,7 +5,7 @@ import BidAnalysisPage from './BidAnalysisPage';
 import OutlineEditPage from './OutlineEditPage';
 import GlobalFactsPage from './GlobalFactsPage';
 import ContentEditPage from './ContentEditPage';
-import { TemplatePreview } from '../../export-format/pages/ExportFormatPage';
+import { TemplatePreview } from '../../export-format/components/TemplatePreview';
 import { normalizeTechnicalPlanState, useTechnicalPlanWorkflow } from '../hooks/useTechnicalPlanWorkflow';
 import { areRequiredBidAnalysisTasksReady } from '../services/bidAnalysisWorkflow';
 import { trackPageView } from '../../../shared/analytics/analytics';

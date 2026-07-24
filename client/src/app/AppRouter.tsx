@@ -1,22 +1,24 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { SectionId } from '../shared/types/navigation';
 import { getAppMenuItemById } from './menuConfig';
-import BidOpportunityPage from '../features/bid-opportunity/pages/BidOpportunityPage';
-import BusinessBidPage from '../features/business-bid/pages/BusinessBidPage';
-import ContentExpansionReplaceTestPage from '../features/developer/pages/ContentExpansionReplaceTestPage';
-import DeveloperDemoPage, { isDeveloperDemoSection } from '../features/developer/pages/DeveloperDemoPage';
-import OpenCodeAgentTestPage from '../features/developer/pages/OpenCodeAgentTestPage';
-import DeveloperTestPage from '../features/developer/pages/DeveloperTestPage';
-import SystemDiagnosticsPage from '../features/developer/pages/SystemDiagnosticsPage';
-import ExportFormatPage from '../features/export-format/pages/ExportFormatPage';
-import MyTemplatesPage from '../features/export-format/pages/MyTemplatesPage';
-import DuplicateCheckPage from '../features/duplicate-check/pages/DuplicateCheckPage';
-import KnowledgeBasePage from '../features/knowledge-base/pages/KnowledgeBasePage';
-import RejectionCheckPage from '../features/rejection-check/pages/RejectionCheckPage';
-import ResourcesPage from '../features/resources/pages/ResourcesPage';
-import SettingsPage from '../features/settings/pages/SettingsPage';
-import TechnicalPlanHome from '../features/technical-plan/pages/TechnicalPlanHome';
 import SecondaryMenuPage from '../shared/ui/SecondaryMenuPage';
+import { isDeveloperDemoSection } from '../features/developer/developerDemoSections';
+
+const BidOpportunityPage = lazy(() => import('../features/bid-opportunity/pages/BidOpportunityPage'));
+const BusinessBidPage = lazy(() => import('../features/business-bid/pages/BusinessBidPage'));
+const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
+const DeveloperDemoPage = lazy(() => import('../features/developer/pages/DeveloperDemoPage'));
+const OpenCodeAgentTestPage = lazy(() => import('../features/developer/pages/OpenCodeAgentTestPage'));
+const DeveloperTestPage = lazy(() => import('../features/developer/pages/DeveloperTestPage'));
+const SystemDiagnosticsPage = lazy(() => import('../features/developer/pages/SystemDiagnosticsPage'));
+const ExportFormatPage = lazy(() => import('../features/export-format/pages/ExportFormatPage'));
+const MyTemplatesPage = lazy(() => import('../features/export-format/pages/MyTemplatesPage'));
+const DuplicateCheckPage = lazy(() => import('../features/duplicate-check/pages/DuplicateCheckPage'));
+const KnowledgeBasePage = lazy(() => import('../features/knowledge-base/pages/KnowledgeBasePage'));
+const RejectionCheckPage = lazy(() => import('../features/rejection-check/pages/RejectionCheckPage'));
+const ResourcesPage = lazy(() => import('../features/resources/pages/ResourcesPage'));
+const SettingsPage = lazy(() => import('../features/settings/pages/SettingsPage'));
+const TechnicalPlanHome = lazy(() => import('../features/technical-plan/pages/TechnicalPlanHome'));
 
 interface AppRouterProps {
   activeSection: SectionId;
@@ -42,46 +44,46 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
   }
 
   if (isDeveloperDemoSection(activeSection)) {
-    return <DeveloperDemoPage sectionId={activeSection} />;
+    return <Suspense fallback={null}><DeveloperDemoPage sectionId={activeSection} /></Suspense>;
   }
 
   switch (activeSection) {
     case 'technical-plan':
-      return <TechnicalPlanHome workflowKind="technical-plan" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} />;
+      return <Suspense fallback={null}><TechnicalPlanHome workflowKind="technical-plan" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
     case 'existing-plan-expansion':
-      return <TechnicalPlanHome workflowKind="existing-plan-expansion" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} />;
+      return <Suspense fallback={null}><TechnicalPlanHome workflowKind="existing-plan-expansion" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
     case 'business-bid':
-      return <BusinessBidPage />;
+      return <Suspense fallback={null}><BusinessBidPage /></Suspense>;
     case 'document-knowledge-base':
-      return <KnowledgeBasePage />;
+      return <Suspense fallback={null}><KnowledgeBasePage /></Suspense>;
     case 'resources':
-      return <ResourcesPage />;
+      return <Suspense fallback={null}><ResourcesPage /></Suspense>;
     case 'duplicate-check':
-      return <DuplicateCheckPage />;
+      return <Suspense fallback={null}><DuplicateCheckPage /></Suspense>;
     case 'rejection-check':
-      return <RejectionCheckPage />;
+      return <Suspense fallback={null}><RejectionCheckPage /></Suspense>;
     case 'my-templates':
       return editingTemplateId
-        ? <ExportFormatPage mode="edit" templateId={editingTemplateId} onBack={() => setEditingTemplateId(null)} />
-        : <MyTemplatesPage onCreateTemplate={() => onSectionChange('new-template')} onEditTemplate={setEditingTemplateId} />;
+        ? <Suspense fallback={null}><ExportFormatPage mode="edit" templateId={editingTemplateId} onBack={() => setEditingTemplateId(null)} /></Suspense>
+        : <Suspense fallback={null}><MyTemplatesPage onCreateTemplate={() => onSectionChange('new-template')} onEditTemplate={setEditingTemplateId} /></Suspense>;
     case 'new-template':
-      return <ExportFormatPage mode="create" />;
+      return <Suspense fallback={null}><ExportFormatPage mode="create" /></Suspense>;
     case 'export-format':
-      return <ExportFormatPage mode="create" />;
+      return <Suspense fallback={null}><ExportFormatPage mode="create" /></Suspense>;
     case 'bid-opportunity':
-      return <BidOpportunityPage />;
+      return <Suspense fallback={null}><BidOpportunityPage /></Suspense>;
     case 'developer-test':
       return null;
     case 'developer-json-test':
-      return <DeveloperTestPage />;
+      return <Suspense fallback={null}><DeveloperTestPage /></Suspense>;
     case 'developer-expansion-replace-test':
-      return <ContentExpansionReplaceTestPage />;
+      return <Suspense fallback={null}><ContentExpansionReplaceTestPage /></Suspense>;
     case 'developer-opencode-agent-test':
-      return <OpenCodeAgentTestPage />;
+      return <Suspense fallback={null}><OpenCodeAgentTestPage /></Suspense>;
     case 'developer-system-diagnostics':
-      return <SystemDiagnosticsPage />;
+      return <Suspense fallback={null}><SystemDiagnosticsPage /></Suspense>;
     case 'settings':
-      return <SettingsPage onDeveloperModeChange={onDeveloperModeChange} onLogout={onLogout} />;
+      return <Suspense fallback={null}><SettingsPage onDeveloperModeChange={onDeveloperModeChange} onLogout={onLogout} /></Suspense>;
     default:
       return null;
   }

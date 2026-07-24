@@ -1,6 +1,8 @@
+import { lazy, Suspense } from 'react';
 import StartupAuthPage from '../features/auth/StartupAuthPage';
-import SettingsPage from '../features/settings/pages/SettingsPage';
 import type { LicenseRuntimeStatus } from '../shared/types';
+
+const SettingsPage = lazy(() => import('../features/settings/pages/SettingsPage'));
 
 const previewLicenseStatus: LicenseRuntimeStatus = {
   status: 'active',
@@ -41,11 +43,13 @@ function BrowserDebugPreview() {
 
   if (preview === 'about') {
     return (
-      <SettingsPage
-        initialTab="about"
-        initialLicenseStatus={previewLicenseStatus}
-        onLogout={() => { window.location.search = ''; }}
-      />
+      <Suspense fallback={null}>
+        <SettingsPage
+          initialTab="about"
+          initialLicenseStatus={previewLicenseStatus}
+          onLogout={() => { window.location.search = ''; }}
+        />
+      </Suspense>
     );
   }
 
