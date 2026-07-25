@@ -3,7 +3,6 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
-const { shell } = require('electron');
 const { getLicenseFilePath } = require('../utils/paths.cjs');
 
 const UPDATE_RELEASE_API = 'https://bidupdat.migrant1124.workers.dev/updates/latest';
@@ -18,6 +17,10 @@ let downloadedUpdateFilePath = '';
 let downloadedUpdateFileSize = 0;
 let downloadedUpdateSha256 = '';
 let activeUpdateCheckPromise = null;
+
+function getElectronShell() {
+  return require('electron').shell;
+}
 
 function compareVersions(a, b) {
   const parse = (value) => {
@@ -644,6 +647,7 @@ async function quitAndInstall(options = {}) {
     downloadedUpdateSha256,
     true,
   )) {
+    const shell = getElectronShell();
     const openError = await shell.openPath(downloadedUpdateFilePath);
     if (openError) {
       const payload = logUpdateFailure(
