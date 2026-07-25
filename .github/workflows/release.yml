@@ -130,10 +130,7 @@ jobs:
 
       - name: Ensure Electron binary is installed
         working-directory: client
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
-          node node_modules/electron/install.js
+        run: node scripts/ensure-electron-binary.cjs --platform win32 --arch x64
 
       - name: Smoke test Electron native dependencies
         working-directory: client
