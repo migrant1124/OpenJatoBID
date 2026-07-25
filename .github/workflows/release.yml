@@ -1,13 +1,14 @@
 name: Release Client
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '要发布的已有 tag，例如 v1.3.2'
+        description: 'Existing stable release tag, for example v1.3.2'
+        required: true
+        type: string
+      confirm_release:
+        description: 'Type PUBLISH vX.Y.Z to publish the selected tag'
         required: true
         type: string
 
@@ -25,93 +26,93 @@ env:
   JQ_VERSION: ${{ vars.JQ_VERSION || 'jq-1.7.1' }}
 
 jobs:
-  validate-release:
-    name: Validate release tag
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
-      commit_sha: ${{ steps.release.outputs.commit_sha }}
-    steps:
-      - name: Checkout exact tag
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.tag_name || github.ref }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Validate tag and checkout commit
-        id: release
-        shell: bash
-        env:
-          TAG_NAME: ${{ inputs.tag_name || github.ref_name }}
-        run: |
-          set -euo pipefail
-          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag: $TAG_NAME"
-            exit 1
-          fi
-          COMMIT_SHA="$(git rev-parse HEAD)"
-          TAG_COMMIT_SHA="$(git rev-list -n 1 "$TAG_NAME")"
-          if [ "$COMMIT_SHA" != "$TAG_COMMIT_SHA" ]; then
-            echo "Checkout commit $COMMIT_SHA does not match tag commit $TAG_COMMIT_SHA."
-            exit 1
-          fi
-          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
-          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-
-      - name: Test release scripts and Worker update routes
-        run: >-
-          node --test
-          .github/scripts/prepare-client-release.test.mjs
-          .github/scripts/publish-r2-release.test.mjs
-          .github/scripts/verify-worker-release.test.mjs
-          .github/scripts/release-workflow.test.mjs
-          analytics/worker/src/routes/updates.test.js
-
-  build-windows:
-    name: Build Windows client
-    needs: validate-release
-    runs-on: windows-latest
+  release-client:
+    name: Release Windows client
+    runs-on: [self-hosted, Windows, X64, jatobid-release]
+    timeout-minutes: 180
     defaults:
       run:
-        working-directory: client
-        shell: bash
+        shell: pwsh
+    env:
+      TAG_NAME: ${{ inputs.tag_name }}
+      CONFIRM_RELEASE: ${{ inputs.confirm_release }}
     steps:
       - name: Checkout exact tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ needs.validate-release.outputs.tag_name }}
+          ref: ${{ inputs.tag_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
 
-      - name: Install dependencies
+      - name: Validate release tag, confirmation, and checkout commit
+        id: release
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TAG_NAME -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Invalid release tag: $env:TAG_NAME"
+          }
+          $expectedConfirmation = "PUBLISH $env:TAG_NAME"
+          if ($env:CONFIRM_RELEASE -cne $expectedConfirmation) {
+            throw "confirm_release must exactly equal '$expectedConfirmation'."
+          }
+          $commitSha = (git rev-parse HEAD).Trim()
+          $tagCommitSha = (git rev-list -n 1 $env:TAG_NAME).Trim()
+          if ($commitSha -cne $tagCommitSha) {
+            throw "Checkout commit $commitSha does not match tag commit $tagCommitSha."
+          }
+          $version = $env:TAG_NAME.Substring(1)
+          "tag_name=$env:TAG_NAME" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "commit_sha=$commitSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Self-hosted Windows tool preflight
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git --version
+          node --version
+          npm --version
+          $awsVersion = (aws --version 2>&1 | Out-String).Trim()
+          Write-Host $awsVersion
+          if ($awsVersion -notmatch '^aws-cli/2\.') {
+            throw 'AWS CLI v2 is required on the self-hosted release runner.'
+          }
+          gh --version
+
+      - name: Test release scripts and Worker update routes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node --test `
+            .github/scripts/prepare-client-release.test.mjs `
+            .github/scripts/publish-r2-release.test.mjs `
+            .github/scripts/verify-worker-release.test.mjs `
+            .github/scripts/release-workflow.test.mjs `
+            analytics/worker/src/routes/updates.test.js
+
+      - name: Install client dependencies
+        working-directory: client
         run: npm ci
 
       - name: Test update integrity checks
+        working-directory: client
         run: npm run test:update
 
       - name: Prepare OpenCode binary
+        working-directory: client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENCODE_VERSION: ${{ env.OPENCODE_VERSION }}
         run: node scripts/prepare-opencode-binary.cjs --platform win32 --arch x64
 
       - name: Verify OpenCode binary
+        working-directory: client
         run: node scripts/verify-opencode-binary.cjs --platform win32 --arch x64
 
       - name: Prepare OpenCode tools
+        working-directory: client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RIPGREP_VERSION: ${{ env.RIPGREP_VERSION }}
@@ -120,186 +121,120 @@ jobs:
         run: node scripts/prepare-opencode-tools.cjs --platform win32 --arch x64
 
       - name: Verify OpenCode tools
+        working-directory: client
         run: node scripts/verify-opencode-tools.cjs --platform win32 --arch x64
 
       - name: Rebuild Electron native dependencies
+        working-directory: client
         run: npm run postinstall
 
       - name: Smoke test Electron native dependencies
+        working-directory: client
         run: npm run smoke:electron-native
 
       - name: Sync package version from tag
+        working-directory: client
         env:
-          RELEASE_VERSION: ${{ needs.validate-release.outputs.version }}
-        run: npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: npm version "$env:RELEASE_VERSION" --no-git-tag-version --allow-same-version
 
       - name: Generate signed build attestation
+        working-directory: client
         env:
           JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK: ${{ secrets.JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK }}
           JATOBID_BUILD_ATTESTATION_KEY_ID: ${{ vars.JATOBID_BUILD_ATTESTATION_KEY_ID || 'jatobid-build-key-2026-07' }}
-          GIT_COMMIT_SHA: ${{ needs.validate-release.outputs.commit_sha }}
+          GIT_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
         run: |
-          if [ -z "$JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK" ]; then
-            echo "JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK is required for official release builds."
-            exit 1
-          fi
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK)) {
+            throw 'JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK is required for official release builds.'
+          }
           npm run generate-build-attestation
           node -e "const value=require('./electron/resources/build-attestation.json'); if (value.gitCommitSha !== process.env.GIT_COMMIT_SHA) throw new Error('build attestation SHA does not match the validated tag commit')"
 
       - name: Build renderer
+        working-directory: client
         run: npm run build
 
       - name: Build Windows NSIS EXE
+        working-directory: client
         run: npx electron-builder --win nsis --publish never
 
       - name: Verify packaged OpenCode binary
+        working-directory: client
         run: node scripts/verify-packaged-opencode-binary.cjs --platform win32 --arch x64 --release release
 
       - name: Verify packaged OpenCode tools
+        working-directory: client
         run: node scripts/verify-packaged-opencode-tools.cjs --platform win32 --arch x64 --release release
 
       - name: Prepare exact release whitelist and manifest
         env:
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_VERSION: ${{ needs.validate-release.outputs.version }}
-          GIT_COMMIT_SHA: ${{ needs.validate-release.outputs.commit_sha }}
-        run: node ../.github/scripts/prepare-client-release.mjs
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GIT_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
+          CLIENT_RELEASE_OUTPUT_DIR: client/release-publish
+        run: node .github/scripts/prepare-client-release.mjs
 
-      - name: Upload prepared client artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-release-${{ needs.validate-release.outputs.tag_name }}
-          path: client/release-publish/*
-          if-no-files-found: error
-          retention-days: 7
-
-  publish-draft-release:
-    name: Publish GitHub Draft Release
-    needs:
-      - validate-release
-      - build-windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact tag
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.validate-release.outputs.tag_name }}
-
-      - name: Download prepared client artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: client-release-${{ needs.validate-release.outputs.tag_name }}
-          path: release-assets
-
-      - name: Create release notes from commits
-        shell: bash
+      - name: Create compliant release notes
         env:
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-        run: |
-          set -euo pipefail
-          PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || true)"
-          if [ -n "$PREVIOUS_TAG" ]; then
-            RANGE="$PREVIOUS_TAG..$TAG_NAME"
-            COMPARE_URL="https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${TAG_NAME}"
-          else
-            RANGE="$TAG_NAME"
-            COMPARE_URL="https://github.com/${{ github.repository }}/commits/${TAG_NAME}"
-          fi
-          {
-            echo "## 更新内容"
-            echo
-            git log "$RANGE" --no-merges --pretty=format:'- %s (%h)' || true
-            echo
-            echo
-            echo "**Full Changelog**: $COMPARE_URL"
-          } > release_notes.md
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          JATOBID_RELEASE_FORBIDDEN_TERMS: ${{ secrets.JATOBID_RELEASE_FORBIDDEN_TERMS }}
+        run: node .github/scripts/create-release-notes.mjs
 
       - name: Create or refresh Draft Release with exact assets
-        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_VERSION: ${{ needs.validate-release.outputs.version }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          set -euo pipefail
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            if [ "$(gh release view "$TAG_NAME" --json isDraft --jq .isDraft)" != "true" ]; then
-              echo "Release $TAG_NAME is already public; publish a new version instead of replacing it."
-              exit 1
-            fi
-            gh release edit "$TAG_NAME" --title "$TAG_NAME" --notes-file release_notes.md --draft=true
-          else
-            gh release create "$TAG_NAME" --title "$TAG_NAME" --notes-file release_notes.md --draft
-          fi
-          files=(
-            "Jato-AI-BID-${RELEASE_VERSION}-win-x64.exe"
-            "manifest.json"
-          )
-          mapfile -t existing_assets < <(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')
-          for file in "${existing_assets[@]}"; do
-            gh release delete-asset "$TAG_NAME" "$file" --yes
-          done
-          upload_files=()
-          for file in "${files[@]}"; do upload_files+=("release-assets/$file"); done
-          gh release upload "$TAG_NAME" "${upload_files[@]}"
-
-  publish-r2-release:
-    name: Publish private R2 and finalize release
-    needs:
-      - validate-release
-      - publish-draft-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-release.outputs.tag_name }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install AWS CLI
-        run: |
-          curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip
-          unzip -q awscliv2.zip
-          sudo ./aws/install --update
-          aws --version 2>&1 | grep '^aws-cli/2\.'
-
-      - name: Download prepared client artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: client-release-${{ needs.validate-release.outputs.tag_name }}
-          path: release-assets
+          $ErrorActionPreference = 'Stop'
+          $isDraft = $null
+          gh release view $env:TAG_NAME --json isDraft --jq .isDraft 2>$null | ForEach-Object { $isDraft = $_ }
+          if ($LASTEXITCODE -eq 0) {
+            if ($isDraft -cne 'true') {
+              throw "Release $env:TAG_NAME is already public; publish a new version instead of replacing it."
+            }
+            gh release edit $env:TAG_NAME --title $env:TAG_NAME --notes-file release_notes.md --draft=true
+          } else {
+            gh release create $env:TAG_NAME --title $env:TAG_NAME --notes-file release_notes.md --draft
+          }
+          $existingAssets = gh release view $env:TAG_NAME --json assets --jq '.assets[].name'
+          foreach ($file in $existingAssets) {
+            if (-not [string]::IsNullOrWhiteSpace($file)) {
+              gh release delete-asset $env:TAG_NAME $file --yes
+            }
+          }
+          gh release upload $env:TAG_NAME `
+            "client/release-publish/Jato-AI-BID-$env:RELEASE_VERSION-win-x64.exe" `
+            "client/release-publish/manifest.json"
 
       - name: Read Draft Release metadata
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-        run: gh release view "$TAG_NAME" --json tagName,name,body,isDraft,url > github-release.json
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: gh release view $env:TAG_NAME --json tagName,name,body,isDraft,url | Out-File -FilePath github-release.json -Encoding utf8
 
       - name: Upload and verify R2 version directory
         env:
-          R2_ACCOUNT_ID: 53d21f8ee647e4b1877d5147e1424636
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_ASSETS_DIR: release-assets
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_ASSETS_DIR: client/release-publish
           GITHUB_RELEASE_JSON: github-release.json
           PREVIOUS_LATEST_PATH: .release-state/previous-latest.json
           R2_RELEASE_ACTION: publish
         run: node .github/scripts/publish-r2-release.mjs
 
       - name: Promote R2 latest.json
-        id: promote
         env:
-          R2_ACCOUNT_ID: 53d21f8ee647e4b1877d5147e1424636
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_ASSETS_DIR: release-assets
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_ASSETS_DIR: client/release-publish
           GITHUB_RELEASE_JSON: github-release.json
           PREVIOUS_LATEST_PATH: .release-state/previous-latest.json
           R2_RELEASE_ACTION: promote
@@ -307,28 +242,31 @@ jobs:
 
       - name: Verify Worker latest and full EXE download
         env:
-          UPDATE_WORKER_BASE_URL: https://bidupdat.migrant1124.workers.dev
+          UPDATE_WORKER_BASE_URL: ${{ vars.UPDATE_WORKER_BASE_URL }}
           JATOBID_UPDATE_TEST_LICENSE_JSON: ${{ secrets.JATOBID_UPDATE_TEST_LICENSE_JSON }}
-          RELEASE_VERSION: ${{ needs.validate-release.outputs.version }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: node .github/scripts/verify-worker-release.mjs
 
       - name: Publish the verified GitHub Release
-        id: finalize
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
-          gh release edit "$TAG_NAME" --draft=false
-          test "$(gh release view "$TAG_NAME" --json isDraft --jq .isDraft)" = "false"
+          $ErrorActionPreference = 'Stop'
+          gh release edit $env:TAG_NAME --draft=false
+          $isDraft = gh release view $env:TAG_NAME --json isDraft --jq .isDraft
+          if ($isDraft -cne 'false') {
+            throw "Release $env:TAG_NAME was not finalized."
+          }
 
       - name: Roll back latest.json after verification or finalization failure
         if: ${{ failure() && hashFiles('.release-state/previous-latest.json') != '' }}
         env:
-          R2_ACCOUNT_ID: 53d21f8ee647e4b1877d5147e1424636
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_ASSETS_DIR: release-assets
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_ASSETS_DIR: client/release-publish
           GITHUB_RELEASE_JSON: github-release.json
           PREVIOUS_LATEST_PATH: .release-state/previous-latest.json
           R2_RELEASE_ACTION: rollback
@@ -338,12 +276,29 @@ jobs:
         if: ${{ success() }}
         continue-on-error: true
         env:
-          R2_ACCOUNT_ID: 53d21f8ee647e4b1877d5147e1424636
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          TAG_NAME: ${{ needs.validate-release.outputs.tag_name }}
-          RELEASE_ASSETS_DIR: release-assets
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RELEASE_ASSETS_DIR: client/release-publish
           GITHUB_RELEASE_JSON: github-release.json
           PREVIOUS_LATEST_PATH: .release-state/previous-latest.json
           R2_RELEASE_ACTION: cleanup
         run: node .github/scripts/publish-r2-release.mjs
+
+      - name: Clean transient release files
+        if: ${{ always() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $paths = @(
+            'client/release-publish',
+            'client/release',
+            '.release-state',
+            'github-release.json',
+            'release_notes.md'
+          )
+          foreach ($target in $paths) {
+            if (Test-Path -LiteralPath $target) {
+              Remove-Item -LiteralPath $target -Recurse -Force
+            }
+          }
