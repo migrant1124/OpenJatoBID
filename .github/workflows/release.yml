@@ -38,13 +38,13 @@ jobs:
       CONFIRM_RELEASE: ${{ inputs.confirm_release }}
     steps:
       - name: Checkout exact tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag_name }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 26
 
