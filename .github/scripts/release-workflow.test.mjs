@@ -7,7 +7,8 @@ import { parseForbiddenTerms, validateReleaseNotesCompliance } from './create-re
 const root = path.resolve(import.meta.dirname, '..', '..');
 
 async function readWorkflow() {
-  return fs.readFile(path.join(root, '.github/workflows/release.yml'), 'utf8');
+  const workflow = await fs.readFile(path.join(root, '.github/workflows/release.yml'), 'utf8');
+  return workflow.replace(/\r\n/g, '\n');
 }
 
 test('client release is one manual self-hosted Windows job', async () => {
