@@ -128,6 +128,13 @@ jobs:
         working-directory: client
         run: npm run postinstall
 
+      - name: Ensure Electron binary is installed
+        working-directory: client
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
+          node node_modules/electron/install.js
+
       - name: Smoke test Electron native dependencies
         working-directory: client
         run: npm run smoke:electron-native
