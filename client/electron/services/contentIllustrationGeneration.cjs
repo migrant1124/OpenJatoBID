@@ -120,7 +120,7 @@ function buildHtmlImagePrompt(execution) {
   return `阅读并理解以下内容，用html绘制一张${execution.planItem.image_type}。
 最终图题：${title}
 必须围绕最终图题限定的对象、范围和关系重点设计图形，不要生成泛化的章节概览。
-不要有太多文字描述，专业商务风格。这是一个类图片的html，所以注意仔细检查显示效果、文字换行、拥挤等问题。宽度固定${HTML_DESIGN_WIDTH}px，高度自适应。
+不要有太多文字描述，专业商务风格。这是一个类图片的html，所以注意仔细检查显示效果、文字换行、拥挤等问题。文字不得旋转、倒置、镜像或缩放变形，不得相互重叠、被前景元素遮挡或被容器裁切。不要使用固定或粘性文字布局，文字容器应随内容增长。宽度固定${HTML_DESIGN_WIDTH}px，高度自适应，不依赖在线字体或外部资源。
 生成包含 html、head、body 的完整 HTML 文档，不依赖本地文件。参考内容如下：
 
 ${execution.reference}`;
@@ -135,10 +135,11 @@ function buildHtmlAgentPrompt(execution) {
 要求：
 1. 必须围绕最终图题限定的对象、范围和关系重点设计图形，不要生成泛化的章节概览。
 2. 不要有太多文字描述，使用专业商务风格。
-3. 这是一个类图片的 HTML，必须仔细检查显示效果、文字换行和内容拥挤问题。
-4. 页面宽度固定为 ${HTML_DESIGN_WIDTH}px，高度自适应。
-5. 生成完整 HTML 文档，包含 html、head、body，不依赖本地文件。
-6. 只创建 illustration.html，不要修改 reference.md，不要创建其他结果文件。`;
+3. 这是一个类图片的 HTML，必须仔细检查显示效果、文字换行和内容拥挤问题；文字不得旋转、倒置、镜像或缩放变形，不得相互重叠、被前景元素遮挡或被容器裁切。
+4. 不要使用固定或粘性文字布局，文字容器应随内容增长；不依赖在线字体或外部资源。
+5. 页面宽度固定为 ${HTML_DESIGN_WIDTH}px，高度自适应。
+6. 生成完整 HTML 文档，包含 html、head、body，不依赖本地文件。
+7. 只创建 illustration.html，不要修改 reference.md，不要创建其他结果文件。`;
 }
 
 function buildMermaidGenerationMessages(execution) {
@@ -313,7 +314,12 @@ async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pau
     if (!rendered?.buffer?.length || rendered.buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
       throw new Error('HTML 本地转图片失败：未生成有效 PNG');
     }
-    return { buffer: rendered.buffer, width: rendered.width, height: rendered.height };
+    return {
+      buffer: rendered.buffer,
+      width: rendered.width,
+      height: rendered.height,
+      layout_issues: Array.isArray(rendered.layout_issues) ? rendered.layout_issues : [],
+    };
   }, {
     onRetry,
     shouldStop: pauseControl.isPauseRequested,
@@ -325,14 +331,16 @@ async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pau
 function getHtmlLayoutIssues(screenshot) {
   const width = Number(screenshot?.width) || 0;
   const height = Number(screenshot?.height) || 0;
-  const issues = [];
+  const issues = Array.isArray(screenshot?.layout_issues)
+    ? screenshot.layout_issues.map((issue) => String(issue || '').trim()).filter(Boolean)
+    : [];
   if (width > HTML_DESIGN_WIDTH + 4) issues.push(`出现横向溢出：实际宽度 ${width}px，设计宽度 ${HTML_DESIGN_WIDTH}px`);
   if (height <= 0) issues.push('截图高度无效');
-  return issues;
+  return [...new Set(issues)];
 }
 
 function buildHtmlLayoutRepairPrompt(execution, html, issues, attempt) {
-  return `请修复以下用于投标文件的 HTML 图片布局。\n最终图题：${getPlannedTitle(execution)}\n修复轮次：${attempt}/${HTML_LAYOUT_REPAIR_ATTEMPTS}\n渲染诊断：${issues.join('；')}\n\n要求：保持图题和正文事实不变；宽度固定 ${HTML_DESIGN_WIDTH}px；禁止横向溢出、文字拥挤和截断；保留专业商务风格；输出完整 HTML 文档且不依赖网络或本地文件。\n\n当前 HTML：\n${String(html || '').slice(0, 60000)}`;
+  return `请修复以下用于投标文件的 HTML 图片布局。\n最终图题：${getPlannedTitle(execution)}\n修复轮次：${attempt}/${HTML_LAYOUT_REPAIR_ATTEMPTS}\n渲染诊断：${issues.join('；')}\n\n要求：保持图题和正文事实不变；宽度固定 ${HTML_DESIGN_WIDTH}px；禁止横向溢出、文字拥挤、重叠、遮挡和截断；文字不得旋转、倒置、镜像或缩放变形；不要使用固定或粘性文字布局，文字容器应随内容增长；保留专业商务风格；输出完整 HTML 文档且不依赖网络、本地文件、在线字体或外部资源。\n\n当前 HTML：\n${String(html || '').slice(0, 60000)}`;
 }
 
 async function repairHtmlLayout({ aiService, execution, html, issues, attempt, mode, runAgentHtml }) {
@@ -446,7 +454,7 @@ async function generateHtmlIllustration({ aiService, execution, plan, workspaceS
     attempts: screenshot.attempts + layoutRepairAttempts,
     visual_qa: {
       status: 'needs-manual-review',
-      reason: '已完成完整 HTML、PNG 和横向溢出检查；当前本地渲染器不提供文字截断与重叠识别，请人工视觉核对。',
+      reason: '已完成完整 HTML、PNG、画布溢出、文字变形、文字重叠、前景遮挡和裁切检查；请人工核对图题与正文事实一致性。',
       width: screenshot.width,
       height: screenshot.height,
       layout_repair_attempts: layoutRepairAttempts,

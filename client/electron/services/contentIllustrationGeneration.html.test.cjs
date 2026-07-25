@@ -65,6 +65,7 @@ test('normal HTML illustration follows the upstream prompt, persists source, ren
 
   assert.match(prompt, /用html绘制一张系统架构与拓扑图/);
   assert.match(prompt, /完整 HTML/);
+  assert.match(prompt, /文字不得旋转、倒置、镜像或缩放变形/);
   assert.match(renderedHtml, /<section>架构图<\/section>/);
   assert.deepEqual(sourceEvents, [{ mode: 'normal', source_path: 'illustrations/revision/html/html-1.html' }]);
   assert.deepEqual(sequence, ['source-saved', 'render']);
@@ -197,4 +198,64 @@ test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => 
   assert.equal(prompts.length, 2);
   assert.match(prompts[1], /横向溢出/);
   assert.equal(result.visual_qa.layout_repair_attempts, 1);
+});
+
+test('HTML 文字变形诊断会反馈给布局修复，并在修复后保存 PNG', async () => {
+  const prompts = [];
+  let renderCount = 0;
+  const result = await generateHtmlIllustration({
+    aiService: {
+      chat: async ({ messages }) => {
+        prompts.push(messages[0].content);
+        return '<!doctype html><html><head></head><body>文字修复图</body></html>';
+      },
+    },
+    execution: createExecution(),
+    plan: { revision: 'revision' },
+    workspaceStore: createWorkspaceStore(),
+    localImageRenderService: {
+      renderHtmlToPng: async () => {
+        renderCount += 1;
+        return {
+          buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
+          width: 1240,
+          height: 600,
+          layout_issues: renderCount === 1 ? ['文字存在旋转、倒置、镜像或缩放变形：div.label'] : [],
+        };
+      },
+    },
+    runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
+  });
+
+  assert.equal(renderCount, 2);
+  assert.match(prompts[1], /文字存在旋转、倒置、镜像或缩放变形/);
+  assert.equal(result.visual_qa.layout_repair_attempts, 1);
+});
+
+test('HTML 布局诊断持续失败时保留源码且不保存 PNG', async () => {
+  let pngSaved = false;
+  let renderCount = 0;
+  const workspaceStore = createWorkspaceStore({
+    saveIllustrationPng: () => { pngSaved = true; throw new Error('不得保存 PNG'); },
+  });
+  await assert.rejects(async () => generateHtmlIllustration({
+    aiService: { chat: async () => '<!doctype html><html><head></head><body>待修复图</body></html>' },
+    execution: createExecution(),
+    plan: { revision: 'revision' },
+    workspaceStore,
+    localImageRenderService: {
+      renderHtmlToPng: async () => {
+        renderCount += 1;
+        return {
+          buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
+          width: 1240,
+          height: 600,
+          layout_issues: ['文字被前景元素遮挡：div.card 被 div.core 覆盖'],
+        };
+      },
+    },
+    runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
+  }), /HTML 图片布局质检未通过：文字被前景元素遮挡/);
+  assert.equal(renderCount, 3);
+  assert.equal(pngSaved, false);
 });
