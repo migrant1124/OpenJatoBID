@@ -30,3 +30,12 @@ test('缺少显式 body 的完整 HTML 仍会在运行时把已有正文纳入�
   assert.match(document, /document\.createElement\('main'\)/);
   assert.doesNotMatch(document, /<main id="jato-capture-root"><\/main>/);
 });
+
+test('HTML 布局探针覆盖文字变形、裁切、遮挡和重叠，不把竖排文字列为问题', () => {
+  const probe = __test__.buildHtmlLayoutProbeScript();
+  assert.match(probe, /文字存在旋转、倒置、镜像或缩放变形/);
+  assert.match(probe, /文字被容器裁切/);
+  assert.match(probe, /文字被前景元素遮挡/);
+  assert.match(probe, /文字内容发生重叠/);
+  assert.doesNotMatch(probe, /writing-mode/);
+});
