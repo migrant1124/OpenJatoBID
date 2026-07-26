@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const DEFAULT_CONCURRENCY = 5;
 const MIN_CONCURRENCY = 1;
@@ -32,6 +33,10 @@ function sanitizeLegacyHtml(value) {
     .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/\s(?:src|href)\s*=\s*(?:"https?:[^"]*"|'https?:[^']*'|https?:[^\s>]+)/gi, '')
     .replace(/url\s*\(\s*['"]?https?:[^)]*\)/gi, 'none');
+}
+
+function localFileUrl(filePath) {
+  return pathToFileURL(filePath).toString();
 }
 
 function createPool(getLimit) {
@@ -390,7 +395,7 @@ function createLocalImageRenderService(options = {}) {
     fs.mkdirSync(tempDir, { recursive: true });
     const tempFile = path.join(tempDir, `${taskId}.html`);
     fs.writeFileSync(tempFile, document, 'utf8');
-    const documentUrl = pathToFileURL(tempFile).toString();
+    const documentUrl = localFileUrl(tempFile);
     const allowedUrls = new Set([documentUrl, ...(options.allowedUrls || [])]);
     const partition = `temp:jato-image-render-${taskId}`;
     const initialWidth = options.initialWidth || HTML_DESIGN_WIDTH;
@@ -495,5 +500,5 @@ module.exports = {
   initLocalImageRenderService,
   normalizeConcurrency,
   sanitizeLegacyHtml,
-  __test__: { buildGeneratedHtmlDocument, buildHtmlLayoutProbeScript, buildRenderWindowOptions, buildStaticDocument, createPool },
+  __test__: { buildGeneratedHtmlDocument, buildHtmlLayoutProbeScript, buildRenderWindowOptions, buildStaticDocument, createPool, localFileUrl },
 };

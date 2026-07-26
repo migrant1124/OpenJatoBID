@@ -39,3 +39,8 @@ test('HTML 布局探针覆盖文字变形、裁切、遮挡和重叠，不把竖
   assert.match(probe, /文字内容发生重叠/);
   assert.doesNotMatch(probe, /writing-mode/);
 });
+
+test('本地 HTML 临时文件使用 file URL 加载，避免渲染阶段缺少路径转换函数', () => {
+  const url = __test__.localFileUrl('C:\\Temp\\jato-local-image-render\\render-test.html');
+  assert.equal(url, 'file:///C:/Temp/jato-local-image-render/render-test.html');
+});

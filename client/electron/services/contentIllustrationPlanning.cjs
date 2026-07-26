@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 
-const ILLUSTRATION_PLAN_VERSION = 6;
+const ILLUSTRATION_PLAN_VERSION = 7;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai'];
 const VISUAL_STYLES = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
@@ -516,6 +516,56 @@ function visualRoleKey(value) {
   return normalizedTitleKey(value);
 }
 
+function visualRhythmDiagnostic(code, message, sectionIds) {
+  return { code, message, section_ids: sectionIds };
+}
+
+// 图片编排只给出节奏建议，绝不替用户自动增删、移动或选择图片。
+function buildVisualRhythmDiagnostics(items, context) {
+  const selected = Array.isArray(items) ? items : [];
+  const selectedSectionIds = new Set(selected.flatMap((item) => item.section_ids || []));
+  const eligibleSections = [...context.sectionMap.values()].filter((section) => section.eligible);
+  const diagnostics = [];
+  const highValueWithoutImage = eligibleSections
+    .filter((section) => (section.scoring_point_ids.length || section.value_anchor_ids.length) && !selectedSectionIds.has(section.id))
+    .map((section) => section.id);
+  if (highValueWithoutImage.length) {
+    diagnostics.push(visualRhythmDiagnostic('high-value-without-image', `有 ${highValueWithoutImage.length} 个评分或价值重点章节未安排配图，可检查是否需要补充结构化展示。`, highValueWithoutImage));
+  }
+  const longTextWithoutImage = eligibleSections
+    .filter((section) => section.blocks.reduce((total, block) => total + String(block.content || '').length, 0) >= 1600 && !selectedSectionIds.has(section.id))
+    .map((section) => section.id);
+  if (longTextWithoutImage.length) {
+    diagnostics.push(visualRhythmDiagnostic('long-text-without-image', `有 ${longTextWithoutImage.length} 个长篇纯文字章节未安排配图，可按内容价值考虑流程、矩阵或场景展示。`, longTextWithoutImage));
+  }
+  const repeatedRoles = selected.reduce((groups, item) => {
+    const key = visualRoleKey(item.visual_role);
+    const list = groups.get(key) || [];
+    list.push(item);
+    groups.set(key, list);
+    return groups;
+  }, new Map());
+  const repeatedRoleItemIds = [...repeatedRoles.values()]
+    .filter((group) => group.length >= 3)
+    .flatMap((group) => group.map((item) => item.item_id));
+  if (repeatedRoleItemIds.length) {
+    diagnostics.push(visualRhythmDiagnostic('repeated-visual-role', `有 ${repeatedRoleItemIds.length} 张图片使用相近视觉作用，请确认跨章节展示是否仍有必要。`, repeatedRoleItemIds));
+  }
+  const opening = eligibleSections.slice(0, Math.min(2, eligibleSections.length)).map((section) => section.id);
+  const implementation = eligibleSections.filter((section) => /实施|执行|技术|服务方案/u.test(section.title)).map((section) => section.id);
+  const assurance = eligibleSections.filter((section) => /保障|质量|安全|承诺|风险/u.test(section.title)).map((section) => section.id);
+  for (const [code, label, sectionIds] of [
+    ['opening-coverage', '开篇', opening],
+    ['implementation-coverage', '核心实施', implementation],
+    ['assurance-coverage', '保障环节', assurance],
+  ]) {
+    if (sectionIds.length && !sectionIds.some((id) => selectedSectionIds.has(id))) {
+      diagnostics.push(visualRhythmDiagnostic(code, `${label}尚无配图覆盖，可结合内容价值判断是否需要补充。`, sectionIds));
+    }
+  }
+  return diagnostics;
+}
+
 // 解析、严格校验并根据全文上限、同节安全上限和信息角色去重选择图片计划。
 function resolveIllustrationPlan(content, context) {
   const parsed = typeof content === 'string' ? extractJsonObject(content) : content;
@@ -589,19 +639,22 @@ function resolveIllustrationPlan(content, context) {
     ...(aspect_ratio ? { aspect_ratio } : {}),
     ...(creative_brief ? { creative_brief } : {}),
   }));
-  const revision = stableHash(planItems).slice(0, 24);
+  const planItemsWithIds = planItems.map((item) => ({
+    item_id: stableHash(item).slice(0, 24),
+    ...item,
+    selected: true,
+    generation: { status: 'pending' },
+  }));
+  const visualRhythmDiagnostics = buildVisualRhythmDiagnostics(planItemsWithIds, context);
+  const revision = stableHash({ items: planItems, visualRhythmDiagnostics }).slice(0, 24);
   return {
     plan: {
       plan_version: ILLUSTRATION_PLAN_VERSION,
       revision,
       confirmation_status: 'pending',
       recommended_visual_style: VISUAL_STYLES.includes(String(parsed.visual_style || '').trim()) ? String(parsed.visual_style).trim() : undefined,
-      items: planItems.map((item) => ({
-        item_id: stableHash(item).slice(0, 24),
-        ...item,
-        selected: true,
-        generation: { status: 'pending' },
-      })),
+      visual_rhythm_diagnostics: visualRhythmDiagnostics,
+      items: planItemsWithIds,
       updated_at: new Date().toISOString(),
     },
     stats: { candidate: candidateStats, selected: selectedStats },
@@ -613,6 +666,7 @@ module.exports = {
   VISUAL_STYLES,
   buildIllustrationPlanningContext,
   buildIllustrationPlanningPrompt,
+  buildVisualRhythmDiagnostics,
   parseHtmlImageTypes,
   resolveIllustrationPlan,
 };

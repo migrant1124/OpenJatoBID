@@ -387,6 +387,12 @@ export interface ContentIllustrationPlanItem {
   };
 }
 
+export interface ContentIllustrationVisualRhythmDiagnostic {
+  code: string;
+  message: string;
+  section_ids: string[];
+}
+
 export interface ContentIllustrationPlanState {
   plan_version: number;
   revision: string;
@@ -394,6 +400,7 @@ export interface ContentIllustrationPlanState {
   confirmation_status?: 'pending' | 'confirmed';
   recommended_visual_style?: string;
   visual_style?: string;
+  visual_rhythm_diagnostics?: ContentIllustrationVisualRhythmDiagnostic[];
   updated_at?: string;
 }
 

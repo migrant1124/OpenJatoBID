@@ -1552,6 +1552,10 @@ function ContentEditPage({
                 </select>
               </label>
             </div>
+            {illustrationPlanDraft?.visual_rhythm_diagnostics?.length ? <div className="illustration-rhythm-diagnostics" role="status">
+              <strong>视觉节奏建议</strong>
+              <ul>{illustrationPlanDraft.visual_rhythm_diagnostics.map((diagnostic) => <li key={diagnostic.code}>{diagnostic.message}</li>)}</ul>
+            </div> : null}
             <div className="illustration-confirmation-table">
               <div className="illustration-confirmation-row illustration-confirmation-head"><span>生成</span><span>章节与锚点</span><span>图片标题</span><span>类型</span><span>图表类型与视觉作用</span></div>
               {illustrationPlanDraft?.items.map((item) => (

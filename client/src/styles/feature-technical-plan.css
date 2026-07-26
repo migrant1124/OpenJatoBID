@@ -2159,7 +2159,7 @@
 
 .content-generation-config-card.illustration-confirmation-card {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   width: min(1080px, calc(100vw - 48px));
   height: min(820px, calc(100vh - 48px));
   max-height: min(820px, calc(100vh - 48px));
@@ -2178,6 +2178,10 @@
 
 .illustration-confirmation-summary b { color: var(--yb-primary); }
 .illustration-confirmation-summary label { display: flex; gap: 8px; align-items: center; margin-left: auto; color: var(--yb-text); font-weight: 700; }
+.illustration-rhythm-diagnostics { padding: 10px 14px; border: 1px solid #dbe7f8; border-radius: 10px; background: #f7faff; color: var(--yb-text); font-size: 13px; }
+.illustration-rhythm-diagnostics strong { color: var(--yb-primary); }
+.illustration-rhythm-diagnostics ul { margin: 6px 0 0; padding-left: 18px; }
+.illustration-rhythm-diagnostics li + li { margin-top: 4px; }
 .illustration-confirmation-summary select,
 .illustration-confirmation-row input,
 .illustration-confirmation-row select { min-width: 0; padding: 8px 10px; font: inherit; border: 1px solid var(--yb-border); border-radius: 8px; background: #fff; }

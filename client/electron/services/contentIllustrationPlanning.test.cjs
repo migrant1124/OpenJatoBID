@@ -51,3 +51,49 @@ test('未保存配置使用 HTML 30 与可用 AI 20 的上限', () => {
   assert.equal(context.config.ai.limit, 20);
   assert.equal(context.config.html.allowed_types.length, 17);
 });
+
+test('视觉节奏诊断只给出建议，不改变已选择图片计划', () => {
+  const longContent = '实施说明。'.repeat(600);
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [
+      { id: '1.1', title: '项目概述', content: '项目概述。' },
+      { id: '2.1', title: '实施方案', content: longContent },
+      { id: '3.1', title: '质量保障', content: '质量保障。' },
+    ] },
+    sections: {
+      '1.1': { status: 'success', content: '项目概述。' },
+      '2.1': { status: 'success', content: longContent },
+      '3.1': { status: 'success', content: '质量保障。' },
+    },
+    options: { useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+    contentPlans: {
+      '2.1': { scoring_point_ids: ['R1'] },
+      '3.1': { value_anchor_ids: ['A1'] },
+    },
+  });
+  const result = resolveIllustrationPlan({ items: [candidate({ section_ids: ['1.1'] })] }, context);
+  assert.equal(result.plan.items.length, 1);
+  assert.equal(result.plan.items[0].section_ids[0], '1.1');
+  assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'high-value-without-image'));
+  assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'long-text-without-image'));
+  assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'implementation-coverage'));
+});
+
+test('人工编辑章节不计入图片覆盖和视觉节奏诊断', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [
+      { id: '1.1', title: '人工编制章节', manual_input_required: true, content: '人工正文。'.repeat(500) },
+      { id: '1.2', title: '实施方案', content: 'AI 正文。' },
+    ] },
+    sections: {
+      '1.1': { status: 'success', content: '人工正文。'.repeat(500) },
+      '1.2': { status: 'success', content: 'AI 正文。' },
+    },
+    options: { useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+  });
+  assert.deepEqual(context.eligibleSectionIds, ['1.2']);
+  const result = resolveIllustrationPlan({ items: [candidate({ section_ids: ['1.2'] })] }, context);
+  assert.ok(result.plan.visual_rhythm_diagnostics.every((item) => !item.section_ids.includes('1.1')));
+});
