@@ -26,7 +26,6 @@ interface ConfigUsagePayload {
   bid_analysis_mode?: string;
   outline_mode?: string;
   table_requirement?: string;
-  use_mermaid_images?: boolean;
   use_ai_images?: boolean;
   content_concurrency?: number;
   content_generation_action?: string;
@@ -44,7 +43,6 @@ const configUsageFields: Array<[keyof ConfigUsagePayload, string]> = [
   ['bid_analysis_mode', 'bidAnalysisModes'],
   ['outline_mode', 'outlineModes'],
   ['table_requirement', 'tableRequirements'],
-  ['use_mermaid_images', 'useMermaidImages'],
   ['use_ai_images', 'useAiImages'],
   ['content_concurrency', 'contentConcurrencies'],
   ['content_generation_action', 'contentGenerationActions'],
@@ -175,7 +173,6 @@ function buildBaseConfigUsage(config?: ClientConfig | null): ConfigUsagePayload 
 function normalizeUsagePayload(payload: ConfigUsagePayload) {
   return {
     ...payload,
-    use_mermaid_images: booleanText(payload.use_mermaid_images),
     use_ai_images: booleanText(payload.use_ai_images),
     enable_consistency_audit: booleanText(payload.enable_consistency_audit),
     enable_original_plan_coverage_audit: booleanText(payload.enable_original_plan_coverage_audit),

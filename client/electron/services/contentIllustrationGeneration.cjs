@@ -1,17 +1,11 @@
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const { runWithRemoteImageRetry } = require('../utils/remoteImageRetry.cjs');
-const {
-  assertSupportedMermaidDiagramType,
-  assertSupportedMermaidSyntax,
-  getMermaidDiagramTypeLabel,
-} = require('../utils/mermaidPolicy.cjs');
 const { buildChartDslPrompt } = require('./chartDslPrompt.cjs');
 const { assertValidChartDsl } = require('./chartDslValidator.cjs');
 
 const HTML_AGENT_THRESHOLD_CHARS = 50000;
 const HTML_DESIGN_WIDTH = 1240;
-const MERMAID_REPAIR_ATTEMPTS = 3;
 const HTML_LAYOUT_REPAIR_ATTEMPTS = 2;
 const GENERATED_ILLUSTRATION_PATTERN = /<!-- yibiao-illustration:start\b[^>]*-->[\s\S]*?<!-- yibiao-illustration:end -->/gi;
 
@@ -22,10 +16,6 @@ function singleLine(value) {
 function compactError(value, maxLength = 220) {
   const text = singleLine(value);
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
-}
-
-function normalizeMermaidCode(value) {
-  return String(value || '').replace(/^```mermaid\s*/i, '').replace(/```$/i, '').trim();
 }
 
 function normalizeHtmlCode(value) {
@@ -142,129 +132,6 @@ function buildHtmlAgentPrompt(execution) {
 7. 只创建 illustration.html，不要修改 reference.md，不要创建其他结果文件。`;
 }
 
-function buildMermaidGenerationMessages(execution) {
-  const type = assertSupportedMermaidDiagramType(execution.planItem.image_type);
-  const typeLabel = getMermaidDiagramTypeLabel(type);
-  const title = getPlannedTitle(execution);
-  return [
-    {
-      role: 'system',
-      content: `你是投标技术方案 Mermaid 图生成助手。请根据最终正文生成一张${typeLabel}。
-
-要求：
-1. 只返回 JSON，不要输出解释、总结或 Markdown。
-2. 只能使用 flowchart TD/TB/LR/RL/BT 语法，不得使用 graph 别名或其他 Mermaid 语法族。
-3. 中文节点标签必须写成 A["中文标签"]。
-4. 不使用 & 多节点连接简写，不使用分号，每行只写一个 Mermaid 语句。
-5. 必须围绕指定图题“${title}”限定的对象、范围和关系重点组织节点，不要生成泛化的章节概览。
-6. 图表必须忠实于正文，不编造正文中没有的流程、层级、角色或职责。
-7. 控制节点数量和文字长度，保证浏览器预览和 Word 导出清晰。
-8. code 不包含 Markdown 代码围栏。`,
-    },
-    {
-      role: 'user',
-      content: `最终图题：${title}\n\n参考正文：\n${execution.reference}\n\n请返回：\n{\n  "code": "flowchart TD..."\n}`,
-    },
-  ];
-}
-
-function normalizeMermaidGenerationResult(value) {
-  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
-  return {
-    code: normalizeMermaidCode(source.code || source.mermaid_code || source.mermaid?.code || ''),
-  };
-}
-
-function validateMermaidGenerationResult(result) {
-  if (!result?.code) throw new Error('Mermaid 生成结果缺少 code');
-  if (/```/.test(result.code)) throw new Error('Mermaid 代码不能包含 Markdown 代码围栏');
-  assertSupportedMermaidSyntax(result.code);
-}
-
-function assertMermaidPreviewCompatible(code) {
-  const normalized = normalizeMermaidCode(code);
-  if (!normalized) throw new Error('Mermaid 代码为空');
-  assertSupportedMermaidSyntax(normalized);
-  if (/[;；]/.test(normalized)) throw new Error('Mermaid 代码不能使用分号');
-  if (/\s&\s/.test(normalized) && /-->|---|==>/.test(normalized)) throw new Error('Mermaid 代码不能使用多节点 & 连接简写');
-  if (/\[[^\]\n"']*[\u3400-\u9fff][^\]\n"']*\]/u.test(normalized)) throw new Error('Mermaid 中文节点标签必须使用双引号');
-  if (/^\s*[\u3400-\u9fff][\w\u3400-\u9fff-]*\s*(?:-->|---|==>)/mu.test(normalized)) throw new Error('Mermaid 节点 ID 不能直接使用中文');
-}
-
-async function validateMermaidRender(code, localImageRenderService) {
-  const normalized = normalizeMermaidCode(code);
-  assertMermaidPreviewCompatible(normalized);
-  if (!localImageRenderService?.renderMermaidToPng) throw new Error('本地 Mermaid 转图组件尚未初始化');
-  await localImageRenderService.renderMermaidToPng(normalized, { timeoutMs: 30000 });
-}
-
-function buildMermaidRepairMessages(execution, mermaidPlan, errorMessage, attempt) {
-  const typeLabel = getMermaidDiagramTypeLabel(execution.planItem.image_type);
-  const title = getPlannedTitle(execution);
-  return [
-    {
-      role: 'system',
-      content: `你是 Mermaid 图代码修复助手。请根据渲染错误和最终正文修复现有 Mermaid 代码。
-
-要求：
-1. 只返回 JSON，不要输出解释、总结或 Markdown。
-2. 保持“${typeLabel}”业务类型，忠实于参考正文。
-3. 必须使用 flowchart TD/TB/LR/RL/BT 语法。
-4. 中文节点标签必须使用双引号，不使用 & 简写和分号。
-5. code 不包含 Markdown 代码围栏。`,
-    },
-    {
-      role: 'user',
-      content: `参考正文：\n${execution.reference}\n\n最终图题：${title}\n修复轮次：${attempt}/${MERMAID_REPAIR_ATTEMPTS}\n渲染错误：${errorMessage}\n\n待修复代码：\n${mermaidPlan.code}\n\n请返回：\n{ "code": "修复后的 Mermaid 代码" }`,
-    },
-  ];
-}
-
-function normalizeMermaidRepairResult(value) {
-  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
-  return { code: normalizeMermaidCode(source.code || source.fixed_code || source.mermaid_code || '') };
-}
-
-function validateMermaidRepairResult(result) {
-  if (!result?.code || /```/.test(result.code)) throw new Error('Mermaid 修复结果缺少有效 code');
-  assertSupportedMermaidSyntax(result.code);
-}
-
-async function prepareRenderableMermaid({ aiService, execution, mermaidPlan, localImageRenderService, isPauseLikeError }) {
-  const title = getPlannedTitle(execution);
-  let currentPlan = { code: normalizeMermaidCode(mermaidPlan.code) };
-  let lastError = null;
-  try {
-    assertSupportedMermaidDiagramType(execution.planItem.image_type);
-    await validateMermaidRender(currentPlan.code, localImageRenderService);
-    return { code: currentPlan.code, attempts: 0 };
-  } catch (error) {
-    lastError = error;
-  }
-
-  for (let attempt = 1; attempt <= MERMAID_REPAIR_ATTEMPTS; attempt += 1) {
-    try {
-      const repaired = await aiService.collectJsonResponse({
-        messages: buildMermaidRepairMessages(execution, currentPlan, compactError(lastError?.message || lastError), attempt),
-        temperature: 0.1,
-        logTitle: `Mermaid配图修复-${execution.planItem.item_id}-${title}`,
-        progressLabel: 'Mermaid 配图修复',
-        failureMessage: '模型返回的 Mermaid 修复结果格式无效',
-        normalizer: normalizeMermaidRepairResult,
-        validator: validateMermaidRepairResult,
-        max_retries: 1,
-      });
-      currentPlan = { ...currentPlan, code: repaired.code };
-      await validateMermaidRender(currentPlan.code, localImageRenderService);
-      return { code: currentPlan.code, attempts: attempt };
-    } catch (error) {
-      if (isPauseLikeError?.(error)) throw error;
-      lastError = error;
-    }
-  }
-  throw new Error(compactError(lastError?.message || lastError || 'Mermaid 渲染失败'));
-}
-
 // 使用生图模型基于最终正文生成 AI 图片。
 async function generateAiIllustration(aiService, execution) {
   const title = getPlannedTitle(execution);
@@ -283,21 +150,6 @@ async function generateAiIllustration(aiService, execution) {
       reason: '当前图片模型未接入视觉审核能力，已完成生成文件状态检查，请人工核对图题、元素和品牌资产。',
     },
   };
-}
-
-// 使用文本模型基于最终正文生成并校验 Mermaid。
-async function generateMermaidIllustration(aiService, execution, localImageRenderService, isPauseLikeError) {
-  const generated = await aiService.collectJsonResponse({
-    messages: buildMermaidGenerationMessages(execution),
-    temperature: 0.2,
-    logTitle: `Mermaid配图-${execution.planItem.item_id}-${getPlannedTitle(execution)}`,
-    progressLabel: 'Mermaid 配图生成',
-    failureMessage: '模型返回的 Mermaid 配图格式无效',
-    normalizer: normalizeMermaidGenerationResult,
-    validator: validateMermaidGenerationResult,
-  });
-  const rendered = await prepareRenderableMermaid({ aiService, execution, mermaidPlan: generated, localImageRenderService, isPauseLikeError });
-  return { ...rendered, visual_qa: { status: 'rendered', reason: '已通过 Mermaid 语法白名单和本地渲染检查。' } };
 }
 
 async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pauseControl = {}) {
@@ -504,12 +356,7 @@ function buildGeneratedIllustrationMarkdown(planItem) {
   const generation = planItem.generation || {};
   const caption = singleLine(planItem.title);
   if (!caption) throw new Error(`图片计划缺少 title：${planItem.item_id || 'unknown'}`);
-  let body = '';
-  if (planItem.kind === 'mermaid' && generation.code) {
-    body = `\`\`\`mermaid\n${normalizeMermaidCode(generation.code)}\n\`\`\`\n\n*图：${caption}*`;
-  } else if (generation.asset_url) {
-    body = `![${caption}](${generation.asset_url})\n\n*图：${caption}*`;
-  }
+  const body = generation.asset_url ? `![${caption}](${generation.asset_url})\n\n*图：${caption}*` : '';
   if (!body) return '';
   return `<!-- yibiao-illustration:start id="${planItem.item_id}" -->\n${buildIllustrationLead(planItem.purpose)}\n\n${body}\n<!-- yibiao-illustration:end -->`;
 }
@@ -622,7 +469,6 @@ module.exports = {
   generateAiIllustration,
   generateChartIllustration,
   generateHtmlIllustration,
-  generateMermaidIllustration,
   normalizeHtmlCode,
   stripGeneratedIllustrationsFromDocument,
   validateHtmlCode,

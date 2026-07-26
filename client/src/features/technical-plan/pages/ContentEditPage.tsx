@@ -90,11 +90,10 @@ const originalPlanCoverageRepairModeOptions: Array<{ value: OriginalPlanCoverage
 const illustrationKindLabels: Record<ContentIllustrationKind, string> = {
   chart: '历史结构化图表',
   html: 'HTML 图片',
-  mermaid: 'Mermaid 图片',
   ai: 'AI 图片',
 };
 
-const illustrationKinds: ContentIllustrationKind[] = ['html', 'mermaid', 'ai'];
+const illustrationKinds: ContentIllustrationKind[] = ['html', 'ai'];
 
 const imageGenerationExamples: Record<'ai' | 'html', { src: string; alt: string }> = {
   ai: { src: aiImageExampleUrl, alt: 'AI 生图示例' },
@@ -148,7 +147,7 @@ const htmlImageTypeOptions = [
 ];
 
 const DEFAULT_HTML_IMAGE_TYPES = htmlImageTypeOptions.map((option) => option.value).join(', ');
-const IMAGE_HARD_LIMITS = { ai: 20, mermaid: 5, html: 30 } as const;
+const IMAGE_HARD_LIMITS = { ai: 20, html: 30 } as const;
 
 function resolveSelectedHtmlImageTypes(value: string | undefined) {
   const selected = new Set(String(value || '').split(/[\n,，、;；]+/).map((item) => item.trim()).filter(Boolean));
@@ -161,8 +160,6 @@ function resolveSelectedHtmlImageTypes(value: string | undefined) {
 const defaultContentGenerationOptions: ContentGenerationOptions = {
   useAiImages: false,
   maxAiImages: IMAGE_HARD_LIMITS.ai,
-  useMermaidImages: false,
-  maxMermaidImages: IMAGE_HARD_LIMITS.mermaid,
   useHtmlImages: true,
   maxHtmlImages: IMAGE_HARD_LIMITS.html,
   htmlImageTypes: DEFAULT_HTML_IMAGE_TYPES,
@@ -196,7 +193,6 @@ function buildDefaultGenerationOptions(imageModelAvailable: boolean, _leafCount:
 function normalizeGenerationOptions(options: ContentGenerationOptions | DraftContentGenerationOptions | undefined, imageModelAvailable: boolean, leafCount: number, isExpansionWorkflow = false): ContentGenerationOptions {
   const fallback = buildDefaultGenerationOptions(imageModelAvailable, leafCount);
   const requestedMaxAiImages = Number(options?.maxAiImages ?? fallback.maxAiImages);
-  const requestedMaxMermaidImages = Number(options?.maxMermaidImages ?? fallback.maxMermaidImages);
   const requestedMaxHtmlImages = Number(options?.maxHtmlImages ?? fallback.maxHtmlImages);
   const requestedMinimumWords = Number(options?.minimumWords ?? fallback.minimumWords);
   const tableRequirement = options?.tableRequirement;
@@ -204,8 +200,6 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
   return {
     useAiImages: Boolean(options?.useAiImages ?? fallback.useAiImages) && imageModelAvailable,
     maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, IMAGE_HARD_LIMITS.ai)),
-    useMermaidImages: Boolean(options?.useMermaidImages ?? fallback.useMermaidImages),
-    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, IMAGE_HARD_LIMITS.mermaid)),
     useHtmlImages: Boolean(options?.useHtmlImages ?? fallback.useHtmlImages),
     maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, IMAGE_HARD_LIMITS.html)),
     htmlImageTypes: String(options?.htmlImageTypes ?? fallback.htmlImageTypes),
@@ -324,7 +318,6 @@ const MarkdownContent = memo(function MarkdownContent({ content, onPreviewImage 
     <MarkdownRenderer
       imageMode="preview"
       imageClassName="markdown-clickable-image"
-      renderMermaid
       onPreviewImage={onPreviewImage}
     >
       {content}
@@ -385,7 +378,6 @@ function ContentEditPage({
     const stats: Record<ContentIllustrationKind, { planned: number; success: number }> = {
       chart: { planned: 0, success: 0 },
       html: { planned: 0, success: 0 },
-      mermaid: { planned: 0, success: 0 },
       ai: { planned: 0, success: 0 },
     };
 
@@ -487,17 +479,15 @@ function ContentEditPage({
   const illustrationPlanningStepCompleted = contentStats?.illustration_planning_step_completed || 0;
   const illustrationPlanningStepLabel = contentStats?.illustration_planning_step_label || '';
   const illustrationCandidateTotal = (contentStats?.illustration_candidate_html || 0)
-    + (contentStats?.illustration_candidate_mermaid || 0)
     + (contentStats?.illustration_candidate_ai || 0);
   const illustrationSelectedTotal = (contentStats?.illustration_selected_html || 0)
-    + (contentStats?.illustration_selected_mermaid || 0)
     + (contentStats?.illustration_selected_ai || 0);
   const illustrationPlanningProgress = Math.round((illustrationPlanningStepCompleted / illustrationPlanningStepTotal) * 100);
   const illustrationGenerationTotal = contentStats?.illustration_generation_total || 0;
   const illustrationGenerationCompleted = contentStats?.illustration_generation_completed || 0;
   const illustrationGenerationProgress = illustrationGenerationTotal ? Math.round((illustrationGenerationCompleted / illustrationGenerationTotal) * 100) : 0;
   const illustrationGenerationStepLabel = contentStats?.illustration_generation_step_label || '';
-  const illustrationGenerationCount = `HTML ${contentStats?.illustration_generation_html_completed || 0}/${contentStats?.illustration_generation_html_total || 0}，Mermaid ${contentStats?.illustration_generation_mermaid_completed || 0}/${contentStats?.illustration_generation_mermaid_total || 0}，AI ${contentStats?.illustration_generation_ai_completed || 0}/${contentStats?.illustration_generation_ai_total || 0}`;
+  const illustrationGenerationCount = `HTML ${contentStats?.illustration_generation_html_completed || 0}/${contentStats?.illustration_generation_html_total || 0}，AI ${contentStats?.illustration_generation_ai_completed || 0}/${contentStats?.illustration_generation_ai_total || 0}`;
   const currentProgressDetail = phaseVisible && progressDetail?.phase === contentStats?.phase ? progressDetail : undefined;
   const displayProgress = currentProgressDetail ? currentProgressDetail.phase_progress : planning ? planningProgress : outlineExpanding ? outlineExpansionProgress : expanding ? wordExpansionProgress : contentCorrecting ? contentCorrectionProgress : illustrationPlanning ? illustrationPlanningProgress : illustrationGenerating ? illustrationGenerationProgress : progress;
   const displayProgressLabel = currentProgressDetail ? currentProgressDetail.phase_label : planning ? '编排统计' : restoring ? '原方案还原' : outlineExpanding ? '补目录' : expanding ? '扩写进度' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '图片编排' : illustrationGenerating ? '图片生成' : '生成统计';
@@ -847,8 +837,6 @@ function ContentEditPage({
       generationOptions: {
         useAiImages: nextImageModelAvailable && savedGenerationOptions.useAiImages,
         maxAiImages: savedGenerationOptions.maxAiImages,
-        useMermaidImages: savedGenerationOptions.useMermaidImages,
-        maxMermaidImages: savedGenerationOptions.maxMermaidImages,
         useHtmlImages: savedGenerationOptions.useHtmlImages,
         maxHtmlImages: savedGenerationOptions.maxHtmlImages,
         htmlImageTypes: savedGenerationOptions.htmlImageTypes,
@@ -862,7 +850,6 @@ function ContentEditPage({
     });
     trackConfigUsage({
       table_requirement: savedGenerationOptions.tableRequirement,
-      use_mermaid_images: savedGenerationOptions.useMermaidImages,
       use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
       content_generation_action: contentGenerationAction,
       minimum_words: savedGenerationOptions.minimumWords,
@@ -972,8 +959,6 @@ function ContentEditPage({
         generationOptions: {
           useAiImages: nextImageModelAvailable && savedGenerationOptions.useAiImages,
           maxAiImages: savedGenerationOptions.maxAiImages,
-          useMermaidImages: savedGenerationOptions.useMermaidImages,
-          maxMermaidImages: savedGenerationOptions.maxMermaidImages,
           useHtmlImages: savedGenerationOptions.useHtmlImages,
           maxHtmlImages: savedGenerationOptions.maxHtmlImages,
           htmlImageTypes: savedGenerationOptions.htmlImageTypes,
@@ -986,7 +971,6 @@ function ContentEditPage({
       });
       trackConfigUsage({
         table_requirement: savedGenerationOptions.tableRequirement,
-        use_mermaid_images: savedGenerationOptions.useMermaidImages,
         use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
         content_generation_action: 'regenerate_section',
         minimum_words: savedGenerationOptions.minimumWords,
@@ -1413,34 +1397,6 @@ function ContentEditPage({
                     onChange={(event) => setDraftGenerationOptions((prev) => ({
                       ...prev,
                       maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.ai)),
-                    }))}
-                  />
-                </label>
-              )}
-              <div className="content-generation-config-row">
-                <span><strong>Mermaid 生图</strong></span>
-                <Switch.Root
-                  className="content-generation-switch"
-                  checked={draftGenerationOptions.useMermaidImages}
-                  disabled={generationStrategyLocked}
-                  onCheckedChange={(checked) => setDraftGenerationOptions((prev) => ({ ...prev, useMermaidImages: checked }))}
-                  aria-label="是否使用 Mermaid 生图"
-                >
-                  <Switch.Thumb className="content-generation-switch-thumb" />
-                </Switch.Root>
-              </div>
-              {draftGenerationOptions.useMermaidImages && (
-                <label className="content-generation-config-row">
-                  <span><strong>Mermaid 生图上限</strong></span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={IMAGE_HARD_LIMITS.mermaid}
-                    value={draftGenerationOptions.maxMermaidImages}
-                    disabled={generationStrategyLocked}
-                    onChange={(event) => setDraftGenerationOptions((prev) => ({
-                      ...prev,
-                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.mermaid)),
                     }))}
                   />
                 </label>

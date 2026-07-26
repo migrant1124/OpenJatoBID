@@ -66,7 +66,6 @@ interface ExportProgressState {
   progress: number;
   message: string;
   warnings: string[];
-  mermaidCount: number;
   filePath?: string;
   error?: string;
 }
@@ -77,21 +76,10 @@ const initialExportProgress: ExportProgressState = {
   progress: 0,
   message: '',
   warnings: [],
-  mermaidCount: 0,
 };
 
 function collectLeafItems(items: OutlineItem[]): OutlineItem[] {
   return items.flatMap((item) => item.children?.length ? collectLeafItems(item.children) : [item]);
-}
-
-function countMermaidDiagrams(content: string) {
-  const mermaidBlocks = (String(content || '').match(/```mermaid[\s\S]*?```/gi) || []).length;
-  const mermaidInkImages = (String(content || '').match(/https:\/\/mermaid\.ink\/img\//gi) || []).length;
-  return mermaidBlocks + mermaidInkImages;
-}
-
-function countOutlineMermaidDiagrams(items: OutlineItem[]) {
-  return collectLeafItems(items).reduce((sum, item) => sum + countMermaidDiagrams(item.content || ''), 0);
 }
 
 function hasGeneratedContent(items: OutlineItem[]) {
@@ -473,16 +461,12 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
       }
 
       const requestId = `template-export-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const mermaidCount = countOutlineMermaidDiagrams(outline);
       setExportProgress({
         open: true,
         running: true,
         progress: 2,
-        message: mermaidCount
-          ? `检测到 ${mermaidCount} 张 Mermaid 图，导出时会转换为 Word 图片，可能需要稍等。`
-          : '正在使用当前模板导出测试 Word。',
+        message: '正在使用当前模板导出测试 Word。',
         warnings: [],
-        mermaidCount,
       });
 
       unsubscribe = window.yibiao?.export.onWordExportProgress((event: WordExportProgressEvent) => {
@@ -1293,9 +1277,7 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
               <span className="section-kicker">导出测试</span>
               <Dialog.Title>{exportProgress.running ? '正在导出测试' : exportProgress.error ? '导出失败' : '导出完成'}</Dialog.Title>
               <Dialog.Description>
-                {exportProgress.mermaidCount > 0
-                  ? `本次包含 ${exportProgress.mermaidCount} 张 Mermaid 图，导出时会使用本地组件转换成 Word 图片。`
-                  : '正在使用当前模板导出已生成的技术方案。'}
+                正在使用当前模板导出已生成的技术方案。
               </Dialog.Description>
             </div>
             <div className="export-progress-body">

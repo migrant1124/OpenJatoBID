@@ -1,8 +1,8 @@
 const crypto = require('node:crypto');
 
-const ILLUSTRATION_PLAN_VERSION = 4;
+const ILLUSTRATION_PLAN_VERSION = 5;
 const ROOT_PARENT_ID = '__root__';
-const ILLUSTRATION_KINDS = ['html', 'ai', 'mermaid'];
+const ILLUSTRATION_KINDS = ['html', 'ai'];
 const ILLUSTRATION_KIND_ORDER = new Map(ILLUSTRATION_KINDS.map((kind, index) => [kind, index]));
 const MAX_IMAGES_PER_SECTION = 8;
 const AI_IMAGE_TYPES = new Set([
@@ -27,7 +27,6 @@ const CREATIVE_AI_IMAGE_TYPES = new Set([
   'storyboard',
   'creative_style_board',
 ]);
-const MERMAID_IMAGE_TYPES = new Set(['process', 'hierarchy', 'responsibility']);
 const AI_IMAGE_TYPE_DESCRIPTIONS = {
   engineering_diagram: '专业工程图示：用于展示设备、系统组件、部署位置、连接关系或工程实施场景，强调结构与关系；不用于步骤流转、组织层级或职责分工。',
   realistic_photo: '专业实景图片：用于表现设备、机房、监控中心、施工、巡检或维护现场等可真实拍摄的对象和环境；不用于抽象系统架构、流程或组织关系。',
@@ -39,11 +38,6 @@ const AI_IMAGE_TYPE_DESCRIPTIONS = {
   brand_touchpoint_mockup: '物料、展板、礼品、导视和终端触点效果：用于展示品牌触点延展；无用户提供资产时采用无 Logo 设计。',
   storyboard: '宣传片、短视频、直播或活动流程分镜：用于表达镜头或活动节奏；不得虚构真实人物、场地或案例。',
   creative_style_board: '创意风格与视觉情绪板：用于色彩、材质、摄影、字体和视觉情绪方向；不代替最终品牌规范。',
-};
-const MERMAID_IMAGE_TYPE_DESCRIPTIONS = {
-  process: '流程图：用于表达按先后顺序发生的步骤、判断、流转和闭环处理过程；不用于静态系统拓扑或人员层级。',
-  hierarchy: '层级图：用于表达组织、系统模块、资源分类等上下级或包含关系；不用于时间顺序或职责矩阵。',
-  responsibility: '职责关系图：用于表达角色、岗位、责任边界和协作关系；不用于设备拓扑或纯流程步骤。',
 };
 const HTML_IMAGE_TYPE_LABELS = new Map([
   ['gantt', '甘特图'],
@@ -235,12 +229,6 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
       allowed_types: [...AI_IMAGE_TYPES],
       type_descriptions: AI_IMAGE_TYPE_DESCRIPTIONS,
     },
-    mermaid: {
-      enabled: Boolean(options?.useMermaidImages ?? false),
-      limit: normalizeLimit(options?.maxMermaidImages, 5, 5),
-      allowed_types: [...MERMAID_IMAGE_TYPES],
-      type_descriptions: MERMAID_IMAGE_TYPE_DESCRIPTIONS,
-    },
     html: {
       enabled: Boolean(options?.useHtmlImages ?? true) && allowedHtmlTypes.length > 0,
       limit: normalizeLimit(options?.maxHtmlImages, 30, 30),
@@ -292,13 +280,13 @@ function buildIllustrationPlanningPrompt() {
 - illustration-input.json：章节写作合同摘要、评分点、增值锚点、全局事实和可用正文块；创意图片必须据此形成独立 Creative Brief。
 
 工作要求：
-1. 图片有 AI、Mermaid、HTML 三类；每类数量可低于上限，数量上限不是必须填满的目标。
-2. kind 只能是 html、mermaid、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
+1. 图片有 AI、HTML 两类；每类数量可低于上限，数量上限不是必须填满的目标。
+2. kind 只能是 html、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
 3. 每项必须有简洁且不重复的 title、visual_role 和 purpose。图片必须能明确回答“帮助评委更快理解或相信什么”；不能回答时不要编排。
-4. 同一小节允许 0-8 张图片，但每张必须承担不同 visual_role；不要为了填满上限制造重复图意。同一小节的同一信息角色跨类型重复时只保留最合适的一张，优先 HTML、其次 AI、最后 Mermaid。
+4. 同一小节允许 0-8 张图片，但每张必须承担不同 visual_role；不要为了填满上限制造重复图意。同一小节的同一信息角色跨类型重复时只保留最合适的一张，优先 HTML、其次 AI。
 5. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
 6. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
-7. AI 图片适合工程、现场、创意场景、空间和视觉概念；Mermaid 只用于简单流程、层级和职责关系；HTML 用于精确结构、数据、流程和矩阵。
+7. AI 图片适合工程、现场、创意场景、空间和视觉概念；HTML 用于精确结构、数据、流程和矩阵。
 8. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
 9. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
 10. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
@@ -546,8 +534,8 @@ function resolveIllustrationPlan(content, context) {
   });
 
   const selected = [];
-  const candidateStats = { html: 0, ai: 0, mermaid: 0 };
-  const selectedStats = { html: 0, ai: 0, mermaid: 0 };
+  const candidateStats = { html: 0, ai: 0 };
+  const selectedStats = { html: 0, ai: 0 };
   const imageCountBySection = new Map();
   const visualRolesBySection = new Map();
   for (const candidate of candidates) candidateStats[candidate.kind] += 1;

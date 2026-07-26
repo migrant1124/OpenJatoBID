@@ -83,7 +83,7 @@ test('migrates local rendering defaults without dropping LAN or unknown configur
   fs.writeFileSync(configPath, JSON.stringify({
     config_version: 1,
     lan_management: { server_address: '192.168.10.8:47821' },
-    components: { mermaid_concurrency_limit: 21, html_concurrency_limit: 0 },
+    components: { html_concurrency_limit: 0 },
     future_option: { enabled: true },
   }), 'utf-8');
 
@@ -92,7 +92,6 @@ test('migrates local rendering defaults without dropping LAN or unknown configur
   assert.equal(config.config_version, 2);
   assert.deepEqual(config.local_rendering, {
     enabled: true,
-    mermaid_concurrency_limit: 20,
     html_concurrency_limit: 5,
   });
   assert.equal(config.lan_management.server_address, '192.168.10.8:47821');

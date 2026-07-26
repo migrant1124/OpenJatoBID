@@ -13,7 +13,6 @@ const {
   buildIllustrationExecutionContexts,
   generateAiIllustration,
   generateHtmlIllustration,
-  generateMermaidIllustration,
   stripGeneratedIllustrationsFromDocument,
 } = require('./contentIllustrationGeneration.cjs');
 const { applyRangeEdits } = require('../utils/textEdit.cjs');
@@ -941,7 +940,7 @@ function buildChapterContentMessages({ chapter, projectOverview, selectedFactsTe
 5. 围绕当前章节标题、描述和正文编排重点展开，保持内容聚焦。
 6. ${tableAllowed ? '可以使用 Markdown 段落、列表和表格；表格必须服务于内容表达，不要为了形式硬插。' : '只能使用 Markdown 段落、普通列表和加粗引导语，严禁输出 Markdown 表格或 HTML 表格。'}
 7. ${tableAllowed ? '正文只生成文字、列表、表格等内容，配图由系统另行处理。' : '正文只生成文字和普通列表，配图由系统另行处理。'}
-8. 严禁输出 Mermaid、PlantUML、Graphviz、flowchart、graph、sequenceDiagram 等图表代码块、mermaid.ink 链接或图片 Markdown；配图由系统另行处理。
+8. 严禁输出图表代码块、外部图表链接或图片 Markdown；配图由系统另行处理。
 9. ${tableAllowed ? '表格单元格内如有多项内容，优先使用编号、顿号、分号或短句，不要使用 HTML <br> 标签。' : '如需表达多项参数、职责、流程或措施，请改用分段文字或普通列表，不要用表格模拟。'}
 10. 严禁使用 Markdown 标题语法（#、##、###、####、#####、######），也不要生成与当前章节同级或下级的伪目录标题。
 11. 如需在正文中分层表达，只能使用普通段落、无编号列表、表格或无编号加粗引导语，例如 **实施要点：**。
@@ -1216,7 +1215,7 @@ workspace 文件：
 4. 结合 chapter-context.md 中的项目概述、全局事实变量和正文编排决策；如存在冲突，以全局事实变量为准。
 5. 可以吸收 knowledge-contents.md 中适合当前章节的技术素材，但不要提到“知识库”“历史文档”“参考资料”或素材来源。
 6. 不要提到“原方案”“历史文档”“用户原文”或“底稿”。
-7. 严禁输出 Mermaid、PlantUML、Graphviz、flowchart、graph、sequenceDiagram 等图表代码块、mermaid.ink 链接或图片 Markdown。
+7. 严禁输出图表代码块、外部图表链接或图片 Markdown。
 8. restored-content.md 可能包含原方案 Markdown 标题行或编号标题，例如“# 第一章...”“## 第一节...”“### 二、...”“（一）...”，这些只作为章节定位线索，不属于最终正文。
 9. 不要输出章节标题、Markdown 标题、编号标题、解释、总结或过程说明；当前章节标题会由程序统一渲染。
 10. 不要修改业务数据库，程序会读取你的输出文件后自行写回。
@@ -1450,7 +1449,6 @@ const OUTLINE_EXPANSION_FORBIDDEN_KEY_NAMES = new Set([
   'contentgenerationsections',
   'illustration',
   'illustrationtype',
-  'mermaid',
 ]);
 
 function normalizeFieldName(value) {
@@ -1597,14 +1595,14 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
 4. insert 表示新增一个或多个段落，anchor 填写建议插入在哪个原段落之后；如果适合放末尾，anchor 写 "end"。
 5. replace 表示重写并扩写某个完整 Markdown 原文块，target_text 必须逐字复制当前章节原正文中的完整待替换块。
 6. content 只写新增或替换后的正文片段，不要包含章节标题。
-7. 禁止输出图片 Markdown、Mermaid、代码块或其他图表代码。
+7. 禁止输出图片 Markdown、代码块或其他图表代码。
 8. 扩写内容必须服务当前章节，不要写其他目录应承载的内容。
 9. 严禁使用 Markdown 标题语法（#、##、###、####、#####、######），也不要新增伪目录标题；需要分层时使用普通段落、无编号列表或无编号加粗引导语。
 10. 加粗引导语禁止使用任何形式的编号。
 11. 只有步骤、流程、时间顺序、操作顺序等连续性非常强的内容，才可以使用有序列表；其他分段禁止使用任何形式的编号。
 12. 如果本章节需要使用的全局事实变量中包含相关内容，扩写必须优先使用变量值，不得新增前后不一致的时间、地点、人员、设备、标准或服务承诺。
 13. 使用 replace 时，如果目标块是 Markdown 列表、表格、引用、加粗引导块或连续多行结构，target_text 必须包含完整结构，不得只返回第一项、表头、关键句或摘要。
-14. 使用 replace 时，target_text 不得改写标点、空格、换行、列表符号、表格分隔线或 Markdown 标记，也不得选择图片 Markdown、Mermaid 或代码块作为替换目标。
+14. 使用 replace 时，target_text 不得改写标点、空格、换行、列表符号、表格分隔线或 Markdown 标记，也不得选择图片 Markdown 或代码块作为替换目标。
 15. 本次只补强章节写作合同中尚未充分体现的评分响应、实施动作、量化细节、交付与验收、证据要求或增值锚点；不得为了凑字数复述已有内容。
 
 返回格式：
@@ -1668,7 +1666,7 @@ function buildContentExpansionRepairMessages({ invalidContent, issues }, current
 4. insert 表示新增段落；anchor 写建议插入在哪个原段落之后，无法确定时写 "end"。
 5. replace 表示重写并扩写一个完整 Markdown 原文块；target_text 必须逐字复制完整待替换块，不得摘要、改写或只返回其中一句。
 6. content 只能是新增或替换后的正文片段，不要返回完整章节正文。
-7. content 不得包含章节标题、Markdown 标题、图片 Markdown、Mermaid、代码块或解释文字。
+7. content 不得包含章节标题、Markdown 标题、图片 Markdown、代码块或解释文字。
 8. insert 时 target_text 留空；replace 时 anchor 可留空，但 target_text 必须非空。
 9. 只返回 JSON，不要输出 Markdown 代码围栏或解释。`,
     },
@@ -2107,7 +2105,7 @@ function buildConsistencyRepairMessages({ context, conflicts, globalFactsText, b
 6. old_text 必须是当前小节正文中逐字存在的原文块，建议包含足够前后上下文，确保只出现一次。
 7. ${tableAllowed ? '如果修改表格，old_text 必须包含完整表格行或完整表格块，不要只返回单元格碎片。' : '本次配置为不要表格；如果冲突位于表格中，new_text 必须把相关内容改为普通文字或普通列表，不得继续返回 Markdown 表格或 HTML 表格。'}
 8. new_text 是替换后的正文块，不要包含章节标题，不要包含行号。
-9. ${tableAllowed ? '保留 Markdown 表格、列表、代码块、图片和 Mermaid 块结构。' : '保留普通列表、代码块、图片和 Mermaid 块结构；不得新增或保留 Markdown 表格、HTML 表格。'}
+9. ${tableAllowed ? '保留 Markdown 表格、列表、代码块和图片结构。' : '保留普通列表、代码块和图片结构；不得新增或保留 Markdown 表格、HTML 表格。'}
 10. start_line/end_line 使用下方带行号正文中的 1-based 行号；如果不确定也必须提供可唯一匹配的 old_text。
 
 返回格式：
@@ -2384,7 +2382,7 @@ function buildOriginalCoverageRepairMessages({ target, coverageItems, currentCon
 7. replace 目标块如为 Markdown 列表、表格、引用、加粗引导块或连续多行结构，target_text 必须包含完整结构。
 8. content 只写新增或替换后的正文片段，不要包含章节标题。
 9. 必须补回审计指出的 partial/missing 核心信息，但不要提到“原方案”“来源段”“用户原文”。
-10. 不要新增图片 Markdown、Mermaid、代码块或伪目录标题，也不要选择图片 Markdown、Mermaid 或代码块作为 replace 的 target_text。
+10. 不要新增图片 Markdown、代码块或伪目录标题，也不要选择图片 Markdown 或代码块作为 replace 的 target_text。
 11. 保持与当前小节职责一致，不要写其他章节内容。
 
 返回格式：
@@ -3236,7 +3234,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
   const fullRegenerate = regenerate && !targetItemId;
   if (fullRegenerate) {
-    workspaceStore.clearMermaidCache?.();
     outlineData = { ...outlineData, outline: clearOutlineContent(outlineData.outline) };
   }
 
@@ -3319,19 +3316,15 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     illustration_planning_step_completed: 0,
     illustration_planning_step_label: '',
     illustration_candidate_ai: 0,
-    illustration_candidate_mermaid: 0,
     illustration_candidate_chart: 0,
     illustration_candidate_html: 0,
     illustration_selected_ai: 0,
-    illustration_selected_mermaid: 0,
     illustration_selected_chart: 0,
     illustration_selected_html: 0,
     illustration_generation_total: 0,
     illustration_generation_completed: 0,
     illustration_generation_ai_total: 0,
     illustration_generation_ai_completed: 0,
-    illustration_generation_mermaid_total: 0,
-    illustration_generation_mermaid_completed: 0,
     illustration_generation_chart_total: 0,
     illustration_generation_chart_completed: 0,
     illustration_generation_html_total: 0,
@@ -6759,7 +6752,7 @@ workspace 文件说明：
     contentStats.illustration_planning_step_label = '正在执行全文图片编排 Agent';
     pauseIfRequested('正文生成已在图片编排输入准备后暂停，本次 Agent 未启动；继续后将重新执行。');
 
-    const enabledKinds = ['html', 'ai', 'mermaid'].filter((kind) => planningContext.config[kind].enabled);
+    const enabledKinds = ['html', 'ai'].filter((kind) => planningContext.config[kind].enabled);
     let resolved;
     if (!planningContext.eligibleSectionIds.length || !enabledKinds.length) {
       resolved = resolveIllustrationPlan({ items: [] }, planningContext);
@@ -6803,11 +6796,9 @@ workspace 文件说明：
     contentStats.illustration_planning_step_completed = 2;
     contentStats.illustration_planning_step_label = '正在保存全文图片计划';
     contentStats.illustration_candidate_ai = resolved.stats.candidate.ai;
-    contentStats.illustration_candidate_mermaid = resolved.stats.candidate.mermaid;
     contentStats.illustration_candidate_chart = 0;
     contentStats.illustration_candidate_html = resolved.stats.candidate.html;
     contentStats.illustration_selected_ai = resolved.stats.selected.ai;
-    contentStats.illustration_selected_mermaid = resolved.stats.selected.mermaid;
     contentStats.illustration_selected_chart = 0;
     contentStats.illustration_selected_html = resolved.stats.selected.html;
     const saved = workspaceStore.updateTechnicalPlan({
@@ -6816,7 +6807,7 @@ workspace 文件说明：
     });
     contentStats.illustration_planning_step_completed = 3;
     contentStats.illustration_planning_step_label = '全文图片编排完成';
-    logs = [...logs, `全文图片编排完成：候选 ${resolved.stats.candidate.html + resolved.stats.candidate.mermaid + resolved.stats.candidate.ai} 项，最终保留 HTML ${resolved.stats.selected.html} 项、Mermaid ${resolved.stats.selected.mermaid} 项、AI ${resolved.stats.selected.ai} 项。`];
+    logs = [...logs, `全文图片编排完成：候选 ${resolved.stats.candidate.html + resolved.stats.candidate.ai} 项，最终保留 HTML ${resolved.stats.selected.html} 项、AI ${resolved.stats.selected.ai} 项。`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, saved, {
       technicalPlanPatch: { contentIllustrationPlan: resolved.plan },
     });
@@ -6852,8 +6843,7 @@ workspace 文件说明：
     };
     const executions = buildIllustrationExecutionContexts(illustrationPlan, leaves, sections);
     const aiExecutions = executions.filter(({ planItem }) => planItem.kind === 'ai');
-    const normalTextExecutions = executions.filter(({ planItem, reference }) => planItem.kind === 'mermaid'
-      || (planItem.kind === 'html' && reference.length <= HTML_AGENT_THRESHOLD_CHARS));
+    const normalTextExecutions = executions.filter(({ planItem, reference }) => planItem.kind === 'html' && reference.length <= HTML_AGENT_THRESHOLD_CHARS);
     const agentHtmlExecutions = executions.filter(({ planItem, reference }) => planItem.kind === 'html' && reference.length > HTML_AGENT_THRESHOLD_CHARS);
 
     function countCompleted(kind) {
@@ -6865,8 +6855,6 @@ workspace 文件说明：
       contentStats.illustration_generation_completed = illustrationPlan.items.filter((item) => ['success', 'error'].includes(item.generation?.status)).length;
       contentStats.illustration_generation_ai_total = aiExecutions.length;
       contentStats.illustration_generation_ai_completed = countCompleted('ai');
-      contentStats.illustration_generation_mermaid_total = executions.filter(({ planItem }) => planItem.kind === 'mermaid').length;
-      contentStats.illustration_generation_mermaid_completed = countCompleted('mermaid');
       contentStats.illustration_generation_chart_total = 0;
       contentStats.illustration_generation_chart_completed = 0;
       contentStats.illustration_generation_html_total = executions.filter(({ planItem }) => planItem.kind === 'html').length;
@@ -6895,17 +6883,12 @@ workspace 文件说明：
     async function runExecution(execution) {
       const { planItem } = execution;
       if (['success', 'error'].includes(planItem.generation?.status)) return;
-      persistIllustrationGeneration(planItem.item_id, { status: 'running', error: undefined }, `正在生成${planItem.kind === 'ai' ? ' AI' : planItem.kind === 'mermaid' ? ' Mermaid' : ' HTML'} 图片`);
+      persistIllustrationGeneration(planItem.item_id, { status: 'running', error: undefined }, `正在生成${planItem.kind === 'ai' ? ' AI' : ' HTML'} 图片`);
       try {
         let result;
         if (planItem.kind === 'ai') {
           result = await generateAiIllustration(aiService, execution);
           logs = [...logs, `AI 配图完成：${planItem.section_ids[0]} ${planItem.title}`];
-        } else if (planItem.kind === 'mermaid') {
-          result = await generateMermaidIllustration(aiService, execution, localImageRenderService, isPauseLikeError);
-          logs = [...logs, result.attempts
-            ? `Mermaid 配图已修复并完成：${planItem.section_ids[0]} ${planItem.title}（修复 ${result.attempts} 轮）`
-            : `Mermaid 配图完成：${planItem.section_ids[0]} ${planItem.title}`];
         } else {
           result = await generateHtmlIllustration({
             aiService,
@@ -6958,7 +6941,7 @@ workspace 文件说明：
           title: planItem.title,
           error: compactError(error?.message || error),
         });
-        const kindLabel = planItem.kind === 'ai' ? 'AI' : planItem.kind === 'mermaid' ? 'Mermaid' : 'HTML';
+        const kindLabel = planItem.kind === 'ai' ? 'AI' : 'HTML';
         logs = [...logs, `${kindLabel} 配图失败：${planItem.section_ids[0]}，${error.message || '生成失败'}，已保留正文。`];
       }
     }

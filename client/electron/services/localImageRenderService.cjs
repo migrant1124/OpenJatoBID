@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 const DEFAULT_CONCURRENCY = 5;
 const MIN_CONCURRENCY = 1;
@@ -9,8 +8,6 @@ const MAX_CONCURRENCY = 20;
 const MAX_CAPTURE_SEGMENT_HEIGHT = 8192;
 const HTML_DESIGN_WIDTH = 1240;
 const HTML_INITIAL_HEIGHT = 900;
-const MERMAID_RENDER_WIDTH = 680;
-const MERMAID_INITIAL_HEIGHT = 480;
 const LAYOUT_SETTLE_MS = 120;
 const PAUSE_POLL_MS = 40;
 let singleton = null;
@@ -125,25 +122,6 @@ html,body{margin:0!important;padding:0!important;background:#fff!important;width
       ? document.replace(/<\/html>/i, `${wrapScript}</html>`)
       : `${document}${wrapScript}`;
   return document;
-}
-
-function resolveMermaidScript(app) {
-  const candidates = [
-    path.join(app?.getAppPath?.() || '', 'node_modules', 'mermaid', 'dist', 'mermaid.min.js'),
-    path.join(__dirname, '..', '..', 'node_modules', 'mermaid', 'dist', 'mermaid.min.js'),
-  ];
-  const script = candidates.find((candidate) => candidate && fs.existsSync(candidate));
-  if (!script) throw new Error('未找到内置 Mermaid 脚本');
-  return script;
-}
-
-function buildMermaidDocument(code, scriptUrl) {
-  const source = JSON.stringify(String(code || ''));
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' file:"><style>
-html,body{margin:0;padding:0;background:#fff;width:fit-content;height:fit-content}#jato-capture-root{padding:8px;display:inline-block;background:#fff}svg{display:block;max-width:680px;height:auto}
-</style><script src="${scriptUrl}"></script></head><body><main id="jato-capture-root"></main><script>
-(async()=>{try{mermaid.initialize({startOnLoad:false,theme:'default',securityLevel:'strict'});const r=await mermaid.render('jato-'+Date.now(),${source});document.getElementById('jato-capture-root').innerHTML=r.svg;window.__jatoRenderReady=true}catch(e){window.__jatoRenderError=String(e&&e.message||e);window.__jatoRenderReady=true}})();
-</script></body></html>`;
 }
 
 function wait(ms) {
@@ -316,7 +294,7 @@ async function waitForLayoutReady(webContents, timeoutMs, options = {}) {
   let lastSize = '';
   let stableSince = 0;
   while (Date.now() - startedAt < timeoutMs) {
-    throwIfPaused(options, options.kind === 'mermaid' ? 'Mermaid 转图已暂停' : 'HTML 转图已暂停');
+    throwIfPaused(options, 'HTML 转图已暂停');
     try {
       const metrics = await probeLayoutMetrics(webContents, options.minWidth, options.contentOnly === true);
       if (metrics?.ready && metrics.width > 0 && metrics.height > 0) {
@@ -347,12 +325,11 @@ function createLocalImageRenderService(options = {}) {
   const app = options.app || electron.app;
   const activeTasks = new Map();
   let nextTaskId = 0;
-  const getLimit = (kind) => {
+  const getLimit = () => {
     const config = configStore?.load?.().local_rendering || {};
-    return normalizeConcurrency(kind === 'mermaid' ? config.mermaid_concurrency_limit : config.html_concurrency_limit);
+    return normalizeConcurrency(config.html_concurrency_limit);
   };
-  const mermaidPool = createPool(() => getLimit('mermaid'));
-  const htmlPool = createPool(() => getLimit('html'));
+  const htmlPool = createPool(getLimit);
 
   function setupWindowSecurity(win, allowedUrls) {
     const { webContents } = win;
@@ -426,16 +403,6 @@ function createLocalImageRenderService(options = {}) {
       await loadHtmlDocument(win, documentUrl, options.timeoutMs || 120000, options);
       throwIfPaused(options);
       await setDeviceMetrics(win.webContents, initialWidth, initialHeight);
-      if (options.waitForReady) {
-        const until = Date.now() + (options.timeoutMs || 120000);
-        while (!await win.webContents.executeJavaScript('Boolean(window.__jatoRenderReady)', true)) {
-          throwIfPaused(options, 'Mermaid 转图已暂停');
-          if (Date.now() >= until) throw new Error('本地 Mermaid 渲染超时');
-          await wait(PAUSE_POLL_MS);
-        }
-        const renderError = await win.webContents.executeJavaScript('window.__jatoRenderError || ""', true);
-        if (renderError) throw new Error(`Mermaid 渲染失败：${String(renderError).slice(0, 200)}`);
-      }
       const metrics = await waitForLayoutReady(win.webContents, options.timeoutMs || 120000, options);
       const captureWidth = Math.max(Number(options.minWidth) || 1, metrics.width);
       const task = activeTasks.get(taskId);
@@ -480,21 +447,6 @@ function createLocalImageRenderService(options = {}) {
         minWidth: width,
       }));
     },
-    renderMermaidToPng(code, renderOptions = {}) {
-      return mermaidPool.run(() => {
-        const scriptUrl = pathToFileURL(resolveMermaidScript(app)).toString();
-        return renderDocument(buildMermaidDocument(code, scriptUrl), {
-          ...renderOptions,
-          kind: 'mermaid',
-          allowedUrls: [scriptUrl],
-          waitForReady: true,
-          contentOnly: true,
-          initialWidth: MERMAID_RENDER_WIDTH,
-          initialHeight: MERMAID_INITIAL_HEIGHT,
-          timeoutMs: renderOptions.timeoutMs || 30000,
-        });
-      });
-    },
     renderChartToPng(chartSpec, renderOptions = {}) {
       const { renderChartToHtml } = require('./chartDslRenderer.cjs');
       return this.renderHtmlToPng(renderChartToHtml(chartSpec), renderOptions);
@@ -502,7 +454,6 @@ function createLocalImageRenderService(options = {}) {
     getDiagnostics() {
       const tasks = [...activeTasks.values()];
       return {
-        mermaid: mermaidPool.snapshot(),
         html: htmlPool.snapshot(),
         active_window_count: tasks.length,
         estimated_rgba_bytes: tasks.reduce((total, task) => total + task.estimatedRgbaBytes, 0),

@@ -481,7 +481,6 @@ const initialState: SettingsPageState = {
   },
   localRendering: {
     enabled: true,
-    mermaid_concurrency_limit: 5,
     html_concurrency_limit: 5,
   },
   agentModeScenarios: { ...defaultAgentModeScenarios },
@@ -1828,9 +1827,8 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           <h3 className="settings-subsection-title">本地转图组件</h3>
           <div className="settings-list">
             {([
-              ['mermaid_concurrency_limit', 'Mermaid 转换并发量', '同时本地渲染 Mermaid 图的最大任务数，默认 5'],
               ['html_concurrency_limit', 'HTML 转换并发量', '同时本地截取 HTML 配图的最大任务数，默认 5'],
-            ] as Array<[keyof Pick<LocalRenderingConfig, 'mermaid_concurrency_limit' | 'html_concurrency_limit'>, string, string]>).map(([key, title, description]) => (
+            ] as Array<[keyof Pick<LocalRenderingConfig, 'html_concurrency_limit'>, string, string]>).map(([key, title, description]) => (
               <label className="settings-row" key={key}>
                 <div className="settings-row-copy"><strong>{title}</strong><span>{description}</span></div>
                 <input

@@ -30,8 +30,6 @@ export interface SaveOutlineRequest {
 export interface ContentGenerationOptions {
   useAiImages: boolean;
   maxAiImages: number;
-  useMermaidImages: boolean;
-  maxMermaidImages: number;
   useHtmlImages: boolean;
   maxHtmlImages: number;
   htmlImageTypes: string;
@@ -99,19 +97,15 @@ export interface BackgroundTaskState {
       illustration_planning_step_completed?: number;
       illustration_planning_step_label?: string;
       illustration_candidate_ai?: number;
-      illustration_candidate_mermaid?: number;
       illustration_candidate_chart?: number;
       illustration_candidate_html?: number;
       illustration_selected_ai?: number;
-      illustration_selected_mermaid?: number;
       illustration_selected_chart?: number;
       illustration_selected_html?: number;
       illustration_generation_total?: number;
       illustration_generation_completed?: number;
       illustration_generation_ai_total?: number;
       illustration_generation_ai_completed?: number;
-      illustration_generation_mermaid_total?: number;
-      illustration_generation_mermaid_completed?: number;
       illustration_generation_chart_total?: number;
       illustration_generation_chart_completed?: number;
       illustration_generation_html_total?: number;
@@ -265,8 +259,7 @@ export interface ContentGenerationSectionState {
 
 export type ContentGenerationSections = Record<string, ContentGenerationSectionState>;
 
-export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibility';
-export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
+export type ContentIllustrationKind = 'ai' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
 export type ContentIllustrationAnchorType = 'before_block' | 'after_block' | 'after_heading' | 'section_end';
 

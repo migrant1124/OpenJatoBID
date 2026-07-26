@@ -13,7 +13,6 @@ const {
   getTechnicalPlanTenderMarkdownPath,
 } = require('../utils/paths.cjs');
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
-const { clearMermaidCache } = require('../utils/mermaidCache.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
 const {
   normalizeRequirementResponseMatrix,
@@ -788,25 +787,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
   function resolvePendingTenderMarkdownPath(filePath) {
     return path.resolve(resolveMarkdownPath(filePath));
-  }
-
-  function clearTechnicalPlanMermaidCache() {
-    try {
-      clearMermaidCache(app);
-    } catch (error) {
-      console.warn('[technical-plan] clear mermaid cache failed', error);
-    }
-  }
-
-  function shouldClearMermaidCacheForPartial(partial) {
-    if (!partial || typeof partial !== 'object') return false;
-    if (hasOwn(partial, 'outlineData') && (!partial.outlineData || !partial.outlineData?.outline?.length)) {
-      return true;
-    }
-    return hasOwn(partial, 'contentGenerationSections')
-      && hasOwn(partial, 'contentGenerationPlans')
-      && isEmptyObject(partial.contentGenerationSections)
-      && isEmptyObject(partial.contentGenerationPlans);
   }
 
   function isPendingTenderMarkdownPath(filePath) {
@@ -1705,7 +1685,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       step: 'document-analysis',
       bid_analysis_mode: 'key',
@@ -1747,7 +1726,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       step: 'bid-analysis',
       content_generation_options_json: null,
@@ -1796,7 +1774,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
@@ -1811,7 +1788,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       step: 'document-analysis',
       outline_project_name: null,
@@ -1844,7 +1820,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       workflow_kind: normalizeWorkflowKind(workflowKind),
       step: 'document-analysis',
@@ -2144,11 +2119,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   });
 
   function updateTechnicalPlanWithoutReload(partial) {
-    const shouldClearMermaidCache = shouldClearMermaidCacheForPartial(partial);
     updateTechnicalPlanTransaction(partial || {});
-    if (shouldClearMermaidCache) {
-      clearTechnicalPlanMermaidCache();
-    }
   }
 
   function updateTechnicalPlan(partial) {
@@ -2267,7 +2238,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     updateMeta({
       step: 'bid-analysis',
       selected_format_profile_id: null,
@@ -2402,7 +2372,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       restoreMappedContentRows({ snapshot, idMap, affectedIds, nextIds, clearAll });
       if (invalidatesContentTask) {
         db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
-        clearTechnicalPlanMermaidCache();
         updateMeta({ content_generation_runtime_json: null });
       }
       updateMeta({ content_illustration_plan_json: null });
@@ -2450,7 +2419,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         updateMeta({ content_illustration_plan_json: jsonOrNull(illustrationPlan) });
       }
       saveTask('outline-deepening', undefined);
-      clearTechnicalPlanMermaidCache();
     });
     transaction();
     return { ...loadTechnicalPlan(), outlineDeepeningDiff: result.diff };
@@ -2525,7 +2493,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         db.prepare(`DELETE FROM technical_plan_content_sections WHERE node_id IN (${placeholders})`).run(...removedIds);
         db.prepare(`DELETE FROM technical_plan_content_plans WHERE node_id IN (${placeholders})`).run(...removedIds);
       }
-      clearTechnicalPlanMermaidCache();
     });
     transaction();
     return loadTechnicalPlan();
@@ -2788,7 +2755,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       fs.rmSync(originalPlanMarkdownPath, { force: true });
     }
     clearOriginalOutlineRuntime();
-    clearTechnicalPlanMermaidCache();
     clearIllustrationFiles();
     deleteImportedImageBatches(app, 'technical-plan');
     return { success: true, message: '技术方案缓存已清空', state: loadTechnicalPlan() };
@@ -2799,7 +2765,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     updateTechnicalPlan,
     updateTechnicalPlanWithoutReload,
     saveContentGenerationItem,
-    clearMermaidCache: clearTechnicalPlanMermaidCache,
     clearIllustrationFiles,
     clearTechnicalPlan,
     importTenderDocument,
