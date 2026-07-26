@@ -2519,7 +2519,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function saveContentGenerationOptions(contentGenerationOptions) {
-    const { minimumWords, minimum_words, ...options } = contentGenerationOptions || {};
+    const { minimumWords, minimum_words, maxAiImages, maxHtmlImages, ...options } = contentGenerationOptions || {};
     return updateTechnicalPlan({ contentGenerationOptions: options, contentIllustrationPlan: undefined });
   }
 

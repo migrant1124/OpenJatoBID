@@ -29,9 +29,7 @@ export interface SaveOutlineRequest {
 
 export interface ContentGenerationOptions {
   useAiImages: boolean;
-  maxAiImages: number;
   useHtmlImages: boolean;
-  maxHtmlImages: number;
   htmlImageTypes: string;
   tableRequirement: ContentTableRequirement;
   enableConsistencyAudit: boolean;

@@ -2192,6 +2192,7 @@
 .illustration-confirmation-row:last-child { border-bottom: 0; }
 .illustration-confirmation-row input[type='checkbox'] { width: 16px; height: 16px; padding: 0; }
 .illustration-confirmation-note { margin: 0; color: var(--yb-text-muted); font-size: 13px; }
+.content-generation-config-hint { margin: 16px 0 0; padding: 10px 14px; border: 1px solid #cfe0fb; border-radius: 8px; background: #f3f8ff; color: #49637f; font-size: 13px; line-height: 1.6; }
 
 .fixed-response-notes p,
 .evidence-index p,

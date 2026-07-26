@@ -25,19 +25,19 @@ function createContext(options = {}, aiImagesAvailable = true) {
   });
 }
 
-test('HTML 在同一视觉角色冲突中优先于 AI，且使用图片计划 v5', () => {
-  const context = createContext({ useAiImages: true, maxAiImages: 1, useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' });
+test('AI 与 HTML 候选独立保留，不因另一类图片数量或相同作用被挤占', () => {
+  const context = createContext({ useAiImages: true, useHtmlImages: true, htmlImageTypes: 'network' });
   const result = resolveIllustrationPlan({ items: [
     candidate({ kind: 'ai', image_type: 'engineering_diagram', title: '实施工程图', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系' }),
     candidate({ kind: 'html', image_type: '进度网络图', title: '实施进度网络图', visual_role: '总体概念', purpose: '帮助评委理解实施方案整体关系' }),
   ] }, context);
-  assert.equal(result.plan.items[0].kind, 'html');
-  assert.deepEqual(result.stats.selected, { html: 1, ai: 0 });
+  assert.deepEqual(result.plan.items.map((item) => item.kind), ['ai', 'html']);
+  assert.deepEqual(result.stats.selected, { html: 1, ai: 1 });
   assert.equal(result.plan.plan_version, ILLUSTRATION_PLAN_VERSION);
 });
 
 test('图片编排只接受 HTML 和 AI 类型', () => {
-  const context = createContext({ useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' }, false);
+  const context = createContext({ useHtmlImages: true, htmlImageTypes: 'network' }, false);
   assert.throws(() => resolveIllustrationPlan({ items: [candidate({ kind: 'unsupported' })] }, context), /图片候选类型未启用或无效/);
   const prompt = buildIllustrationPlanningPrompt();
   assert.match(prompt, /kind 只能是 html、ai/);
@@ -45,10 +45,10 @@ test('图片编排只接受 HTML 和 AI 类型', () => {
   assert.match(prompt, /yibiao-content-block/);
 });
 
-test('未保存配置使用 HTML 30 与可用 AI 20 的上限', () => {
+test('图片编排配置不再携带数量上限', () => {
   const context = createContext();
-  assert.equal(context.config.html.limit, 30);
-  assert.equal(context.config.ai.limit, 20);
+  assert.equal('limit' in context.config.html, false);
+  assert.equal('limit' in context.config.ai, false);
   assert.equal(context.config.html.allowed_types.length, 17);
 });
 
@@ -65,7 +65,7 @@ test('视觉节奏诊断只给出建议，不改变已选择图片计划', () =>
       '2.1': { status: 'success', content: longContent },
       '3.1': { status: 'success', content: '质量保障。' },
     },
-    options: { useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
     aiImagesAvailable: false,
     contentPlans: {
       '2.1': { scoring_point_ids: ['R1'] },
@@ -90,7 +90,7 @@ test('人工编辑章节不计入图片覆盖和视觉节奏诊断', () => {
       '1.1': { status: 'success', content: '人工正文。'.repeat(500) },
       '1.2': { status: 'success', content: 'AI 正文。' },
     },
-    options: { useHtmlImages: true, maxHtmlImages: 1, htmlImageTypes: 'network' },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
     aiImagesAvailable: false,
   });
   assert.deepEqual(context.eligibleSectionIds, ['1.2']);

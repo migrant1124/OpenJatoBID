@@ -1,11 +1,9 @@
 const crypto = require('node:crypto');
 
-const ILLUSTRATION_PLAN_VERSION = 7;
+const ILLUSTRATION_PLAN_VERSION = 8;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai'];
 const VISUAL_STYLES = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
-const ILLUSTRATION_KIND_ORDER = new Map(ILLUSTRATION_KINDS.map((kind, index) => [kind, index]));
-const MAX_IMAGES_PER_SECTION = 8;
 const AI_IMAGE_TYPES = new Set([
   'engineering_diagram',
   'realistic_photo',
@@ -82,11 +80,6 @@ function resolveAllowedHtmlTypes(value) {
   const selectedTypes = parseHtmlImageTypes(value);
   const allowedTypes = selectedTypes.map((type) => HTML_IMAGE_TYPE_LABELS.get(type) || (HTML_IMAGE_TYPE_VALUES.has(type) ? type : '')).filter(Boolean);
   return allowedTypes.length ? [...new Set(allowedTypes)] : [...HTML_IMAGE_TYPE_LABELS.values()];
-}
-
-function normalizeLimit(value, fallback, hardMax) {
-  const number = Number(value);
-  return Math.max(0, Math.min(Number.isFinite(number) ? Math.round(number) : fallback, hardMax));
 }
 
 function resolveSectionContent(item, sections) {
@@ -226,21 +219,15 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
   const config = {
     ai: {
       enabled: Boolean(options?.useAiImages ?? true) && Boolean(aiImagesAvailable),
-      limit: normalizeLimit(options?.maxAiImages, 20, 20),
       allowed_types: [...AI_IMAGE_TYPES],
       type_descriptions: AI_IMAGE_TYPE_DESCRIPTIONS,
     },
     html: {
       enabled: Boolean(options?.useHtmlImages ?? true) && allowedHtmlTypes.length > 0,
-      limit: normalizeLimit(options?.maxHtmlImages, 30, 30),
       allowed_types: allowedHtmlTypes,
     },
     eligible_section_ids: eligibleSectionIds,
   };
-  for (const kind of ILLUSTRATION_KINDS) {
-    if (config[kind].limit <= 0) config[kind].enabled = false;
-  }
-
   const illustrationInput = buildIllustrationInput({
     outlineData,
     contentPlans,
@@ -277,14 +264,14 @@ function buildIllustrationPlanningPrompt() {
 
 - technical-plan.md：投标文件全文；可写叶子小节由 yibiao-section-start / yibiao-section-end 标记，正文块由 yibiao-content-block 标记。
 - outline-tree.json：目录树，用于核对目录 ID、父子关系和顺序。
-- illustration-config.json：图片类型是否启用、允许类型和全文硬上限。
+- illustration-config.json：图片类型是否启用和允许类型。
 - illustration-input.json：章节写作合同摘要、评分点、增值锚点、全局事实和可用正文块；创意图片必须据此形成独立 Creative Brief。
 
 工作要求：
-1. 图片有 AI、HTML 两类；每类数量可低于上限，数量上限不是必须填满的目标。
+1. 图片有 AI、HTML 两类；由正文价值、评分关联、信息可视化必要性决定各自数量，不设程序数量上限，不为凑数量编排图片，也不因另一类图片数量压缩本类图片。
 2. kind 只能是 html、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
 3. 每项必须有简洁且不重复的 title、visual_role 和 purpose。图片必须能明确回答“帮助评委更快理解或相信什么”；不能回答时不要编排。
-4. 同一小节允许 0-8 张图片，但每张必须承担不同 visual_role；不要为了填满上限制造重复图意。同一小节的同一信息角色跨类型重复时只保留最合适的一张，优先 HTML、其次 AI。
+4. 同一小节的图片应各自承担清晰且不重复的 visual_role；避免无价值重复，但不要以程序配额、跨引擎优先级或另一类图片数量删除有效图片。
 5. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
 6. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
 7. AI 图片适合工程、现场、创意场景、空间和视觉概念；HTML 用于精确结构、数据、流程和矩阵。
@@ -450,7 +437,7 @@ function validateCreativeBrief(brief, candidate) {
 
 function validateCandidate(candidate, context) {
   const config = context.config[candidate.kind];
-  if (!ILLUSTRATION_KIND_ORDER.has(candidate.kind) || !config?.enabled) {
+  if (!ILLUSTRATION_KINDS.includes(candidate.kind) || !config?.enabled) {
     throw new Error(`图片候选类型未启用或无效：${candidate.kind || 'empty'}`);
   }
   if (!config.allowed_types.includes(candidate.image_type)) {
@@ -585,34 +572,12 @@ function resolveIllustrationPlan(content, context) {
     return validateCandidate(normalizeCandidate(item, index), context);
   });
 
-  const selected = [];
   const candidateStats = { html: 0, ai: 0 };
-  const selectedStats = { html: 0, ai: 0 };
-  const imageCountBySection = new Map();
-  const visualRolesBySection = new Map();
   for (const candidate of candidates) candidateStats[candidate.kind] += 1;
-
-  const sortedCandidates = [...candidates].sort((a, b) => ILLUSTRATION_KIND_ORDER.get(a.kind) - ILLUSTRATION_KIND_ORDER.get(b.kind)
-    || b.priority - a.priority || a.firstOrder - b.firstOrder || a.outputIndex - b.outputIndex);
-  for (const candidate of sortedCandidates) {
-    if (selectedStats[candidate.kind] >= context.config[candidate.kind].limit) continue;
-    const roleKey = visualRoleKey(candidate.visual_role);
-    const exceedsSectionLimit = candidate.section_ids.some((id) => (imageCountBySection.get(id) || 0) >= MAX_IMAGES_PER_SECTION);
-    const repeatsVisualRole = candidate.section_ids.some((id) => visualRolesBySection.get(id)?.has(roleKey));
-    if (exceedsSectionLimit || repeatsVisualRole) continue;
-    selected.push(candidate);
-    selectedStats[candidate.kind] += 1;
-    for (const id of candidate.section_ids) {
-      imageCountBySection.set(id, (imageCountBySection.get(id) || 0) + 1);
-      const roles = visualRolesBySection.get(id) || new Set();
-      roles.add(roleKey);
-      visualRolesBySection.set(id, roles);
-    }
-  }
-
-  selected.sort((a, b) => a.firstOrder - b.firstOrder
+  const selected = [...candidates].sort((a, b) => a.firstOrder - b.firstOrder
     || a.anchor.sequence - b.anchor.sequence
     || a.outputIndex - b.outputIndex);
+  const selectedStats = { ...candidateStats };
   const titleByKey = new Map();
   for (const candidate of selected) {
     const titleKey = normalizedTitleKey(candidate.title);
