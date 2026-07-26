@@ -34,7 +34,6 @@ export interface ContentGenerationOptions {
   maxHtmlImages: number;
   htmlImageTypes: string;
   tableRequirement: ContentTableRequirement;
-  minimumWords: number;
   enableConsistencyAudit: boolean;
   consistencyRepairMode: ConsistencyRepairMode;
   enableOriginalPlanCoverageAudit: boolean;

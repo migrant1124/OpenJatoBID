@@ -45,10 +45,7 @@ interface PendingMinimumWordsChoice {
   minimumWords: number;
 }
 
-type NumberInputDraft = number | '';
-type DraftContentGenerationOptions = Omit<ContentGenerationOptions, 'minimumWords'> & {
-  minimumWords: NumberInputDraft;
-};
+type DraftContentGenerationOptions = ContentGenerationOptions;
 
 const statusLabels: Record<TreeStatus, string> = {
   idle: '待生成',
@@ -64,11 +61,6 @@ const imageModelStatusLabels: Record<ImageModelStatus, string> = {
   available: '可用',
   unavailable: '不可用',
 };
-
-function formatTenThousandWords(value: number) {
-  const normalized = Math.max(0, Number(value) || 0) / 10000;
-  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
-}
 
 const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: string }> = [
   { value: 'none', label: '不要' },
@@ -164,7 +156,6 @@ const defaultContentGenerationOptions: ContentGenerationOptions = {
   maxHtmlImages: IMAGE_HARD_LIMITS.html,
   htmlImageTypes: DEFAULT_HTML_IMAGE_TYPES,
   tableRequirement: 'heavy',
-  minimumWords: 0,
   enableConsistencyAudit: true,
   consistencyRepairMode: 'agent',
   enableOriginalPlanCoverageAudit: false,
@@ -194,7 +185,6 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
   const fallback = buildDefaultGenerationOptions(imageModelAvailable, leafCount);
   const requestedMaxAiImages = Number(options?.maxAiImages ?? fallback.maxAiImages);
   const requestedMaxHtmlImages = Number(options?.maxHtmlImages ?? fallback.maxHtmlImages);
-  const requestedMinimumWords = Number(options?.minimumWords ?? fallback.minimumWords);
   const tableRequirement = options?.tableRequirement;
 
   return {
@@ -204,18 +194,11 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
     maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, IMAGE_HARD_LIMITS.html)),
     htmlImageTypes: String(options?.htmlImageTypes ?? fallback.htmlImageTypes),
     tableRequirement: isContentTableRequirement(tableRequirement) ? tableRequirement : fallback.tableRequirement,
-    minimumWords: Math.max(0, Number.isFinite(requestedMinimumWords) ? Math.round(requestedMinimumWords) : fallback.minimumWords),
     enableConsistencyAudit: Boolean(options?.enableConsistencyAudit ?? fallback.enableConsistencyAudit),
     consistencyRepairMode: isConsistencyRepairMode(options?.consistencyRepairMode) ? options.consistencyRepairMode : fallback.consistencyRepairMode,
     enableOriginalPlanCoverageAudit: isExpansionWorkflow ? Boolean(options?.enableOriginalPlanCoverageAudit ?? fallback.enableOriginalPlanCoverageAudit) : false,
     originalPlanCoverageRepairMode: isExpansionWorkflow && isOriginalPlanCoverageRepairMode(options?.originalPlanCoverageRepairMode) ? options.originalPlanCoverageRepairMode : fallback.originalPlanCoverageRepairMode,
   };
-}
-
-function parseMinimumWordsInput(value: string): NumberInputDraft {
-  if (value === '') return '';
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : '';
 }
 
 function collectLeafItems(items: OutlineItem[]): OutlineItem[] {
@@ -427,7 +410,7 @@ function ContentEditPage({
   const outlineExpansionRoundTotal = contentStats?.outline_expansion_round_total || outlineExpansionTotal;
   const outlineExpansionStepLabel = contentStats?.outline_expansion_step_label || '';
   const outlineExpansionProgress = outlineExpansionStepTotal ? Math.round((outlineExpansionStepCompleted / outlineExpansionStepTotal) * 100) : 0;
-  const minimumWords = contentStats?.minimum_words ?? contentGenerationOptions?.minimumWords ?? 0;
+  const minimumWords = contentStats?.minimum_words ?? (outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0);
   const currentWords = contentStats?.current_words ?? totalWords;
   const minimumWordsUnmet = minimumWords > 0 && currentWords < minimumWords;
   const canRetryMinimumWords = taskFailed && minimumWordsUnmet && completedCount === leaves.length;
@@ -693,11 +676,14 @@ function ContentEditPage({
     setHtmlImageTypesDialogOpen(false);
   };
 
-  const shouldAskMinimumWordsChoice = (options: ContentGenerationOptions) => leaves.length > 0
-    && completedCount === leaves.length
-    && !canRetryMinimumWords
-    && options.minimumWords > 0
-    && totalWords < options.minimumWords;
+  const shouldAskMinimumWordsChoice = () => {
+    const configuredMinimumWords = outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0;
+    return leaves.length > 0
+      && completedCount === leaves.length
+      && !canRetryMinimumWords
+      && configuredMinimumWords > 0
+      && totalWords < configuredMinimumWords;
+  };
 
   const openGenerationChoiceOrDialog = async () => {
     if (!outlineData?.outline?.length) {
@@ -715,13 +701,13 @@ function ContentEditPage({
       const available = nextStatus === 'available';
       const savedOptions = normalizeGenerationOptions(contentGenerationOptions, available, leaves.length, isExpansionWorkflow);
       setImageModelStatus(nextStatus);
-      if (shouldAskMinimumWordsChoice(savedOptions)) {
+      if (shouldAskMinimumWordsChoice()) {
         setPendingMinimumWordsChoice({
           options: savedOptions,
           imageModelAvailable: available,
           config: config || null,
           currentWords: totalWords,
-          minimumWords: savedOptions.minimumWords,
+          minimumWords: outlineWordControlSnapshot?.minimumWords || 0,
         });
         return;
       }
@@ -841,7 +827,6 @@ function ContentEditPage({
         maxHtmlImages: savedGenerationOptions.maxHtmlImages,
         htmlImageTypes: savedGenerationOptions.htmlImageTypes,
         tableRequirement: savedGenerationOptions.tableRequirement,
-        minimumWords: savedGenerationOptions.minimumWords,
         enableConsistencyAudit: savedGenerationOptions.enableConsistencyAudit,
         consistencyRepairMode: savedGenerationOptions.consistencyRepairMode,
         enableOriginalPlanCoverageAudit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -852,7 +837,7 @@ function ContentEditPage({
       table_requirement: savedGenerationOptions.tableRequirement,
       use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
       content_generation_action: contentGenerationAction,
-      minimum_words: savedGenerationOptions.minimumWords,
+      minimum_words: outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0,
       enable_consistency_audit: savedGenerationOptions.enableConsistencyAudit,
       consistency_repair_mode: savedGenerationOptions.enableConsistencyAudit ? savedGenerationOptions.consistencyRepairMode : undefined,
       enable_original_plan_coverage_audit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -875,13 +860,13 @@ function ContentEditPage({
       const nextImageModelAvailable = nextImageModelStatus === 'available';
       setImageModelStatus(nextImageModelStatus);
       const savedGenerationOptions = await saveDraftGenerationOptions(false, nextImageModelAvailable);
-      if (shouldAskMinimumWordsChoice(savedGenerationOptions)) {
+      if (shouldAskMinimumWordsChoice()) {
         setPendingMinimumWordsChoice({
           options: savedGenerationOptions,
           imageModelAvailable: nextImageModelAvailable,
           config: config || null,
           currentWords: totalWords,
-          minimumWords: savedGenerationOptions.minimumWords,
+          minimumWords: outlineWordControlSnapshot?.minimumWords || 0,
         });
         setGenerationDialogOpen(false);
         return;
@@ -973,7 +958,7 @@ function ContentEditPage({
         table_requirement: savedGenerationOptions.tableRequirement,
         use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
         content_generation_action: 'regenerate_section',
-        minimum_words: savedGenerationOptions.minimumWords,
+        minimum_words: outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0,
         enable_consistency_audit: savedGenerationOptions.enableConsistencyAudit,
         consistency_repair_mode: savedGenerationOptions.enableConsistencyAudit ? savedGenerationOptions.consistencyRepairMode : undefined,
         enable_original_plan_coverage_audit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -1288,17 +1273,6 @@ function ContentEditPage({
                   {tableRequirementOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                 </select>
               </label>
-              {outlineWordControlSnapshot?.enabled ? (
-                <div className="content-generation-config-row">
-                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.minimumWords)} 万字` : '不限制'}，最多 {outlineWordControlSnapshot.maximumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.maximumWords)} 万字` : '不限制'}{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${formatTenThousandWords(outlineWordControlSnapshot.sectionWords)} 万字` : ''}</small></span>
-                  <span>请在目录生成步骤修改</span>
-                </div>
-              ) : (
-                <label className="content-generation-config-row">
-                  <span><strong>最低字数</strong></span>
-                  <input type="number" min="0" step="1000" value={draftGenerationOptions.minimumWords} disabled={generationStrategyLocked} onChange={(event) => setDraftGenerationOptions((prev) => ({ ...prev, minimumWords: parseMinimumWordsInput(event.target.value) }))} />
-                </label>
-              )}
               <label className="content-generation-config-row">
                 <span>
                   <strong>全文一致性审计</strong>
@@ -1447,7 +1421,6 @@ function ContentEditPage({
                 </>
               )}
             </div>
-            <p className="content-generation-config-note">图片数量是全文上限，AI 会按内容价值决定实际数量，不会强制填满。</p>
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={saveGenerationOptions} disabled={taskInFlight || paused}>

@@ -2519,7 +2519,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function saveContentGenerationOptions(contentGenerationOptions) {
-    return updateTechnicalPlan({ contentGenerationOptions, contentIllustrationPlan: undefined });
+    const { minimumWords, minimum_words, ...options } = contentGenerationOptions || {};
+    return updateTechnicalPlan({ contentGenerationOptions: options, contentIllustrationPlan: undefined });
   }
 
   function saveChapterContent({ nodeId, content }) {

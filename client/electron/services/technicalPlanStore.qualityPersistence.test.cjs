@@ -107,3 +107,37 @@ test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼�
     fs.rmSync(userDataPath, { recursive: true, force: true });
   }
 });
+
+test('正文生成配置不再保存最低字数，字数控制仅保留目录快照', () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'openjatobid-content-options-'));
+  const app = createTestApp(userDataPath);
+  const sqlite = createSqliteDatabase(app);
+  const store = createTechnicalPlanStore({ app, db: sqlite.db, fileService: {} });
+
+  try {
+    store.updateTechnicalPlan({
+      outlineWordControlSnapshot: {
+        enabled: true,
+        minimumWords: 20000,
+        maximumWords: 30000,
+        sectionWords: 1500,
+        strictSectionWords: true,
+      },
+    });
+    store.saveContentGenerationOptions({
+      tableRequirement: 'heavy',
+      useAiImages: true,
+      minimumWords: 10000,
+      minimum_words: 10000,
+    });
+
+    const loaded = store.loadTechnicalPlan();
+    assert.equal(loaded.contentGenerationOptions.minimumWords, undefined);
+    assert.equal(loaded.contentGenerationOptions.minimum_words, undefined);
+    assert.equal(loaded.contentGenerationOptions.tableRequirement, 'heavy');
+    assert.equal(loaded.outlineWordControlSnapshot.minimumWords, 20000);
+  } finally {
+    sqlite.close();
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
+});

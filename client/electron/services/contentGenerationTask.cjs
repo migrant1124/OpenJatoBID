@@ -383,11 +383,6 @@ function normalizeOriginalPlanCoverageRepairMode(value) {
   return String(value || '').trim() === 'normal' ? 'normal' : 'agent';
 }
 
-function normalizeMinimumWords(value) {
-  const words = Number(value);
-  return Math.max(0, Number.isFinite(words) ? Math.round(words) : 0);
-}
-
 function normalizePositiveInteger(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
@@ -3256,9 +3251,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   const developerModeEnabled = isDeveloperModeEnabled(aiService);
   const tableRequirement = normalizeTableRequirement(generationOptions.tableRequirement ?? generationOptions.table_requirement);
   let maxTables = maxTablesForRequirement(tableRequirement, leaves.length);
-  const minimumWords = targetItemId ? 0 : wordControl.enabled
-    ? wordControl.minimumWords
-    : normalizeMinimumWords(generationOptions.minimumWords ?? generationOptions.minimum_words);
+  const minimumWords = targetItemId || !wordControl.enabled ? 0 : wordControl.minimumWords;
   const maximumWords = targetItemId || !wordControl.enabled ? 0 : wordControl.maximumWords;
   const enforceSectionWords = !targetItemId && wordControl.enabled && wordControl.strictSectionWords;
   if (minimumWords > 0 && maximumWords > 0 && maximumWords < minimumWords) {

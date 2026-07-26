@@ -193,7 +193,9 @@ function inferContentGenerationPhase(technicalPlan) {
   const leaves = collectLeafItems(technicalPlan?.outlineData?.outline || []);
   const sections = technicalPlan?.contentGenerationSections || {};
   const completed = leaves.filter((item) => sections[item.id]?.status === 'success').length;
-  const minimumWords = Number(taskContent.minimum_words ?? technicalPlan?.contentGenerationOptions?.minimumWords ?? 0) || 0;
+  const minimumWords = Number(taskContent.minimum_words
+    ?? (technicalPlan?.outlineWordControlSnapshot?.enabled ? technicalPlan.outlineWordControlSnapshot.minimumWords : 0)
+    ?? 0) || 0;
   const currentWords = Number(taskContent.current_words ?? 0) || 0;
 
   if (leaves.length && completed >= leaves.length && minimumWords > 0 && currentWords < minimumWords) {
