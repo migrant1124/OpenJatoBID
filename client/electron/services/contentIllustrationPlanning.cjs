@@ -1,8 +1,9 @@
 const crypto = require('node:crypto');
 
-const ILLUSTRATION_PLAN_VERSION = 5;
+const ILLUSTRATION_PLAN_VERSION = 6;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai'];
+const VISUAL_STYLES = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
 const ILLUSTRATION_KIND_ORDER = new Map(ILLUSTRATION_KINDS.map((kind, index) => [kind, index]));
 const MAX_IMAGES_PER_SECTION = 8;
 const AI_IMAGE_TYPES = new Set([
@@ -294,6 +295,7 @@ function buildIllustrationPlanningPrompt() {
 
 illustration-plan.json 只能使用以下结构：
 {
+  "visual_style": "技术研究",
   "items": [
     {
       "kind": "ai",
@@ -520,7 +522,7 @@ function resolveIllustrationPlan(content, context) {
   if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
     throw new Error('Agent 图片编排结果缺少 items 数组');
   }
-  const extraRootFields = Object.keys(parsed).filter((key) => key !== 'items');
+  const extraRootFields = Object.keys(parsed).filter((key) => !['items', 'visual_style'].includes(key));
   if (extraRootFields.length) throw new Error(`Agent 图片编排结果包含多余字段：${extraRootFields.join(', ')}`);
 
   const allowedFields = new Set([
@@ -592,9 +594,12 @@ function resolveIllustrationPlan(content, context) {
     plan: {
       plan_version: ILLUSTRATION_PLAN_VERSION,
       revision,
+      confirmation_status: 'pending',
+      recommended_visual_style: VISUAL_STYLES.includes(String(parsed.visual_style || '').trim()) ? String(parsed.visual_style).trim() : undefined,
       items: planItems.map((item) => ({
         item_id: stableHash(item).slice(0, 24),
         ...item,
+        selected: true,
         generation: { status: 'pending' },
       })),
       updated_at: new Date().toISOString(),
@@ -605,6 +610,7 @@ function resolveIllustrationPlan(content, context) {
 
 module.exports = {
   ILLUSTRATION_PLAN_VERSION,
+  VISUAL_STYLES,
   buildIllustrationPlanningContext,
   buildIllustrationPlanningPrompt,
   parseHtmlImageTypes,

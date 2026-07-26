@@ -50,6 +50,7 @@ function buildIllustrationExecutionContexts(plan, leafContexts, sections) {
   const contextById = new Map((leafContexts || []).map((context) => [context.item.id, context]));
   return (plan?.items || []).map((planItem) => ({
     planItem,
+    visualStyle: plan?.visual_style || plan?.recommended_visual_style || '',
     contexts: planItem.section_ids.map((id) => contextById.get(id)).filter(Boolean),
     reference: buildIllustrationReference(planItem, contextById, sections),
   }));
@@ -59,6 +60,12 @@ function getPlannedTitle(execution) {
   const title = singleLine(execution.planItem.title);
   if (!title) throw new Error(`图片计划缺少 title：${execution.planItem.item_id || 'unknown'}`);
   return title;
+}
+
+function formatPlanContext(execution) {
+  const item = execution.planItem || {};
+  const list = (value) => Array.isArray(value) && value.length ? value.join('、') : '无';
+  return `图片规划：视觉作用：${item.visual_role || '未指定'}；配图目的：${item.purpose || '未指定'}；比例：${item.aspect_ratio || '未指定'}；关联评分项：${list(item.scoring_point_ids)}；价值锚点：${list(item.value_anchor_ids)}；插入锚点：${item.anchor?.type || '章节末尾'}；全文视觉风格：${execution.visualStyle || '由内容自行判断'}。`;
 }
 
 function formatCreativeBrief(brief) {
@@ -100,6 +107,7 @@ function buildAiImagePrompt(execution) {
 图片需要准确表达正文中的设备、环境、部署关系或实施场景，不要编造正文中没有的关键对象。
 不要有太多文字，专业、克制，适合投标技术方案。没有用户提供的品牌资产时不得生成 Logo 或近似 Logo；不得生成关键中文文案、伪造客户/人物/场地/案例。
 ${creativeBrief ? `\n${creativeBrief}\n` : ''}
+${formatPlanContext(execution)}
 参考内容如下：
 
 ${execution.reference}`;
@@ -109,6 +117,7 @@ function buildHtmlImagePrompt(execution) {
   const title = getPlannedTitle(execution);
   return `阅读并理解以下内容，用html绘制一张${execution.planItem.image_type}。
 最终图题：${title}
+${formatPlanContext(execution)}
 必须围绕最终图题限定的对象、范围和关系重点设计图形，不要生成泛化的章节概览。
 不要有太多文字描述，专业商务风格。这是一个类图片的html，所以注意仔细检查显示效果、文字换行、拥挤等问题。文字不得旋转、倒置、镜像或缩放变形，不得相互重叠、被前景元素遮挡或被容器裁切。不要使用固定或粘性文字布局，文字容器应随内容增长。宽度固定${HTML_DESIGN_WIDTH}px，高度自适应，不依赖在线字体或外部资源。
 生成包含 html、head、body 的完整 HTML 文档，不依赖本地文件。参考内容如下：
@@ -121,6 +130,8 @@ function buildHtmlAgentPrompt(execution) {
   return `请读取当前工作目录中的 reference.md，阅读并理解全部内容，用 HTML 绘制一张${execution.planItem.image_type}。
 
 最终图题：${title}
+
+${formatPlanContext(execution)}
 
 要求：
 1. 必须围绕最终图题限定的对象、范围和关系重点设计图形，不要生成泛化的章节概览。

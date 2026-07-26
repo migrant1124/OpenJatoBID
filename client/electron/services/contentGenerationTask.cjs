@@ -3219,7 +3219,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   const runOnlyIllustrationPlanning = rerunIllustrations
     || (resume && contentRuntime.phase === 'illustration-planning')
     || (retryContentCorrection && previousState?.contentGenerationTask?.stats?.content?.phase === 'illustration-planning');
-  const runOnlyIllustrationGeneration = (resume && contentRuntime.phase === 'illustration-generating')
+  const runOnlyIllustrationGeneration = (resume && ['illustration-confirmation', 'illustration-generating'].includes(contentRuntime.phase))
     || (retryContentCorrection && previousState?.contentGenerationTask?.stats?.content?.phase === 'illustration-generating');
   const runOnlyIllustrationStage = runOnlyIllustrationPlanning || runOnlyIllustrationGeneration;
   const regenerate = !resume && !retryContentCorrection && !rerunIllustrations && Boolean(payload.regenerate);
@@ -6821,7 +6821,8 @@ workspace 文件说明：
     illustrationPlan = {
       ...illustrationPlan,
       items: illustrationPlan.items.filter((item) => (
-        Array.isArray(item.section_ids)
+        item.selected !== false
+        && Array.isArray(item.section_ids)
         && item.section_ids.length > 0
         && item.section_ids.every((sectionId) => allowedIllustrationSectionIds.has(sectionId))
       )),
@@ -7080,6 +7081,13 @@ workspace 文件说明：
       }
       pauseIfRequested('正文生成已在全文图片编排前暂停，可导出当前已完成内容，稍后继续。');
       illustrationPlan = await runIllustrationPlanning();
+      contentStats.phase = 'illustration-confirmation';
+      contentStats.illustration_planning_step_label = '等待确认全文图片计划';
+      persistPausedContentGeneration('全文图片编排完成，请确认图片计划后再开始生成。');
+      throw createContentGenerationPausedError();
+    }
+    if (illustrationPlan?.confirmation_status !== 'confirmed') {
+      throw new Error('请先确认全文图片计划后再开始生成。');
     }
     pauseIfRequested('正文生成已在图片生成前暂停，可导出当前已完成内容，稍后继续。');
     await runIllustrationGeneration(illustrationPlan);

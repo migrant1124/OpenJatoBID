@@ -152,6 +152,7 @@ const bridge = {
     saveOutline: (outlineData) => ipcRenderer.invoke('technical-plan:save-outline', outlineData),
     saveGlobalFacts: (globalFacts) => ipcRenderer.invoke('technical-plan:save-global-facts', globalFacts),
     saveContentGenerationOptions: (options) => ipcRenderer.invoke('technical-plan:save-content-generation-options', options),
+    saveContentIllustrationPlan: (plan) => ipcRenderer.invoke('technical-plan:save-content-illustration-plan', plan),
     saveChapterContent: (payload) => ipcRenderer.invoke('technical-plan:save-chapter-content', payload),
     clear: () => ipcRenderer.invoke('technical-plan:clear'),
   },

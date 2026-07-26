@@ -68,14 +68,15 @@ const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: st
   { value: 'moderate', label: '适中' },
   { value: 'heavy', label: '大量' },
 ];
+const visualStyleOptions = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
 
 const consistencyRepairModeOptions: Array<{ value: ConsistencyRepairMode; label: string }> = [
-  { value: 'agent', label: 'Agent 修复（推荐）' },
+  { value: 'agent', label: 'Agent 修复' },
   { value: 'normal', label: '普通修复' },
 ];
 
 const originalPlanCoverageRepairModeOptions: Array<{ value: OriginalPlanCoverageRepairMode; label: string }> = [
-  { value: 'agent', label: 'Agent 修复（推荐）' },
+  { value: 'agent', label: 'Agent 修复' },
   { value: 'normal', label: '普通修复' },
 ];
 
@@ -339,6 +340,8 @@ function ContentEditPage({
   const [pendingMinimumWordsChoice, setPendingMinimumWordsChoice] = useState<PendingMinimumWordsChoice | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
+  const [illustrationPlanDraft, setIllustrationPlanDraft] = useState<ContentIllustrationPlanState | null>(null);
+  const [illustrationConfirmationOpen, setIllustrationConfirmationOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [developerMode, setDeveloperMode] = useState(false);
   const firstLeafId = leaves[0]?.id || '';
@@ -386,6 +389,14 @@ function ContentEditPage({
   const contentCorrecting = originalAuditing || auditing || tableCleaning;
   const illustrationPlanning = phaseVisible && contentStats?.phase === 'illustration-planning';
   const illustrationGenerating = phaseVisible && contentStats?.phase === 'illustration-generating';
+  const awaitingIllustrationConfirmation = paused && contentStats?.phase === 'illustration-confirmation' && Boolean(contentIllustrationPlan);
+
+  useEffect(() => {
+    if (awaitingIllustrationConfirmation && contentIllustrationPlan) {
+      setIllustrationPlanDraft(contentIllustrationPlan);
+      setIllustrationConfirmationOpen(true);
+    }
+  }, [awaitingIllustrationConfirmation, contentIllustrationPlan]);
   const outlineMeta = useMemo(() => outlineData?.outline ? buildOutlineMeta(outlineData.outline, sections, planning) : new Map<string, OutlineNodeMeta>(), [outlineData, planning, sections]);
   const contentSummary = useMemo(() => leaves.reduce((summary, item) => {
     const status = getLeafStatus(item, sections);
@@ -738,12 +749,38 @@ function ContentEditPage({
     if (!paused) {
       return;
     }
+    if (contentStats?.phase === 'illustration-confirmation') {
+      setIllustrationConfirmationOpen(true);
+      return;
+    }
 
     try {
       await window.yibiao?.tasks.startContentGeneration({ resume: true });
       showToast('已继续正文生成任务', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '继续正文生成失败', 'error');
+    }
+  };
+
+  const saveIllustrationPlanConfirmation = async (confirmed: boolean) => {
+    if (!illustrationPlanDraft) return;
+    const nextPlan: ContentIllustrationPlanState = {
+      ...illustrationPlanDraft,
+      confirmation_status: confirmed ? 'confirmed' : 'pending',
+      visual_style: illustrationPlanDraft.visual_style || illustrationPlanDraft.recommended_visual_style,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      await window.yibiao?.technicalPlan.saveContentIllustrationPlan(nextPlan);
+      setIllustrationPlanDraft(nextPlan);
+      if (confirmed) {
+        await window.yibiao?.tasks.startContentGeneration({ resume: true });
+        showToast('图片计划已确认，开始生成图片', 'success');
+      } else {
+        showToast('图片计划已保存', 'success');
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存图片计划失败', 'error');
     }
   };
 
@@ -1489,6 +1526,49 @@ function ContentEditPage({
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={regenerateAfterMinimumWordsChoice} disabled={taskBlocksGeneration}>清空重新生成</button>
               <button type="button" className="primary-action" onClick={continueMinimumWordsExpansion} disabled={taskBlocksGeneration}>继续补齐字数</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={awaitingIllustrationConfirmation && illustrationConfirmationOpen} onOpenChange={setIllustrationConfirmationOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-generation-config-card illustration-confirmation-card" aria-describedby={undefined}>
+            <div className="content-regenerate-card-head">
+              <span className="section-kicker">正文生成</span>
+              <Dialog.Title>图片编排确认</Dialog.Title>
+              <Dialog.Description>请确认本次技术方案的配图计划，取消不需要的图片后再开始生成。</Dialog.Description>
+            </div>
+            <div className="illustration-confirmation-summary">
+              <span>预计生成 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b> 张</span>
+              <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'html').length || 0}</b> 张</span>
+              <span>AI 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b> 张</span>
+              <span>最低字数阈值 <b>{minimumWords}</b> 字</span>
+              <label>全文视觉风格
+                <select value={illustrationPlanDraft?.visual_style || illustrationPlanDraft?.recommended_visual_style || ''} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, visual_style: event.target.value } : plan)}>
+                  <option value="">AI 未推荐</option>
+                  {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="illustration-confirmation-table">
+              <div className="illustration-confirmation-row illustration-confirmation-head"><span>生成</span><span>章节与锚点</span><span>图片标题</span><span>类型</span><span>图表类型与视觉作用</span></div>
+              {illustrationPlanDraft?.items.map((item) => (
+                <div className="illustration-confirmation-row" key={item.item_id}>
+                  <input type="checkbox" checked={item.selected !== false} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, selected: event.target.checked } : candidate) } : plan)} />
+                  <span>{item.section_ids.join('、')}</span>
+                  <input value={item.title} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, title: event.target.value } : candidate) } : plan)} />
+                  <select value={item.kind} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, kind: event.target.value as ContentIllustrationKind } : candidate) } : plan)}><option value="html">HTML</option><option value="ai">AI</option></select>
+                  <span>{item.image_type} · {item.visual_role || item.purpose || '未指定'}</span>
+                </div>
+              ))}
+            </div>
+            <p className="illustration-confirmation-note">图片编号和图注将在正文中自动生成。</p>
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" onClick={() => setIllustrationConfirmationOpen(false)}>取消</button>
+              <button type="button" className="secondary-action" onClick={() => void saveIllustrationPlanConfirmation(false)}>保存计划</button>
+              <button type="button" className="primary-action" onClick={() => void saveIllustrationPlanConfirmation(true)}>确认并开始生成</button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

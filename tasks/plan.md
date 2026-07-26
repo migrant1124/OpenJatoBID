@@ -1332,3 +1332,50 @@ T71 → T72 → T73 → T74 → T75
 - 为重点优先级、人工子树切换、正文零调用和人工说明导出补充聚焦回归。
 - 对实际修改的 CJS 文件执行 `node --check`，并运行相关 Node 测试和 `cd client; npm run build`。
 - 完整重启 Electron 后人工验证目录确认、正文跳过和 Word 导出；未执行真实模型调用、打包、提交或远程 Git 操作。
+
+## 15. 图片编排确认与生成上下文 P0
+
+> 权威需求：[技术方案配图规划与生成优化 Spec](../docs/secondary-development/prd/image-illustration-optimization-spec.md)。本阶段只实现 Spec 2.1—2.5；P1 的视觉节奏、模板、图文衔接和 AI 视觉复核不得提前实施。
+
+### 15.1 当前基线与约束
+
+- 图片计划由 `contentIllustrationPlanning.cjs` 生成并持久化到 `contentIllustrationPlan`；正文任务保存计划后直接进入图片生成。
+- 图片生成的现有执行上下文只带计划项和章节正文，未完整传入视觉作用、目的、比例、评分项、价值锚点与全文风格。
+- 计划、正文任务状态和运行期相位均由 Main 侧 SQLite Store 权威持久化；Renderer 通过既有 preload/IPC 访问。
+- 不新增 SQLite migration、依赖、Analytics 字段、管理端、发布或导出改动。旧计划在重新编排时按新版本生成；旧工作区不能绕过确认直接进入新图片生成。
+
+### 15.2 T157 图片计划确认状态与保存契约 — M
+
+- 范围：`contentIllustrationPlanning.cjs`、`technicalPlanStore.cjs`、`technicalPlanIpc.cjs`、`preload.cjs`、`ipc.ts`、技术方案类型与聚焦测试。
+- 目标：在现有 `contentIllustrationPlan` 中持久化确认状态、AI 推荐/用户选择的视觉风格，以及用户筛选、标题/类型修改后的计划；不保存“最小图片比例”。
+- 规则：图片计划生成后状态为待确认；保存计划不启动任务；只允许 HTML/AI 类型及该类型允许的 `image_type`；确认后仍按现有有效锚点、人工节点保护和事实约束执行。
+- 验收：保存后重新加载仍保留修改；旧计划或无确认计划不能作为新图片生成输入。
+
+### 15.3 T158 正文任务确认停点与恢复 — H
+
+- 范围：`contentGenerationTask.cjs`、`taskService.cjs`、`contentGenerationGuard.cjs` 及相邻聚焦测试。
+- 目标：全文图片编排完成后，将正文任务持久化停在 `illustration-confirmation`，不调度 HTML/AI 生成；确认后只继续已保存计划的图片生成。
+- 规则：取消确认不写正文；取消全部图片时允许任务完成且不插图；重新配图必须重新编排并再次确认；暂停/恢复、失败重试和原有人工节点保护保持有效。
+- 验收：确认前图片模型、HTML Agent 和本地渲染调用次数均为 0；确认后只运行勾选项目。
+
+### 15.4 T159 图片编排确认界面 — M
+
+- 范围：`ContentEditPage.tsx`、`TechnicalPlanHome.tsx`、技术方案类型、`feature-technical-plan.css`。
+- 目标：按已选高保真基线，在正文生成阶段展示内部滚动、固定操作区的“图片编排确认”弹窗。
+- 内容：只读汇总（预计图片、HTML、AI、配额剩余、目录最低字数阈值）；可编辑图片标题和 HTML/AI 类型；可取消图片；展示章节/锚点、具体类型、视觉作用、评分项/价值锚点、比例、优先级；不显示最小图片比例。
+- 视觉风格：不设默认；由 AI 根据全文与计划推荐七种预设之一，用户可改选；保存与确认均持久化最终选择。
+- 验收：用户可保存、关闭、重新打开、取消全部、确认继续；长计划只在弹窗内容区滚动。
+
+### 15.5 T160 受确认计划驱动的 HTML/AI 提示词 — M
+
+- 范围：`contentIllustrationGeneration.cjs`、必要的计划/生成聚焦测试。
+- 目标：让 HTML、普通 AI 和 HTML Agent 提示词均接收最终计划的视觉作用、目的、比例、评分项、价值锚点、锚点上下文、具体类型和全文视觉风格。
+- 规则：渐变不作为生成限制或质量检查项；不加入 P1 模板、图号/图注、图后说明或 AI 视觉复核。
+- 验收：聚焦提示词测试证明确认后的字段进入两类生成上下文，且原 HTML 布局质检规则不变。
+
+### 15.6 T161 P0 验证与用户测试门 — M
+
+- 自动化：计划确认持久化、确认停点/恢复、取消全部、类型约束、提示词字段与既有 HTML 保护测试。
+- 静态：受改 CJS `node --check`、Renderer `npm run build`、`git diff --check`；`npm audit` 仅报告，不自动修复。
+- 运行：完整重启 Electron，在正文生成完成后的真实界面确认计划弹窗、保存后恢复、取消全部与确认生成；记录控制台/任务状态/截图。
+- 用户门：P0 通过用户测试后，才将 P1 加入新的计划与 `tasks/todo.md`；本次不实现 P1。

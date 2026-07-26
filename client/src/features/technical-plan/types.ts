@@ -14,7 +14,7 @@ export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error
 export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
-export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-generating' | 'done';
+export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-confirmation' | 'illustration-generating' | 'done';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
 export type ConsistencyRepairMode = 'agent' | 'normal';
 export type OriginalPlanCoverageRepairMode = 'agent' | 'normal';
@@ -367,6 +367,7 @@ export interface ContentIllustrationPlanItem {
   aspect_ratio?: string;
   creative_brief?: CreativeBrief;
   priority: number;
+  selected?: boolean;
   generation?: {
     status: 'pending' | 'running' | 'success' | 'error';
     mode?: 'normal' | 'agent';
@@ -390,6 +391,9 @@ export interface ContentIllustrationPlanState {
   plan_version: number;
   revision: string;
   items: ContentIllustrationPlanItem[];
+  confirmation_status?: 'pending' | 'confirmed';
+  recommended_visual_style?: string;
+  visual_style?: string;
   updated_at?: string;
 }
 

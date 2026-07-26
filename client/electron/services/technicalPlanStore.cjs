@@ -2523,6 +2523,10 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return updateTechnicalPlan({ contentGenerationOptions: options, contentIllustrationPlan: undefined });
   }
 
+  function saveContentIllustrationPlan(contentIllustrationPlan) {
+    return updateTechnicalPlan({ contentIllustrationPlan });
+  }
+
   function saveChapterContent({ nodeId, content }) {
     const transaction = db.transaction(() => {
       assertContentEditingAllowed();
@@ -2794,6 +2798,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveIllustrationChart,
     saveIllustrationPng,
     saveContentGenerationOptions,
+    saveContentIllustrationPlan,
     saveChapterContent,
   };
 }
