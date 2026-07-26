@@ -5,9 +5,6 @@ const { app, dialog, nativeImage } = require('electron');
 const cheerio = require('cheerio');
 const { imageSize } = require('image-size');
 const { compactLogError, createDeveloperLogger, textMetrics } = require('../utils/developerLog.cjs');
-const { getMermaidCacheEntry, saveMermaidCacheImage } = require('../utils/mermaidCache.cjs');
-const { assertSupportedMermaidSyntax } = require('../utils/mermaidPolicy.cjs');
-const { getLocalImageRenderService } = require('./localImageRenderService.cjs');
 const { getGeneratedImagesDir, getImportedImagesDir } = require('../utils/paths.cjs');
 const { REMOTE_IMAGE_RETRY_ATTEMPTS, REMOTE_IMAGE_RETRY_DELAY_MS } = require('../utils/remoteImageRetry.cjs');
 const { renderMarkdownHtml } = require('../utils/renderMarkdownHtml.cjs');
@@ -129,8 +126,8 @@ function reportProgress(context, progress, message, extra = {}) {
 
 function reportConversionProgress(context, message) {
   const stats = context?.stats || {};
-  const total = Math.max(1, (stats.leafCount || 0) + (stats.mermaidCount || 0));
-  const done = Math.min(total, (context.convertedLeafCount || 0) + (context.convertedMermaidCount || 0));
+  const total = Math.max(1, stats.leafCount || 0);
+  const done = Math.min(total, context.convertedLeafCount || 0);
   reportProgress(context, 10 + (done / total) * 78, message);
 }
 
@@ -165,26 +162,19 @@ function compactText(value, maxLength = 140) {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-function countMermaidBlocks(content) {
-  return (String(content || '').match(/```mermaid[\s\S]*?```/gi) || []).length;
-}
-
 function countOutlineStats(items = []) {
   let leafCount = 0;
-  let mermaidCount = 0;
 
   for (const item of items || []) {
     if (item.children?.length) {
       const childStats = countOutlineStats(item.children);
       leafCount += childStats.leafCount;
-      mermaidCount += childStats.mermaidCount;
     } else {
       leafCount += 1;
-      mermaidCount += countMermaidBlocks(item.content);
     }
   }
 
-  return { leafCount, mermaidCount };
+  return { leafCount };
 }
 
 function collectOutlineContents(items = []) {
@@ -1188,37 +1178,6 @@ async function loadImageWithRetry(source, context = {}, options = {}) {
   return null;
 }
 
-async function resolveMermaidImageForExport(code, context = {}, options = {}) {
-  const cacheEntry = options.cacheEntry || getMermaidCacheEntry(app, code);
-  if (cacheEntry.exists) {
-    return {
-      source: cacheEntry.assetUrl,
-      cacheHit: true,
-      cacheHash: cacheEntry.hash,
-    };
-  }
-
-  const rendered = await getLocalImageRenderService().renderMermaidToPng(cacheEntry.code, { timeoutMs: 30000 });
-  const loaded = { buffer: rendered.buffer, type: 'png' };
-  if (loaded?.buffer?.length) {
-    try {
-      saveMermaidCacheImage(app, cacheEntry.hash, loaded.buffer);
-    } catch (error) {
-      writeExportLog(context, 'export.mermaid.cache_write_failed', {
-        cache_hash: cacheEntry.hash,
-        error: compactLogError(error),
-      });
-    }
-  }
-
-  return {
-    source: cacheEntry.assetUrl,
-    loaded,
-    cacheHit: false,
-    cacheHash: cacheEntry.hash,
-  };
-}
-
 async function imageRunFromNode(node, context, options = {}) {
   let loaded = null;
   const imageLabel = compactText(node.alt || node.url || '未知图片');
@@ -1550,69 +1509,6 @@ function buildHtmlBodyParaOpts(context) {
   return opts;
 }
 
-async function mermaidCodeToDocxBlocks(code, context) {
-  const value = String(code || '').trim();
-  if (!value) return [];
-
-  const nextIndex = (context.convertedMermaidCount || 0) + 1;
-  const total = context.stats?.mermaidCount || nextIndex;
-  let cacheEntry = null;
-
-  try {
-    assertSupportedMermaidSyntax(value);
-    cacheEntry = getMermaidCacheEntry(app, value);
-    writeExportLog(context, 'export.mermaid.started', {
-      mermaid_index: nextIndex,
-      total,
-      cache_hash: cacheEntry.hash,
-      cache_hit: cacheEntry.exists,
-      code_metrics: textMetrics(value),
-    });
-    reportConversionProgress(context, cacheEntry.exists
-      ? `Mermaid 图 ${nextIndex}/${total} 已命中本地缓存。`
-      : `正在转换 Mermaid 图 ${nextIndex}/${total}，可能需要联网等待。`);
-    const loadRetry = {
-      retryAttempts: REMOTE_IMAGE_RETRY_ATTEMPTS,
-      retryDelayMs: REMOTE_IMAGE_RETRY_DELAY_MS,
-      onRetry: (attempt) => {
-        reportConversionProgress(context, `Mermaid 图 ${nextIndex}/${total} 转换失败，3 秒后第 ${attempt} 次重试。`);
-      },
-    };
-    const mermaidImage = await resolveMermaidImageForExport(value, context, { cacheEntry, loadRetry });
-    const block = mermaidImage.loaded === undefined
-      ? await imageParagraphFromSource(mermaidImage.source, 'Mermaid 图', context)
-      : await imageParagraphFromLoadedImage(mermaidImage.source, 'Mermaid 图', mermaidImage.loaded, context);
-    writeExportLog(context, 'export.mermaid.completed', {
-      mermaid_index: nextIndex,
-      total,
-      cache_hash: mermaidImage.cacheHash,
-      cache_hit: mermaidImage.cacheHit,
-    });
-    reportConversionProgress(context, mermaidImage.cacheHit
-      ? `Mermaid 图 ${nextIndex}/${total} 已使用本地缓存。`
-      : `Mermaid 图 ${nextIndex}/${total} 已转换并缓存。`);
-    return [block];
-  } catch (error) {
-    const message = `Mermaid 图无法导出：${compactText(error.message || '转换失败', 120)}`;
-    addWarning(context, message);
-    writeExportLog(context, 'export.mermaid.error', {
-      mermaid_index: nextIndex,
-      total,
-      cache_hash: cacheEntry?.hash || '',
-      error: compactLogError(error),
-    });
-    reportConversionProgress(context, `Mermaid 图 ${nextIndex}/${total} 转换失败。`);
-    return [paragraph([textRun(`[${message}]`, { color: 'C83220' })], { alignment: AlignmentType.CENTER })];
-  } finally {
-    context.convertedMermaidCount = nextIndex;
-  }
-}
-
-function isMermaidCodeElement($, codeNode) {
-  const className = String($(codeNode).attr('class') || '').toLowerCase();
-  return /\blanguage-mermaid\b/.test(className) || /\bmermaid\b/.test(className);
-}
-
 async function htmlHeadingToDocxBlocks($, node, context) {
   const mdLevel = Math.min(Math.max(parseInt(htmlTagName(node).slice(1), 10) || 1, 1), 6);
   const style = getHeadingStyle(context.exportFormat, mdLevel);
@@ -1675,10 +1571,6 @@ async function htmlNodeToDocxBlocks($, node, context, options = {}) {
     })];
   }
   if (tag === 'pre') {
-    const codeNode = $(node).children('code').first();
-    if (codeNode.length && isMermaidCodeElement($, codeNode[0])) {
-      return mermaidCodeToDocxBlocks(codeNode.text(), context);
-    }
     return [paragraph([new TextRun({ text: cleanText($(node).text()), font: 'Consolas', size: 21, color: '243048' })], {
       shading: { type: ShadingType.CLEAR, fill: 'F6F9FF' },
       indent: { left: 260, right: 260 },
@@ -2006,7 +1898,6 @@ async function buildDocxResult(payload, options = {}) {
     warnings: options.warnings || [],
     stats,
     convertedLeafCount: 0,
-    convertedMermaidCount: 0,
     imageCount: 0,
     imageSuccessCount: 0,
     numberingReferences: [],
@@ -2051,9 +1942,7 @@ async function buildDocxResult(payload, options = {}) {
     paragraph([textRun(payload.project_name || '投标技术文件', { bold: true, size: 34 })], { alignment: AlignmentType.CENTER, after: 300 }),
   ];
 
-  reportProgress(context, 10, stats.mermaidCount
-    ? `准备导出正文，并转换 ${stats.mermaidCount} 张 Mermaid 图。`
-    : '准备导出正文。');
+  reportProgress(context, 10, '准备导出正文。');
   await addOutlineItems(children, payload.outline || [], context);
   reportProgress(context, 90, '正在生成 Word 文件。');
 
@@ -2123,7 +2012,6 @@ async function buildDocxResult(payload, options = {}) {
     stats,
     warning_count: context.warnings.length,
     converted_leaf_count: context.convertedLeafCount,
-    converted_mermaid_count: context.convertedMermaidCount,
     image_count: context.imageCount,
     image_success_count: context.imageSuccessCount,
     image_failure_count: Math.max(0, context.imageCount - context.imageSuccessCount),
@@ -2209,9 +2097,7 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
       }
 
       const progressContext = { onProgress, warnings: [], stats };
-      reportProgress(progressContext, 2, stats.mermaidCount
-        ? `检测到 ${stats.mermaidCount} 张 Mermaid 图，导出时会转换为 Word 图片。`
-        : '正在准备 Word 导出。');
+      reportProgress(progressContext, 2, '正在准备 Word 导出。');
       const defaultFilename = `${sanitizeFilename(effectivePayload.project_name || '标书文档')}_${formatExportTimestamp()}.docx`;
       const defaultDir = app?.getPath ? app.getPath('downloads') : process.env.USERPROFILE || process.cwd();
       const result = await dialog.showSaveDialog({

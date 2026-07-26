@@ -3,7 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { validateChartDsl } = require('./chartDslValidator.cjs');
 
-const DIAGNOSTIC_IDS = ['app-version', 'build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'opencode', 'agent-tools', 'agent-run', 'mermaid-render', 'chart-dsl', 'legacy-html', 'word-export', 'system-fonts', 'storage', 'network'];
+const DIAGNOSTIC_IDS = ['app-version', 'build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'opencode', 'agent-tools', 'agent-run', 'chart-dsl', 'legacy-html', 'word-export', 'system-fonts', 'storage', 'network'];
 const SKIPPED_IDS = new Set(['build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'opencode', 'agent-tools', 'agent-run', 'legacy-html', 'word-export', 'system-fonts', 'network']);
 
 function result(id, status, message, impact = '', action = '') {
@@ -22,13 +22,7 @@ function createSystemDiagnosticsService({ app, configStore, localImageRenderServ
     let item;
     if (cancelled) item = result(id, 'cancelled', '诊断已取消');
     else if (id === 'app-version') item = result(id, app?.getVersion?.() ? 'ok' : 'error', app?.getVersion?.() ? `运行时版本：${app.getVersion()}` : '无法读取应用版本', '版本信息不可核验', '重新启动应用后重试');
-    else if (id === 'mermaid-render') {
-      try {
-        if (!localImageRenderService?.renderMermaidToPng) throw new Error('本地渲染组件未初始化');
-        const rendered = await localImageRenderService.renderMermaidToPng('flowchart TD\nA[开始] --> B[完成]', { timeoutMs: 30000 });
-        item = result(id, rendered.buffer?.length ? 'ok' : 'error', `本地 Mermaid 渲染成功：${rendered.width}×${rendered.height}`);
-      } catch (error) { item = result(id, 'error', `本地 Mermaid 渲染失败：${String(error.message || error).slice(0, 180)}`, 'Mermaid 图片与 Word 导出可能失败', '检查本地转图组件与系统资源'); }
-    } else if (id === 'chart-dsl') {
+    else if (id === 'chart-dsl') {
       const spec = { schema_version: 1, chart_type: 'table', title: '诊断图表', theme: 'jato-business', layout: { width: 1240, density: 'normal', orientation: 'landscape' }, data: { columns: ['状态'], rows: [['正常']] } };
       item = result(id, validateChartDsl(spec).valid ? 'ok' : 'error', validateChartDsl(spec).valid ? '结构化图表 DSL Schema 有效' : '结构化图表 DSL Schema 无效', '新图表无法生成', '检查 DSL Schema 与编译器');
     } else if (id === 'storage') {

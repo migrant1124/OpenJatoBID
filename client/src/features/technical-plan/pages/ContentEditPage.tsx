@@ -45,10 +45,7 @@ interface PendingMinimumWordsChoice {
   minimumWords: number;
 }
 
-type NumberInputDraft = number | '';
-type DraftContentGenerationOptions = Omit<ContentGenerationOptions, 'minimumWords'> & {
-  minimumWords: NumberInputDraft;
-};
+type DraftContentGenerationOptions = ContentGenerationOptions;
 
 const statusLabels: Record<TreeStatus, string> = {
   idle: '待生成',
@@ -65,36 +62,31 @@ const imageModelStatusLabels: Record<ImageModelStatus, string> = {
   unavailable: '不可用',
 };
 
-function formatTenThousandWords(value: number) {
-  const normalized = Math.max(0, Number(value) || 0) / 10000;
-  return Number.isInteger(normalized) ? String(normalized) : String(Math.round(normalized * 100) / 100);
-}
-
 const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: string }> = [
   { value: 'none', label: '不要' },
   { value: 'light', label: '少量' },
   { value: 'moderate', label: '适中' },
   { value: 'heavy', label: '大量' },
 ];
+const visualStyleOptions = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
 
 const consistencyRepairModeOptions: Array<{ value: ConsistencyRepairMode; label: string }> = [
-  { value: 'agent', label: 'Agent 修复（推荐）' },
+  { value: 'agent', label: 'Agent 修复' },
   { value: 'normal', label: '普通修复' },
 ];
 
 const originalPlanCoverageRepairModeOptions: Array<{ value: OriginalPlanCoverageRepairMode; label: string }> = [
-  { value: 'agent', label: 'Agent 修复（推荐）' },
+  { value: 'agent', label: 'Agent 修复' },
   { value: 'normal', label: '普通修复' },
 ];
 
 const illustrationKindLabels: Record<ContentIllustrationKind, string> = {
   chart: '历史结构化图表',
   html: 'HTML 图片',
-  mermaid: 'Mermaid 图片',
   ai: 'AI 图片',
 };
 
-const illustrationKinds: ContentIllustrationKind[] = ['html', 'mermaid', 'ai'];
+const illustrationKinds: ContentIllustrationKind[] = ['html', 'ai'];
 
 const imageGenerationExamples: Record<'ai' | 'html', { src: string; alt: string }> = {
   ai: { src: aiImageExampleUrl, alt: 'AI 生图示例' },
@@ -148,7 +140,6 @@ const htmlImageTypeOptions = [
 ];
 
 const DEFAULT_HTML_IMAGE_TYPES = htmlImageTypeOptions.map((option) => option.value).join(', ');
-const IMAGE_HARD_LIMITS = { ai: 20, mermaid: 5, html: 30 } as const;
 
 function resolveSelectedHtmlImageTypes(value: string | undefined) {
   const selected = new Set(String(value || '').split(/[\n,，、;；]+/).map((item) => item.trim()).filter(Boolean));
@@ -160,14 +151,9 @@ function resolveSelectedHtmlImageTypes(value: string | undefined) {
 
 const defaultContentGenerationOptions: ContentGenerationOptions = {
   useAiImages: false,
-  maxAiImages: IMAGE_HARD_LIMITS.ai,
-  useMermaidImages: false,
-  maxMermaidImages: IMAGE_HARD_LIMITS.mermaid,
   useHtmlImages: true,
-  maxHtmlImages: IMAGE_HARD_LIMITS.html,
   htmlImageTypes: DEFAULT_HTML_IMAGE_TYPES,
   tableRequirement: 'heavy',
-  minimumWords: 0,
   enableConsistencyAudit: true,
   consistencyRepairMode: 'agent',
   enableOriginalPlanCoverageAudit: false,
@@ -193,35 +179,20 @@ function buildDefaultGenerationOptions(imageModelAvailable: boolean, _leafCount:
   };
 }
 
-function normalizeGenerationOptions(options: ContentGenerationOptions | DraftContentGenerationOptions | undefined, imageModelAvailable: boolean, leafCount: number, isExpansionWorkflow = false): ContentGenerationOptions {
-  const fallback = buildDefaultGenerationOptions(imageModelAvailable, leafCount);
-  const requestedMaxAiImages = Number(options?.maxAiImages ?? fallback.maxAiImages);
-  const requestedMaxMermaidImages = Number(options?.maxMermaidImages ?? fallback.maxMermaidImages);
-  const requestedMaxHtmlImages = Number(options?.maxHtmlImages ?? fallback.maxHtmlImages);
-  const requestedMinimumWords = Number(options?.minimumWords ?? fallback.minimumWords);
+function normalizeGenerationOptions(options: ContentGenerationOptions | DraftContentGenerationOptions | undefined, imageModelAvailable: boolean, _leafCount: number, isExpansionWorkflow = false): ContentGenerationOptions {
+  const fallback = buildDefaultGenerationOptions(imageModelAvailable, _leafCount);
   const tableRequirement = options?.tableRequirement;
 
   return {
     useAiImages: Boolean(options?.useAiImages ?? fallback.useAiImages) && imageModelAvailable,
-    maxAiImages: Math.max(0, Math.min(Number.isFinite(requestedMaxAiImages) ? Math.round(requestedMaxAiImages) : fallback.maxAiImages, IMAGE_HARD_LIMITS.ai)),
-    useMermaidImages: Boolean(options?.useMermaidImages ?? fallback.useMermaidImages),
-    maxMermaidImages: Math.max(0, Math.min(Number.isFinite(requestedMaxMermaidImages) ? Math.round(requestedMaxMermaidImages) : fallback.maxMermaidImages, IMAGE_HARD_LIMITS.mermaid)),
     useHtmlImages: Boolean(options?.useHtmlImages ?? fallback.useHtmlImages),
-    maxHtmlImages: Math.max(0, Math.min(Number.isFinite(requestedMaxHtmlImages) ? Math.round(requestedMaxHtmlImages) : fallback.maxHtmlImages, IMAGE_HARD_LIMITS.html)),
     htmlImageTypes: String(options?.htmlImageTypes ?? fallback.htmlImageTypes),
     tableRequirement: isContentTableRequirement(tableRequirement) ? tableRequirement : fallback.tableRequirement,
-    minimumWords: Math.max(0, Number.isFinite(requestedMinimumWords) ? Math.round(requestedMinimumWords) : fallback.minimumWords),
     enableConsistencyAudit: Boolean(options?.enableConsistencyAudit ?? fallback.enableConsistencyAudit),
     consistencyRepairMode: isConsistencyRepairMode(options?.consistencyRepairMode) ? options.consistencyRepairMode : fallback.consistencyRepairMode,
     enableOriginalPlanCoverageAudit: isExpansionWorkflow ? Boolean(options?.enableOriginalPlanCoverageAudit ?? fallback.enableOriginalPlanCoverageAudit) : false,
     originalPlanCoverageRepairMode: isExpansionWorkflow && isOriginalPlanCoverageRepairMode(options?.originalPlanCoverageRepairMode) ? options.originalPlanCoverageRepairMode : fallback.originalPlanCoverageRepairMode,
   };
-}
-
-function parseMinimumWordsInput(value: string): NumberInputDraft {
-  if (value === '') return '';
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : '';
 }
 
 function collectLeafItems(items: OutlineItem[]): OutlineItem[] {
@@ -324,7 +295,6 @@ const MarkdownContent = memo(function MarkdownContent({ content, onPreviewImage 
     <MarkdownRenderer
       imageMode="preview"
       imageClassName="markdown-clickable-image"
-      renderMermaid
       onPreviewImage={onPreviewImage}
     >
       {content}
@@ -363,6 +333,8 @@ function ContentEditPage({
   const [pendingMinimumWordsChoice, setPendingMinimumWordsChoice] = useState<PendingMinimumWordsChoice | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
+  const [illustrationPlanDraft, setIllustrationPlanDraft] = useState<ContentIllustrationPlanState | null>(null);
+  const [illustrationConfirmationOpen, setIllustrationConfirmationOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [developerMode, setDeveloperMode] = useState(false);
   const firstLeafId = leaves[0]?.id || '';
@@ -385,7 +357,6 @@ function ContentEditPage({
     const stats: Record<ContentIllustrationKind, { planned: number; success: number }> = {
       chart: { planned: 0, success: 0 },
       html: { planned: 0, success: 0 },
-      mermaid: { planned: 0, success: 0 },
       ai: { planned: 0, success: 0 },
     };
 
@@ -411,16 +382,25 @@ function ContentEditPage({
   const contentCorrecting = originalAuditing || auditing || tableCleaning;
   const illustrationPlanning = phaseVisible && contentStats?.phase === 'illustration-planning';
   const illustrationGenerating = phaseVisible && contentStats?.phase === 'illustration-generating';
+  const awaitingIllustrationConfirmation = paused && contentStats?.phase === 'illustration-confirmation' && Boolean(contentIllustrationPlan);
+
+  useEffect(() => {
+    if (awaitingIllustrationConfirmation && contentIllustrationPlan) {
+      setIllustrationPlanDraft(contentIllustrationPlan);
+      setIllustrationConfirmationOpen(true);
+    }
+  }, [awaitingIllustrationConfirmation, contentIllustrationPlan]);
   const outlineMeta = useMemo(() => outlineData?.outline ? buildOutlineMeta(outlineData.outline, sections, planning) : new Map<string, OutlineNodeMeta>(), [outlineData, planning, sections]);
   const contentSummary = useMemo(() => leaves.reduce((summary, item) => {
     const status = getLeafStatus(item, sections);
     return {
-      completedCount: summary.completedCount + (status === 'success' ? 1 : 0),
+      autoGeneratedCount: summary.autoGeneratedCount + (status === 'success' && item.manual_input_required !== true ? 1 : 0),
+      completedCount: summary.completedCount + (status === 'success' || item.manual_input_required === true ? 1 : 0),
       failedCount: summary.failedCount + (status === 'error' ? 1 : 0),
       totalWords: summary.totalWords + (outlineMeta.get(item.id)?.words || 0),
     };
-  }, { completedCount: 0, failedCount: 0, totalWords: 0 }), [leaves, outlineMeta, sections]);
-  const { completedCount, failedCount, totalWords } = contentSummary;
+  }, { autoGeneratedCount: 0, completedCount: 0, failedCount: 0, totalWords: 0 }), [leaves, outlineMeta, sections]);
+  const { autoGeneratedCount, completedCount, failedCount, totalWords } = contentSummary;
   const progress = leaves.length ? Math.round((completedCount / leaves.length) * 100) : 0;
   const planningTotal = contentStats?.planning_total || leaves.length;
   const planningCompleted = contentStats?.planning_completed || 0;
@@ -435,7 +415,7 @@ function ContentEditPage({
   const outlineExpansionRoundTotal = contentStats?.outline_expansion_round_total || outlineExpansionTotal;
   const outlineExpansionStepLabel = contentStats?.outline_expansion_step_label || '';
   const outlineExpansionProgress = outlineExpansionStepTotal ? Math.round((outlineExpansionStepCompleted / outlineExpansionStepTotal) * 100) : 0;
-  const minimumWords = contentStats?.minimum_words ?? contentGenerationOptions?.minimumWords ?? 0;
+  const minimumWords = contentStats?.minimum_words ?? (outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0);
   const currentWords = contentStats?.current_words ?? totalWords;
   const minimumWordsUnmet = minimumWords > 0 && currentWords < minimumWords;
   const canRetryMinimumWords = taskFailed && minimumWordsUnmet && completedCount === leaves.length;
@@ -487,17 +467,15 @@ function ContentEditPage({
   const illustrationPlanningStepCompleted = contentStats?.illustration_planning_step_completed || 0;
   const illustrationPlanningStepLabel = contentStats?.illustration_planning_step_label || '';
   const illustrationCandidateTotal = (contentStats?.illustration_candidate_html || 0)
-    + (contentStats?.illustration_candidate_mermaid || 0)
     + (contentStats?.illustration_candidate_ai || 0);
   const illustrationSelectedTotal = (contentStats?.illustration_selected_html || 0)
-    + (contentStats?.illustration_selected_mermaid || 0)
     + (contentStats?.illustration_selected_ai || 0);
   const illustrationPlanningProgress = Math.round((illustrationPlanningStepCompleted / illustrationPlanningStepTotal) * 100);
   const illustrationGenerationTotal = contentStats?.illustration_generation_total || 0;
   const illustrationGenerationCompleted = contentStats?.illustration_generation_completed || 0;
   const illustrationGenerationProgress = illustrationGenerationTotal ? Math.round((illustrationGenerationCompleted / illustrationGenerationTotal) * 100) : 0;
   const illustrationGenerationStepLabel = contentStats?.illustration_generation_step_label || '';
-  const illustrationGenerationCount = `HTML ${contentStats?.illustration_generation_html_completed || 0}/${contentStats?.illustration_generation_html_total || 0}，Mermaid ${contentStats?.illustration_generation_mermaid_completed || 0}/${contentStats?.illustration_generation_mermaid_total || 0}，AI ${contentStats?.illustration_generation_ai_completed || 0}/${contentStats?.illustration_generation_ai_total || 0}`;
+  const illustrationGenerationCount = `HTML ${contentStats?.illustration_generation_html_completed || 0}/${contentStats?.illustration_generation_html_total || 0}，AI ${contentStats?.illustration_generation_ai_completed || 0}/${contentStats?.illustration_generation_ai_total || 0}`;
   const currentProgressDetail = phaseVisible && progressDetail?.phase === contentStats?.phase ? progressDetail : undefined;
   const displayProgress = currentProgressDetail ? currentProgressDetail.phase_progress : planning ? planningProgress : outlineExpanding ? outlineExpansionProgress : expanding ? wordExpansionProgress : contentCorrecting ? contentCorrectionProgress : illustrationPlanning ? illustrationPlanningProgress : illustrationGenerating ? illustrationGenerationProgress : progress;
   const displayProgressLabel = currentProgressDetail ? currentProgressDetail.phase_label : planning ? '编排统计' : restoring ? '原方案还原' : outlineExpanding ? '补目录' : expanding ? '扩写进度' : contentCorrecting ? '内容矫正' : illustrationPlanning ? '图片编排' : illustrationGenerating ? '图片生成' : '生成统计';
@@ -592,7 +570,7 @@ function ContentEditPage({
           ? retryingIllustrationGeneration ? '重试图片生成' : retryingIllustrationPlanning ? '重试图片编排' : '重试内容矫正'
           : canRetryMinimumWords
             ? '继续补足字数'
-            : completedCount === leaves.length && leaves.length
+            : (task?.status === 'success' || (completedCount === leaves.length && leaves.length))
               ? '重新生成正文'
               : completedCount > 0
                 ? '继续生成正文'
@@ -703,11 +681,14 @@ function ContentEditPage({
     setHtmlImageTypesDialogOpen(false);
   };
 
-  const shouldAskMinimumWordsChoice = (options: ContentGenerationOptions) => leaves.length > 0
-    && completedCount === leaves.length
-    && !canRetryMinimumWords
-    && options.minimumWords > 0
-    && totalWords < options.minimumWords;
+  const shouldAskMinimumWordsChoice = () => {
+    const configuredMinimumWords = outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0;
+    return leaves.length > 0
+      && completedCount === leaves.length
+      && !canRetryMinimumWords
+      && configuredMinimumWords > 0
+      && totalWords < configuredMinimumWords;
+  };
 
   const openGenerationChoiceOrDialog = async () => {
     if (!outlineData?.outline?.length) {
@@ -725,13 +706,13 @@ function ContentEditPage({
       const available = nextStatus === 'available';
       const savedOptions = normalizeGenerationOptions(contentGenerationOptions, available, leaves.length, isExpansionWorkflow);
       setImageModelStatus(nextStatus);
-      if (shouldAskMinimumWordsChoice(savedOptions)) {
+      if (shouldAskMinimumWordsChoice()) {
         setPendingMinimumWordsChoice({
           options: savedOptions,
           imageModelAvailable: available,
           config: config || null,
           currentWords: totalWords,
-          minimumWords: savedOptions.minimumWords,
+          minimumWords: outlineWordControlSnapshot?.minimumWords || 0,
         });
         return;
       }
@@ -762,12 +743,38 @@ function ContentEditPage({
     if (!paused) {
       return;
     }
+    if (contentStats?.phase === 'illustration-confirmation') {
+      setIllustrationConfirmationOpen(true);
+      return;
+    }
 
     try {
       await window.yibiao?.tasks.startContentGeneration({ resume: true });
       showToast('已继续正文生成任务', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '继续正文生成失败', 'error');
+    }
+  };
+
+  const saveIllustrationPlanConfirmation = async (confirmed: boolean) => {
+    if (!illustrationPlanDraft) return;
+    const nextPlan: ContentIllustrationPlanState = {
+      ...illustrationPlanDraft,
+      confirmation_status: confirmed ? 'confirmed' : 'pending',
+      visual_style: illustrationPlanDraft.visual_style || illustrationPlanDraft.recommended_visual_style,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      await window.yibiao?.technicalPlan.saveContentIllustrationPlan(nextPlan);
+      setIllustrationPlanDraft(nextPlan);
+      if (confirmed) {
+        await window.yibiao?.tasks.startContentGeneration({ resume: true });
+        showToast('图片计划已确认，开始生成图片', 'success');
+      } else {
+        showToast('图片计划已保存', 'success');
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存图片计划失败', 'error');
     }
   };
 
@@ -846,14 +853,9 @@ function ContentEditPage({
       regenerate,
       generationOptions: {
         useAiImages: nextImageModelAvailable && savedGenerationOptions.useAiImages,
-        maxAiImages: savedGenerationOptions.maxAiImages,
-        useMermaidImages: savedGenerationOptions.useMermaidImages,
-        maxMermaidImages: savedGenerationOptions.maxMermaidImages,
         useHtmlImages: savedGenerationOptions.useHtmlImages,
-        maxHtmlImages: savedGenerationOptions.maxHtmlImages,
         htmlImageTypes: savedGenerationOptions.htmlImageTypes,
         tableRequirement: savedGenerationOptions.tableRequirement,
-        minimumWords: savedGenerationOptions.minimumWords,
         enableConsistencyAudit: savedGenerationOptions.enableConsistencyAudit,
         consistencyRepairMode: savedGenerationOptions.consistencyRepairMode,
         enableOriginalPlanCoverageAudit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -862,10 +864,9 @@ function ContentEditPage({
     });
     trackConfigUsage({
       table_requirement: savedGenerationOptions.tableRequirement,
-      use_mermaid_images: savedGenerationOptions.useMermaidImages,
       use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
       content_generation_action: contentGenerationAction,
-      minimum_words: savedGenerationOptions.minimumWords,
+      minimum_words: outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0,
       enable_consistency_audit: savedGenerationOptions.enableConsistencyAudit,
       consistency_repair_mode: savedGenerationOptions.enableConsistencyAudit ? savedGenerationOptions.consistencyRepairMode : undefined,
       enable_original_plan_coverage_audit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -888,13 +889,13 @@ function ContentEditPage({
       const nextImageModelAvailable = nextImageModelStatus === 'available';
       setImageModelStatus(nextImageModelStatus);
       const savedGenerationOptions = await saveDraftGenerationOptions(false, nextImageModelAvailable);
-      if (shouldAskMinimumWordsChoice(savedGenerationOptions)) {
+      if (shouldAskMinimumWordsChoice()) {
         setPendingMinimumWordsChoice({
           options: savedGenerationOptions,
           imageModelAvailable: nextImageModelAvailable,
           config: config || null,
           currentWords: totalWords,
-          minimumWords: savedGenerationOptions.minimumWords,
+          minimumWords: outlineWordControlSnapshot?.minimumWords || 0,
         });
         setGenerationDialogOpen(false);
         return;
@@ -971,11 +972,7 @@ function ContentEditPage({
         requirement: regenerateRequirement,
         generationOptions: {
           useAiImages: nextImageModelAvailable && savedGenerationOptions.useAiImages,
-          maxAiImages: savedGenerationOptions.maxAiImages,
-          useMermaidImages: savedGenerationOptions.useMermaidImages,
-          maxMermaidImages: savedGenerationOptions.maxMermaidImages,
           useHtmlImages: savedGenerationOptions.useHtmlImages,
-          maxHtmlImages: savedGenerationOptions.maxHtmlImages,
           htmlImageTypes: savedGenerationOptions.htmlImageTypes,
           tableRequirement: savedGenerationOptions.tableRequirement,
           enableConsistencyAudit: savedGenerationOptions.enableConsistencyAudit,
@@ -986,10 +983,9 @@ function ContentEditPage({
       });
       trackConfigUsage({
         table_requirement: savedGenerationOptions.tableRequirement,
-        use_mermaid_images: savedGenerationOptions.useMermaidImages,
         use_ai_images: nextImageModelAvailable && savedGenerationOptions.useAiImages,
         content_generation_action: 'regenerate_section',
-        minimum_words: savedGenerationOptions.minimumWords,
+        minimum_words: outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0,
         enable_consistency_audit: savedGenerationOptions.enableConsistencyAudit,
         consistency_repair_mode: savedGenerationOptions.enableConsistencyAudit ? savedGenerationOptions.consistencyRepairMode : undefined,
         enable_original_plan_coverage_audit: isExpansionWorkflow && savedGenerationOptions.enableOriginalPlanCoverageAudit,
@@ -1138,7 +1134,8 @@ function ContentEditPage({
         </div>
         <div className="content-generation-stats" aria-label="正文生成统计">
           <span><strong>{leaves.length}</strong> 个小节</span>
-          <span><strong>{completedCount}</strong> 已生成</span>
+          <span><strong>{autoGeneratedCount}</strong> AI 已生成</span>
+          <span><strong>{completedCount}</strong> 已完成</span>
           <span><strong>{totalWords}</strong> 字</span>
         </div>
         <div className="content-generation-actions">
@@ -1304,17 +1301,6 @@ function ContentEditPage({
                   {tableRequirementOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                 </select>
               </label>
-              {outlineWordControlSnapshot?.enabled ? (
-                <div className="content-generation-config-row">
-                  <span><strong>目录字数控制</strong><small>最少 {outlineWordControlSnapshot.minimumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.minimumWords)} 万字` : '不限制'}，最多 {outlineWordControlSnapshot.maximumWords ? `${formatTenThousandWords(outlineWordControlSnapshot.maximumWords)} 万字` : '不限制'}{outlineWordControlSnapshot.strictSectionWords ? `，每小节约 ${formatTenThousandWords(outlineWordControlSnapshot.sectionWords)} 万字` : ''}</small></span>
-                  <span>请在目录生成步骤修改</span>
-                </div>
-              ) : (
-                <label className="content-generation-config-row">
-                  <span><strong>最低字数</strong></span>
-                  <input type="number" min="0" step="1000" value={draftGenerationOptions.minimumWords} disabled={generationStrategyLocked} onChange={(event) => setDraftGenerationOptions((prev) => ({ ...prev, minimumWords: parseMinimumWordsInput(event.target.value) }))} />
-                </label>
-              )}
               <label className="content-generation-config-row">
                 <span>
                   <strong>全文一致性审计</strong>
@@ -1401,50 +1387,6 @@ function ContentEditPage({
                   </Switch.Root>
                 </div>
               </div>
-              {draftGenerationOptions.useAiImages && imageModelAvailable && (
-                <label className="content-generation-config-row">
-                  <span><strong>AI 生图上限</strong></span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={IMAGE_HARD_LIMITS.ai}
-                    value={draftGenerationOptions.maxAiImages}
-                    disabled={generationStrategyLocked}
-                    onChange={(event) => setDraftGenerationOptions((prev) => ({
-                      ...prev,
-                      maxAiImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.ai)),
-                    }))}
-                  />
-                </label>
-              )}
-              <div className="content-generation-config-row">
-                <span><strong>Mermaid 生图</strong></span>
-                <Switch.Root
-                  className="content-generation-switch"
-                  checked={draftGenerationOptions.useMermaidImages}
-                  disabled={generationStrategyLocked}
-                  onCheckedChange={(checked) => setDraftGenerationOptions((prev) => ({ ...prev, useMermaidImages: checked }))}
-                  aria-label="是否使用 Mermaid 生图"
-                >
-                  <Switch.Thumb className="content-generation-switch-thumb" />
-                </Switch.Root>
-              </div>
-              {draftGenerationOptions.useMermaidImages && (
-                <label className="content-generation-config-row">
-                  <span><strong>Mermaid 生图上限</strong></span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={IMAGE_HARD_LIMITS.mermaid}
-                    value={draftGenerationOptions.maxMermaidImages}
-                    disabled={generationStrategyLocked}
-                    onChange={(event) => setDraftGenerationOptions((prev) => ({
-                      ...prev,
-                      maxMermaidImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.mermaid)),
-                    }))}
-                  />
-                </label>
-              )}
               <div className="content-generation-config-row">
                 <div className="content-generation-image-option-title">
                   <strong>生成 HTML 图片</strong>
@@ -1470,20 +1412,6 @@ function ContentEditPage({
               </div>
               {draftGenerationOptions.useHtmlImages && (
                 <>
-                  <label className="content-generation-config-row">
-                    <span><strong>HTML 生图上限</strong></span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={IMAGE_HARD_LIMITS.html}
-                      value={draftGenerationOptions.maxHtmlImages}
-                      disabled={generationStrategyLocked}
-                      onChange={(event) => setDraftGenerationOptions((prev) => ({
-                        ...prev,
-                        maxHtmlImages: Math.max(0, Math.min(Number(event.target.value) || 0, IMAGE_HARD_LIMITS.html)),
-                      }))}
-                    />
-                  </label>
                   <div className="content-generation-config-row">
                     <span><strong>支持图表类型</strong></span>
                     <button type="button" className="secondary-action" onClick={openHtmlImageTypesDialog} disabled={generationStrategyLocked}>查看</button>
@@ -1491,7 +1419,7 @@ function ContentEditPage({
                 </>
               )}
             </div>
-            <p className="content-generation-config-note">图片数量是全文上限，AI 会按内容价值决定实际数量，不会强制填满。</p>
+            <p className="content-generation-config-hint">图片由系统根据正文价值自动规划，生成前可在图片编排确认中筛选和调整。</p>
             <div className="content-regenerate-actions">
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={saveGenerationOptions} disabled={taskInFlight || paused}>
@@ -1560,6 +1488,53 @@ function ContentEditPage({
               <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
               <button type="button" className="secondary-action" onClick={regenerateAfterMinimumWordsChoice} disabled={taskBlocksGeneration}>清空重新生成</button>
               <button type="button" className="primary-action" onClick={continueMinimumWordsExpansion} disabled={taskBlocksGeneration}>继续补齐字数</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={awaitingIllustrationConfirmation && illustrationConfirmationOpen} onOpenChange={setIllustrationConfirmationOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-generation-config-card illustration-confirmation-card" aria-describedby={undefined}>
+            <div className="content-regenerate-card-head">
+              <span className="section-kicker">正文生成</span>
+              <Dialog.Title>图片编排确认</Dialog.Title>
+              <Dialog.Description>请确认本次技术方案的配图计划，取消不需要的图片后再开始生成。</Dialog.Description>
+            </div>
+            <div className="illustration-confirmation-summary">
+              <span>预计生成 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b> 张</span>
+              <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'html').length || 0}</b> 张</span>
+              <span>AI 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b> 张</span>
+              <span>最低字数阈值 <b>{minimumWords}</b> 字</span>
+              <label>全文视觉风格
+                <select value={illustrationPlanDraft?.visual_style || illustrationPlanDraft?.recommended_visual_style || ''} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, visual_style: event.target.value } : plan)}>
+                  <option value="">AI 未推荐</option>
+                  {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
+                </select>
+              </label>
+            </div>
+            {illustrationPlanDraft?.visual_rhythm_diagnostics?.length ? <div className="illustration-rhythm-diagnostics" role="status">
+              <strong>视觉节奏建议</strong>
+              <ul>{illustrationPlanDraft.visual_rhythm_diagnostics.map((diagnostic) => <li key={diagnostic.code}>{diagnostic.message}</li>)}</ul>
+            </div> : null}
+            <div className="illustration-confirmation-table">
+              <div className="illustration-confirmation-row illustration-confirmation-head"><span>生成</span><span>章节与锚点</span><span>图片标题</span><span>类型</span><span>图表类型与视觉作用</span></div>
+              {illustrationPlanDraft?.items.map((item) => (
+                <div className="illustration-confirmation-row" key={item.item_id}>
+                  <input type="checkbox" checked={item.selected !== false} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, selected: event.target.checked } : candidate) } : plan)} />
+                  <span>{item.section_ids.join('、')}</span>
+                  <input value={item.title} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, title: event.target.value } : candidate) } : plan)} />
+                  <select value={item.kind} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, kind: event.target.value as ContentIllustrationKind } : candidate) } : plan)}><option value="html">HTML</option><option value="ai">AI</option></select>
+                  <span>{item.image_type} · {item.visual_role || item.purpose || '未指定'}</span>
+                </div>
+              ))}
+            </div>
+            <p className="illustration-confirmation-note">图片编号和图注将在正文中自动生成。</p>
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" onClick={() => setIllustrationConfirmationOpen(false)}>取消</button>
+              <button type="button" className="secondary-action" onClick={() => void saveIllustrationPlanConfirmation(false)}>保存计划</button>
+              <button type="button" className="primary-action" onClick={() => void saveIllustrationPlanConfirmation(true)}>确认并开始生成</button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

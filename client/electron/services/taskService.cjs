@@ -183,17 +183,19 @@ function inferContentGenerationPhase(technicalPlan) {
   const taskContent = technicalPlan?.contentGenerationTask?.stats?.content || {};
   const taskPhase = taskContent.phase;
   const runtimePhase = technicalPlan?.contentGenerationRuntime?.phase;
-  if (['restoring', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-generating'].includes(taskPhase)) {
+  if (['restoring', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(taskPhase)) {
     return taskPhase;
   }
-  if (['planning', 'restoring', 'generating', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-generating'].includes(runtimePhase)) {
+  if (['planning', 'restoring', 'generating', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(runtimePhase)) {
     return runtimePhase;
   }
 
   const leaves = collectLeafItems(technicalPlan?.outlineData?.outline || []);
   const sections = technicalPlan?.contentGenerationSections || {};
   const completed = leaves.filter((item) => sections[item.id]?.status === 'success').length;
-  const minimumWords = Number(taskContent.minimum_words ?? technicalPlan?.contentGenerationOptions?.minimumWords ?? 0) || 0;
+  const minimumWords = Number(taskContent.minimum_words
+    ?? (technicalPlan?.outlineWordControlSnapshot?.enabled ? technicalPlan.outlineWordControlSnapshot.minimumWords : 0)
+    ?? 0) || 0;
   const currentWords = Number(taskContent.current_words ?? 0) || 0;
 
   if (leaves.length && completed >= leaves.length && minimumWords > 0 && currentWords < minimumWords) {

@@ -399,7 +399,7 @@ function BidAnalysisPage({
     && tasks.projectOverview?.status === 'running'
     && doneCount === 0;
   const isFocusWritingAnalysisRunning = task?.status === 'running'
-    && task.logs?.at(-1)?.includes('重点编写项') === true;
+    && task.logs?.[task.logs.length - 1]?.includes('重点编写项') === true;
   const progressMessage = isPromptCacheOptimizing
     ? '正在优化提示词缓存'
     : isFocusWritingAnalysisRunning

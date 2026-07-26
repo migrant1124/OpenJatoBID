@@ -161,10 +161,10 @@
   z-index: 131;
   display: flex;
   flex-direction: column;
-  width: min(640px, calc(100vw - 40px));
-  max-height: min(680px, calc(100vh - 56px));
-  gap: 18px;
-  padding: 24px;
+  width: min(900px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 56px));
+  gap: 16px;
+  padding: 28px 32px;
   overflow: hidden;
   background: #ffffff;
   border: 1px solid rgba(228, 233, 240, 0.9);
@@ -402,7 +402,7 @@
   flex: 0 0 auto;
   margin: 0;
   color: var(--yb-text);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1.35;
   text-align: left;
@@ -410,11 +410,40 @@
 
 .remote-notice-time {
   flex: 0 0 auto;
-  margin-top: -10px;
+  margin-top: 6px;
   color: var(--yb-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   text-align: left;
+}
+
+.remote-notice-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--yb-border-soft);
+}
+
+.remote-notice-card > .markdown-fullscreen-frame {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.remote-notice-card > .markdown-fullscreen-frame > .markdown-fullscreen-trigger {
+  position: static;
+  grid-row: 1;
+  justify-self: end;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+  border-radius: 10px;
+  box-shadow: none;
 }
 
 .remote-notice-content {
@@ -422,11 +451,36 @@
   min-height: 0;
   max-height: none;
   overflow: auto;
-  padding: 0 4px 0 0;
+  grid-row: 2;
+  padding: 4px 16px 4px 0;
   color: #243048;
   text-align: left;
   line-height: 1.72;
   background: transparent;
+  scrollbar-color: rgba(100, 116, 139, 0.66) rgba(226, 232, 240, 0.72);
+  scrollbar-width: auto;
+}
+
+.remote-notice-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.remote-notice-content::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.72);
+  border-radius: 999px;
+}
+
+.remote-notice-content::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.66);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.remote-notice-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.78);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .remote-notice-content > *:first-child {
@@ -525,6 +579,21 @@
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--yb-border-soft);
+}
+
+@media (max-width: 640px) {
+  .remote-notice-card {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .remote-notice-title {
+    font-size: 21px;
+  }
 }
 
 .remote-notice-preview-modal {

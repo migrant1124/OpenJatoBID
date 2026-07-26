@@ -59,7 +59,7 @@ function developerReplaceTestBuildMessages(payload) {
 5. 如果目标块是 Markdown 列表、表格、引用、加粗引导块或连续多行结构，target_text 必须包含完整结构，不得只返回第一项、表头、关键句或摘要。
 6. target_text 不得改写标点、空格、换行、列表符号、表格分隔线或 Markdown 标记。
 7. content 写对整个 target_text 替换并扩写后的正文片段，不要包含章节标题，不要输出完整章节正文。
-8. 禁止输出图片 Markdown、Mermaid、代码块或其他图表代码。
+8. 禁止输出图片 Markdown、代码块或其他图表代码。
 
 返回格式：
 {

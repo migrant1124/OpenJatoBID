@@ -2157,6 +2157,43 @@
   border-radius: 14px;
 }
 
+.content-generation-config-card.illustration-confirmation-card {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  width: min(1080px, calc(100vw - 48px));
+  height: min(820px, calc(100vh - 48px));
+  max-height: min(820px, calc(100vh - 48px));
+}
+
+.illustration-confirmation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  align-items: center;
+  padding: 14px 16px;
+  background: rgba(23, 32, 51, 0.035);
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 12px;
+}
+
+.illustration-confirmation-summary b { color: var(--yb-primary); }
+.illustration-confirmation-summary label { display: flex; gap: 8px; align-items: center; margin-left: auto; color: var(--yb-text); font-weight: 700; }
+.illustration-rhythm-diagnostics { padding: 10px 14px; border: 1px solid #dbe7f8; border-radius: 10px; background: #f7faff; color: var(--yb-text); font-size: 13px; }
+.illustration-rhythm-diagnostics strong { color: var(--yb-primary); }
+.illustration-rhythm-diagnostics ul { margin: 6px 0 0; padding-left: 18px; }
+.illustration-rhythm-diagnostics li + li { margin-top: 4px; }
+.illustration-confirmation-summary select,
+.illustration-confirmation-row input,
+.illustration-confirmation-row select { min-width: 0; padding: 8px 10px; font: inherit; border: 1px solid var(--yb-border); border-radius: 8px; background: #fff; }
+.illustration-confirmation-table { min-height: 0; overflow: auto; border: 1px solid var(--yb-border-soft); border-radius: 12px; }
+.illustration-confirmation-row { display: grid; grid-template-columns: 20px 140px minmax(180px, 1fr) 86px minmax(160px, .9fr); gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--yb-border-soft); }
+.illustration-confirmation-head { position: sticky; top: 0; z-index: 1; color: var(--yb-text); font-size: 13px; font-weight: 800; background: #f7f9fc; }
+.illustration-confirmation-head span:first-child { padding-left: 0; }
+.illustration-confirmation-row:last-child { border-bottom: 0; }
+.illustration-confirmation-row input[type='checkbox'] { width: 16px; height: 16px; padding: 0; }
+.illustration-confirmation-note { margin: 0; color: var(--yb-text-muted); font-size: 13px; }
+.content-generation-config-hint { margin: 16px 0 0; padding: 10px 14px; border: 1px solid #cfe0fb; border-radius: 8px; background: #f3f8ff; color: #49637f; font-size: 13px; line-height: 1.6; }
+
 .fixed-response-notes p,
 .evidence-index p,
 .explicit-none-response p,

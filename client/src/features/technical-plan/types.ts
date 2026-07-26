@@ -14,7 +14,7 @@ export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error
 export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
-export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-generating' | 'done';
+export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-confirmation' | 'illustration-generating' | 'done';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
 export type ConsistencyRepairMode = 'agent' | 'normal';
 export type OriginalPlanCoverageRepairMode = 'agent' | 'normal';
@@ -29,14 +29,9 @@ export interface SaveOutlineRequest {
 
 export interface ContentGenerationOptions {
   useAiImages: boolean;
-  maxAiImages: number;
-  useMermaidImages: boolean;
-  maxMermaidImages: number;
   useHtmlImages: boolean;
-  maxHtmlImages: number;
   htmlImageTypes: string;
   tableRequirement: ContentTableRequirement;
-  minimumWords: number;
   enableConsistencyAudit: boolean;
   consistencyRepairMode: ConsistencyRepairMode;
   enableOriginalPlanCoverageAudit: boolean;
@@ -99,19 +94,15 @@ export interface BackgroundTaskState {
       illustration_planning_step_completed?: number;
       illustration_planning_step_label?: string;
       illustration_candidate_ai?: number;
-      illustration_candidate_mermaid?: number;
       illustration_candidate_chart?: number;
       illustration_candidate_html?: number;
       illustration_selected_ai?: number;
-      illustration_selected_mermaid?: number;
       illustration_selected_chart?: number;
       illustration_selected_html?: number;
       illustration_generation_total?: number;
       illustration_generation_completed?: number;
       illustration_generation_ai_total?: number;
       illustration_generation_ai_completed?: number;
-      illustration_generation_mermaid_total?: number;
-      illustration_generation_mermaid_completed?: number;
       illustration_generation_chart_total?: number;
       illustration_generation_chart_completed?: number;
       illustration_generation_html_total?: number;
@@ -265,8 +256,7 @@ export interface ContentGenerationSectionState {
 
 export type ContentGenerationSections = Record<string, ContentGenerationSectionState>;
 
-export type ContentMermaidDiagramType = 'process' | 'hierarchy' | 'responsibility';
-export type ContentIllustrationKind = 'ai' | 'mermaid' | 'chart' | 'html';
+export type ContentIllustrationKind = 'ai' | 'chart' | 'html';
 export type ContentIllustrationPlacement = 'before' | 'after';
 export type ContentIllustrationAnchorType = 'before_block' | 'after_block' | 'after_heading' | 'section_end';
 
@@ -375,6 +365,7 @@ export interface ContentIllustrationPlanItem {
   aspect_ratio?: string;
   creative_brief?: CreativeBrief;
   priority: number;
+  selected?: boolean;
   generation?: {
     status: 'pending' | 'running' | 'success' | 'error';
     mode?: 'normal' | 'agent';
@@ -394,10 +385,20 @@ export interface ContentIllustrationPlanItem {
   };
 }
 
+export interface ContentIllustrationVisualRhythmDiagnostic {
+  code: string;
+  message: string;
+  section_ids: string[];
+}
+
 export interface ContentIllustrationPlanState {
   plan_version: number;
   revision: string;
   items: ContentIllustrationPlanItem[];
+  confirmation_status?: 'pending' | 'confirmed';
+  recommended_visual_style?: string;
+  visual_style?: string;
+  visual_rhythm_diagnostics?: ContentIllustrationVisualRhythmDiagnostic[];
   updated_at?: string;
 }
 

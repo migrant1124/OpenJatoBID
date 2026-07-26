@@ -239,7 +239,6 @@ const defaultConfig = {
   },
   local_rendering: {
     enabled: true,
-    mermaid_concurrency_limit: 5,
     html_concurrency_limit: 5,
   },
   update_channel: 'cloudflare-r2',
@@ -667,9 +666,6 @@ function normalizeConfig(config) {
     },
     local_rendering: {
       enabled: localRendering.enabled !== false,
-      mermaid_concurrency_limit: normalizeRenderConcurrencyLimit(
-        localRendering.mermaid_concurrency_limit ?? legacyComponents.mermaid_concurrency_limit,
-      ),
       html_concurrency_limit: normalizeRenderConcurrencyLimit(
         localRendering.html_concurrency_limit
           ?? localRendering.chart_concurrency_limit

@@ -68,7 +68,6 @@ export interface FileParserConfig {
 
 export interface LocalRenderingConfig {
   enabled: boolean;
-  mermaid_concurrency_limit: number;
   html_concurrency_limit: number;
 }
 

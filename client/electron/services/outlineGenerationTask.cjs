@@ -469,7 +469,7 @@ ${segmentContent}` });
 3. 当前段发现新的章节、标题或明显隐含章节时，请补充到完整目录中。
 4. 如果当前段能证明上一轮目录的层级、标题或说明不准确，可以合理修正。
 5. 只提取原方案已有目录和章节结构，不要改写成新的投标方案目录。
-6. 只返回完整 {"outline": [...]} JSON；不要返回正文 content、图片、表格、Mermaid、解释文字或 Markdown 代码块。`,
+6. 只返回完整 {"outline": [...]} JSON；不要返回正文 content、图片、表格、解释文字或 Markdown 代码块。`,
   });
   return messages;
 }
@@ -844,7 +844,7 @@ ${outputShape}
 - 程序校验要求：outline 内每一个目录节点（一级、二级、三级、四级）都必须包含非空字符串 id、title、description，不能省略 description。
 - children 只在确实存在下级目录时输出；只要输出 children，children 内每个下级节点也必须包含 id、title、description。
 - 新增、迁移、合并或修改目录时必须同步填写 description；保留 current-outline.json 或 original-outline.json 中已有目录时，优先沿用原有 description。
-- 不输出正文 content、图片、表格、Mermaid、审查说明或额外字段。
+- 不输出正文 content、图片、表格、审查说明或额外字段。
 - 编号可以自行整理，程序会再次统一编号；但层级关系需要正确，并满足 workflow.json 中的 hard_constraints。
 - id 字段用于承载目录编号；所有 title 字段只能写纯标题，不得包含“第一章”“第一节”“一、”“（一）”“1.1.1”等任何原文编号或 Markdown #。`;
 }
