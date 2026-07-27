@@ -14,6 +14,7 @@ const {
 } = require('../utils/paths.cjs');
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
+const { normalizeBidSectionDisplayText } = require('../utils/bidSectionDisplayText.cjs');
 const {
   normalizeRequirementResponseMatrix,
 } = require('./technicalPlanQualityModel.cjs');
@@ -502,8 +503,8 @@ function normalizeBidSections(value) {
         index: Number.isFinite(normalizedIndex) && normalizedIndex > 0 ? normalizedIndex : index + 1,
         unit: String(section?.unit || '标段').trim() || '标段',
         title,
-        headLine: String(section?.headLine || section?.head_line || ''),
-        description: String(section?.description || ''),
+        headLine: normalizeBidSectionDisplayText(section?.headLine || section?.head_line),
+        description: normalizeBidSectionDisplayText(section?.description),
         includeRanges: normalizeBidSectionRanges(section?.includeRanges || section?.include_ranges),
         evidence: (Array.isArray(section?.evidence) ? section.evidence : [])
           .map((item) => String(item || '').trim())

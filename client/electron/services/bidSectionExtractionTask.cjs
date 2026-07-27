@@ -1,4 +1,5 @@
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
+const { normalizeBidSectionDisplayText } = require('../utils/bidSectionDisplayText.cjs');
 
 function pushLog(logs, message) {
   logs.push(message);
@@ -72,8 +73,8 @@ function normalizeSection(section, index, totalLines) {
     index: Number.isFinite(sectionIndex) && sectionIndex > 0 ? sectionIndex : index + 1,
     unit: String(section?.unit || '标段').trim() || '标段',
     title,
-    headLine: String(section?.headLine || section?.head_line || '').trim(),
-    description: String(section?.description || '').trim(),
+    headLine: normalizeBidSectionDisplayText(section?.headLine || section?.head_line),
+    description: normalizeBidSectionDisplayText(section?.description),
     includeRanges,
     evidence: (Array.isArray(section?.evidence) ? section.evidence : [])
       .map((item) => String(item || '').trim())
@@ -141,7 +142,6 @@ function buildExtractMessages(segment, segmentIndex, totalSegments) {
       "index": 1,
       "unit": "标段",
       "title": "一标段",
-      "headLine": "一标段：设备采购及安装",
       "description": "设备采购、安装、调试及售后服务。",
       "includeRanges": [
         { "startLine": 120, "endLine": 180, "reason": "一标段采购清单" }
@@ -150,6 +150,8 @@ function buildExtractMessages(segment, segmentIndex, totalSegments) {
     }
   ]
 }
+
+description 仅用于投标范围选择列表展示，必须是一句完整、自然的中文服务说明；不得包含行号、竖线、HTML 标签、换行标记、原文片段或编码符号。
 
 带行号文本：
 ${segment}`,
@@ -211,6 +213,7 @@ async function runBidSectionExtractionTask({ aiService, workspaceStore, updateTa
     });
     updateTask({ status: 'running', progress, logs: nextLogs }, state);
   };
+  let taskSettled = false;
 
   try {
     log('开始识别招标文件中的标段范围。', 5);
@@ -220,18 +223,22 @@ async function runBidSectionExtractionTask({ aiService, workspaceStore, updateTa
     const sourceSegments = segments.length ? segments : [numberedMarkdown];
     log(`招标文件已按上下文拆分为 ${sourceSegments.length} 段，正在提取标段候选。`, 12);
 
-    const segmentResults = [];
-    for (let index = 0; index < sourceSegments.length; index += 1) {
+    let completedSegments = 0;
+    const segmentResults = await Promise.all(sourceSegments.map(async (segment, index) => {
       const raw = await collectJson(aiService, {
-        messages: buildExtractMessages(sourceSegments[index], index + 1, sourceSegments.length),
+        messages: buildExtractMessages(segment, index + 1, sourceSegments.length),
         temperature: 0.1,
         response_format: { type: 'json_object' },
         logTitle: `多标段识别-第${index + 1}段`,
         progressLabel: `多标段识别第${index + 1}段`,
       });
-      segmentResults.push(normalizeSectionsResponse(raw, totalLines));
-      log(`已完成第 ${index + 1}/${sourceSegments.length} 段标段候选提取。`, Math.min(80, 12 + Math.round(((index + 1) / sourceSegments.length) * 60)));
-    }
+      const normalized = normalizeSectionsResponse(raw, totalLines);
+      completedSegments += 1;
+      if (!taskSettled) {
+        log(`已完成 ${completedSegments}/${sourceSegments.length} 段标段候选提取。`, Math.min(80, 12 + Math.round((completedSegments / sourceSegments.length) * 60)));
+      }
+      return normalized;
+    }));
 
     const mergedRaw = sourceSegments.length > 1
       ? await collectJson(aiService, {
@@ -264,6 +271,7 @@ async function runBidSectionExtractionTask({ aiService, workspaceStore, updateTa
     const finalLogs = pushLog(logs, `已识别 ${merged.sections.length} 个标段，请选择本次投标范围。`);
     updateTask({ status: 'success', progress: 100, logs: finalLogs }, finalState);
   } catch (error) {
+    taskSettled = true;
     const message = error instanceof Error ? error.message : '多标段识别失败';
     const failedState = workspaceStore.updateTechnicalPlan({
       bidSectionMode: 'multiple',
