@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { normalizeAndValidateOutline } = require('./outlineGenerationGuard.cjs');
 const { getBidAnalysisTasks } = require('./bidAnalysisTask.cjs');
-const { runOutlineGenerationTask, validateSourceDrivenOutline } = require('./outlineGenerationTask.cjs');
+const { runOutlineGenerationTask, validateSourceDrivenOutline, __knowledgePatchRuntime } = require('./outlineGenerationTask.cjs');
 
 test('目录生成保留招标文件规定的一级目录，并将全部节点默认设为 AI 编制', () => {
   const result = normalizeAndValidateOutline({
@@ -257,6 +257,36 @@ test('重点章节允许以三级主题、四级分支和五级叶子补充目�
   };
 
   assert.doesNotThrow(() => validateSourceDrivenOutline(outline, sourceOutline, { enforceGrouping: true }));
+});
+
+test('知识库补目录保留人工和已有正文节点，并拒绝六个并列三级叶子', () => {
+  const outline = {
+    outline: [{
+      id: '1', title: '技术方案', description: '技术方案说明', children: [{
+        id: '1.1', title: '服务方案', description: '服务方案说明', service_plan_section: true, children: [
+          { id: '1.1.1', title: '人工章节', description: '人工填写', manual_input_required: true },
+          { id: '1.1.2', title: '已有正文', description: '已有正文', content: '用户已填写的内容' },
+        ],
+      }],
+    }],
+  };
+  const sixLeaves = Array.from({ length: 6 }, (_item, index) => ({
+    parent_id: '1.1', title: `知识库新增事项${index + 1}`, description: `知识库新增事项${index + 1}说明`,
+  }));
+
+  assert.throws(
+    () => __knowledgePatchRuntime.applyKnowledgeAdditions(outline, { updates: [], additions: sixLeaves }),
+    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
+  );
+  const result = __knowledgePatchRuntime.applyKnowledgeAdditions(outline, {
+    updates: [
+      { id: '1.1.1', title: '不应修改人工章节' },
+      { id: '1.1.2', title: '不应修改已有正文' },
+    ],
+    additions: [],
+  });
+  assert.equal(result.outline.outline[0].children[0].children[0].title, '人工章节');
+  assert.equal(result.outline.outline[0].children[0].children[1].title, '已有正文');
 });
 
 test('非重点章节拒绝模型新增五级目录', () => {

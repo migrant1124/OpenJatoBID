@@ -85,3 +85,53 @@ test('正文扩写拒绝模糊、重复或受保护 Markdown 范围', () => {
   });
   assert.throws(() => runtime.applyContentExpansionOperations('正文。\n\n![示意图](asset://example.png)', protectedAnchor), /不能在图片、代码块或表格内部插入/);
 });
+
+test('最低字数补目录拒绝同一二级目录下六个模型新增的并列三级叶子', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const outline = [{
+    id: '1', title: '技术方案', description: '技术方案说明', children: [{
+      id: '1.1', title: '服务方案', description: '服务方案说明', focus_priority: 'service-plan', allow_ai_children: true,
+    }],
+  }];
+  const patch = {
+    additions: Array.from({ length: 6 }, (_item, index) => ({
+      parent_id: '1.1', title: `模型新增事项${index + 1}`, description: `模型新增事项${index + 1}说明`,
+    })),
+  };
+
+  assert.throws(
+    () => runtime.applyOutlineExpansionAdditions(outline, patch),
+    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
+  );
+});
+
+test('最低字数补目录仅允许重点章节新增五级叶子，且不拆分已有正文节点', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const focusOutline = [{
+    id: '1', title: '技术方案', description: '技术方案说明', children: [{
+      id: '1.1', title: '服务方案', description: '服务方案说明', focus_priority: 'service-plan', children: [{
+        id: '1.1.1', title: '实施组织', description: '实施组织说明', allow_ai_children: true,
+      }],
+    }],
+  }];
+  const focusPatch = {
+    additions: [{
+      parent_id: '1.1.1', title: '人员配置', description: '人员配置说明', children: [
+        { title: '项目经理职责', description: '项目经理职责说明' },
+        { title: '专业人员分工', description: '专业人员分工说明' },
+      ],
+    }],
+  };
+  const result = runtime.applyOutlineExpansionAdditions(focusOutline, focusPatch);
+  assert.equal(result.outline[0].children[0].children[0].children[0].children.length, 2);
+
+  const protectedOutline = [{
+    id: '1', title: '技术方案', description: '技术方案说明', children: [{
+      id: '1.1', title: '服务方案', description: '服务方案说明', focus_priority: 'service-plan', allow_ai_children: true, content: '已生成正文',
+    }],
+  }];
+  assert.throws(
+    () => runtime.applyOutlineExpansionAdditions(protectedOutline, { additions: [{ parent_id: '1.1', title: '不应新增', description: '不应新增' }] }),
+    /父节点不允许 AI 新增子目录/u,
+  );
+});
