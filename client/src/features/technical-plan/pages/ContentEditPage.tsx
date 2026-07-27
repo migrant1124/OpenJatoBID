@@ -69,6 +69,15 @@ const tableRequirementOptions: Array<{ value: ContentTableRequirement; label: st
   { value: 'heavy', label: '大量' },
 ];
 const visualStyleOptions = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
+const visualStyleColors: Record<string, string> = {
+  技术研究: '#1F4E79',
+  管理咨询: '#233E63',
+  工程建设: '#245B82',
+  市场营销: '#146BC3',
+  党群阵地: '#C8262D',
+  工会活动: '#1677C8',
+  安监环: '#257A4B',
+};
 
 const consistencyRepairModeOptions: Array<{ value: ConsistencyRepairMode; label: string }> = [
   { value: 'agent', label: 'Agent 修复' },
@@ -117,6 +126,37 @@ function ImageExampleIcon() {
       <path d="M12 17h.01" strokeWidth="2.4" />
     </svg>
   );
+}
+
+function VisualStyleIcon({ style }: { style: string }) {
+  const color = visualStyleColors[style] || '#718096';
+  let glyph: ReactNode;
+  switch (style) {
+    case '技术研究':
+      glyph = <><circle cx="7" cy="7" r="2" /><circle cx="17" cy="7" r="2" /><circle cx="12" cy="17" r="2" /><path d="M8.7 8.4 10.8 15M15.3 8.4 13.2 15M9 7h6" /></>;
+      break;
+    case '管理咨询':
+      glyph = <><circle cx="10" cy="10" r="6" /><path d="m8 12 4-5 1 4-5 1M17 8h3M17 12h3M17 16h3" /></>;
+      break;
+    case '工程建设':
+      glyph = <><path d="M4 18h16M6 18V9l6-5 6 5v9M9 18v-5h6v5" /><circle cx="18" cy="6" r="2.5" /><path d="M18 2v1M18 9v1M14 6h1M21 6h1" /></>;
+      break;
+    case '市场营销':
+      glyph = <><path d="M4 12h4l8-4v8l-8-4H4zM8 16l1 4h3l-1-3M18 17l2-2 2 2M20 15v5" /></>;
+      break;
+    case '党群阵地':
+      glyph = <><path d="m7 7 7 7M12 6l-5 9M10 5l4 2-2 3-4-2zM13 12l4 2-2 3-4-2z" /><path d="M5 18h14" /></>;
+      break;
+    case '工会活动':
+      glyph = <><circle cx="12" cy="12" r="8" /><path d="M12 7v10M8 10h8M8 14h8" /><path d="M5 5h14" /></>;
+      break;
+    case '安监环':
+      glyph = <><path d="M4 13a8 8 0 0 1 16 0v2H4zM7 15v2h10v-2M10 5v4M14 5v4" /></>;
+      break;
+    default:
+      glyph = <circle cx="12" cy="12" r="7" />;
+  }
+  return <span className="visual-style-icon" style={{ color }} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{glyph}</svg></span>;
 }
 
 const htmlImageTypeOptions = [
@@ -416,6 +456,9 @@ function ContentEditPage({
   const outlineExpansionStepLabel = contentStats?.outline_expansion_step_label || '';
   const outlineExpansionProgress = outlineExpansionStepTotal ? Math.round((outlineExpansionStepCompleted / outlineExpansionStepTotal) * 100) : 0;
   const minimumWords = contentStats?.minimum_words ?? (outlineWordControlSnapshot?.enabled ? outlineWordControlSnapshot.minimumWords : 0);
+  const recommendedVisualStyle = illustrationPlanDraft?.recommended_visual_style || '';
+  const selectedVisualStyle = illustrationPlanDraft?.visual_style || recommendedVisualStyle;
+  const hasManualVisualStyle = Boolean(illustrationPlanDraft?.visual_style && illustrationPlanDraft.visual_style !== recommendedVisualStyle);
   const currentWords = contentStats?.current_words ?? totalWords;
   const minimumWordsUnmet = minimumWords > 0 && currentWords < minimumWords;
   const canRetryMinimumWords = taskFailed && minimumWordsUnmet && completedCount === leaves.length;
@@ -761,7 +804,9 @@ function ContentEditPage({
     const nextPlan: ContentIllustrationPlanState = {
       ...illustrationPlanDraft,
       confirmation_status: confirmed ? 'confirmed' : 'pending',
-      visual_style: illustrationPlanDraft.visual_style || illustrationPlanDraft.recommended_visual_style,
+      visual_style: illustrationPlanDraft.visual_style && illustrationPlanDraft.visual_style !== illustrationPlanDraft.recommended_visual_style
+        ? illustrationPlanDraft.visual_style
+        : undefined,
       updated_at: new Date().toISOString(),
     };
     try {
@@ -1498,21 +1543,43 @@ function ContentEditPage({
           <Dialog.Overlay className="content-regenerate-modal" />
           <Dialog.Content className="content-generation-config-card illustration-confirmation-card" aria-describedby={undefined}>
             <div className="content-regenerate-card-head">
-              <span className="section-kicker">正文生成</span>
               <Dialog.Title>图片编排确认</Dialog.Title>
-              <Dialog.Description>请确认本次技术方案的配图计划，取消不需要的图片后再开始生成。</Dialog.Description>
+              <Dialog.Description>请确认本次技术方案的配图计划，确认后开始生成。</Dialog.Description>
             </div>
-            <div className="illustration-confirmation-summary">
-              <span>预计生成 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b> 张</span>
-              <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'html').length || 0}</b> 张</span>
-              <span>AI 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b> 张</span>
-              <span>最低字数阈值 <b>{minimumWords}</b> 字</span>
-              <label>全文视觉风格
-                <select value={illustrationPlanDraft?.visual_style || illustrationPlanDraft?.recommended_visual_style || ''} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, visual_style: event.target.value } : plan)}>
-                  <option value="">AI 未推荐</option>
-                  {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
-                </select>
-              </label>
+            <div className="illustration-confirmation-overview">
+              <div className="illustration-confirmation-metrics">
+                <span>预计生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b><em>张</em></span>
+                <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'html').length || 0}</b><em>张</em></span>
+                <span>AI 生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b><em>张</em></span>
+              </div>
+              <div className="illustration-style-controls">
+                <section className={`illustration-style-recommendation${recommendedVisualStyle ? '' : ' is-empty'}`}>
+                  <VisualStyleIcon style={recommendedVisualStyle} />
+                  <div>
+                    <span>AI 推荐视觉风格</span>
+                    <strong>{recommendedVisualStyle || 'AI 未推荐'}</strong>
+                    {recommendedVisualStyle ? <i>{hasManualVisualStyle ? '已人工指定' : '已识别'}</i> : null}
+                    <p>{recommendedVisualStyle
+                      ? `依据：${(illustrationPlanDraft?.recommended_visual_style_evidence || []).join(' · ') || '项目核心对象与成果'}`
+                      : '未识别到足够的专业领域证据，请人工选择。'}</p>
+                  </div>
+                </section>
+                <section className="illustration-style-manual">
+                  <span>人工兜底调整</span>
+                  <select
+                    aria-label="人工兜底调整全文视觉风格"
+                    value={selectedVisualStyle}
+                    onChange={(event) => setIllustrationPlanDraft((plan) => plan ? {
+                      ...plan,
+                      visual_style: event.target.value === plan.recommended_visual_style ? undefined : event.target.value,
+                    } : plan)}
+                  >
+                    {!recommendedVisualStyle ? <option value="">请选择</option> : null}
+                    {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
+                  </select>
+                  <p>仅当 AI 推荐与项目实际不符时调整；确认后全文配图统一按人工选择执行。</p>
+                </section>
+              </div>
             </div>
             {illustrationPlanDraft?.visual_rhythm_diagnostics?.length ? <div className="illustration-rhythm-diagnostics" role="status">
               <strong>视觉节奏建议</strong>
@@ -1532,7 +1599,6 @@ function ContentEditPage({
             </div>
             <p className="illustration-confirmation-note">图片编号和图注将在正文中自动生成。</p>
             <div className="content-regenerate-actions">
-              <button type="button" className="secondary-action" onClick={() => setIllustrationConfirmationOpen(false)}>取消</button>
               <button type="button" className="secondary-action" onClick={() => void saveIllustrationPlanConfirmation(false)}>保存计划</button>
               <button type="button" className="primary-action" onClick={() => void saveIllustrationPlanConfirmation(true)}>确认并开始生成</button>
             </div>
