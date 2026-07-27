@@ -308,16 +308,11 @@ function updateOutlineSubtreeManual(items: OutlineItem[], itemId: string, manual
 }
 
 function getOutlineWritingLabel(item: OutlineItem) {
-  return item.manual_input_required ? '人工填写' : 'AI编写';
+  return item.manual_input_required ? '人工撰写' : 'AI 撰写';
 }
 
 function getOutlineFocusLabel(item: OutlineItem) {
-  const labels: Record<string, string> = {
-    'service-plan': '重点：服务方案',
-    'score-first': '重点：第一档分值',
-    'score-second': '重点：第二档分值',
-  };
-  return item.focus_priority ? labels[item.focus_priority] : undefined;
+  return item.focus_priority ? '重点' : undefined;
 }
 
 function getInitialExpandedKnowledgeFolders(index: KnowledgeBaseIndex) {
@@ -684,7 +679,7 @@ function OutlineEditPage({
         'edit',
         [item.id],
       );
-      showToast(manualInputRequired ? '已设为人工编制，全部下级目录同步更新' : '已设为 AI 编制，全部下级目录同步更新', 'success');
+      showToast(manualInputRequired ? '已设为人工撰写，全部下级目录同步更新' : '已设为 AI 撰写，全部下级目录同步更新', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '更新编制方式失败', 'error');
     }
@@ -1027,9 +1022,9 @@ function OutlineEditPage({
             onDoubleClick={() => hasChildren && toggleExpanded(item.id)}
           >
             <strong>{displayTitle}</strong>
-            <span className="bid-analysis-section-chip">{writingLabel}</span>
-            {constraintLabels.length > 0 && <span className="bid-analysis-section-chip">{constraintLabels.join(' · ')}</span>}
-            {focusLabel && <span className="bid-analysis-section-chip">{focusLabel}</span>}
+            <span className="outline-tree-writing-chip">{writingLabel}</span>
+            {focusLabel && <span className="outline-tree-focus-chip">{focusLabel}</span>}
+            {constraintLabels.length > 0 && <span className="outline-tree-constraint-chip">{constraintLabels.join(' · ')}</span>}
           </button>
           {level < 3 && (
             <label className="outline-tree-manual-toggle" onClick={(event) => event.stopPropagation()}>
@@ -1039,7 +1034,7 @@ function OutlineEditPage({
                 disabled={outlineMutationLocked || sorting}
                 onChange={(event) => { void changeManualAuthoring(item, event.target.checked); }}
               />
-              <span>人工编制</span>
+              <span>人工撰写</span>
             </label>
           )}
         </div>
@@ -1331,8 +1326,8 @@ function OutlineEditPage({
                       onChange={(event) => setEditManualInputRequired(event.target.value === 'manual')}
                       disabled={outlineMutationLocked || sorting}
                     >
-                      <option value="ai">AI编写</option>
-                      <option value="manual">人工填写</option>
+                      <option value="ai">AI 撰写</option>
+                      <option value="manual">人工撰写</option>
                     </select>
                   </label>
                   <div className="outline-detail-actions">

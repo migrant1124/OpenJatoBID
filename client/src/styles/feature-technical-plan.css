@@ -3925,7 +3925,7 @@
   position: relative;
   display: grid;
   width: 100%;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-columns: 26px minmax(0, 1fr) 118px;
   align-items: stretch;
   gap: 6px;
   margin-bottom: 3px;
@@ -3938,7 +3938,7 @@
 }
 
 .outline-tree-item.is-sorting {
-  grid-template-columns: 20px 26px minmax(0, 1fr) auto;
+  grid-template-columns: 20px 26px minmax(0, 1fr) 118px;
   cursor: grab;
 }
 
@@ -4027,10 +4027,12 @@
 }
 
 .outline-tree-content {
-  display: grid;
+  display: flex;
   min-width: 0;
   align-items: center;
-  padding: 2px 3px 2px 0;
+  gap: 8px;
+  padding: 4px 3px 4px 0;
+  overflow: hidden;
   text-align: left;
   background: transparent;
   border: 0;
@@ -4042,6 +4044,7 @@
 }
 
 .outline-tree-content strong {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--yb-text);
@@ -4051,9 +4054,44 @@
   white-space: nowrap;
 }
 
+.outline-tree-writing-chip,
+.outline-tree-focus-chip,
+.outline-tree-constraint-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.outline-tree-writing-chip {
+  color: var(--yb-primary);
+  background: rgba(33, 116, 253, 0.08);
+}
+
+.outline-tree-focus-chip {
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+}
+
+.outline-tree-constraint-chip {
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  text-overflow: ellipsis;
+  background: #f8fafc;
+}
+
 .outline-tree-manual-toggle {
   display: inline-flex;
+  width: 118px;
   align-items: center;
+  justify-content: flex-start;
   gap: 5px;
   padding-right: 4px;
   color: #64748b;

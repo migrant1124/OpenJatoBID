@@ -97,7 +97,7 @@ const responseStatusLabels: Record<ResponseStatus, string> = {
   pending: '待响应',
   'responded-substantive': '已实质响应',
   'responded-none': '已无内容响应',
-  'needs-manual-input': '待人工填写',
+  'needs-manual-input': '待人工撰写',
   'missing-required-evidence': '缺少必要材料',
 };
 
@@ -957,7 +957,7 @@ function ContentEditPage({
     }
 
     if (requirementItem.manual_input_required === true) {
-      showToast('当前小节必须人工填写，不允许 AI 重新生成', 'info');
+      showToast('当前小节必须人工撰写，不允许 AI 重新生成', 'info');
       return;
     }
     try {
@@ -1220,7 +1220,7 @@ function ContentEditPage({
                   ? responseStatusLabels[selectedItem.response_status]
                   : selectedStatus === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[selectedStatus]}
               </span>
-              {selectedItem?.manual_input_required ? <span className="content-status-badge">人工填写</span> : null}
+              {selectedItem?.manual_input_required ? <span className="content-status-badge">人工撰写</span> : null}
               {selectedItem?.compliance_risk && selectedItem.compliance_risk !== 'none' ? (
                 <span className={`content-risk-badge is-${selectedItem.compliance_risk}`}>{complianceRiskLabels[selectedItem.compliance_risk]}</span>
               ) : null}
@@ -1261,7 +1261,7 @@ function ContentEditPage({
             </MarkdownFullscreenViewer>
           ) : selectedItem && selectedIsLeaf ? (
             <div className="markdown-empty-state content-generation-empty">
-              <strong>{selectedItem.manual_input_required ? '正文待人工填写' : getLeafStatus(selectedItem, sections) === 'error' ? sections[selectedItem.id]?.error || '正文生成失败' : '正文待生成'}</strong>
+              <strong>{selectedItem.manual_input_required ? '正文待人工撰写' : getLeafStatus(selectedItem, sections) === 'error' ? sections[selectedItem.id]?.error || '正文生成失败' : '正文待生成'}</strong>
               <p>{selectedItem.manual_input_required
                 ? '该节点不会进入 AI 生成、扩写或自动改写流程，请点击“编辑”填写 Markdown 内容。'
                 : taskInFlight ? '如果该小节正在生成，模型返回内容后会实时显示在这里。' : paused ? '任务已暂停，可先导出当前内容或点击继续。' : '点击生成正文后，后台会按目录小节生成内容。'}</p>
