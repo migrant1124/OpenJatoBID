@@ -2643,13 +2643,104 @@ function validateSourceChildrenPreserved(sourceNodes, finalNodes, path) {
   });
 }
 
+function markPreservedSourceNodes(sourceNodes, finalNodes, marked = new WeakSet()) {
+  let cursor = 0;
+  for (const sourceNode of sourceNodes || []) {
+    const foundIndex = findSourceNodeInOrder(finalNodes || [], sourceNode, cursor);
+    if (foundIndex < 0) continue;
+    const finalNode = finalNodes[foundIndex];
+    marked.add(finalNode);
+    markPreservedSourceNodes(sourceNode.children || [], finalNode.children || [], marked);
+    cursor = foundIndex + 1;
+  }
+  return marked;
+}
+
+function collectSourceDrivenGroupingIssues(payload, sourceOutline, requirementResponseMatrix) {
+  const annotatedOutline = applyOutlineQualityRules(
+    payload,
+    requirementResponseMatrix || createEmptyFocusWritingMatrix(),
+  ).outline || payload;
+  const preservedSourceNodes = markPreservedSourceNodes(sourceOutline?.outline || [], annotatedOutline.outline || []);
+  const issues = [];
+
+  function visit(items, level = 1, secondLevelItem = null) {
+    for (const item of items || []) {
+      const children = Array.isArray(item?.children) ? item.children : [];
+      const currentSecondLevel = level === 2 ? item : secondLevelItem;
+      const modelAdded = !preservedSourceNodes.has(item);
+
+      if (modelAdded && level > 5) {
+        issues.push(`模型新增目录不能超过五级：${formatOutlineItemLabel(item)}`);
+      }
+      if (modelAdded && level === 3 && children.length > 0 && children.length < 2) {
+        issues.push(`模型新增三级主题至少需要两个四级分支：${formatOutlineItemLabel(item)}`);
+      }
+      const hasModelAddedChildren = children.some((child) => !preservedSourceNodes.has(child));
+      if (level === 4 && hasModelAddedChildren) {
+        if (!currentSecondLevel?.focus_priority) {
+          issues.push(`非重点章节不允许新增五级目录：${formatOutlineItemLabel(item)}`);
+        }
+        if (children.length < 2) {
+          issues.push(`模型新增四级主题至少需要两个五级叶子：${formatOutlineItemLabel(item)}`);
+        }
+      }
+      if (modelAdded && level === 5) {
+        if (!currentSecondLevel?.focus_priority) {
+          issues.push(`非重点章节不允许新增五级目录：${formatOutlineItemLabel(item)}`);
+        }
+        if (children.length > 0) {
+          issues.push(`五级目录不能包含子目录：${formatOutlineItemLabel(item)}`);
+        }
+      }
+
+      if (level === 2) {
+        const addedThirdLevelLeaves = children.filter((child) => (
+          !preservedSourceNodes.has(child)
+          && !(Array.isArray(child?.children) && child.children.length)
+        ));
+        if (addedThirdLevelLeaves.length > 5) {
+          issues.push(`同一二级目录下模型新增的无子节点三级目录不能超过 5 个：${formatOutlineItemLabel(item)}`);
+        }
+      }
+
+      if (children.length) visit(children, level + 1, currentSecondLevel);
+    }
+  }
+
+  visit(annotatedOutline.outline || []);
+  return issues;
+}
+
+function sourceDrivenGroupingRules() {
+  return `模型新增目录的层级规则：
+1. 来源骨架已有节点的层级、标题和顺序必须原样保留；以下规则只约束你自行新增的节点。
+2. 同主题或同评分点的具体内容，应先建立三级主题，再在其下使用四级目录表达具体内容。
+3. 同一二级目录下，新增的无子节点三级目录最多 5 个；如需第 6 个，必须重新归类为一个或多个三级主题。
+4. 每个新增三级主题至少包含两个四级分支，不得使用“其他事项”“补充内容”等空泛标题。
+5. 四级可以直接作为正文叶子。只有服务方案、最高分档或次高分档等重点章节中，四级才可作为子主题继续展开；此时至少包含两个五级叶子。
+6. 五级必须是可独立编写的具体叶子，不能再包含 children。模型新增目录最大深度为五级。`;
+}
+
+function buildSourceDrivenGroupingRepairMessages({ invalidContent, issues }, context) {
+  return [
+    {
+      role: 'user',
+      content: `你是投标技术文件目录 JSON 修复器。请在保留来源骨架已有层级、标题和顺序的前提下修复目录；只返回完整 {"outline":[...]} JSON，不要解释。\n\n${sourceDrivenGroupingRules()}`,
+    },
+    { role: 'user', content: `冻结目录来源骨架：\n${JSON.stringify(context.sourceOutline, null, 2)}` },
+    { role: 'user', content: `错误列表：\n${(issues || []).map((item, index) => `${index + 1}. ${item}`).join('\n')}` },
+    { role: 'user', content: `待修复内容：\n\`\`\`json\n${String(invalidContent || '').slice(0, 60000)}\n\`\`\`` },
+  ];
+}
+
 const PERSONNEL_CAPABILITY_SECTION_TITLE = '团队能力分析与履约保障';
 
 function normalizeTitleForMatch(value) {
   return String(value || '').replace(/[\s\p{P}\p{S}]/gu, '').trim();
 }
 
-function validateSourceDrivenOutline(payload, sourceOutline) {
+function validateSourceDrivenOutline(payload, sourceOutline, options = {}) {
   if (!Array.isArray(payload?.outline) || !payload.outline.length) {
     throw new Error('最终目录不能为空');
   }
@@ -2668,6 +2759,12 @@ function validateSourceDrivenOutline(payload, sourceOutline) {
       `一级目录 ${sourceRoot.title}`,
     );
   });
+  if (options.enforceGrouping === true) {
+    const issues = collectSourceDrivenGroupingIssues(payload, sourceOutline, options.requirementResponseMatrix);
+    if (issues.length) {
+      throw new Error(`模型新增目录归类不符合要求：${issues.join('；')}`);
+    }
+  }
 }
 async function generateSourceDrivenOutline(aiService, context, log) {
   return collectJson(aiService, {
@@ -2689,6 +2786,7 @@ async function generateSourceDrivenOutline(aiService, context, log) {
 6. 不要返回 source_requirement_id、primary_requirement_ids、supplemental_requirement_ids、mapped_scoring_point_ids、value_anchor_ids、deep_writing、writing_profile 或 response_mode。
 7. 服务方案类节点返回 service_plan_section=true；如能明确判断某节点对应下方评分项，可返回 focus_scoring_point_ids（评分项 ID 数组）。不能明确判断时留空，不得猜测。
 8. ${wordControlLeafCountMessage(context.wordControl)} 如需调整数量，只能在不改变冻结目录及人工填写节点的前提下增减 AI 编制的二级及以下节点。
+9. ${sourceDrivenGroupingRules()}
 
 输出格式：{"outline":[{"id":"1","title":"一级目录","description":"该章应编制的具体内容","service_plan_section":true,"focus_scoring_point_ids":["SP-1"],"children":[{"id":"1.1","title":"小节","description":"该小节应编制的具体内容"}]}]}
 
@@ -2710,8 +2808,12 @@ ${context.referenceOutlineContext || '未提供'}`,
     ],
     normalizer: normalizeSourceDrivenOutlineResponse,
     validator: (value) => {
-      validateSourceDrivenOutline(value, context.sourceOutline);
+      validateSourceDrivenOutline(value, context.sourceOutline, {
+        enforceGrouping: true,
+        requirementResponseMatrix: context.requirementResponseMatrix,
+      });
     },
+    repairMessagesBuilder: (repairContext) => buildSourceDrivenGroupingRepairMessages(repairContext, context),
     progressCallback: (message) => log(message, 90),
     progressLabel: '目录下级补充',
     failureMessage: '目录下级补充结果格式无效',
@@ -3408,7 +3510,10 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     referenceOutlineContext: sourceKind === 'format' ? referenceOutlineContext : '',
     wordControl,
   }, log);
-  validateSourceDrivenOutline(outline, sourceOutline);
+  validateSourceDrivenOutline(outline, sourceOutline, {
+    enforceGrouping: true,
+    requirementResponseMatrix,
+  });
   if (wordControlOptions.enabled && (wordControl.minimumLeafCount !== null || wordControl.maximumLeafCount !== null)) {
     for (let attempt = 1; attempt <= MAX_WORD_CONTROL_OUTLINE_ADJUSTMENTS; attempt += 1) {
       const leafCount = countOutlineLeaves(outline.outline || []);
@@ -3444,4 +3549,7 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
   updateTask({ status: 'success', progress: 100, logs: [...logs, '目录生成完成。'] }, technicalPlan);
 }
 
-module.exports = { runOutlineGenerationTask };
+module.exports = {
+  runOutlineGenerationTask,
+  validateSourceDrivenOutline,
+};
