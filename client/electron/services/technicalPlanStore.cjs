@@ -90,7 +90,7 @@ const defaultOutlineFormatConstraints = Object.freeze({
 });
 
 const defaultOutlineWordControlOptions = Object.freeze({
-  enabled: false,
+  enabled: true,
   minimumWords: 0,
   maximumWords: 0,
   sectionWords: 0,
@@ -161,7 +161,7 @@ function normalizeOutlineWordControlOptions(value) {
   };
   const sectionWords = normalizeInteger(source.sectionWords);
   return {
-    enabled: Boolean(source.enabled),
+    enabled: true,
     minimumWords: normalizeInteger(source.minimumWords),
     maximumWords: normalizeInteger(source.maximumWords),
     sectionWords,

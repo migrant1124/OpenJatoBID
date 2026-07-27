@@ -472,7 +472,7 @@ function normalizeOutlineWordControlSnapshot(value) {
   };
   const sectionWords = normalizeInteger(source.sectionWords);
   return {
-    enabled: Boolean(source.enabled),
+    enabled: true,
     minimumWords: normalizeInteger(source.minimumWords),
     maximumWords: normalizeInteger(source.maximumWords),
     sectionWords,

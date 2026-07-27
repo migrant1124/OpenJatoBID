@@ -107,7 +107,7 @@ export interface OutlineWordControlOptions {
 }
 
 export const DEFAULT_OUTLINE_WORD_CONTROL_OPTIONS: OutlineWordControlOptions = {
-  enabled: false,
+  enabled: true,
   minimumWords: 0,
   maximumWords: 0,
   sectionWords: 0,
