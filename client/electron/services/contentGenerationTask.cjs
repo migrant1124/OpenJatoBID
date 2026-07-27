@@ -15,7 +15,7 @@ const {
   generateHtmlIllustration,
   stripGeneratedIllustrationsFromDocument,
 } = require('./contentIllustrationGeneration.cjs');
-const { applyRangeEdits } = require('../utils/textEdit.cjs');
+const { applyRangeEdits, findTextMatches } = require('../utils/textEdit.cjs');
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
 const {
   deriveResponseCompletion,
@@ -1585,9 +1585,9 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
 
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown 代码围栏。
-2. 不要返回完整正文，只返回一次局部扩写操作。
+2. 不要返回完整正文，只返回一个或多个局部扩写操作；多个操作应分别补强不同的评分响应、实施动作、量化细节、交付与验收或价值锚点。
 3. operation 只能是 "insert" 或 "replace"。
-4. insert 表示新增一个或多个段落，anchor 填写建议插入在哪个原段落之后；如果适合放末尾，anchor 写 "end"。
+4. insert 表示新增一个或多个段落，anchor 必须逐字复制当前正文中唯一完整的原文段落或 Markdown 块；仅适合放开头或末尾时可写 "start" 或 "end"。
 5. replace 表示重写并扩写某个完整 Markdown 原文块，target_text 必须逐字复制当前章节原正文中的完整待替换块。
 6. content 只写新增或替换后的正文片段，不要包含章节标题。
 7. 禁止输出图片 Markdown、代码块或其他图表代码。
@@ -1602,10 +1602,14 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
 
 返回格式：
 {
-  "operation": "insert",
-  "anchor": "end",
-  "target_text": "replace 时填写逐字复制的完整待替换 Markdown 原文块，insert 时留空",
-  "content": "扩写后的新增段落或替换段落"
+  "operations": [
+    {
+      "operation": "insert",
+      "anchor": "逐字复制的唯一原文段落，或 start/end",
+      "target_text": "replace 时填写逐字复制的完整待替换 Markdown 原文块，insert 时留空",
+      "content": "扩写后的新增段落或替换段落"
+    }
+  ]
 }`,
     },
     { role: 'user', content: `项目概述：\n${projectOverview || '未提供'}` },
@@ -1615,21 +1619,32 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
     { role: 'user', content: `当前章节路径：${chapterPath}\n当前章节描述：${item.description || ''}` },
     { role: 'user', content: `同级章节（扩写时避免重复）：\n${siblingLines || '无'}` },
     { role: 'user', content: `当前章节原正文：\n${currentContent}` },
-    { role: 'user', content: `当前章节统计字数：${currentWords}\n期望本章节扩写后至少达到：${targetWords}\n请返回一次局部扩写 JSON。` },
+  { role: 'user', content: `当前章节统计字数：${currentWords}\n期望本章节扩写后至少达到：${targetWords}\n请返回局部扩写 JSON。` },
   ];
 }
 
-function normalizeContentExpansionPatch(value) {
-  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
-  const rawPatch = Array.isArray(source.operations) ? source.operations[0] : Array.isArray(source.patches) ? source.patches[0] : source;
+function normalizeContentExpansionOperation(value) {
+  const rawPatch = value && typeof value === 'object' ? value : {};
   const operation = String(rawPatch.operation || rawPatch.type || '').trim().toLowerCase();
-  const anchor = singleLine(rawPatch.anchor || rawPatch.position || rawPatch.after || rawPatch.target || rawPatch.replace_target || 'end') || 'end';
+  const anchor = String(rawPatch.anchor || rawPatch.position || rawPatch.after || rawPatch.target || rawPatch.replace_target || '').trim();
   const targetText = normalizeNewlines(rawPatch.target_text ?? rawPatch.targetText ?? rawPatch.old_text ?? rawPatch.oldText ?? '').trim();
   const content = normalizeGeneratedMarkdown(String(rawPatch.content || rawPatch.paragraph || rawPatch.text || rawPatch.new_content || ''))
     .replace(/```[\s\S]*?```/g, '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .trim();
   return { operation, anchor, target_text: targetText, content };
+}
+
+function normalizeContentExpansionPatch(value) {
+  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
+  const rawPatch = Array.isArray(source.operations) ? source.operations[0] : Array.isArray(source.patches) ? source.patches[0] : source;
+  return normalizeContentExpansionOperation(rawPatch);
+}
+
+function normalizeContentExpansionOperations(value) {
+  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
+  const rawOperations = Array.isArray(source.operations) ? source.operations : Array.isArray(source.patches) ? source.patches : [source];
+  return { operations: rawOperations.slice(0, 8).map(normalizeContentExpansionOperation) };
 }
 
 function validateContentExpansionPatch(patch) {
@@ -1644,6 +1659,17 @@ function validateContentExpansionPatch(patch) {
   }
 }
 
+function validateContentExpansionOperations(value) {
+  const operations = Array.isArray(value?.operations) ? value.operations : [];
+  if (!operations.length) throw new Error('扩写结果 operations 不能为空');
+  for (const patch of operations) {
+    validateContentExpansionPatch(patch);
+    if (patch.operation === 'insert' && !String(patch.anchor || '').trim()) {
+      throw new Error('扩写 insert 结果缺少 anchor');
+    }
+  }
+}
+
 function buildContentExpansionRepairMessages({ invalidContent, issues }, currentContent = '') {
   const issueLines = (issues || []).map((item, index) => `${index + 1}. ${item}`).join('\n');
   const currentContentBlock = String(currentContent || '').trim()
@@ -1655,14 +1681,14 @@ function buildContentExpansionRepairMessages({ invalidContent, issues }, current
       content: `你是严格的 JSON 修复器。请把模型输出修复为“正文局部扩写”JSON。
 
 必须满足：
-1. 顶层只能包含 operation、anchor、target_text、content。
-2. operation 只能是 "insert" 或 "replace"。
-3. 严禁使用 delete、rewrite_full、rewrite、append、update 或其他 operation。
-4. insert 表示新增段落；anchor 写建议插入在哪个原段落之后，无法确定时写 "end"。
+1. 顶层只能包含 operations，operations 为局部扩写操作数组。
+2. 每项只能包含 operation、anchor、target_text、content。
+3. operation 只能是 "insert" 或 "replace"；严禁 delete、rewrite_full、rewrite、append、update 或其他 operation。
+4. insert 表示新增段落；anchor 必须逐字复制当前正文中唯一完整原文块，或写 "start" / "end"。
 5. replace 表示重写并扩写一个完整 Markdown 原文块；target_text 必须逐字复制完整待替换块，不得摘要、改写或只返回其中一句。
 6. content 只能是新增或替换后的正文片段，不要返回完整章节正文。
 7. content 不得包含章节标题、Markdown 标题、图片 Markdown、代码块或解释文字。
-8. insert 时 target_text 留空；replace 时 anchor 可留空，但 target_text 必须非空。
+8. insert 时 target_text 留空；replace 时 anchor 可留空，但 target_text 必须非空；多个操作的锚点和替换范围不得重复或重叠。
 9. 只返回 JSON，不要输出 Markdown 代码围栏或解释。`,
     },
     { role: 'user', content: `错误列表：\n${issueLines}` },
@@ -2825,6 +2851,62 @@ function applyContentExpansionPatch(content, patch) {
   }
 
   return `${normalizedContent}\n\n${patchContent}`;
+}
+
+function collectContentExpansionProtectedRanges(content) {
+  const source = String(content || '');
+  const ranges = [
+    ...collectFencedCodeRanges(source),
+    ...extractContentTableBlocks(source).map((table) => ({ start: table.start, end: table.end })),
+  ];
+  for (const pattern of [/!\[[^\]]*\]\([^)]*\)/g, /<img\b[^>]*>/gi]) {
+    let match;
+    while ((match = pattern.exec(source))) ranges.push({ start: match.index, end: match.index + match[0].length });
+  }
+  return ranges;
+}
+
+function contentExpansionRangeOverlaps(start, end, ranges) {
+  return (ranges || []).some((range) => start < range.end && end > range.start);
+}
+
+function applyContentExpansionOperations(content, value) {
+  const source = normalizeNewlines(String(content || '')).trim();
+  const operations = Array.isArray(value?.operations) ? value.operations : [];
+  const protectedRanges = collectContentExpansionProtectedRanges(source);
+  const seenRanges = new Set();
+  const edits = operations.map((patch) => {
+    const patchContent = normalizeGeneratedMarkdown(patch.content).trim();
+    if (patch.operation === 'insert') {
+      const anchorKey = String(patch.anchor || '').trim().toLowerCase();
+      let position;
+      if (anchorKey === 'start') position = 0;
+      else if (anchorKey === 'end') position = source.length;
+      else {
+        const result = findTextMatches(source, patch.anchor);
+        if (!result.unique || result.strategy !== 'exact') throw new Error('扩写 insert anchor 未在当前正文中精确唯一命中');
+        const match = result.matches[0];
+        if (contentExpansionRangeOverlaps(match.start, match.end, protectedRanges)) throw new Error('扩写不能在图片、代码块或表格内部插入内容');
+        position = match.end;
+      }
+      const rangeKey = `${position}:${position}`;
+      if (seenRanges.has(rangeKey)) throw new Error('扩写操作锚点重复');
+      seenRanges.add(rangeKey);
+      return { start: position, end: position, newText: position === 0 ? `${patchContent}\n\n` : `\n\n${patchContent}` };
+    }
+
+    const result = findTextMatches(source, patch.target_text);
+    if (!result.unique || result.strategy !== 'exact') throw new Error('扩写 replace target_text 未在当前正文中精确唯一命中');
+    const match = result.matches[0];
+    if (contentExpansionRangeOverlaps(match.start, match.end, protectedRanges)) throw new Error('扩写不能修改图片、代码块或表格');
+    const rangeKey = `${match.start}:${match.end}`;
+    if (seenRanges.has(rangeKey)) throw new Error('扩写操作范围重复');
+    seenRanges.add(rangeKey);
+    return { start: match.start, end: match.end, newText: patchContent };
+  });
+  const result = applyRangeEdits(source, edits);
+  if (!result.changed || result.errors.length) throw new Error(result.errors[0] || '扩写没有产生有效修改');
+  return result.content;
 }
 
 function escapeRegExp(value) {
@@ -5116,11 +5198,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         logTitle: `正文扩写-${item.id}-${item.title || '未命名章节'}`,
         progressLabel: '正文扩写',
         failureMessage: '模型返回的正文扩写结果格式无效',
-        normalizer: normalizeContentExpansionPatch,
-        validator: validateContentExpansionPatch,
+        normalizer: normalizeContentExpansionOperations,
+        validator: validateContentExpansionOperations,
         repairMessagesBuilder: (contextForRepair) => buildContentExpansionRepairMessages(contextForRepair, content),
       });
-      const nextContent = applyContentExpansionPatch(content, patch);
+      const nextContent = applyContentExpansionOperations(content, patch);
       const nextWords = countContentWords(nextContent);
       logs = [...logs, `扩写完成：${item.id} ${item.title || '未命名章节'}（${words} -> ${nextWords} 字）。`];
       rememberTouchedItem(item.id);
@@ -7151,10 +7233,13 @@ workspace 文件说明：
 const __developerContentExpansionPatchRuntime = {
   buildContentExpansionMessages,
   normalizeContentExpansionPatch,
+  normalizeContentExpansionOperations,
   validateContentExpansionPatch,
+  validateContentExpansionOperations,
   buildContentExpansionRepairMessages,
   findContentExpansionTargetTextMatch,
   applyContentExpansionPatch,
+  applyContentExpansionOperations,
   applyOutlineExpansionAdditions,
   collectFreeformLeafContexts,
   formatOutlineExpansionContext,

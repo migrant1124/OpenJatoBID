@@ -55,3 +55,33 @@ test('评分价值扩写提示词保留章节合同而非只按字数扩写', ()
   assert.match(prompt, /实施闭环/);
   assert.match(prompt, /不得为了凑字数复述已有内容/);
 });
+
+test('正文扩写按多个精确锚点局部插入，不重写整节正文', () => {
+  const source = '第一段：项目启动。\n\n第二段：实施执行。';
+  const patch = __developerContentExpansionPatchRuntime.normalizeContentExpansionOperations({
+    operations: [
+      { operation: 'insert', anchor: '第一段：项目启动。', content: '补充：启动阶段完成职责分工与资料核验。' },
+      { operation: 'insert', anchor: 'end', content: '补充：执行完成后形成验收记录。' },
+    ],
+  });
+  assert.doesNotThrow(() => __developerContentExpansionPatchRuntime.validateContentExpansionOperations(patch));
+  assert.equal(__developerContentExpansionPatchRuntime.applyContentExpansionOperations(source, patch), [
+    '第一段：项目启动。',
+    '补充：启动阶段完成职责分工与资料核验。',
+    '第二段：实施执行。',
+    '补充：执行完成后形成验收记录。',
+  ].join('\n\n'));
+});
+
+test('正文扩写拒绝模糊、重复或受保护 Markdown 范围', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const duplicateAnchor = runtime.normalizeContentExpansionOperations({
+    operations: [{ operation: 'insert', anchor: '重复段落。', content: '补充内容。' }],
+  });
+  assert.throws(() => runtime.applyContentExpansionOperations('重复段落。\n\n重复段落。', duplicateAnchor), /精确唯一命中/);
+
+  const protectedAnchor = runtime.normalizeContentExpansionOperations({
+    operations: [{ operation: 'insert', anchor: '![示意图](asset://example.png)', content: '补充内容。' }],
+  });
+  assert.throws(() => runtime.applyContentExpansionOperations('正文。\n\n![示意图](asset://example.png)', protectedAnchor), /不能在图片、代码块或表格内部插入/);
+});
