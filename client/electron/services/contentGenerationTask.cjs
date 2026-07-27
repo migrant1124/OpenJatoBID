@@ -558,6 +558,10 @@ function normalizeCrossSectionBoundaries(value) {
 
 function normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles, options = {}) {
   const source = value?.plan && typeof value.plan === 'object' ? value.plan : value || {};
+  const requestedWritingProfile = String(options.writingProfile || source.writing_profile || source.writingProfile || '').trim();
+  const writingProfile = ['standard', 'deep', 'creative-proposal'].includes(requestedWritingProfile)
+    ? requestedWritingProfile
+    : resolveWritingProfile(source);
   const knowledgeSource = source.knowledge;
   const knowledge = knowledgeSource && typeof knowledgeSource === 'object' && !Array.isArray(knowledgeSource) ? knowledgeSource : {};
   const rawKnowledgeItemIds = Array.isArray(knowledgeSource)
@@ -573,7 +577,7 @@ function normalizeContentPlan(value, allowedKnowledgeItemIds, allowedFactTitles,
   const sectionRole = singleLine(source.section_role || source.sectionRole);
 
   return {
-    writing_profile: options.writingProfile || resolveWritingProfile(source),
+    writing_profile: writingProfile,
     section_role: sectionRole,
     scoring_point_ids: uniqueStrings(source.scoring_point_ids || source.scoringPointIds),
     value_anchor_ids: uniqueStrings(source.value_anchor_ids || source.valueAnchorIds),

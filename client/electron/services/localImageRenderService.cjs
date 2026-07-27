@@ -415,13 +415,15 @@ function createLocalImageRenderService(options = {}) {
       const layoutIssues = options.kind === 'html' || options.kind === 'legacy-html'
         ? await probeHtmlLayoutIssues(win.webContents)
         : [];
-      const buffer = await captureFullPage(win.webContents, captureWidth, metrics.height, options);
+      const buffer = options.capture === false
+        ? undefined
+        : await captureFullPage(win.webContents, captureWidth, metrics.height, options);
       return {
-        buffer,
         width: captureWidth,
         height: metrics.height,
         estimated_rgba_bytes: estimateRgbaBytes(captureWidth, metrics.height),
         layout_issues: layoutIssues,
+        ...(buffer ? { buffer } : {}),
       };
     } finally {
       try { if (win.webContents.debugger.isAttached()) win.webContents.debugger.detach(); } catch {}
@@ -432,6 +434,17 @@ function createLocalImageRenderService(options = {}) {
   }
 
   return {
+    probeHtmlLayoutOnly(html, renderOptions = {}) {
+      const width = renderOptions.width || HTML_DESIGN_WIDTH;
+      return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width), {
+        ...renderOptions,
+        kind: 'html',
+        capture: false,
+        initialWidth: width,
+        initialHeight: HTML_INITIAL_HEIGHT,
+        minWidth: width,
+      }));
+    },
     renderHtmlToPng(html, renderOptions = {}) {
       const width = renderOptions.width || HTML_DESIGN_WIDTH;
       return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width), {
