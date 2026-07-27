@@ -891,30 +891,47 @@ function BidAnalysisPage({
             </header>
 
             <div className="bid-analysis-config-body">
-              <section className="bid-analysis-config-section is-compact">
+              <section className="bid-analysis-config-section bid-analysis-scope-section">
                 <div className="bid-analysis-config-section-head">
-                  <strong>投标范围</strong>
-                  <span>{draftBidSectionMode === 'multiple' ? '多标段' : '默认单标段'}</span>
+                  <div className="bid-analysis-scope-title">
+                    <strong>投标范围</strong>
+                    <em>请确认</em>
+                  </div>
+                  <span>{draftBidSectionMode === 'multiple' ? '默认多标段' : '单标段'}</span>
                 </div>
-                <div className="bid-analysis-config-presets" role="group" aria-label="投标范围模式">
+                <div className="bid-analysis-scope-card">
+                  <div className="bid-analysis-scope-notice">
+                    <span aria-hidden="true">!</span>
+                    <div>
+                      <strong>默认按多标段识别</strong>
+                      <p>请根据投标文件实际结构确认；单标段文件可切换为单标段解析。</p>
+                    </div>
+                  </div>
+                  <div className="bid-analysis-scope-options" role="radiogroup" aria-label="投标范围模式">
                   <button
                     type="button"
-                    className={`bid-analysis-config-preset${draftBidSectionMode === 'single' ? ' is-active' : ''}`}
-                    onClick={() => setDraftBidSectionMode('single')}
+                    className={`bid-analysis-scope-option${draftBidSectionMode === 'multiple' ? ' is-active' : ''}`}
+                    onClick={() => setDraftBidSectionMode('multiple')}
                     disabled={taskRunning}
+                    role="radio"
+                    aria-checked={draftBidSectionMode === 'multiple'}
                   >
-                    <span>单标段</span>
+                    <span className="bid-analysis-scope-radio" aria-hidden="true" />
+                    <span>多标段</span>
                     <small>默认</small>
                   </button>
                   <button
                     type="button"
-                    className={`bid-analysis-config-preset${draftBidSectionMode === 'multiple' ? ' is-active' : ''}`}
-                    onClick={() => setDraftBidSectionMode('multiple')}
+                    className={`bid-analysis-scope-option${draftBidSectionMode === 'single' ? ' is-active' : ''}`}
+                    onClick={() => setDraftBidSectionMode('single')}
                     disabled={taskRunning}
+                    role="radio"
+                    aria-checked={draftBidSectionMode === 'single'}
                   >
-                    <span>多标段</span>
-                    <small>AI 识别</small>
+                    <span className="bid-analysis-scope-radio" aria-hidden="true" />
+                    <span>单标段</span>
                   </button>
+                  </div>
                 </div>
                 {draftBidSectionMode === 'multiple' && (
                   <div className="bid-analysis-section-action">
@@ -940,6 +957,7 @@ function BidAnalysisPage({
                     </button>
                   </div>
                 )}
+                <p className="bid-analysis-scope-hint">将通过 AI 识别标段范围，确认后仅解析所选范围。</p>
               </section>
 
               <section className="bid-analysis-config-section is-compact">

@@ -37,7 +37,7 @@ function createInitialSchema(db) {
       bid_analysis_selected_task_ids_json TEXT,
       selected_format_profile_id TEXT,
       selected_format_profile_hash TEXT,
-      bid_section_mode TEXT NOT NULL DEFAULT 'single',
+      bid_section_mode TEXT NOT NULL DEFAULT 'multiple',
       bid_sections_json TEXT,
       bid_section_extraction_status TEXT NOT NULL DEFAULT 'idle',
       bid_section_extraction_error TEXT,
@@ -261,7 +261,7 @@ function addTechnicalPlanBidSectionOptimization(db) {
   addColumnIfMissing(db, 'technical_plan_meta', 'tender_original_markdown_path', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_meta', 'tender_original_markdown_hash', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_meta', 'tender_original_markdown_chars', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(db, 'technical_plan_meta', 'bid_section_mode', "TEXT NOT NULL DEFAULT 'single'");
+  addColumnIfMissing(db, 'technical_plan_meta', 'bid_section_mode', "TEXT NOT NULL DEFAULT 'multiple'");
   addColumnIfMissing(db, 'technical_plan_meta', 'bid_sections_json', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_meta', 'bid_section_extraction_status', "TEXT NOT NULL DEFAULT 'idle'");
   addColumnIfMissing(db, 'technical_plan_meta', 'bid_section_extraction_error', 'TEXT');
@@ -1163,7 +1163,7 @@ const schemaHealthColumnGroups = [
       tender_original_markdown_path: 'TEXT',
       tender_original_markdown_hash: 'TEXT',
       tender_original_markdown_chars: 'INTEGER NOT NULL DEFAULT 0',
-      bid_section_mode: "TEXT NOT NULL DEFAULT 'single'",
+      bid_section_mode: "TEXT NOT NULL DEFAULT 'multiple'",
       bid_sections_json: 'TEXT',
       bid_section_extraction_status: "TEXT NOT NULL DEFAULT 'idle'",
       bid_section_extraction_error: 'TEXT',

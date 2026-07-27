@@ -967,6 +967,129 @@
   gap: 8px;
 }
 
+.bid-analysis-scope-section {
+  gap: 10px;
+}
+
+.bid-analysis-scope-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bid-analysis-scope-title em {
+  padding: 3px 7px;
+  color: #b45309;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  background: #fff3d7;
+  border-radius: 999px;
+}
+
+.bid-analysis-scope-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: #fffbf2;
+  border: 1px solid #f5c56c;
+  border-radius: 14px;
+}
+
+.bid-analysis-scope-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.bid-analysis-scope-notice > span {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  background: #f59e0b;
+  border-radius: 50%;
+}
+
+.bid-analysis-scope-notice strong {
+  color: #8a4b08;
+  font-size: 15px;
+}
+
+.bid-analysis-scope-notice p,
+.bid-analysis-scope-hint {
+  margin: 4px 0 0;
+  color: #8b6b3e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.bid-analysis-scope-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bid-analysis-scope-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 56px;
+  padding: 0 14px;
+  color: var(--yb-text-soft);
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #d8dee9;
+  border-radius: 10px;
+}
+
+.bid-analysis-scope-option > span:not(.bid-analysis-scope-radio) {
+  color: var(--yb-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.bid-analysis-scope-option small {
+  color: var(--yb-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bid-analysis-scope-radio {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #aeb8c8;
+  border-radius: 50%;
+}
+
+.bid-analysis-scope-option.is-active {
+  background: #f5f9ff;
+  border-color: var(--yb-primary);
+  box-shadow: 0 0 0 2px rgba(33, 116, 253, 0.08);
+}
+
+.bid-analysis-scope-option.is-active .bid-analysis-scope-radio {
+  border: 5px solid var(--yb-primary);
+}
+
+.bid-analysis-scope-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.bid-analysis-scope-hint {
+  margin: 0;
+  padding-left: 2px;
+  color: var(--yb-text-muted);
+}
+
 .bid-analysis-section-action {
   display: flex;
   flex-wrap: wrap;

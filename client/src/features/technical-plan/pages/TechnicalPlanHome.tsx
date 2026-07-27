@@ -66,7 +66,7 @@ const resetState = {
   bidAnalysisTaskDefinitions: [],
   bidAnalysisTasks: {},
   bidAnalysisProgress: 0,
-  bidSectionMode: 'single' as const,
+  bidSectionMode: 'multiple' as const,
   bidSections: [],
   bidSectionExtractionStatus: 'idle' as const,
   bidSectionExtractionError: undefined,

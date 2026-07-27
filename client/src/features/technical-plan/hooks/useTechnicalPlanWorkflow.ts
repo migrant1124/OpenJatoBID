@@ -16,7 +16,7 @@ const initialState: TechnicalPlanState = {
   bidAnalysisTaskDefinitions: [],
   bidAnalysisTasks: {},
   bidAnalysisProgress: 0,
-  bidSectionMode: 'single',
+  bidSectionMode: 'multiple',
   bidSections: [],
   bidSectionExtractionStatus: 'idle',
   bidSectionExtractionError: undefined,
