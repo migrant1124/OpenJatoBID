@@ -3,11 +3,13 @@ const zlib = require('node:zlib');
 const { runWithRemoteImageRetry } = require('../utils/remoteImageRetry.cjs');
 const { buildChartDslPrompt } = require('./chartDslPrompt.cjs');
 const { assertValidChartDsl } = require('./chartDslValidator.cjs');
+const { VISUAL_STYLE_PROFILES } = require('./contentIllustrationPlanning.cjs');
 
 const HTML_AGENT_THRESHOLD_CHARS = 50000;
 const HTML_DESIGN_WIDTH = 1240;
 const HTML_LAYOUT_REPAIR_ATTEMPTS = 2;
 const GENERATED_ILLUSTRATION_PATTERN = /<!-- yibiao-illustration:start\b[^>]*-->[\s\S]*?<!-- yibiao-illustration:end -->/gi;
+const VISUAL_STYLE_PROFILE_BY_NAME = new Map(VISUAL_STYLE_PROFILES.map((profile) => [profile.name, profile]));
 
 function singleLine(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -62,10 +64,16 @@ function getPlannedTitle(execution) {
   return title;
 }
 
+function formatVisualStyle(style) {
+  const profile = VISUAL_STYLE_PROFILE_BY_NAME.get(style);
+  if (!profile) return style || '由内容自行判断';
+  return `${profile.name}（${profile.definition} 配色：${profile.palette}）`;
+}
+
 function formatPlanContext(execution) {
   const item = execution.planItem || {};
   const list = (value) => Array.isArray(value) && value.length ? value.join('、') : '无';
-  return `图片规划：视觉作用：${item.visual_role || '未指定'}；配图目的：${item.purpose || '未指定'}；比例：${item.aspect_ratio || '未指定'}；关联评分项：${list(item.scoring_point_ids)}；价值锚点：${list(item.value_anchor_ids)}；插入锚点：${item.anchor?.type || '章节末尾'}；全文视觉风格：${execution.visualStyle || '由内容自行判断'}。`;
+  return `图片规划：视觉作用：${item.visual_role || '未指定'}；配图目的：${item.purpose || '未指定'}；比例：${item.aspect_ratio || '未指定'}；关联评分项：${list(item.scoring_point_ids)}；价值锚点：${list(item.value_anchor_ids)}；插入锚点：${item.anchor?.type || '章节末尾'}；全文视觉风格：${formatVisualStyle(execution.visualStyle)}。`;
 }
 
 function formatCreativeBrief(brief) {
@@ -510,6 +518,7 @@ module.exports = {
   buildAiImagePrompt,
   buildHtmlImagePrompt,
   buildIllustrationExecutionContexts,
+  formatPlanContext,
   generateAiIllustration,
   generateChartIllustration,
   generateHtmlIllustration,

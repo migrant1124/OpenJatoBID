@@ -397,6 +397,7 @@ export interface ContentIllustrationPlanState {
   items: ContentIllustrationPlanItem[];
   confirmation_status?: 'pending' | 'confirmed';
   recommended_visual_style?: string;
+  recommended_visual_style_evidence?: string[];
   visual_style?: string;
   visual_rhythm_diagnostics?: ContentIllustrationVisualRhythmDiagnostic[];
   updated_at?: string;

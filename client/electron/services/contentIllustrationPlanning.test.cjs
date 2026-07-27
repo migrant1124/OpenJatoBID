@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   ILLUSTRATION_PLAN_VERSION,
+  VISUAL_STYLE_PROFILES,
   buildIllustrationPlanningContext,
   buildIllustrationPlanningPrompt,
+  resolveVisualStyleRecommendation,
   resolveIllustrationPlan,
 } = require('./contentIllustrationPlanning.cjs');
 
@@ -50,6 +52,36 @@ test('图片编排配置不再携带数量上限', () => {
   assert.equal('limit' in context.config.html, false);
   assert.equal('limit' in context.config.ai, false);
   assert.equal(context.config.html.allowed_types.length, 17);
+});
+
+test('视觉风格按项目专业对象和核心成果识别，不被 Agent 示例风格带偏', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: {
+      project_overview: '曲靖局2025年-2027年创建全国和云南省安全文化建设示范企业专题技术服务项目，属于安全文化建设与评价。',
+      outline: [{ id: '1.1', title: '安全文化建设实施方案', content: '围绕安全文化建设示范企业创建开展服务。' }],
+    },
+    sections: { '1.1': { status: 'success', content: '围绕安全文化建设示范企业创建开展服务。' } },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+  });
+  const recommendation = resolveVisualStyleRecommendation(context);
+  assert.equal(recommendation.style, '安监环');
+  assert.deepEqual(recommendation.evidence, ['安全文化建设示范企业', '安全文化建设与评价']);
+  const result = resolveIllustrationPlan({ visual_style: '技术研究', items: [candidate()] }, context);
+  assert.equal(result.plan.recommended_visual_style, '安监环');
+  assert.deepEqual(result.plan.recommended_visual_style_evidence, recommendation.evidence);
+});
+
+test('通用工作动作不足以推荐视觉风格', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [{ id: '1.1', title: '项目实施方案', content: '开展创建、评价、评审、风险管控、现场服务和验收。' }] },
+    sections: { '1.1': { status: 'success', content: '开展创建、评价、评审、风险管控、现场服务和验收。' } },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+  });
+  assert.equal(resolveVisualStyleRecommendation(context), undefined);
+  assert.equal(VISUAL_STYLE_PROFILES.length, 7);
+  assert.match(buildIllustrationPlanningPrompt(), /通用工作动作不得单独用于风格判断/);
 });
 
 test('视觉节奏诊断只给出建议，不改变已选择图片计划', () => {

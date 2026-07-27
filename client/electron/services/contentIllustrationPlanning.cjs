@@ -1,9 +1,54 @@
 const crypto = require('node:crypto');
 
-const ILLUSTRATION_PLAN_VERSION = 8;
+const ILLUSTRATION_PLAN_VERSION = 9;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai'];
 const VISUAL_STYLES = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
+// 全文风格只按项目专业对象和核心成果识别，通用工作动作不参与判断。
+const VISUAL_STYLE_PROFILES = [
+  {
+    name: '技术研究',
+    definition: '科研、技术攻关、技术验证或数字技术研发，核心成果是研究结论、技术模型、原型或验证结果。',
+    palette: '专业深蓝 #1F4E79，辅以冷灰和理性数据网格。',
+    signals: ['科研课题', '技术攻关', '试验验证', '实验验证', '仿真验证', '算法模型', '原型系统', '研究报告', '技术研究', '科研创新'],
+  },
+  {
+    name: '管理咨询',
+    definition: '企业治理、组织运营、战略、制度、流程、绩效或内控咨询，核心成果是管理诊断、管理方案或制度流程成果。',
+    palette: '稳重藏蓝 #233E63，辅以石墨灰和清晰信息层级。',
+    signals: ['管理诊断', '战略规划', '组织优化', '流程再造', '制度体系', '绩效体系', '运营提升', '内控合规'],
+  },
+  {
+    name: '工程建设',
+    definition: '实体工程、基建、施工、安装、改造、运维或设备实施，核心成果是工程实体、设备设施或工程交付。',
+    palette: '工程蓝 #245B82，辅以钢灰和结构化线条。',
+    signals: ['工程建设', '勘察设计', '施工组织', '土建工程', '安装调试', '工程改造', '设备设施', '竣工验收'],
+  },
+  {
+    name: '市场营销',
+    definition: '市场拓展、品牌传播、客户运营、推广活动或销售转化，核心成果是营销传播、客户运营或市场转化成果。',
+    palette: '品牌蓝 #146BC3，辅以暖橙作为重点强调。',
+    signals: ['市场营销', '市场调研', '品牌定位', '品牌传播', '营销策划', '客户运营', '渠道推广', '市场推广', '招商推广'],
+  },
+  {
+    name: '党群阵地',
+    definition: '党的建设、思想政治、党员教育或党群文化阵地，核心对象必须是党组织、党员或党群服务。',
+    palette: '党建红 #C8262D，辅以庄重金色点缀。',
+    signals: ['党的建设', '党建', '党组织', '党员', '三会一课', '主题党日', '思想政治', '廉洁教育', '党群服务', '党建阵地'],
+  },
+  {
+    name: '工会活动',
+    definition: '工会组织及职工权益、服务、关爱或文体活动，核心对象必须是工会或职工服务。',
+    palette: '工会蓝绿 #1677C8，辅以活力绿色点缀。',
+    signals: ['工会', '职代会', '职工之家', '职工代表', '职工权益', '困难帮扶', '劳模工匠', '职工文体'],
+  },
+  {
+    name: '安监环',
+    definition: '安全生产、安全文化、生态环境或职业健康及其专业治理，核心成果是对应的创建、标准化、体系或专业交付物。',
+    palette: '安全绿 #257A4B，辅以环保青绿和警示黄的克制强调。',
+    signals: ['安全文化建设示范企业', '安全文化建设与评价', '安全生产标准化', '双重预防机制', '安全生产', '安全文化', '安健环', 'EHS', 'HSE', '环境保护', '生态环境', '职业健康', '隐患排查治理'],
+  },
+];
 const AI_IMAGE_TYPES = new Set([
   'engineering_diagram',
   'realistic_photo',
@@ -69,6 +114,50 @@ function normalizedTitleKey(value) {
 
 function stableHash(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
+}
+
+function buildVisualStyleProfilePrompt() {
+  return VISUAL_STYLE_PROFILES.map((profile) => `- ${profile.name}：${profile.definition} 强识别依据：${profile.signals.join('、')}。`).join('\n');
+}
+
+function resolveVisualStyleRecommendation(context) {
+  const input = context?.illustrationInput || {};
+  const sources = [
+    {
+      label: '项目名称及概述',
+      weight: 4,
+      text: [input.project_name, input.project_overview].filter(Boolean).join('\n'),
+    },
+    {
+      label: '评分项与目录',
+      weight: 1,
+      text: [
+        ...(input.scoring_points || []).flatMap((item) => [item.title, ...(item.high_score_conditions || [])]),
+        ...(input.sections || []).map((item) => item.title),
+      ].filter(Boolean).join('\n'),
+    },
+  ];
+  const candidates = VISUAL_STYLE_PROFILES.map((profile) => {
+    const matched = [];
+    let score = 0;
+    for (const source of sources) {
+      for (const signal of profile.signals) {
+        if (source.text.includes(signal)) {
+          score += source.weight;
+          matched.push({ signal, source: source.label });
+        }
+      }
+    }
+    return { profile, score, matched };
+  }).filter((candidate) => candidate.score > 0);
+  if (!candidates.length) return undefined;
+  candidates.sort((left, right) => right.score - left.score || right.matched.length - left.matched.length);
+  if (candidates.length > 1 && candidates[0].score === candidates[1].score) return undefined;
+  const selected = candidates[0];
+  return {
+    style: selected.profile.name,
+    evidence: selected.matched.slice(0, 2).map((item) => item.signal),
+  };
 }
 
 // 解析用户允许的 HTML 图片类型。
@@ -240,6 +329,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
     sectionMap,
     eligibleSectionIds,
     config,
+    illustrationInput,
     files: [
       { path: 'technical-plan.md', content: markdownLines.join('\n').trim() },
       {
@@ -278,11 +368,13 @@ function buildIllustrationPlanningPrompt() {
 8. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
 9. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
 10. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
-11. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
+11. visual_style 只能从下列预设中选择一个，或在证据不足时输出空字符串。必须按项目标的、核心成果、评分重点和明确交付物判断；创建、评价、评审、风险、现场、管理、体系、方案、培训、宣传、验收、咨询等通用工作动作不得单独用于风格判断。
+${buildVisualStyleProfilePrompt()}
+12. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
 
 illustration-plan.json 只能使用以下结构：
 {
-  "visual_style": "技术研究",
+  "visual_style": "",
   "items": [
     {
       "kind": "ai",
@@ -561,6 +653,10 @@ function resolveIllustrationPlan(content, context) {
   }
   const extraRootFields = Object.keys(parsed).filter((key) => !['items', 'visual_style'].includes(key));
   if (extraRootFields.length) throw new Error(`Agent 图片编排结果包含多余字段：${extraRootFields.join(', ')}`);
+  const agentVisualStyle = String(parsed.visual_style || '').trim();
+  if (agentVisualStyle && !VISUAL_STYLES.includes(agentVisualStyle)) {
+    throw new Error(`Agent 图片编排视觉风格无效：${agentVisualStyle}`);
+  }
 
   const allowedFields = new Set([
     'kind', 'image_type', 'title', 'section_ids', 'visual_role', 'purpose', 'scoring_point_ids',
@@ -611,13 +707,15 @@ function resolveIllustrationPlan(content, context) {
     generation: { status: 'pending' },
   }));
   const visualRhythmDiagnostics = buildVisualRhythmDiagnostics(planItemsWithIds, context);
+  const visualStyleRecommendation = resolveVisualStyleRecommendation(context);
   const revision = stableHash({ items: planItems, visualRhythmDiagnostics }).slice(0, 24);
   return {
     plan: {
       plan_version: ILLUSTRATION_PLAN_VERSION,
       revision,
       confirmation_status: 'pending',
-      recommended_visual_style: VISUAL_STYLES.includes(String(parsed.visual_style || '').trim()) ? String(parsed.visual_style).trim() : undefined,
+      recommended_visual_style: visualStyleRecommendation?.style,
+      recommended_visual_style_evidence: visualStyleRecommendation?.evidence,
       visual_rhythm_diagnostics: visualRhythmDiagnostics,
       items: planItemsWithIds,
       updated_at: new Date().toISOString(),
@@ -629,9 +727,11 @@ function resolveIllustrationPlan(content, context) {
 module.exports = {
   ILLUSTRATION_PLAN_VERSION,
   VISUAL_STYLES,
+  VISUAL_STYLE_PROFILES,
   buildIllustrationPlanningContext,
   buildIllustrationPlanningPrompt,
   buildVisualRhythmDiagnostics,
   parseHtmlImageTypes,
+  resolveVisualStyleRecommendation,
   resolveIllustrationPlan,
 };
