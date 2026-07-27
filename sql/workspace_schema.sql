@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS technical_plan_meta (
   selected_format_profile_id TEXT,
   selected_format_profile_hash TEXT,
   -- v14 投标范围模式：single / multiple；多标段 AI 提取结果保存在 bid_sections_json。
-  bid_section_mode TEXT NOT NULL DEFAULT 'single',
+  bid_section_mode TEXT NOT NULL DEFAULT 'multiple',
   bid_sections_json TEXT,
   bid_section_extraction_status TEXT NOT NULL DEFAULT 'idle',
   bid_section_extraction_error TEXT,

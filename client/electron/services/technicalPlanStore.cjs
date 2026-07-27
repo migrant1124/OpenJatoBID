@@ -14,6 +14,7 @@ const {
 } = require('../utils/paths.cjs');
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
+const { normalizeBidSectionDisplayText } = require('../utils/bidSectionDisplayText.cjs');
 const {
   normalizeRequirementResponseMatrix,
 } = require('./technicalPlanQualityModel.cjs');
@@ -89,7 +90,7 @@ const defaultOutlineFormatConstraints = Object.freeze({
 });
 
 const defaultOutlineWordControlOptions = Object.freeze({
-  enabled: false,
+  enabled: true,
   minimumWords: 0,
   maximumWords: 0,
   sectionWords: 0,
@@ -109,7 +110,7 @@ const initialState = {
   bidAnalysisTaskDefinitions: [],
   bidAnalysisTasks: {},
   bidAnalysisProgress: 0,
-  bidSectionMode: 'single',
+  bidSectionMode: 'multiple',
   bidSections: [],
   bidSectionExtractionStatus: 'idle',
   bidSectionExtractionError: undefined,
@@ -160,7 +161,7 @@ function normalizeOutlineWordControlOptions(value) {
   };
   const sectionWords = normalizeInteger(source.sectionWords);
   return {
-    enabled: Boolean(source.enabled),
+    enabled: true,
     minimumWords: normalizeInteger(source.minimumWords),
     maximumWords: normalizeInteger(source.maximumWords),
     sectionWords,
@@ -502,8 +503,8 @@ function normalizeBidSections(value) {
         index: Number.isFinite(normalizedIndex) && normalizedIndex > 0 ? normalizedIndex : index + 1,
         unit: String(section?.unit || '标段').trim() || '标段',
         title,
-        headLine: String(section?.headLine || section?.head_line || ''),
-        description: String(section?.description || ''),
+        headLine: normalizeBidSectionDisplayText(section?.headLine || section?.head_line),
+        description: normalizeBidSectionDisplayText(section?.description),
         includeRanges: normalizeBidSectionRanges(section?.includeRanges || section?.include_ranges),
         evidence: (Array.isArray(section?.evidence) ? section.evidence : [])
           .map((item) => String(item || '').trim())
@@ -1707,7 +1708,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       pending_tender_sections_json: null,
       pending_tender_total_declared: null,
       pending_tender_created_at: null,
-      bid_section_mode: 'single',
+      bid_section_mode: 'multiple',
       bid_sections_json: null,
       bid_section_extraction_status: 'idle',
       bid_section_extraction_error: null,
@@ -2746,7 +2747,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
       db.prepare('DELETE FROM technical_plan_meta').run();
       ensureMetaRow();
-      updateMeta({ workflow_kind: workflowKind });
+      updateMeta({ workflow_kind: workflowKind, bid_section_mode: 'multiple' });
     });
     transaction();
     if (fs.existsSync(tenderMarkdownPath)) {

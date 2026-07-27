@@ -191,6 +191,27 @@ async function requestHtmlScreenshot(html, localImageRenderService, onRetry, pau
   return { ...result, attempts: requestAttempts };
 }
 
+async function requestHtmlLayoutProbe(html, localImageRenderService, onRetry, pauseControl = {}) {
+  if (!localImageRenderService?.probeHtmlLayoutOnly) {
+    return requestHtmlScreenshot(html, localImageRenderService, onRetry, pauseControl);
+  }
+  let requestAttempts = 0;
+  const result = await runWithRemoteImageRetry(async (attempt) => {
+    requestAttempts = attempt;
+    if (pauseControl.isPauseRequested?.()) throw pauseControl.createPauseError?.() || new Error('HTML 质检已暂停');
+    return localImageRenderService.probeHtmlLayoutOnly(html, {
+      timeoutMs: 120000,
+      isPauseRequested: pauseControl.isPauseRequested,
+      createPauseError: pauseControl.createPauseError,
+    });
+  }, {
+    onRetry,
+    shouldStop: pauseControl.isPauseRequested,
+    createStopError: pauseControl.createPauseError,
+  });
+  return { ...result, attempts: requestAttempts };
+}
+
 function getHtmlLayoutIssues(screenshot) {
   const width = Number(screenshot?.width) || 0;
   const height = Number(screenshot?.height) || 0;
@@ -286,19 +307,18 @@ async function generateHtmlIllustration({ aiService, execution, plan, workspaceS
   }
 
   let savedHtml;
-  let screenshot;
   let layoutIssues = [];
   let layoutRepairAttempts = 0;
   while (layoutRepairAttempts <= HTML_LAYOUT_REPAIR_ATTEMPTS) {
     savedHtml = workspaceStore.saveIllustrationHtml({ revision: plan.revision, itemId: execution.planItem.item_id, content: html });
     if (!sourceAlreadyPersisted || layoutRepairAttempts > 0) onSourceSaved?.({ mode, source_path: savedHtml.relativePath });
     try {
-      screenshot = await requestHtmlScreenshot(html, localImageRenderService, onRenderRetry, { isPauseRequested, createPauseError });
+      const probe = await requestHtmlLayoutProbe(html, localImageRenderService, onRenderRetry, { isPauseRequested, createPauseError });
+      layoutIssues = getHtmlLayoutIssues(probe);
     } catch (error) {
       error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
       throw error;
     }
-    layoutIssues = getHtmlLayoutIssues(screenshot);
     if (!layoutIssues.length) break;
     if (layoutRepairAttempts >= HTML_LAYOUT_REPAIR_ATTEMPTS) {
       const error = new Error(`HTML 图片布局质检未通过：${layoutIssues.join('；')}`);
@@ -308,6 +328,19 @@ async function generateHtmlIllustration({ aiService, execution, plan, workspaceS
     layoutRepairAttempts += 1;
     html = await repairHtmlLayout({ aiService, execution, html, issues: layoutIssues, attempt: layoutRepairAttempts, mode, runAgentHtml });
     sourceAlreadyPersisted = false;
+  }
+  let screenshot;
+  try {
+    screenshot = await requestHtmlScreenshot(html, localImageRenderService, onRenderRetry, { isPauseRequested, createPauseError });
+  } catch (error) {
+    error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
+    throw error;
+  }
+  layoutIssues = getHtmlLayoutIssues(screenshot);
+  if (layoutIssues.length) {
+    const error = new Error(`HTML 图片布局质检未通过：${layoutIssues.join('；')}`);
+    error.illustrationGeneration = { mode, source_path: savedHtml.relativePath };
+    throw error;
   }
   const savedPng = workspaceStore.saveIllustrationPng({ revision: plan.revision, itemId: execution.planItem.item_id, buffer: screenshot.buffer });
   return {

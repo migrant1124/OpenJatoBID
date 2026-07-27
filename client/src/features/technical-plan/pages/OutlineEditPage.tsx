@@ -85,8 +85,7 @@ function parseTenThousandWords(value: string) {
   return Number.isFinite(number) && number >= 0 ? Math.round(number * WORDS_PER_TEN_THOUSAND) : null;
 }
 
-function normalizeWordControlDraft({ enabled, minimumWords, maximumWords, sectionWords, strictSectionWords }: {
-  enabled: boolean;
+function normalizeWordControlDraft({ minimumWords, maximumWords, sectionWords, strictSectionWords }: {
   minimumWords: string;
   maximumWords: string;
   sectionWords: string;
@@ -98,11 +97,11 @@ function normalizeWordControlDraft({ enabled, minimumWords, maximumWords, sectio
   if (minimum === null || maximum === null || section === null) {
     throw new Error('字数设置只允许填写最多两位小数的非负万字数');
   }
-  if (enabled && minimum > 0 && maximum > 0 && maximum < minimum) {
+  if (minimum > 0 && maximum > 0 && maximum < minimum) {
     throw new Error('最多字数不能低于最少字数');
   }
   return {
-    enabled,
+    enabled: true,
     minimumWords: minimum,
     maximumWords: maximum,
     sectionWords: section,
@@ -250,6 +249,19 @@ function findOutlineItem(items: OutlineItem[], itemId: string): OutlineItem | nu
   return null;
 }
 
+function findOutlineItemLevel(items: OutlineItem[], itemId: string, level = 1): number {
+  for (const item of items) {
+    if (item.id === itemId) {
+      return level;
+    }
+    const childLevel = item.children ? findOutlineItemLevel(item.children, itemId, level + 1) : 0;
+    if (childLevel) {
+      return childLevel;
+    }
+  }
+  return 0;
+}
+
 function isOutlinePositionLocked(item: OutlineItem) {
   return Boolean(item.order_locked || item.level_locked);
 }
@@ -295,16 +307,11 @@ function updateOutlineSubtreeManual(items: OutlineItem[], itemId: string, manual
 }
 
 function getOutlineWritingLabel(item: OutlineItem) {
-  return item.manual_input_required ? '人工填写' : 'AI编写';
+  return item.manual_input_required ? '人工撰写' : 'AI 撰写';
 }
 
 function getOutlineFocusLabel(item: OutlineItem) {
-  const labels: Record<string, string> = {
-    'service-plan': '重点：服务方案',
-    'score-first': '重点：第一档分值',
-    'score-second': '重点：第二档分值',
-  };
-  return item.focus_priority ? labels[item.focus_priority] : undefined;
+  return item.focus_priority ? '重点' : undefined;
 }
 
 function getInitialExpandedKnowledgeFolders(index: KnowledgeBaseIndex) {
@@ -345,7 +352,6 @@ function OutlineEditPage({
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [draftOutlineExpansionMode, setDraftOutlineExpansionMode] = useState<OutlineExpansionMode>(outlineExpansionMode);
   const [draftKnowledgeDocumentIds, setDraftKnowledgeDocumentIds] = useState<string[]>(referenceKnowledgeDocumentIds);
-  const [draftWordControlEnabled, setDraftWordControlEnabled] = useState(outlineWordControlOptions.enabled);
   const [draftMinimumWords, setDraftMinimumWords] = useState(formatTenThousandWords(outlineWordControlOptions.minimumWords));
   const [draftMaximumWords, setDraftMaximumWords] = useState(formatTenThousandWords(outlineWordControlOptions.maximumWords));
   const [draftSectionWords, setDraftSectionWords] = useState(formatTenThousandWords(outlineWordControlOptions.sectionWords));
@@ -374,6 +380,9 @@ function OutlineEditPage({
   const missingRequiredKnowledge = hasUnspecifiedFormat && draftKnowledgeDocumentIds.length === 0;
   const activeOutlineData = sorting ? draftOutlineData : outlineData;
   const selectedItem = activeOutlineData && selectedItemId ? findOutlineItem(activeOutlineData.outline, selectedItemId) : null;
+  const selectedItemLevel = selectedItem && activeOutlineData
+    ? findOutlineItemLevel(activeOutlineData.outline, selectedItem.id)
+    : 0;
   const taskRunning = task?.status === 'running';
   const taskFailed = task?.status === 'error';
   const generating = startingOutline || taskRunning;
@@ -400,7 +409,6 @@ function OutlineEditPage({
   const staleText = generating && Number.isFinite(updatedAt) ? `最近更新 ${Math.floor(Math.max(0, nowTick - updatedAt) / 1000)} 秒前` : '';
   const wordControlChanged = Boolean(outlineData && (
     !outlineWordControlSnapshot
-    || draftWordControlEnabled !== outlineWordControlSnapshot.enabled
     || parseTenThousandWords(draftMinimumWords) !== outlineWordControlSnapshot.minimumWords
     || parseTenThousandWords(draftMaximumWords) !== outlineWordControlSnapshot.maximumWords
     || parseTenThousandWords(draftSectionWords) !== outlineWordControlSnapshot.sectionWords
@@ -411,10 +419,9 @@ function OutlineEditPage({
   const estimatedPageWords = draftMinimumWordsValue > 0 && draftMaximumWordsValue > 0
     ? (draftMinimumWordsValue + draftMaximumWordsValue) / 2
     : draftMinimumWordsValue || draftMaximumWordsValue;
-  const estimatedPages = draftWordControlEnabled && estimatedPageWords > 0 ? Math.ceil(estimatedPageWords / 650) : null;
+  const estimatedPages = estimatedPageWords > 0 ? Math.ceil(estimatedPageWords / 650) : null;
 
   const resetWordControlDraft = () => {
-    setDraftWordControlEnabled(outlineWordControlOptions.enabled);
     setDraftMinimumWords(formatTenThousandWords(outlineWordControlOptions.minimumWords));
     setDraftMaximumWords(formatTenThousandWords(outlineWordControlOptions.maximumWords));
     setDraftSectionWords(formatTenThousandWords(outlineWordControlOptions.sectionWords));
@@ -526,7 +533,6 @@ function OutlineEditPage({
   };
 
   const getWordControlOptions = () => normalizeWordControlDraft({
-    enabled: draftWordControlEnabled,
     minimumWords: draftMinimumWords,
     maximumWords: draftMaximumWords,
     sectionWords: draftSectionWords,
@@ -668,7 +674,7 @@ function OutlineEditPage({
         'edit',
         [item.id],
       );
-      showToast(manualInputRequired ? '已设为人工编制，全部下级目录同步更新' : '已设为 AI 编制，全部下级目录同步更新', 'success');
+      showToast(manualInputRequired ? '已设为人工撰写，全部下级目录同步更新' : '已设为 AI 撰写，全部下级目录同步更新', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '更新编制方式失败', 'error');
     }
@@ -744,6 +750,10 @@ function OutlineEditPage({
     const parent = findOutlineItem(outlineData.outline, parentId);
     if (parent?.allow_ai_children === false) {
       showToast('该固定目录不允许添加子目录', 'info');
+      return;
+    }
+    if (findOutlineItemLevel(outlineData.outline, parentId) >= 5) {
+      showToast('目录最多五级，五级目录不能新增子目录', 'info');
       return;
     }
     const nextIndex = (parent?.children?.length || 0) + 1;
@@ -1007,9 +1017,9 @@ function OutlineEditPage({
             onDoubleClick={() => hasChildren && toggleExpanded(item.id)}
           >
             <strong>{displayTitle}</strong>
-            <span className="bid-analysis-section-chip">{writingLabel}</span>
-            {constraintLabels.length > 0 && <span className="bid-analysis-section-chip">{constraintLabels.join(' · ')}</span>}
-            {focusLabel && <span className="bid-analysis-section-chip">{focusLabel}</span>}
+            <span className="outline-tree-writing-chip">{writingLabel}</span>
+            {focusLabel && <span className="outline-tree-focus-chip">{focusLabel}</span>}
+            {constraintLabels.length > 0 && <span className="outline-tree-constraint-chip">{constraintLabels.join(' · ')}</span>}
           </button>
           {level < 3 && (
             <label className="outline-tree-manual-toggle" onClick={(event) => event.stopPropagation()}>
@@ -1019,7 +1029,7 @@ function OutlineEditPage({
                 disabled={outlineMutationLocked || sorting}
                 onChange={(event) => { void changeManualAuthoring(item, event.target.checked); }}
               />
-              <span>人工编制</span>
+              <span>人工撰写</span>
             </label>
           )}
         </div>
@@ -1311,8 +1321,8 @@ function OutlineEditPage({
                       onChange={(event) => setEditManualInputRequired(event.target.value === 'manual')}
                       disabled={outlineMutationLocked || sorting}
                     >
-                      <option value="ai">AI编写</option>
-                      <option value="manual">人工填写</option>
+                      <option value="ai">AI 撰写</option>
+                      <option value="manual">人工撰写</option>
                     </select>
                   </label>
                   <div className="outline-detail-actions">
@@ -1336,7 +1346,7 @@ function OutlineEditPage({
                   </div>
                   <div className="outline-detail-actions">
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
-                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
+                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting || selectedItemLevel >= 5} title={selectedItemLevel >= 5 ? '目录最多五级' : undefined}>添加子目录</button>}
                     {!selectedItem.required_in_outline && <button type="button" className="danger-action" onClick={() => { void removeItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>删除</button>}
                   </div>
                 </>
@@ -1380,37 +1390,32 @@ function OutlineEditPage({
                   </label>
                 </section>
               )}
-              <section className="outline-generation-config-section outline-word-control-section">
-                <div className="outline-generation-config-head">
-                  <div>
-                    <strong className="outline-config-section-title">控制字数</strong>
-                    <small>在目录生成阶段，预先设定全文生成的字数（单位：万字）</small>
-                  </div>
-                  <label className="yb-switch-control">
-                    <input type="checkbox" checked={draftWordControlEnabled} onChange={(event) => setDraftWordControlEnabled(event.target.checked)} />
-                    <span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span>
-                  </label>
-                </div>
-                {draftWordControlEnabled && (
-                  <>
-                    <div className="outline-word-control-grid">
-                      <label><span>最少字数（万）</span><input inputMode="decimal" value={draftMinimumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMinimumWords(event.target.value)} /><small>0 表示不限制</small></label>
-                      <label><span>最多字数（万）</span><input inputMode="decimal" value={draftMaximumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMaximumWords(event.target.value)} /><small>0 表示不限制</small></label>
-                      <label><span>每小节字数（万）</span><input inputMode="decimal" value={draftSectionWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftSectionWords(event.target.value)} /><small>0 表示不控制小节</small></label>
+              <div className="outline-generation-config-main">
+                <section className="outline-generation-config-section outline-word-control-section">
+                  <div className="outline-generation-config-head">
+                    <div>
+                      <strong className="outline-config-section-title">全文字数/页数预设</strong>
+                      <small>在目录生成阶段，预先设定全文生成的字数（单位：万字）</small>
                     </div>
-                    <label className="outline-word-control-switch"><span><strong>强控小节字数</strong><small>允许范围为目标字数上下 20%</small></span><span className="yb-switch-control"><input type="checkbox" checked={draftStrictSectionWords} disabled={!Boolean(parseTenThousandWords(draftSectionWords))} onChange={(event) => setDraftStrictSectionWords(event.target.checked)} /><span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span></span></label>
-                    <div className="outline-word-control-pages"><strong>预估页数</strong>{estimatedPages ? <span>约 {estimatedPages} 页</span> : <span>填写最少或最多字数后显示</span>}<small>页数和排版有关，无法精确预估。</small></div>
-                  </>
-                )}
-                {wordControlChanged && <small>当前目录仍使用上次生效的字数规则；重新生成目录后才会应用新设置。</small>}
-              </section>
-              <section className="outline-generation-config-section outline-knowledge-picker">
-                <div className="outline-generation-config-head">
-                  <strong className="outline-config-section-title">参考知识库</strong>
-                  <span>已选择 {draftKnowledgeDocumentIds.length} 个文档</span>
-                </div>
-                {renderKnowledgePicker()}
-              </section>
+                  </div>
+                  <div className="outline-word-control-grid">
+                    <label><span>最少字数（万）</span><input inputMode="decimal" value={draftMinimumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMinimumWords(event.target.value)} /></label>
+                    <label><span>最多字数（万）</span><input inputMode="decimal" value={draftMaximumWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftMaximumWords(event.target.value)} /></label>
+                    <label><span>每小节字数（万）</span><input inputMode="decimal" value={draftSectionWords} onChange={(event) => /^\d*(?:\.\d{0,2})?$/u.test(event.target.value) && setDraftSectionWords(event.target.value)} /></label>
+                  </div>
+                  <small className="outline-word-control-helper">0 表示不限制；每小节为 0 时不控制小节字数。</small>
+                  <label className="outline-word-control-switch"><span><strong>严格控制单节字数</strong><small>允许范围为目标字数上下 20%</small></span><span className="yb-switch-control"><input type="checkbox" checked={draftStrictSectionWords} disabled={!Boolean(parseTenThousandWords(draftSectionWords))} onChange={(event) => setDraftStrictSectionWords(event.target.checked)} /><span className="yb-switch-track" aria-hidden="true"><span className="yb-switch-thumb" /></span></span></label>
+                  <div className="outline-word-control-pages"><strong>预估页数</strong>{estimatedPages ? <span>约 {estimatedPages} 页</span> : <em>填写最少或最多字数后显示</em>}<small>页数和排版有关，无法精确预估。</small></div>
+                  {wordControlChanged && <small className="outline-word-control-change-note">当前目录仍使用上次生效的字数规则；重新生成目录后才会应用新设置。</small>}
+                </section>
+                <section className="outline-generation-config-section outline-knowledge-picker">
+                  <div className="outline-generation-config-head">
+                    <strong className="outline-config-section-title">参考知识库</strong>
+                    <span>已选择 {draftKnowledgeDocumentIds.length} 个文档</span>
+                  </div>
+                  {renderKnowledgePicker()}
+                </section>
+              </div>
             </div>
 
             <div className="content-regenerate-actions">

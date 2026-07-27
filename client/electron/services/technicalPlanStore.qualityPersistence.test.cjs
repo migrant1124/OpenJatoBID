@@ -17,6 +17,50 @@ function createTestApp(userDataPath) {
   return app;
 }
 
+test('新技术方案默认使用多标段识别', () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'openjatobid-bid-section-default-'));
+  const app = createTestApp(userDataPath);
+  const sqlite = createSqliteDatabase(app);
+  const store = createTechnicalPlanStore({ app, db: sqlite.db, fileService: {} });
+
+  try {
+    assert.equal(store.loadTechnicalPlan().bidSectionMode, 'multiple');
+  } finally {
+    sqlite.close();
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
+});
+
+test('字数规则固定启用，兼容旧的总开关状态', () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'openjatobid-word-control-always-enabled-'));
+  const app = createTestApp(userDataPath);
+  const sqlite = createSqliteDatabase(app);
+  const store = createTechnicalPlanStore({ app, db: sqlite.db, fileService: {} });
+
+  try {
+    const saved = store.saveOutlineConfig({
+      wordControlOptions: {
+        enabled: false,
+        minimumWords: 20000,
+        maximumWords: 300000,
+        sectionWords: 0,
+        strictSectionWords: true,
+      },
+    });
+
+    assert.deepEqual(saved.outlineWordControlOptions, {
+      enabled: true,
+      minimumWords: 20000,
+      maximumWords: 300000,
+      sectionWords: 0,
+      strictSectionWords: false,
+    });
+  } finally {
+    sqlite.close();
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
+});
+
 test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼容', () => {
   const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'openjatobid-quality-'));
   const app = createTestApp(userDataPath);
@@ -24,7 +68,7 @@ test('v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼�
   const store = createTechnicalPlanStore({ app, db: sqlite.db, fileService: {} });
 
   try {
-    assert.equal(schemaVersion, 20);
+    assert.ok(schemaVersion >= 20, 'v1.4.5 质量字段要求 schema 至少为 v20');
     store.updateTechnicalPlan({
       outlineData: {
         outline: [{

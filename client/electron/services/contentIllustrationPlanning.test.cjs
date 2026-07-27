@@ -97,3 +97,30 @@ test('人工编辑章节不计入图片覆盖和视觉节奏诊断', () => {
   const result = resolveIllustrationPlan({ items: [candidate({ section_ids: ['1.2'] })] }, context);
   assert.ok(result.plan.visual_rhythm_diagnostics.every((item) => !item.section_ids.includes('1.1')));
 });
+
+test('四级和五级正文叶子都可进入图片编排，人工五级叶子继续排除', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [{
+      id: '1', title: '技术方案', children: [{
+        id: '1.1', title: '服务方案', children: [{
+          id: '1.1.1', title: '实施组织', children: [
+            { id: '1.1.1.1', title: '四级正文叶子', content: '四级正文。' },
+            { id: '1.1.1.2', title: '人员分工', children: [
+              { id: '1.1.1.2.1', title: '五级正文叶子', content: '五级正文。' },
+              { id: '1.1.1.2.2', title: '人工五级叶子', manual_input_required: true, content: '人工正文。' },
+            ] },
+          ],
+        }],
+      }],
+    }] },
+    sections: {
+      '1.1.1.1': { status: 'success', content: '四级正文。' },
+      '1.1.1.2.1': { status: 'success', content: '五级正文。' },
+      '1.1.1.2.2': { status: 'success', content: '人工正文。' },
+    },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+  });
+
+  assert.deepEqual(context.eligibleSectionIds, ['1.1.1.1', '1.1.1.2.1']);
+});

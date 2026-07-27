@@ -28,3 +28,24 @@ test('manual subtree leaves skip AI generation and do not block export', () => {
   assert.equal(deriveResponseCompletion([manual], { taskStatus: 'success' }).response_complete, true);
   assert.doesNotThrow(() => resolveTechnicalPlanExportPayload({ source: 'technical-plan' }, fakeStore([manual])));
 });
+
+test('四级和五级叶子都进入正文生成目标，人工五级叶子继续排除', () => {
+  const outline = [{
+    id: '1', title: '技术方案', children: [{
+      id: '1.1', title: '服务方案', children: [{
+        id: '1.1.1', title: '实施组织', children: [
+          { id: '1.1.1.1', title: '四级正文叶子' },
+          { id: '1.1.1.2', title: '人员分工', children: [
+            { id: '1.1.1.2.1', title: '五级正文叶子' },
+            { id: '1.1.1.2.2', title: '人工五级叶子', manual_input_required: true },
+          ] },
+        ],
+      }],
+    }],
+  }];
+
+  assert.deepEqual(
+    __developerContentExpansionPatchRuntime.collectFreeformLeafContexts(outline).map(({ item }) => item.id),
+    ['1.1.1.1', '1.1.1.2.1'],
+  );
+});

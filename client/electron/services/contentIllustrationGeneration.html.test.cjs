@@ -50,6 +50,10 @@ test('normal HTML illustration follows the upstream prompt, persists source, ren
     plan: { revision: 'revision' },
     workspaceStore: createWorkspaceStore(),
     localImageRenderService: {
+      probeHtmlLayoutOnly: async () => {
+        sequence.push('probe');
+        return { width: 1240, height: 600, layout_issues: [] };
+      },
       renderHtmlToPng: async (html) => {
         sequence.push('render');
         renderedHtml = html;
@@ -68,7 +72,7 @@ test('normal HTML illustration follows the upstream prompt, persists source, ren
   assert.match(prompt, /文字不得旋转、倒置、镜像或缩放变形/);
   assert.match(renderedHtml, /<section>架构图<\/section>/);
   assert.deepEqual(sourceEvents, [{ mode: 'normal', source_path: 'illustrations/revision/html/html-1.html' }]);
-  assert.deepEqual(sequence, ['source-saved', 'render']);
+  assert.deepEqual(sequence, ['source-saved', 'probe', 'render']);
   assert.equal(result.asset_url, 'yibiao-asset://generated-images/html-1.png');
   assert.equal(result.source_path, 'illustrations/revision/html/html-1.html');
 });
@@ -175,6 +179,7 @@ test('HTML render failure keeps the persisted source path for the next run', asy
 
 test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => {
   const prompts = [];
+  let probeCount = 0;
   let renderCount = 0;
   const result = await generateHtmlIllustration({
     aiService: {
@@ -187,14 +192,19 @@ test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => 
     plan: { revision: 'revision' },
     workspaceStore: createWorkspaceStore(),
     localImageRenderService: {
+      probeHtmlLayoutOnly: async () => {
+        probeCount += 1;
+        return { width: probeCount === 1 ? 1300 : 1240, height: 600, layout_issues: [] };
+      },
       renderHtmlToPng: async () => {
         renderCount += 1;
-        return { buffer: Buffer.from('89504e470d0a1a0a', 'hex'), width: renderCount === 1 ? 1300 : 1240, height: 600 };
+        return { buffer: Buffer.from('89504e470d0a1a0a', 'hex'), width: 1240, height: 600 };
       },
     },
     runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
   });
-  assert.equal(renderCount, 2);
+  assert.equal(probeCount, 2);
+  assert.equal(renderCount, 1);
   assert.equal(prompts.length, 2);
   assert.match(prompts[1], /横向溢出/);
   assert.equal(result.visual_qa.layout_repair_attempts, 1);
@@ -202,6 +212,7 @@ test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => 
 
 test('HTML 文字变形诊断会反馈给布局修复，并在修复后保存 PNG', async () => {
   const prompts = [];
+  let probeCount = 0;
   let renderCount = 0;
   const result = await generateHtmlIllustration({
     aiService: {
@@ -214,26 +225,36 @@ test('HTML 文字变形诊断会反馈给布局修复，并在修复后保存 PN
     plan: { revision: 'revision' },
     workspaceStore: createWorkspaceStore(),
     localImageRenderService: {
+      probeHtmlLayoutOnly: async () => {
+        probeCount += 1;
+        return {
+          width: 1240,
+          height: 600,
+          layout_issues: probeCount === 1 ? ['文字存在旋转、倒置、镜像或缩放变形：div.label'] : [],
+        };
+      },
       renderHtmlToPng: async () => {
         renderCount += 1;
         return {
           buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
           width: 1240,
           height: 600,
-          layout_issues: renderCount === 1 ? ['文字存在旋转、倒置、镜像或缩放变形：div.label'] : [],
+          layout_issues: [],
         };
       },
     },
     runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
   });
 
-  assert.equal(renderCount, 2);
+  assert.equal(probeCount, 2);
+  assert.equal(renderCount, 1);
   assert.match(prompts[1], /文字存在旋转、倒置、镜像或缩放变形/);
   assert.equal(result.visual_qa.layout_repair_attempts, 1);
 });
 
 test('HTML 布局诊断持续失败时保留源码且不保存 PNG', async () => {
   let pngSaved = false;
+  let probeCount = 0;
   let renderCount = 0;
   const workspaceStore = createWorkspaceStore({
     saveIllustrationPng: () => { pngSaved = true; throw new Error('不得保存 PNG'); },
@@ -244,6 +265,14 @@ test('HTML 布局诊断持续失败时保留源码且不保存 PNG', async () =>
     plan: { revision: 'revision' },
     workspaceStore,
     localImageRenderService: {
+      probeHtmlLayoutOnly: async () => {
+        probeCount += 1;
+        return {
+          width: 1240,
+          height: 600,
+          layout_issues: ['文字被前景元素遮挡：div.card 被 div.core 覆盖'],
+        };
+      },
       renderHtmlToPng: async () => {
         renderCount += 1;
         return {
@@ -256,6 +285,7 @@ test('HTML 布局诊断持续失败时保留源码且不保存 PNG', async () =>
     },
     runAgentHtml: async () => { throw new Error('normal mode must not start Agent'); },
   }), /HTML 图片布局质检未通过：文字被前景元素遮挡/);
-  assert.equal(renderCount, 3);
+  assert.equal(probeCount, 3);
+  assert.equal(renderCount, 0);
   assert.equal(pngSaved, false);
 });
