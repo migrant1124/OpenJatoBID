@@ -143,6 +143,28 @@ test('authoritative manually filled Markdown reaches DOCX without rewriting cont
   assert.match(xml, new RegExp(fixedNote));
 });
 
+test('Word 保留三级主题、四级子主题和五级正文标题及内容', async () => {
+  const outline = [{
+    ...responseItem('1'), title: '技术方案', content: '', children: [{
+      ...responseItem('1.1'), title: '服务方案', content: '', children: [{
+        ...responseItem('1.1.1'), title: '实施组织', content: '', children: [
+          responseItem('1.1.1.1', { title: '四级正文', content: '四级正文内容。' }),
+          {
+            ...responseItem('1.1.1.2'), title: '人员分工', content: '', children: [
+              responseItem('1.1.1.2.1', { title: '五级正文', content: '五级正文内容。' }),
+            ],
+          },
+        ],
+      }],
+    }],
+  }];
+  const xml = new AdmZip(await buildDocxBuffer({ project_name: '五级目录导出', outline })).readAsText('word/document.xml');
+
+  for (const text of ['实施组织', '四级正文', '人员分工', '五级正文', '四级正文内容。', '五级正文内容。']) {
+    assert.match(xml, new RegExp(text));
+  }
+});
+
 test('a generated PNG referenced by authoritative Markdown is embedded into DOCX media', async () => {
   const pngDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
   const result = await buildDocxResult({

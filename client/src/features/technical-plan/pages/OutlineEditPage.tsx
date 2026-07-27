@@ -250,6 +250,19 @@ function findOutlineItem(items: OutlineItem[], itemId: string): OutlineItem | nu
   return null;
 }
 
+function findOutlineItemLevel(items: OutlineItem[], itemId: string, level = 1): number {
+  for (const item of items) {
+    if (item.id === itemId) {
+      return level;
+    }
+    const childLevel = item.children ? findOutlineItemLevel(item.children, itemId, level + 1) : 0;
+    if (childLevel) {
+      return childLevel;
+    }
+  }
+  return 0;
+}
+
 function isOutlinePositionLocked(item: OutlineItem) {
   return Boolean(item.order_locked || item.level_locked);
 }
@@ -374,6 +387,9 @@ function OutlineEditPage({
   const missingRequiredKnowledge = hasUnspecifiedFormat && draftKnowledgeDocumentIds.length === 0;
   const activeOutlineData = sorting ? draftOutlineData : outlineData;
   const selectedItem = activeOutlineData && selectedItemId ? findOutlineItem(activeOutlineData.outline, selectedItemId) : null;
+  const selectedItemLevel = selectedItem && activeOutlineData
+    ? findOutlineItemLevel(activeOutlineData.outline, selectedItem.id)
+    : 0;
   const taskRunning = task?.status === 'running';
   const taskFailed = task?.status === 'error';
   const generating = startingOutline || taskRunning;
@@ -744,6 +760,10 @@ function OutlineEditPage({
     const parent = findOutlineItem(outlineData.outline, parentId);
     if (parent?.allow_ai_children === false) {
       showToast('该固定目录不允许添加子目录', 'info');
+      return;
+    }
+    if (findOutlineItemLevel(outlineData.outline, parentId) >= 5) {
+      showToast('目录最多五级，五级目录不能新增子目录', 'info');
       return;
     }
     const nextIndex = (parent?.children?.length || 0) + 1;
@@ -1336,7 +1356,7 @@ function OutlineEditPage({
                   </div>
                   <div className="outline-detail-actions">
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
-                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>添加子目录</button>}
+                    {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting || selectedItemLevel >= 5} title={selectedItemLevel >= 5 ? '目录最多五级' : undefined}>添加子目录</button>}
                     {!selectedItem.required_in_outline && <button type="button" className="danger-action" onClick={() => { void removeItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>删除</button>}
                   </div>
                 </>
