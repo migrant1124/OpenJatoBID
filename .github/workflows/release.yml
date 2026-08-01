@@ -36,6 +36,11 @@ jobs:
     env:
       TAG_NAME: ${{ inputs.tag_name }}
       CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+      CSC_LINK: ''
+      WIN_CSC_LINK: ''
+      CSC_KEY_PASSWORD: ''
+      WIN_CSC_KEY_PASSWORD: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - name: Checkout exact tag
         uses: actions/checkout@v5

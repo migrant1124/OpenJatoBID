@@ -25,6 +25,9 @@ test('client release is one manual self-hosted Windows job', async () => {
   assert.match(workflow, /contents: write/);
   assert.match(workflow, /group: openjatobid-client-release/);
   assert.match(workflow, /cancel-in-progress: false/);
+  assert.match(workflow, /CSC_LINK: ''/);
+  assert.match(workflow, /WIN_CSC_LINK: ''/);
+  assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY: 'false'/);
 });
 
 test('client release rejects hosted runners, Actions artifacts, and npm cache', async () => {
