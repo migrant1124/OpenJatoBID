@@ -368,3 +368,11 @@
 - [x] T177 以项目专业对象、核心成果和明确评分/交付物为依据定义技术研究、管理咨询、工程建设、市场营销、党群阵地、工会活动、安监环七类风格；通用工作动作不得单独触发分类，安全文化建设示范企业固定推荐安监环。
 - [x] T178 按确认高保真稿重构图片编排确认弹窗：紧凑顶部汇总、AI 推荐主区及证据、醒目的人工兜底调整、三项图片总览和无取消按钮；接入七类内联 SVG 图标，其中党群阵地为党徽、工会活动为工会会徽、安监环为安全帽。
 - [x] T179 将强语义定义与确认配色同步传入 HTML/AI 生图提示词；规划与界面聚焦测试、CJS 语法检查、客户端构建和差异检查通过；待完整重启 Electron 后以安全文化建设示范企业样本人工确认推荐结果和弹窗布局。
+
+## 阶段 21：Pi Agent 独立专项迁入
+
+> 本阶段只迁入智能体运行时注册表、Pi runtime 与自检链路；OpenCode 保持默认运行时，不迁入源项目公网错误上报，不修改发布 workflow。
+
+- [x] T180 第一阶段：新增 Agent runtime registry、coordinator、IPC/preload/types/config/settings 最小接入；默认运行时仍为 OpenCode，设置页可选择 Pi Agent 并对选中运行时执行自检。
+- [x] T181 第二阶段：新增 Pi SDK 依赖、Pi 独立运行目录、Pi Session、共享工具环境、自检诊断和本地 analytics 适配；Pi SDK 加载、runtime 创建和结构化自检失败链路已验证。
+- [-] T182 验证：CJS 语法检查、客户端构建、registry smoke、Pi runtime smoke、Pi self-check smoke、Electron native smoke、OpenCode 隔离/自检测试、workflow dry-run 和差异检查通过；`npm audit` 仍报告 25 项依赖漏洞，真实文本模型下 Pi 自检通过与 Electron UI 人工验收待执行。

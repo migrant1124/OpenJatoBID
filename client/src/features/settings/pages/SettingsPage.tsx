@@ -4,7 +4,7 @@ import { getAppVersion } from '../../../shared/runtime/appVersion';
 import { FloatingToolbar, InputWithAction, useToast } from '../../../shared/ui';
 import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
-import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, LocalRenderingConfig, TextModelConfig, TextModelProfiles, TextModelProvider } from '../../../shared/types';
+import type { AgentModeScenariosConfig, AgentRuntimeDescriptor, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, LocalRenderingConfig, TextModelConfig, TextModelProfiles, TextModelProvider } from '../../../shared/types';
 import type { SettingsPageState } from '../types';
 import logoUrl from '../../../../assets/logo.png';
 
@@ -22,10 +22,10 @@ const settingsTabs: Array<{ id: SettingsTab; label: string }> = [
 ];
 
 const agentSelfCheckStatusMeta: Record<AgentSelfCheckUiStatus, { label: string; description: string }> = {
-  untested: { label: '未检测', description: '点击自检后，会验证 OpenCode 逻辑隔离、Server、AI proxy、已集成命令工具、当前文本模型和智能体输出链路。' },
-  checking: { label: '检测中', description: '正在清理上一轮自检日志，并校验逻辑隔离、工具环境与极简智能体任务。' },
-  normal: { label: '正常', description: 'OpenCode 逻辑隔离、智能体链路和关键集成工具已通过自检。' },
-  busy: { label: '忙碌', description: 'Agent 正在处理其他任务，本次自检已跳过；这不是 OpenCode 故障。' },
+  untested: { label: '未检测', description: '点击自检后，会验证当前智能体运行时、AI proxy、已集成命令工具、当前文本模型和输出链路。' },
+  checking: { label: '检测中', description: '正在清理上一轮自检日志，并校验运行环境、工具环境与极简智能体任务。' },
+  normal: { label: '正常', description: '当前智能体运行时、输出链路和关键集成工具已通过自检。' },
+  busy: { label: '忙碌', description: 'Agent 正在处理其他任务，本次自检已跳过。' },
   error: { label: '异常', description: '智能体链路自检失败，请查看下方错误详情。' },
 };
 
@@ -483,6 +483,7 @@ const initialState: SettingsPageState = {
     enabled: true,
     html_concurrency_limit: 5,
   },
+  agentRuntime: 'opencode',
   agentModeScenarios: { ...defaultAgentModeScenarios },
   general: {
     developer_mode: false,
@@ -515,6 +516,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
   const [updateVersion, setUpdateVersion] = useState('');
   const [updateError, setUpdateError] = useState('');
   const [licenseStatus, setLicenseStatus] = useState<LicenseRuntimeStatus | null>(initialLicenseStatus);
+  const [agentRuntimes, setAgentRuntimes] = useState<AgentRuntimeDescriptor[]>([]);
   const [agentSelfCheckStatus, setAgentSelfCheckStatus] = useState<AgentSelfCheckUiStatus>('untested');
   const [agentSelfCheckResult, setAgentSelfCheckResult] = useState<AgentSelfCheckResult | null>(null);
   const [exportingAgentSelfCheckReport, setExportingAgentSelfCheckReport] = useState(false);
@@ -524,6 +526,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     void loadTextConfig();
     void getAppVersion().then(setAppVersion);
     void window.yibiao?.license?.getStatus().then(setLicenseStatus).catch(() => setLicenseStatus(null));
+    void window.yibiao?.agent?.listRuntimes?.().then((runtimes) => setAgentRuntimes(runtimes || [])).catch(() => setAgentRuntimes([]));
 
     const unsubs: Array<() => void> = [];
     unsubs.push(
@@ -577,6 +580,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           mineru_token: config.file_parser.mineru_token || '',
         },
         localRendering: config.local_rendering || initialState.localRendering,
+        agentRuntime: config.agent_runtime || 'opencode',
         agentModeScenarios: normalizeAgentModeScenarios(config.agent_mode_scenarios),
         general: {
           developer_mode: Boolean(config.developer_mode),
@@ -626,6 +630,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         mineru_token: state.fileParser.mineru_token || '',
       },
       local_rendering: state.localRendering,
+      agent_runtime: state.agentRuntime || 'opencode',
       agent_mode_scenarios: state.agentModeScenarios,
       gpu_hardware_acceleration_enabled: state.general.gpu_hardware_acceleration_enabled,
       gpu_hardware_acceleration_configured: state.general.gpu_hardware_acceleration_configured,
@@ -782,6 +787,15 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     }));
   };
 
+  const updateAgentRuntime = (runtimeId: string) => {
+    setAgentSelfCheckStatus('untested');
+    setAgentSelfCheckResult(null);
+    setState((prev) => ({
+      ...prev,
+      agentRuntime: runtimeId || 'opencode',
+    }));
+  };
+
   const updateTextModelProvider = (provider: TextModelProvider) => {
     setTextModels([]);
     setState((prev) => ({
@@ -890,7 +904,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       setSavedConfig(config);
       onDeveloperModeChange?.(Boolean(config.developer_mode));
 
-      const result = await window.yibiao?.agent.selfCheck();
+      const result = await window.yibiao?.agent.selfCheck(config.agent_runtime);
       if (!result) {
         throw new Error('智能体自检未返回结果');
       }
@@ -906,6 +920,8 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       const message = error instanceof Error ? error.message : '智能体自检失败';
       const failedResult: AgentSelfCheckResult = {
         success: false,
+        runtime_id: state.agentRuntime || 'opencode',
+        runtime_name: agentRuntimes.find((runtime) => runtime.id === state.agentRuntime)?.display_name || '智能体',
         status: 'error',
         message,
         checked_at: new Date().toISOString(),
@@ -1205,7 +1221,13 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     }
 
     if (activeTab === 'agent') {
-      return JSON.stringify(state.agentModeScenarios) !== JSON.stringify(normalizeAgentModeScenarios(savedConfig.agent_mode_scenarios));
+      return JSON.stringify({
+        agentRuntime: state.agentRuntime || 'opencode',
+        scenarios: state.agentModeScenarios,
+      }) !== JSON.stringify({
+        agentRuntime: savedConfig.agent_runtime || 'opencode',
+        scenarios: normalizeAgentModeScenarios(savedConfig.agent_mode_scenarios),
+      });
     }
 
     return false;
@@ -1853,6 +1875,21 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             <span />
             <strong>智能体配置</strong>
           </div>
+          <div className="settings-list">
+            <label className="settings-row">
+              <div className="settings-row-copy">
+                <strong>智能体运行时</strong>
+                <span>OpenCode 为当前默认链路；Pi Agent 用于专项验证，保存后才会成为后续业务任务的默认运行时。</span>
+              </div>
+              <select value={state.agentRuntime} onChange={(event) => updateAgentRuntime(event.target.value)}>
+                {(agentRuntimes.length ? agentRuntimes : [{ id: 'opencode', display_name: 'OpenCode Agent', description: '', is_default: true }]).map((runtime) => (
+                  <option key={runtime.id} value={runtime.id}>
+                    {runtime.display_name}{runtime.is_default ? '（默认）' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className={`agent-self-check-status is-${agentSelfCheckStatus}`}>
             <div>
               <strong>智能体自检</strong>
@@ -1864,7 +1901,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             <div className="settings-row">
               <div className="settings-row-copy">
                 <strong>自检</strong>
-                <span>先检查 OpenCode 逻辑隔离，再执行极简智能体任务，检测 Server、AI proxy、已集成命令工具、当前文本模型和输出文件校验链路。每次自检前会清空上一轮自检日志。</span>
+                <span>保存当前配置后，检测所选运行时的 AI proxy、已集成命令工具、当前文本模型和输出文件校验链路。每次自检前会清空上一轮自检日志。</span>
               </div>
               <div className="settings-action-cell">
                 <button type="button" className="inline-action" onClick={runAgentSelfCheck} disabled={agentSelfCheckStatus === 'checking'}>

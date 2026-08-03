@@ -220,7 +220,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   });
   const aiService = createAiService({ app, configStore, analyticsService });
   const developerExpansionReplaceTestService = createDeveloperExpansionReplaceTestService({ aiService });
-  const agentService = createAgentService({ app, configStore, mainWindow, analyticsService });
+  const agentService = createAgentService({ app, configStore, mainWindow, aiService, analyticsService });
   const fileService = createFileService({ app, configStore });
   const exportService = createExportService({ configStore });
   const localImageRenderService = initLocalImageRenderService({ app, configStore });
