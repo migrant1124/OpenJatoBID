@@ -82,7 +82,8 @@ async function splitPdfByPageSize(inputPath, tempRoot, maxChunkBytes) {
     send({
       type: 'progress',
       stage: 'split',
-      page: chunk.endPage,
+      startPage: chunk.startPage,
+      endPage: chunk.endPage,
       totalPages: pageCount,
       chunkCount: chunks.length,
       chunkBytes: chunk.bytes,
@@ -125,6 +126,12 @@ async function parseLargePdf(payload) {
     throw new Error('大 PDF 分片解析后未得到有效 Markdown 内容，可能是扫描件或无可选中文字层');
   }
 
+  send({
+    type: 'progress',
+    stage: 'merge',
+    chunkCount: chunks.length,
+    pageCount,
+  });
   await writeFile(outputPath, `${merged}\n`, 'utf-8');
   send({
     type: 'done',

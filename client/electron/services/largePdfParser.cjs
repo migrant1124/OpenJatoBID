@@ -50,7 +50,7 @@ function parseLargePdfWithWorker(inputPath, options = {}) {
       }
     });
     child.on('message', (message) => {
-      if (message?.type === 'progress' && typeof options.onProgress === 'function') {
+      if ((message?.type === 'progress' || message?.type === 'done') && typeof options.onProgress === 'function') {
         options.onProgress(message);
       }
       if (message?.type === 'error') {

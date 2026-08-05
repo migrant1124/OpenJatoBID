@@ -696,6 +696,82 @@
   transition: width 0.2s ease;
 }
 
+.knowledge-large-pdf-progress {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #f8fbff;
+  border: 1px solid rgba(33, 116, 253, 0.18);
+  border-radius: 10px;
+}
+
+.knowledge-large-pdf-summary,
+.knowledge-large-pdf-facts,
+.knowledge-large-pdf-chunk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.knowledge-large-pdf-summary {
+  justify-content: space-between;
+}
+
+.knowledge-large-pdf-summary strong {
+  color: var(--yb-text);
+  font-size: 13px;
+}
+
+.knowledge-large-pdf-summary span,
+.knowledge-large-pdf-facts,
+.knowledge-large-pdf-chunk span {
+  color: var(--yb-text-muted);
+  font-size: 12px;
+}
+
+.knowledge-large-pdf-facts {
+  flex-wrap: wrap;
+}
+
+.knowledge-large-pdf-facts span {
+  padding: 3px 8px;
+  background: #ffffff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 999px;
+}
+
+.knowledge-large-pdf-chunks {
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-large-pdf-chunk {
+  display: grid;
+  grid-template-columns: 96px minmax(120px, 1fr) 82px 62px;
+  padding: 7px 9px;
+  background: #ffffff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 8px;
+}
+
+.knowledge-large-pdf-chunk strong {
+  color: var(--yb-text);
+  font-size: 12px;
+}
+
+.knowledge-large-pdf-chunk em {
+  justify-self: end;
+  color: var(--yb-primary);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.knowledge-large-pdf-chunk.is-success em {
+  color: #047857;
+}
+
 .knowledge-document-actions,
 .knowledge-preview-tabs {
   justify-content: flex-start;
@@ -1225,6 +1301,19 @@
   .knowledge-folder-list,
   .knowledge-document-list {
     max-height: 360px;
+  }
+
+  .knowledge-large-pdf-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .knowledge-large-pdf-chunk {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-large-pdf-chunk em {
+    justify-self: start;
   }
 
   .knowledge-preview-panel {

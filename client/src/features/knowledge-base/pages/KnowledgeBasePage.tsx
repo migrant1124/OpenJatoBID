@@ -2,7 +2,7 @@ import { Profiler, startTransition, useEffect, useLayoutEffect, useMemo, useRef,
 import * as Dialog from '@radix-ui/react-dialog';
 import { trackPageView } from '../../../shared/analytics/analytics';
 import { isLibreOfficeRequiredMessage, MarkdownFullscreenViewer, MarkdownRenderer, useDocumentParseNotice, useToast } from '../../../shared/ui';
-import type { KnowledgeAnalysisSnapshot, KnowledgeBaseIndex, KnowledgeBaseMigrationStatus, KnowledgeDocument, KnowledgeItem } from '../types';
+import type { KnowledgeAnalysisSnapshot, KnowledgeBaseIndex, KnowledgeBaseMigrationStatus, KnowledgeDocument, KnowledgeItem, KnowledgeLargePdfProgressDetail } from '../types';
 
 declare global {
   interface Window {
@@ -27,6 +27,19 @@ const statusLabels: Record<KnowledgeDocument['status'], string> = {
   success: '完成',
   skipped: '已跳过',
   error: '失败',
+};
+
+const largePdfStageLabels: Record<KnowledgeLargePdfProgressDetail['stage'], string> = {
+  split: '正在拆分 PDF',
+  convert: '正在转换 Markdown',
+  merge: '正在合并 Markdown',
+  done: 'Markdown 转换完成',
+};
+
+const largePdfChunkStatusLabels: Record<NonNullable<KnowledgeLargePdfProgressDetail['chunks']>[number]['status'], string> = {
+  split: '已拆分',
+  converting: '转换中',
+  success: '已完成',
 };
 
 type RenderDebugKind = 'item-source' | 'document-markdown' | 'document-items';
@@ -79,6 +92,32 @@ const contentMetricKeys = [
 
 function nowMs() {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function getLargePdfProgressDetail(document: KnowledgeDocument): KnowledgeLargePdfProgressDetail | null {
+  const detail = document.progress_detail;
+  return document.status === 'converting' && detail?.type === 'large_pdf' ? detail : null;
+}
+
+function formatLargePdfChunkSize(bytes: number | undefined) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)}MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)}KB`;
+  return `${value}B`;
+}
+
+function formatLargePdfSubtitle(detail: KnowledgeLargePdfProgressDetail) {
+  if (detail.stage === 'split') {
+    return `已拆分 ${detail.current_end_page || 0}/${detail.total_pages || 0} 页，已生成 ${detail.chunk_count || 0} 个分片`;
+  }
+  if (detail.stage === 'convert') {
+    return `当前分片 ${detail.current_start_page || 0}-${detail.current_end_page || 0} 页，共 ${detail.chunk_count || 0} 个分片`;
+  }
+  if (detail.stage === 'merge') {
+    return `正在合并 ${detail.chunk_count || 0} 个分片的 Markdown`;
+  }
+  return `共 ${detail.chunk_count || 0} 个分片，准备进入知识条目提取`;
 }
 
 function roundMs(value: number) {
@@ -1226,6 +1265,7 @@ function KnowledgeBasePage() {
                 const canDragDocument = canMoveKnowledgeDocument(document) && !migrationRunning && !dragSaving && !batchDeleting;
                 const dragging = dragPayload?.kind === 'document' && dragPayload.documentId === document.id;
                 const dropTarget = documentDropTarget?.documentId === document.id ? ` is-drop-${documentDropTarget.position}` : '';
+                const largePdfProgress = getLargePdfProgressDetail(document);
                 return (
                   <article
                     className={`knowledge-document-card${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${dropTarget}`}
@@ -1262,6 +1302,31 @@ function KnowledgeBasePage() {
                     <div className="knowledge-progress-track" aria-label={`处理进度 ${document.progress}%`}>
                       <span style={{ width: `${Math.max(0, Math.min(100, document.progress || 0))}%` }} />
                     </div>
+                    {largePdfProgress && (
+                      <div className="knowledge-large-pdf-progress">
+                        <div className="knowledge-large-pdf-summary">
+                          <strong>{largePdfStageLabels[largePdfProgress.stage]}</strong>
+                          <span>{formatLargePdfSubtitle(largePdfProgress)}</span>
+                        </div>
+                        <div className="knowledge-large-pdf-facts">
+                          {largePdfProgress.source_label && <span>源文件 {largePdfProgress.source_label}</span>}
+                          {largePdfProgress.max_chunk_label && <span>分片阈值 {largePdfProgress.max_chunk_label}</span>}
+                          <span>主进程不参与解析</span>
+                        </div>
+                        {Boolean(largePdfProgress.chunks?.length) && (
+                          <div className="knowledge-large-pdf-chunks">
+                            {largePdfProgress.chunks?.slice(-4).map((chunk) => (
+                              <div className={`knowledge-large-pdf-chunk is-${chunk.status}`} key={chunk.index}>
+                                <strong>chunk-{String(chunk.index).padStart(4, '0')}</strong>
+                                <span>页码 {chunk.start_page}-{chunk.end_page}</span>
+                                <span>{formatLargePdfChunkSize(chunk.bytes)}</span>
+                                <em>{largePdfChunkStatusLabels[chunk.status]}</em>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="knowledge-document-meta">
                       <span>{document.message}</span>
                       <span>{document.item_count || 0} 条知识</span>

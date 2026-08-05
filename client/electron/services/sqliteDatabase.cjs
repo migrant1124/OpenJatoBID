@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 21;
+const schemaVersion = 22;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -339,6 +339,10 @@ function addKnowledgeDocumentSortOrder(db) {
     CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_order
     ON knowledge_documents(folder_id, sort_order, created_at DESC);
   `);
+}
+
+function addKnowledgeDocumentProgressDetail(db) {
+  addColumnIfMissing(db, 'knowledge_documents', 'progress_detail_json', 'TEXT');
 }
 
 function createDuplicateCheckSchema(db) {
@@ -792,6 +796,7 @@ function createKnowledgeBaseSchema(db) {
       system_discarded_after_retry_count INTEGER NOT NULL DEFAULT 0,
       last_batch_size INTEGER,
       parser_label TEXT,
+      progress_detail_json TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -1406,6 +1411,11 @@ const migrations = [
     version: 21,
     description: '技术方案新增目录字数控制配置和生效快照',
     up: addTechnicalPlanOutlineWordControl,
+  },
+  {
+    version: 22,
+    description: '知识库文档新增结构化进度详情',
+    up: addKnowledgeDocumentProgressDetail,
   },
 ];
 

@@ -118,6 +118,7 @@ function normalizeDocument(document) {
     system_discarded_after_retry_count: Number(document?.system_discarded_after_retry_count || 0),
     last_batch_size: document?.last_batch_size === undefined || document?.last_batch_size === null ? undefined : Number(document.last_batch_size || 0),
     parser_label: document?.parser_label ? String(document.parser_label) : undefined,
+    progress_detail: document?.progress_detail || document?.progressDetail || undefined,
     sort_order: hasSortOrder ? Number(document.sort_order ?? document.sortOrder ?? 0) : undefined,
     created_at: document?.created_at || now(),
     updated_at: document?.updated_at || now(),
@@ -192,6 +193,7 @@ function createKnowledgeBaseStore({ app, db }) {
       system_discarded_after_retry_count: Number(row.system_discarded_after_retry_count || 0),
       last_batch_size: row.last_batch_size === null || row.last_batch_size === undefined ? undefined : Number(row.last_batch_size || 0),
       parser_label: row.parser_label || undefined,
+      progress_detail: safeJsonParse(row.progress_detail_json, undefined),
       sort_order: Number(row.sort_order || 0),
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -239,12 +241,12 @@ function createKnowledgeBaseStore({ app, db }) {
       INSERT INTO knowledge_documents (
         document_id, folder_id, file_name, document_dir, source_path, markdown_path, markdown_hash, markdown_chars,
         source_extension, status, progress, message, error, item_count, block_count, filtered_block_count,
-        candidate_item_count, discarded_block_count, system_discarded_after_retry_count, last_batch_size, parser_label, sort_order,
+        candidate_item_count, discarded_block_count, system_discarded_after_retry_count, last_batch_size, parser_label, progress_detail_json, sort_order,
         created_at, updated_at
       ) VALUES (
         @document_id, @folder_id, @file_name, @document_dir, @source_path, @markdown_path, @markdown_hash, @markdown_chars,
         @source_extension, @status, @progress, @message, @error, @item_count, @block_count, @filtered_block_count,
-        @candidate_item_count, @discarded_block_count, @system_discarded_after_retry_count, @last_batch_size, @parser_label, @sort_order,
+        @candidate_item_count, @discarded_block_count, @system_discarded_after_retry_count, @last_batch_size, @parser_label, @progress_detail_json, @sort_order,
         @created_at, @updated_at
       ) ON CONFLICT(document_id) DO UPDATE SET
         folder_id = excluded.folder_id,
@@ -267,6 +269,7 @@ function createKnowledgeBaseStore({ app, db }) {
         system_discarded_after_retry_count = excluded.system_discarded_after_retry_count,
         last_batch_size = excluded.last_batch_size,
         parser_label = excluded.parser_label,
+        progress_detail_json = excluded.progress_detail_json,
         sort_order = excluded.sort_order,
         updated_at = excluded.updated_at
     `).run({
@@ -291,6 +294,7 @@ function createKnowledgeBaseStore({ app, db }) {
       system_discarded_after_retry_count: normalized.system_discarded_after_retry_count,
       last_batch_size: normalized.last_batch_size === undefined ? null : normalized.last_batch_size,
       parser_label: normalized.parser_label || null,
+      progress_detail_json: normalized.progress_detail ? JSON.stringify(normalized.progress_detail) : null,
       sort_order: Number(normalized.sort_order || 0),
       created_at: normalized.created_at,
       updated_at: normalized.updated_at,
@@ -507,6 +511,7 @@ function createKnowledgeBaseStore({ app, db }) {
       system_discarded_after_retry_count: 'system_discarded_after_retry_count',
       last_batch_size: 'last_batch_size',
       parser_label: 'parser_label',
+      progress_detail: 'progress_detail_json',
     };
     const values = { document_id: documentId, updated_at: now() };
     const assignments = [];
@@ -520,6 +525,7 @@ function createKnowledgeBaseStore({ app, db }) {
       }
       if (field === 'message') value = String(value || '');
       if (field === 'error' || field === 'parser_label') value = value ? String(value) : null;
+      if (field === 'progress_detail') value = value ? JSON.stringify(value) : null;
       values[column] = value;
       assignments.push(`${column} = @${column}`);
     }

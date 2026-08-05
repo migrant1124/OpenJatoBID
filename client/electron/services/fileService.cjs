@@ -102,6 +102,7 @@ async function parseLocalDocument(filePath, options = {}) {
     if (stats?.size > LARGE_PDF_THRESHOLD_BYTES) {
       return parseLargePdfWithWorker(filePath, {
         includeImages: false,
+        onProgress: options.onProgress,
       });
     }
   }
@@ -533,7 +534,7 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
   const provider = parser.provider;
   const preserveImages = options.preserveImages === true;
   const assets = preserveImages ? createAssetContext(app, options.assetScope || 'documents') : null;
-  const parseOptions = { preserveImages, assets, imageResolver: createImageResolver(assets) };
+  const parseOptions = { preserveImages, assets, imageResolver: createImageResolver(assets), onProgress: options.onProgress };
   let markdown = '';
   try {
     if (provider === 'mineru-agent-api') {
