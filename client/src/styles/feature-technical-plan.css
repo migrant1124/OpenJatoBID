@@ -814,35 +814,75 @@
   word-break: break-word;
 }
 
-.bid-analysis-procurement-requirements {
-  margin-top: 14px;
-  padding-top: 14px;
+.bid-analysis-procurement-result {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bid-analysis-procurement-section {
+  min-width: 0;
+}
+
+.bid-analysis-procurement-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 8px;
+}
+
+.bid-analysis-procurement-section-heading em {
+  padding: 3px 8px;
+  color: var(--yb-primary);
+  font-size: 12px;
+  font-style: normal;
+  background: rgba(33, 116, 253, 0.08);
+  border-radius: 999px;
+}
+
+.bid-analysis-procurement-table {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 8px;
+}
+
+.bid-analysis-procurement-table-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.bid-analysis-procurement-table-row + .bid-analysis-procurement-table-row {
   border-top: 1px solid var(--yb-border-soft);
 }
 
-.bid-analysis-procurement-requirements > strong {
-  display: block;
-  margin-bottom: 8px;
+.bid-analysis-procurement-table-label,
+.bid-analysis-procurement-table-content {
+  padding: 16px 18px;
+  line-height: 1.85;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
-.bid-analysis-procurement-requirements ul,
-.bid-analysis-procurement-rules ul {
-  padding-left: 20px;
+.bid-analysis-procurement-table-label {
+  color: var(--yb-text);
+  font-weight: 800;
+  background: #f3f6fb;
+  border-right: 1px solid var(--yb-border-soft);
+}
+
+.bid-analysis-procurement-table-content {
+  color: var(--yb-text);
+}
+
+.bid-analysis-procurement-table-list ul {
+  padding-left: 18px;
   margin: 0;
 }
 
-.bid-analysis-procurement-requirements li,
-.bid-analysis-procurement-rules li {
-  line-height: 1.7;
-}
-
-.bid-analysis-procurement-requirements li + li,
-.bid-analysis-procurement-rules li + li {
-  margin-top: 7px;
-}
-
-.bid-analysis-procurement-rules-summary {
-  margin-top: 18px;
+.bid-analysis-procurement-table-list li + li {
+  margin-top: 6px;
 }
 
 .bid-analysis-template-review-card {
@@ -4338,6 +4378,15 @@
 
   .bid-analysis-mode-switch {
     width: fit-content;
+  }
+
+  .bid-analysis-procurement-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bid-analysis-procurement-table-label {
+    border-right: 0;
+    border-bottom: 1px solid var(--yb-border-soft);
   }
 
   .bid-analysis-task-pane {
