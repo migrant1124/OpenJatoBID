@@ -43,6 +43,12 @@ test('图片编排只接受 HTML 和 AI 类型', () => {
   assert.throws(() => resolveIllustrationPlan({ items: [candidate({ kind: 'unsupported' })] }, context), /图片候选类型未启用或无效/);
   const prompt = buildIllustrationPlanningPrompt();
   assert.match(prompt, /kind 只能是 html、ai/);
+  assert.match(prompt, /HTML 多节图片必须属于同一直接父目录，且小节必须连续/);
+  assert.match(prompt, /AI 图片不能明显偏少/);
+  assert.match(prompt, /现场安装/);
+  assert.match(prompt, /不要生成蓝色大屏控制室/);
+  assert.match(prompt, /long_text_requires_image=true/);
+  assert.match(prompt, /不能让大量长段落或长小节无配图/);
   assert.match(prompt, /Creative Brief/);
   assert.match(prompt, /yibiao-content-block/);
 });
@@ -110,6 +116,30 @@ test('视觉节奏诊断只给出建议，不改变已选择图片计划', () =>
   assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'high-value-without-image'));
   assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'long-text-without-image'));
   assert.ok(result.plan.visual_rhythm_diagnostics.some((item) => item.code === 'implementation-coverage'));
+});
+
+test('大量长文小节未配图时拒绝图片编排结果', () => {
+  const longContent = '实施内容。'.repeat(600);
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [
+      { id: '1.1', title: '长文小节一', content: longContent },
+      { id: '1.2', title: '长文小节二', content: longContent },
+      { id: '1.3', title: '长文小节三', content: longContent },
+      { id: '1.4', title: '长文小节四', content: longContent },
+    ] },
+    sections: {
+      '1.1': { status: 'success', content: longContent },
+      '1.2': { status: 'success', content: longContent },
+      '1.3': { status: 'success', content: longContent },
+      '1.4': { status: 'success', content: longContent },
+    },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' },
+    aiImagesAvailable: false,
+  });
+  assert.equal(context.illustrationInput.sections[0].long_text_requires_image, true);
+  assert.throws(() => resolveIllustrationPlan({ items: [
+    candidate({ section_ids: ['1.1'], anchor: { type: 'section_end', section_id: '1.1', sequence: 0 } }),
+  ] }, context), /长文小节配图覆盖不足/);
 });
 
 test('人工编辑章节不计入图片覆盖和视觉节奏诊断', () => {

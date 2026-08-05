@@ -4,6 +4,9 @@ const ILLUSTRATION_PLAN_VERSION = 9;
 const ROOT_PARENT_ID = '__root__';
 const ILLUSTRATION_KINDS = ['html', 'ai'];
 const VISUAL_STYLES = ['技术研究', '管理咨询', '工程建设', '市场营销', '党群阵地', '工会活动', '安监环'];
+const LONG_TEXT_SECTION_MIN_CHARS = 1600;
+const MAX_LONG_TEXT_WITHOUT_IMAGE_COUNT = 1;
+const MAX_LONG_TEXT_WITHOUT_IMAGE_RATIO = 0.25;
 // 全文风格只按项目专业对象和核心成果识别，通用工作动作不参与判断。
 const VISUAL_STYLE_PROFILES = [
   {
@@ -224,6 +227,9 @@ function buildIllustrationInput({ outlineData, contentPlans, requirementResponse
       scoring_point_ids: uniqueStrings(plan?.scoring_point_ids || section.scoring_point_ids),
       value_anchor_ids: uniqueStrings(plan?.value_anchor_ids || section.value_anchor_ids),
       illustration_briefs: Array.isArray(plan?.illustration_briefs) ? plan.illustration_briefs : [],
+      content_length: section.contentLength,
+      content_block_count: section.blocks.length,
+      long_text_requires_image: section.contentLength >= LONG_TEXT_SECTION_MIN_CHARS,
       content_blocks: section.blocks.map(({ id, type, hash }) => ({ id, type, hash })),
     };
   });
@@ -262,6 +268,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
       const order = eligibleSectionIds.length;
       const contentPlan = resolveContentPlan(contentPlans, id);
       const blocks = eligible ? splitContentBlocks(content, getNextBlockId) : [];
+      const contentLength = blocks.reduce((total, block) => total + String(block.content || '').length, 0);
 
       markdownLines.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${id} ${title}`.trim());
       markdownLines.push('');
@@ -289,6 +296,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
         scoring_point_ids: uniqueStrings(contentPlan?.scoring_point_ids || item?.mapped_scoring_point_ids),
         value_anchor_ids: uniqueStrings(contentPlan?.value_anchor_ids || item?.value_anchor_ids),
         blocks,
+        contentLength,
       });
       if (eligible) eligibleSectionIds.push(id);
 
@@ -359,18 +367,22 @@ function buildIllustrationPlanningPrompt() {
 
 工作要求：
 1. 图片有 AI、HTML 两类；由正文价值、评分关联、信息可视化必要性决定各自数量，不设程序数量上限，不为凑数量编排图片，也不因另一类图片数量压缩本类图片。
-2. kind 只能是 html、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
-3. 每项必须有简洁且不重复的 title、visual_role 和 purpose。图片必须能明确回答“帮助评委更快理解或相信什么”；不能回答时不要编排。
-4. 同一小节的图片应各自承担清晰且不重复的 visual_role；避免无价值重复，但不要以程序配额、跨引擎优先级或另一类图片数量删除有效图片。
-5. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
-6. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
-7. AI 图片适合工程、现场、创意场景、空间和视觉概念；HTML 用于精确结构、数据、流程和矩阵。
-8. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
-9. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
-10. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
-11. visual_style 只能从下列预设中选择一个，或在证据不足时输出空字符串。必须按项目标的、核心成果、评分重点和明确交付物判断；创建、评价、评审、风险、现场、管理、体系、方案、培训、宣传、验收、咨询等通用工作动作不得单独用于风格判断。
+2. 当 AI 和 HTML 均启用时，AI 图片不能明显偏少。对于包含设备、材料、生产、安装、检验、包装运输、现场施工、验收、维保等实物或现场场景的技术方案，应主动编排一定比例 AI 图片；AI 图片数量原则上应接近有效图片总量的 25%-35%，但不得为了凑数生成无信息价值图片。
+3. AI 图片优先选择现场安装、站内复核、标识固定节点、材料入厂检验、生产加工设备、表面处理/装配产线、包装运输、防腐抗风节点、巡检维保、质量抽检、验收移交、安全交底和作业许可场景。除非正文明确涉及监控中心、调度大屏或会议评审，不要生成蓝色大屏控制室、会议室、泛化商务汇报场景。
+4. kind 只能是 html、ai；image_type 必须来自对应 allowed_types。先阅读 type_descriptions 的中文适用范围，不得按英文单词猜测。
+5. 每项必须有简洁且不重复的 title、visual_role 和 purpose。图片必须能明确回答“帮助评委更快理解或相信什么”；不能回答时不要编排。
+6. 长文小节是重要配图触发条件。illustration-input.json 中 content_length >= 1600 或 long_text_requires_image=true 的小节，原则上必须至少安排 1 张图片；不能让大量长段落或长小节无配图。长文含流程、清单、对比、职责、工期、风险时优先 HTML，长文含设备、安装、检查、验收、维保、现场动作时优先 AI。
+7. 同一小节的图片应各自承担清晰且不重复的 visual_role；避免无价值重复，但不要以程序配额、跨引擎优先级或另一类图片数量删除有效图片。
+8. HTML 多节图片必须属于同一直接父目录，且小节必须连续；跨父目录内容应拆成多张 HTML 图片，或只选择最核心的一组连续小节。AI 图片只能编排到一个小节。
+9. scoring_point_ids 和 value_anchor_ids 只能引用 illustration-input.json 中存在且与所选章节相关的 ID；无关联时返回空数组。
+10. anchor 必须引用真实 section_id。before_block / after_block 的 block_id 必须来自该节的 content_blocks；after_heading 和 section_end 不填写 block_id；sequence 为同一锚点的从小到大顺序。
+11. AI 图片用于工程节点、现场安装、设备材料、检查验收、巡检维保、包装运输、安全作业等实物或现场场景；安健环标识类项目中，AI 图片应更多表现变电站现场、标识牌安装、材料与设备、检测与维保动作。HTML 用于精确结构、数据、流程、矩阵、清单、甘特图、组织关系和对比表。
+12. 创意 AI 类型 campaign_key_visual、event_scene_render、spatial_concept_render、poster_concept、social_media_mockup、brand_touchpoint_mockup、storyboard、creative_style_board 必须提供 creative_brief。未在输入中确认的客户、场地、受众、品牌色或资产必须写入 needs_user_confirmation，不得虚构事实。
+13. Creative Brief 禁止伪造 Logo、品牌标识、真实案例、人物或场地；不得依赖 AI 图片生成关键中文文字。没有提供资产时 brand_assets 留空并采用无 Logo 设计。
+14. priority 只能是 1-5 的整数，5 表示信息价值最高。输出前核对 section_ids、anchor、标题、视觉角色和评分关联均有效。
+15. visual_style 只能从下列预设中选择一个，或在证据不足时输出空字符串。必须按项目标的、核心成果、评分重点和明确交付物判断；创建、评价、评审、风险、现场、管理、体系、方案、培训、宣传、验收、咨询等通用工作动作不得单独用于风格判断。
 ${buildVisualStyleProfilePrompt()}
-12. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
+16. 只创建 illustration-plan.json，不修改输入文件，不创建其他结果文件。
 
 illustration-plan.json 只能使用以下结构：
 {
@@ -599,6 +611,29 @@ function visualRhythmDiagnostic(code, message, sectionIds) {
   return { code, message, section_ids: sectionIds };
 }
 
+function getLongTextSections(context) {
+  return [...context.sectionMap.values()]
+    .filter((section) => section.eligible && section.contentLength >= LONG_TEXT_SECTION_MIN_CHARS);
+}
+
+function getUncoveredLongTextSectionIds(items, context) {
+  const selectedSectionIds = new Set((Array.isArray(items) ? items : []).flatMap((item) => item.section_ids || []));
+  return getLongTextSections(context)
+    .filter((section) => !selectedSectionIds.has(section.id))
+    .map((section) => section.id);
+}
+
+function assertLongTextCoverage(items, context) {
+  if (!context?.config?.html?.enabled && !context?.config?.ai?.enabled) return;
+  const longTextSections = getLongTextSections(context);
+  if (!longTextSections.length) return;
+  const uncovered = getUncoveredLongTextSectionIds(items, context);
+  const uncoveredRatio = uncovered.length / longTextSections.length;
+  if (uncovered.length > MAX_LONG_TEXT_WITHOUT_IMAGE_COUNT && uncoveredRatio > MAX_LONG_TEXT_WITHOUT_IMAGE_RATIO) {
+    throw new Error(`长文小节配图覆盖不足：${uncovered.length}/${longTextSections.length} 个长文小节未安排配图（${uncovered.slice(0, 8).join('、')}）。长文小节必须优先配图，请补充 HTML 流程/矩阵/清单图或 AI 现场/设备/检查图。`);
+  }
+}
+
 // 图片编排只给出节奏建议，绝不替用户自动增删、移动或选择图片。
 function buildVisualRhythmDiagnostics(items, context) {
   const selected = Array.isArray(items) ? items : [];
@@ -611,9 +646,7 @@ function buildVisualRhythmDiagnostics(items, context) {
   if (highValueWithoutImage.length) {
     diagnostics.push(visualRhythmDiagnostic('high-value-without-image', `有 ${highValueWithoutImage.length} 个评分或价值重点章节未安排配图，可检查是否需要补充结构化展示。`, highValueWithoutImage));
   }
-  const longTextWithoutImage = eligibleSections
-    .filter((section) => section.blocks.reduce((total, block) => total + String(block.content || '').length, 0) >= 1600 && !selectedSectionIds.has(section.id))
-    .map((section) => section.id);
+  const longTextWithoutImage = getUncoveredLongTextSectionIds(selected, context);
   if (longTextWithoutImage.length) {
     diagnostics.push(visualRhythmDiagnostic('long-text-without-image', `有 ${longTextWithoutImage.length} 个长篇纯文字章节未安排配图，可按内容价值考虑流程、矩阵或场景展示。`, longTextWithoutImage));
   }
@@ -706,6 +739,7 @@ function resolveIllustrationPlan(content, context) {
     selected: true,
     generation: { status: 'pending' },
   }));
+  assertLongTextCoverage(planItemsWithIds, context);
   const visualRhythmDiagnostics = buildVisualRhythmDiagnostics(planItemsWithIds, context);
   const visualStyleRecommendation = resolveVisualStyleRecommendation(context);
   const revision = stableHash({ items: planItems, visualRhythmDiagnostics }).slice(0, 24);
