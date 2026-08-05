@@ -154,6 +154,7 @@
     "markdown-it-cjk-friendly": "^2.0.2",
     "markdown-it-task-lists": "^2.1.1",
     "mime-types": "^3.0.2",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.1.1",
