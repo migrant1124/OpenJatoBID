@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { copyFile, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -169,8 +169,14 @@ function isOleCompoundHeader(header) {
 }
 
 async function readFileHeader(inputPath, bytes) {
-  const buffer = await readFile(inputPath);
-  return buffer.subarray(0, bytes);
+  const handle = await open(inputPath, 'r');
+  try {
+    const buffer = Buffer.alloc(bytes);
+    const result = await handle.read(buffer, 0, bytes, 0);
+    return buffer.subarray(0, result.bytesRead);
+  } finally {
+    await handle.close();
+  }
 }
 
 async function convertMarkdownFile(inputPath, includeImages, imageResolver) {

@@ -165,10 +165,17 @@ export interface WorkspaceDatabaseStatus {
   migrationDescription?: string;
 }
 
-export type AgentSelfCheckStepStatus = 'pending' | 'running' | 'success' | 'error';
+export type AgentSelfCheckStepStatus = 'pending' | 'running' | 'success' | 'warning' | 'error' | 'skipped';
 export type AgentSelfCheckStatus = 'normal' | 'error' | 'busy';
 
 export type AgentRuntimePhase = 'stopped' | 'starting' | 'idle' | 'running' | 'aborting' | 'unhealthy' | 'restarting' | 'closing';
+
+export interface AgentRuntimeDescriptor {
+  id: string;
+  display_name: string;
+  description: string;
+  is_default: boolean;
+}
 
 export interface AgentRuntimeActiveTask {
   task_id: string;
@@ -238,6 +245,10 @@ export interface AuthorizationApplicationResult {
 }
 
 export interface AgentRuntimeStatus {
+  runtime_id?: string;
+  runtime_name?: string;
+  selected_runtime_id?: string;
+  active_runtime_id?: string;
   phase: AgentRuntimePhase;
   healthy: boolean;
   message: string;
@@ -253,6 +264,7 @@ export interface AgentRuntimeStatus {
     title: string;
     queued_at: string;
     position: number;
+    runtime_id?: string;
   }>;
   proxy?: {
     active: number;
@@ -266,6 +278,7 @@ export interface AgentRuntimeStatus {
     last_exit_code?: number | null;
     last_exit_signal?: string;
   };
+  runtime_details?: Record<string, unknown>;
 }
 
 export interface AgentRunFile {
@@ -294,6 +307,7 @@ export interface AgentRetryAttempt {
 
 export interface AgentRunResult {
   success: boolean;
+  runtime_id?: string;
   status?: 'busy' | string;
   skipped?: boolean;
   message?: string;
@@ -314,6 +328,7 @@ export interface AgentRunResult {
   opencode_request_log?: unknown[];
   opencode_stderr_tail?: string;
   opencode_stdout_tail?: string;
+  diagnostics?: Record<string, unknown>;
 }
 
 export interface AgentSelfCheckStep {
@@ -322,6 +337,27 @@ export interface AgentSelfCheckStep {
   status: AgentSelfCheckStepStatus;
   message?: string;
   updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+}
+
+export interface AgentDiagnosticSection {
+  id: string;
+  title: string;
+  status: AgentSelfCheckStepStatus | 'warning';
+  summary?: string;
+  details?: Array<{
+    label: string;
+    value: string;
+  }>;
+  items?: Array<{
+    id: string;
+    label: string;
+    status: AgentSelfCheckStepStatus | 'warning';
+    message?: string;
+    detail?: string;
+  }>;
 }
 
 export type AgentToolCheckStatus = 'success' | 'warning' | 'error';
@@ -395,7 +431,12 @@ export interface AgentIsolationCheckResult {
 }
 
 export interface AgentSelfCheckResult {
+  report_version?: number;
+  check_id?: string;
   success: boolean;
+  repaired?: boolean;
+  runtime_id?: string;
+  runtime_name?: string;
   status: AgentSelfCheckStatus;
   message: string;
   checked_at: string;
@@ -407,10 +448,18 @@ export interface AgentSelfCheckResult {
   output_file: string;
   output_path: string;
   output_content?: string;
-  opencode_binary_path: string;
+  opencode_binary_path?: string;
   conclusion?: string;
+  sdk_version?: string;
   model_config?: Record<string, unknown>;
+  model_check?: Record<string, unknown>;
   environment?: AgentSelfCheckEnvironmentSnapshot | null;
+  loopback_check?: Record<string, unknown>;
+  tool_check?: Record<string, unknown>;
+  agent_check?: Record<string, unknown>;
+  session_snapshot?: Record<string, unknown>;
+  diagnosis?: Record<string, unknown>;
+  repair?: Record<string, unknown>;
   isolation_check?: AgentIsolationCheckResult | null;
   direct_model_test?: Record<string, unknown> | null;
   tool_check_summary?: string;
@@ -421,6 +470,7 @@ export interface AgentSelfCheckResult {
   workspace_snapshot?: Record<string, unknown> | null;
   agent_result?: Record<string, unknown>;
   steps: AgentSelfCheckStep[];
+  sections?: AgentDiagnosticSection[];
   diagnostics?: AgentSelfCheckDiagnostics;
   error?: AgentSelfCheckDiagnostics;
   detail_text: string;
@@ -491,11 +541,12 @@ export interface YibiaoBridge {
     onHttpError: (callback: (event: AiHttpErrorPayload) => void) => () => void;
   };
   agent: {
-    run: (payload: AgentRunPayload) => Promise<AgentRunResult>;
-    selfCheck: () => Promise<AgentSelfCheckResult>;
+    listRuntimes: () => Promise<AgentRuntimeDescriptor[]>;
+    run: (payload: AgentRunPayload, runtimeId?: string) => Promise<AgentRunResult>;
+    selfCheck: (runtimeId?: string) => Promise<AgentSelfCheckResult>;
     exportSelfCheckReport: (payload: AgentSelfCheckResult) => Promise<AgentSelfCheckReportExportResult>;
-    getStatus: () => Promise<AgentRuntimeStatus>;
-    restart: (reason?: string) => Promise<AgentRuntimeStatus>;
+    getStatus: (runtimeId?: string) => Promise<AgentRuntimeStatus>;
+    restart: (reason?: string, runtimeId?: string) => Promise<AgentRuntimeStatus>;
     onStatus: (callback: (status: AgentRuntimeStatus) => void) => () => void;
   };
   developerTokenStats: {

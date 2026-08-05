@@ -117,11 +117,37 @@ export interface KnowledgeDocument {
   discarded_block_count?: number;
   system_discarded_after_retry_count?: number;
   last_batch_size?: number;
+  progress_detail?: KnowledgeDocumentProgressDetail;
   sort_order?: number;
   created_at: string;
   updated_at: string;
   error?: string;
 }
+
+export interface KnowledgeLargePdfChunkProgress {
+  index: number;
+  start_page: number;
+  end_page: number;
+  bytes: number;
+  status: 'split' | 'converting' | 'success';
+}
+
+export interface KnowledgeLargePdfProgressDetail {
+  type: 'large_pdf';
+  stage: 'split' | 'convert' | 'merge' | 'done';
+  source_bytes?: number;
+  source_label?: string;
+  max_chunk_bytes?: number;
+  max_chunk_label?: string;
+  total_pages?: number;
+  chunk_count?: number;
+  current_chunk_index?: number;
+  current_start_page?: number;
+  current_end_page?: number;
+  chunks?: KnowledgeLargePdfChunkProgress[];
+}
+
+export type KnowledgeDocumentProgressDetail = KnowledgeLargePdfProgressDetail;
 
 export interface KnowledgeBaseIndex {
   folders: KnowledgeFolder[];

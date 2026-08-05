@@ -193,6 +193,82 @@ function getContentCharCount(text) {
   return String(text || '').replace(/\s+/g, '').length;
 }
 
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)}MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)}KB`;
+  return `${value}B`;
+}
+
+function upsertLargePdfChunk(chunks, chunk) {
+  const list = Array.isArray(chunks) ? chunks.slice() : [];
+  const index = Number(chunk.index || 0);
+  const existingIndex = list.findIndex((item) => Number(item.index || 0) === index);
+  if (existingIndex >= 0) {
+    list[existingIndex] = { ...list[existingIndex], ...chunk };
+  } else {
+    list.push(chunk);
+  }
+  return list.sort((left, right) => Number(left.index || 0) - Number(right.index || 0));
+}
+
+function buildLargePdfProgressUpdate(event, previousDetail, context = {}) {
+  const detail = {
+    type: 'large_pdf',
+    stage: event.stage || previousDetail?.stage || 'split',
+    source_bytes: Number(context.sourceBytes || previousDetail?.source_bytes || 0),
+    max_chunk_bytes: Number(context.maxChunkBytes || previousDetail?.max_chunk_bytes || 0),
+    total_pages: Number(event.totalPages || event.pageCount || previousDetail?.total_pages || 0),
+    chunk_count: Number(event.chunkCount || previousDetail?.chunk_count || 0),
+    current_chunk_index: Number(event.chunkIndex || previousDetail?.current_chunk_index || 0),
+    current_start_page: Number(event.startPage || previousDetail?.current_start_page || 0),
+    current_end_page: Number(event.endPage || previousDetail?.current_end_page || 0),
+    chunks: Array.isArray(previousDetail?.chunks) ? previousDetail.chunks : [],
+  };
+
+  let progress = 15;
+  let message = '正在处理大 PDF';
+
+  if (event.stage === 'split') {
+    const chunkIndex = Number(event.chunkCount || 0);
+    detail.chunk_count = Math.max(detail.chunk_count, chunkIndex);
+    detail.chunks = upsertLargePdfChunk(detail.chunks, {
+      index: chunkIndex,
+      start_page: Number(event.startPage || 0),
+      end_page: Number(event.endPage || 0),
+      bytes: Number(event.chunkBytes || 0),
+      status: 'split',
+    });
+    const pageRate = detail.total_pages ? Math.min(1, detail.current_end_page / detail.total_pages) : 0;
+    progress = 15 + Math.round(pageRate * 8);
+    message = `正在拆分大 PDF：已拆分 ${detail.current_end_page || 0}/${detail.total_pages || 0} 页，已生成 ${detail.chunk_count} 个分片`;
+  } else if (event.stage === 'convert') {
+    const chunkIndex = Number(event.chunkIndex || 0);
+    detail.chunks = detail.chunks.map((chunk) => {
+      if (Number(chunk.index) < chunkIndex) return { ...chunk, status: 'success' };
+      if (Number(chunk.index) === chunkIndex) return { ...chunk, status: 'converting' };
+      return chunk;
+    });
+    const chunkRate = detail.chunk_count ? Math.max(0, chunkIndex - 1) / detail.chunk_count : 0;
+    progress = 23 + Math.round(chunkRate * 6);
+    message = `正在转换 Markdown：第 ${chunkIndex}/${detail.chunk_count || '?'} 个分片（页码 ${detail.current_start_page}-${detail.current_end_page}）`;
+  } else if (event.stage === 'merge') {
+    detail.chunks = detail.chunks.map((chunk) => ({ ...chunk, status: 'success' }));
+    progress = 30;
+    message = `正在合并 Markdown：共 ${detail.chunk_count || event.chunkCount || 0} 个分片`;
+  } else if (event.type === 'done') {
+    detail.stage = 'done';
+    detail.chunks = detail.chunks.map((chunk) => ({ ...chunk, status: 'success' }));
+    progress = 30;
+    message = `大 PDF 转换完成：共 ${detail.chunk_count || event.chunkCount || 0} 个分片`;
+  }
+
+  detail.source_label = formatFileSize(detail.source_bytes);
+  detail.max_chunk_label = formatFileSize(detail.max_chunk_bytes);
+  return { detail, progress, message };
+}
+
 function stripBoldMarker(text) {
   return String(text || '').trim().replace(/^\*\*(.+)\*\*$/, '$1').trim();
 }
@@ -1394,9 +1470,29 @@ function createKnowledgeBaseService({ app, aiService, configStore, knowledgeBase
         firstItems = null;
         supplementItems = null;
         candidateItems = [];
-        updateDocument(documentId, { status: 'converting', progress: 15, message: '正在转换为 Markdown', error: null }, webContents);
+        let largePdfProgressDetail = null;
+        const handleLargePdfProgress = (event) => {
+          if (!event || (event.type !== 'progress' && event.type !== 'done')) {
+            return;
+          }
+          const sourceBytes = fs.existsSync(sourcePath) ? fs.statSync(sourcePath).size : 0;
+          const update = buildLargePdfProgressUpdate(event, largePdfProgressDetail, { sourceBytes, maxChunkBytes: 100 * 1024 * 1024 });
+          largePdfProgressDetail = update.detail;
+          updateDocument(documentId, {
+            status: 'converting',
+            progress: update.progress,
+            message: update.message,
+            progress_detail: update.detail,
+            error: null,
+          }, webContents);
+        };
+        updateDocument(documentId, { status: 'converting', progress: 15, message: '正在转换为 Markdown', progress_detail: null, error: null }, webContents);
         const result = await runDocumentStep(documentId, 'convert_markdown', async () => {
-          const parsedMarkdown = stripMarkdownFence((await parseDocumentWithConfig(app, sourcePath, config, { assetScope: `knowledge-${documentId}`, preserveImages: false })).trim());
+          const parsedMarkdown = stripMarkdownFence((await parseDocumentWithConfig(app, sourcePath, config, {
+            assetScope: `knowledge-${documentId}`,
+            preserveImages: false,
+            onProgress: handleLargePdfProgress,
+          })).trim());
           if (!parsedMarkdown) throw new Error('文档未解析出有效 Markdown 内容');
           await fsp.writeFile(markdownPath, `${parsedMarkdown}\n`, 'utf-8');
           knowledgeBaseStore.updateMarkdownMetadata(documentId, parsedMarkdown);

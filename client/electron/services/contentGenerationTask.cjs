@@ -948,8 +948,26 @@ function buildChapterContentMessages({ chapter, projectOverview, selectedFactsTe
 14. 直接返回章节内容，不生成标题，不要任何额外说明。
 15. 如果本章节需要使用的全局事实变量中包含相关内容，必须优先使用变量值，不得前后矛盾。
 16. 仅使用本章节提供的全局事实变量；未提供时不要主动编造具体人员、周期、质保、品牌、型号等会影响全文一致性的承诺。
-17. ${buildWritingProfileRequirement(contentPlan)}
-18. 表格和图片只承担合同中定义的独立信息功能，不得与正文简单重复；不得重复合同 forbidden_repetition 中的内容。`,
+17. 【去AI味核心规则】强制禁用以下AI高频词和连接词：
+    - 禁止使用：首先、其次、最后、此外、值得一提的是、不仅...而且、一方面...另一方面、总的来说、总而言之。
+    - 禁止使用形容词组合：高度的、显著的、极大的、深入的、全面的（除非紧跟具体数值）。
+    - 禁止使用“本项目将”开头（被动将来时），一律改为“我们采用/我们配置/我们基于”（主动现在时）。
+    - 禁止使用“我们将”“我们会”“我们可以”“我们能够”“我们能够为”“我们能够提供”“我们能够实现”“我们能够满足”“我们能够保证”等被动将来时，必须改为“我们采用/我们配置/我们基于”（主动现在时）。
+18.【短句爆破】每句话不超过30个汉字。如果一句超过30字，必须用句号（。）拆分成两句。
+     禁止使用逗号连接超过3个分句的长难句。
+19.【取消铺垫，直击痛点】段落开头禁止使用“为了...”、“基于...”等目的状语开头。
+    必须直接用“事实/动作”开头。例如：不准写“为了保障系统稳定，我们...”，必须写“我们部署了双机热备，RTO≤30分钟”。
+20.【强制主动语态】全文主语必须是“我们”、“我方”或具体的“系统/设备名称”。
+     禁止使用“...被...”、“...得以...”、“...得到了...”等被动及弱动词结构。
+21.【风控视角替代服务视角】在描述优势时，不要只说“我们能做什么”，要说“我们如何帮业主规避了哪些风险/损失”。
+     例如：不说“我们有应急方案”，说“我们针对市电中断和光缆挖断两种情况，分别配置了柴油机和4G备份链路”。
+23. 【词汇替换映射表】遇到以下词强制替换：
+     确保 → 控制在...以内 / 满足...阈值
+     加强 → 配置了... / 启用了...
+     完善 → 覆盖了...场景 / 补充了...接口
+     丰富 → 提供了...种 / 扩展了...容量
+24. ${buildWritingProfileRequirement(contentPlan)}
+25. 表格和图片只承担合同中定义的独立信息功能，不得与正文简单重复；不得重复合同 forbidden_repetition 中的内容。`,
     },
   ];
 
@@ -3305,6 +3323,9 @@ function buildContentOverallProgress(detail, status) {
 
 function taskStatusFor(leaves, sections) {
   if (leaves.some(({ item }) => sections[item.id]?.status === 'error')) {
+    return 'error';
+  }
+  if (leaves.some(({ item }) => sections[item.id]?.status !== 'success')) {
     return 'error';
   }
 
@@ -7259,13 +7280,21 @@ workspace 文件说明：
     pauseIfRequested('正文生成已在完成前暂停，可导出当前已完成内容，稍后继续。');
 
     const failedCount = leaves.filter(({ item }) => sections[item.id]?.status === 'error').length;
+    const incompleteCount = leaves.filter(({ item }) => {
+      const status = sections[item.id]?.status;
+      return status !== 'success' && status !== 'error';
+    }).length;
     const finalProgress = leaves.length ? progressFor(leaves, sections) : 100;
     const finalStatus = taskStatusFor(leaves, sections);
     const responseCompletion = deriveResponseCompletion(outlineData.outline, { taskStatus: finalStatus });
     contentStats.phase = 'done';
     logs = [...logs, targetItemId
-      ? (failedCount ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${failedCount} 个小节失败。` : `小节重新生成完成，当前整体进度 ${finalProgress}%。`)
-      : (failedCount ? `正文生成完成，${failedCount} 个小节失败。` : '正文生成完成。')];
+      ? (failedCount
+        ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${failedCount} 个小节失败。`
+        : (incompleteCount ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${incompleteCount} 个小节未生成。` : `小节重新生成完成，当前整体进度 ${finalProgress}%。`))
+      : (failedCount
+        ? `正文生成完成，${failedCount} 个小节失败。`
+        : (incompleteCount ? `正文生成结束，仍有 ${incompleteCount} 个小节未生成。` : '正文生成完成。'))];
     if (!responseCompletion.compliance_complete) {
       logs = [...logs, `任务执行已结束，但仍有 ${responseCompletion.attention_node_ids.length} 个合规待处理节点。`];
     }
@@ -7273,6 +7302,7 @@ workspace 文件说明：
       status: finalStatus,
       progress: finalProgress,
       failed_count: failedCount,
+      incomplete_count: incompleteCount,
       stats: { ...statsSnapshot(), response: responseCompletion },
       touched_item_ids: [...touchedItemIds],
     });

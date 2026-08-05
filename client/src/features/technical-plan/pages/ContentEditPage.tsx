@@ -1542,7 +1542,7 @@ function ContentEditPage({
         <Dialog.Portal>
           <Dialog.Overlay className="content-regenerate-modal" />
           <Dialog.Content className="content-generation-config-card illustration-confirmation-card" aria-describedby={undefined}>
-            <div className="content-regenerate-card-head">
+            <div className="content-regenerate-card-head illustration-confirmation-headline">
               <Dialog.Title>图片编排确认</Dialog.Title>
               <Dialog.Description>请确认本次技术方案的配图计划，确认后开始生成。</Dialog.Description>
             </div>
@@ -1553,31 +1553,36 @@ function ContentEditPage({
                 <span>AI 生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b><em>张</em></span>
               </div>
               <div className="illustration-style-controls">
-                <section className={`illustration-style-recommendation${recommendedVisualStyle ? '' : ' is-empty'}`}>
-                  <VisualStyleIcon style={recommendedVisualStyle} />
-                  <div>
+                <section className={`illustration-style-card${recommendedVisualStyle ? '' : ' is-empty'}`}>
+                  <div className="illustration-style-recommendation">
                     <span>AI 推荐视觉风格</span>
                     <strong>{recommendedVisualStyle || 'AI 未推荐'}</strong>
-                    {recommendedVisualStyle ? <i>{hasManualVisualStyle ? '已人工指定' : '已识别'}</i> : null}
                     <p>{recommendedVisualStyle
                       ? `依据：${(illustrationPlanDraft?.recommended_visual_style_evidence || []).join(' · ') || '项目核心对象与成果'}`
                       : '未识别到足够的专业领域证据，请人工选择。'}</p>
                   </div>
-                </section>
-                <section className="illustration-style-manual">
-                  <span>人工兜底调整</span>
-                  <select
-                    aria-label="人工兜底调整全文视觉风格"
-                    value={selectedVisualStyle}
-                    onChange={(event) => setIllustrationPlanDraft((plan) => plan ? {
-                      ...plan,
-                      visual_style: event.target.value === plan.recommended_visual_style ? undefined : event.target.value,
-                    } : plan)}
-                  >
-                    {!recommendedVisualStyle ? <option value="">请选择</option> : null}
-                    {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
-                  </select>
-                  <p>仅当 AI 推荐与项目实际不符时调整；确认后全文配图统一按人工选择执行。</p>
+                  <div className="illustration-style-icon-panel">
+                    <VisualStyleIcon style={selectedVisualStyle} />
+                    <span>{selectedVisualStyle || '待选择'}</span>
+                  </div>
+                  <div className="illustration-style-manual">
+                    <div className="illustration-style-manual-head">
+                      <span>人工兜底调整</span>
+                      {hasManualVisualStyle ? <i>已人工指定</i> : null}
+                    </div>
+                    <select
+                      aria-label="人工兜底调整全文视觉风格"
+                      value={selectedVisualStyle}
+                      onChange={(event) => setIllustrationPlanDraft((plan) => plan ? {
+                        ...plan,
+                        visual_style: event.target.value === plan.recommended_visual_style ? undefined : event.target.value,
+                      } : plan)}
+                    >
+                      {!recommendedVisualStyle ? <option value="">请选择</option> : null}
+                      {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}
+                    </select>
+                    <p>仅当 AI 推荐与项目实际不符时调整；确认后全文配图统一按人工选择执行。</p>
+                  </div>
                 </section>
               </div>
             </div>

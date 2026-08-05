@@ -13,6 +13,7 @@ export interface SettingsPageState {
   imageModelProfiles: ImageModelProfiles;
   fileParser: FileParserConfig;
   localRendering: LocalRenderingConfig;
+  agentRuntime: string;
   agentModeScenarios: AgentModeScenariosConfig;
   general: {
     developer_mode: boolean;

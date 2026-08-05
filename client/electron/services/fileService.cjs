@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { dialog } = require('electron');
 const AdmZip = require('adm-zip');
 const { formatDocumentParseError, isLibreOfficeMissingError, normalizeDocumentParseError } = require('./documentParseErrors.cjs');
+const { LARGE_PDF_THRESHOLD_BYTES, parseLargePdfWithWorker } = require('./largePdfParser.cjs');
 const { compactLogError, createDeveloperLogger, textMetrics } = require('../utils/developerLog.cjs');
 const { getImportedImagesDir } = require('../utils/paths.cjs');
 
@@ -94,6 +95,16 @@ async function parseLocalDocument(filePath, options = {}) {
 
   if (ext === '.txt') {
     return fs.readFile(filePath, 'utf-8');
+  }
+
+  if (ext === '.pdf' && options.preserveImages !== true) {
+    const stats = await fs.stat(filePath).catch(() => null);
+    if (stats?.size > LARGE_PDF_THRESHOLD_BYTES) {
+      return parseLargePdfWithWorker(filePath, {
+        includeImages: false,
+        onProgress: options.onProgress,
+      });
+    }
   }
 
   const { convertPathToMarkdown } = await import('./doc2markdown/convert.mjs');
@@ -523,7 +534,7 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
   const provider = parser.provider;
   const preserveImages = options.preserveImages === true;
   const assets = preserveImages ? createAssetContext(app, options.assetScope || 'documents') : null;
-  const parseOptions = { preserveImages, assets, imageResolver: createImageResolver(assets) };
+  const parseOptions = { preserveImages, assets, imageResolver: createImageResolver(assets), onProgress: options.onProgress };
   let markdown = '';
   try {
     if (provider === 'mineru-agent-api') {
