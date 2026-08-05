@@ -3307,6 +3307,9 @@ function taskStatusFor(leaves, sections) {
   if (leaves.some(({ item }) => sections[item.id]?.status === 'error')) {
     return 'error';
   }
+  if (leaves.some(({ item }) => sections[item.id]?.status !== 'success')) {
+    return 'error';
+  }
 
   return 'success';
 }
@@ -7259,13 +7262,21 @@ workspace 文件说明：
     pauseIfRequested('正文生成已在完成前暂停，可导出当前已完成内容，稍后继续。');
 
     const failedCount = leaves.filter(({ item }) => sections[item.id]?.status === 'error').length;
+    const incompleteCount = leaves.filter(({ item }) => {
+      const status = sections[item.id]?.status;
+      return status !== 'success' && status !== 'error';
+    }).length;
     const finalProgress = leaves.length ? progressFor(leaves, sections) : 100;
     const finalStatus = taskStatusFor(leaves, sections);
     const responseCompletion = deriveResponseCompletion(outlineData.outline, { taskStatus: finalStatus });
     contentStats.phase = 'done';
     logs = [...logs, targetItemId
-      ? (failedCount ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${failedCount} 个小节失败。` : `小节重新生成完成，当前整体进度 ${finalProgress}%。`)
-      : (failedCount ? `正文生成完成，${failedCount} 个小节失败。` : '正文生成完成。')];
+      ? (failedCount
+        ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${failedCount} 个小节失败。`
+        : (incompleteCount ? `小节重新生成结束，当前整体进度 ${finalProgress}%，${incompleteCount} 个小节未生成。` : `小节重新生成完成，当前整体进度 ${finalProgress}%。`))
+      : (failedCount
+        ? `正文生成完成，${failedCount} 个小节失败。`
+        : (incompleteCount ? `正文生成结束，仍有 ${incompleteCount} 个小节未生成。` : '正文生成完成。'))];
     if (!responseCompletion.compliance_complete) {
       logs = [...logs, `任务执行已结束，但仍有 ${responseCompletion.attention_node_ids.length} 个合规待处理节点。`];
     }
@@ -7273,6 +7284,7 @@ workspace 文件说明：
       status: finalStatus,
       progress: finalProgress,
       failed_count: failedCount,
+      incomplete_count: incompleteCount,
       stats: { ...statsSnapshot(), response: responseCompletion },
       touched_item_ids: [...touchedItemIds],
     });
