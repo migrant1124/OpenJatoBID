@@ -83,9 +83,10 @@ const statusLabel: Record<BidAnalysisTaskState['status'], string> = {
 
 const jsonFieldLabels: Record<string, string> = {
   schema_version: 'Schema 版本',
-  extraction_status: '提取状态',
-  procurement_items: '采购项',
-  quotation_rules: '报价规则',
+  procurement_summary: '采购摘要',
+  quotation_summary: '报价摘要',
+  quotation_table: '报价表概况',
+  quote_documents: '报价文件',
   project_name: '项目名称',
   project_number: '项目编号',
   project_type: '项目类型',
@@ -144,36 +145,44 @@ const jsonFieldLabels: Record<string, string> = {
   documentation_requirements: '资料/文档交付要求',
 };
 
-const procurementQuotationRuleLabels = {
-  pricing_method: '计价方式',
-  price_limits: '价格限制',
-  tax_and_invoice: '税费与发票',
-  cost_scope: '费用范围',
-  calculation_and_rounding: '计算与取整',
-  quote_documents_and_attachments: '报价文件与附件',
-  submission_method_or_platform: '提交方式与平台',
-  consistency_and_priority: '报价一致性与优先级',
-  invalid_or_abnormal_price: '无效或异常报价',
-  settlement_and_payment: '结算与付款',
-  other_explicit_rules: '其他明确规则',
+const procurementSummaryLabels = {
+  target_name: '标的名称',
+  package_name: '标包名称',
+  package_amount: '标包金额',
+  procurement_scope: '采购范围',
+  delivery_period: '交货期',
+  delivery_location: '交货地点',
+  implementation_scope: '实施范围',
 } as const;
 
-type ProcurementQuotationRuleKey = keyof typeof procurementQuotationRuleLabels;
+const quotationSummaryLabels = {
+  pricing_method: '报价方式',
+  price_evaluation_method: '评标价格计算',
+  price_limit_rule: '限价规则',
+  settlement_method: '结算方式',
+  platform_or_transaction_requirements: '平台与交易要求',
+  tax_and_fee_requirements: '税费要求',
+} as const;
+
+const quotationTableLabels = {
+  table_name: '表格名称',
+  item_count_or_range: '明细范围',
+  source_note: '提取说明',
+} as const;
 
 interface ProcurementAnalysisResult {
-  extraction_status: {
-    procurement_items: 'found' | 'not_found';
-    quotation_rules: 'found' | 'not_found';
+  schema_version: 2;
+  procurement_summary: Record<keyof typeof procurementSummaryLabels, string>;
+  quotation_summary: Record<keyof typeof quotationSummaryLabels, string> & {
+    invalid_quote_rules: string[];
+    other_explicit_rules: string[];
   };
-  procurement_items: Array<{
-    item_name: string;
-    quantity: string;
-    unit: string;
-    attributes: Array<{ name: string; value: string }>;
-    applicable_scope: string;
-    delivery_or_acceptance_requirements: string[];
-  }>;
-  quotation_rules: Record<ProcurementQuotationRuleKey, string[]>;
+  quotation_table: Record<keyof typeof quotationTableLabels, string> & {
+    exists: boolean;
+    columns: string[];
+    representative_item_categories: string[];
+  };
+  quote_documents: string[];
 }
 
 function tryParseJsonObject(content: string): Record<string, unknown> | null {
@@ -187,7 +196,7 @@ function tryParseJsonObject(content: string): Record<string, unknown> | null {
 
 function tryParseProcurementAnalysisResult(content: string): ProcurementAnalysisResult | null {
   const data = tryParseJsonObject(content);
-  if (data?.schema_version !== 1 || !Array.isArray(data.procurement_items) || !data.extraction_status || !data.quotation_rules) {
+  if (data?.schema_version !== 2 || !data.procurement_summary || !data.quotation_summary || !data.quotation_table || !Array.isArray(data.quote_documents)) {
     return null;
   }
   return data as unknown as ProcurementAnalysisResult;
@@ -233,62 +242,74 @@ function JsonResultTable({ content }: { content: string }) {
   );
 }
 
+function renderStringFields<T extends Record<string, string>>(labels: T, values: Record<keyof T, string>) {
+  return (Object.keys(labels) as Array<keyof T>).map((key) => (
+    <div key={String(key)}>
+      <dt>{labels[key]}</dt>
+      <dd>{values[key] || '未明确'}</dd>
+    </div>
+  ));
+}
+
+function StringListBlock({ title, items }: { title: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="bid-analysis-procurement-requirements">
+      <strong>{title}</strong>
+      <ul>
+        {items.map((item, index) => <li key={index}>{item}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 function ProcurementAnalysisResultView({ content }: { content: string }) {
   const result = tryParseProcurementAnalysisResult(content);
   if (!result) {
     return <JsonResultTable content={content} />;
   }
 
-  const quotationRuleGroups = (Object.keys(procurementQuotationRuleLabels) as ProcurementQuotationRuleKey[])
-    .map((key) => ({ key, label: procurementQuotationRuleLabels[key], rules: result.quotation_rules[key] || [] }))
-    .filter((group) => group.rules.length > 0);
-
   return (
     <div className="bid-analysis-structured-result bid-analysis-procurement-result">
       <div className="bid-analysis-structured-summary">
-        <strong>采购项</strong>
-        <span>{result.extraction_status.procurement_items === 'found' ? `已识别 ${result.procurement_items.length} 项` : '未识别到明确采购项'}</span>
+        <strong>采购与报价</strong>
+        <span>{result.quotation_table.exists ? '已识别报价表概况' : '未识别到独立报价表'}</span>
       </div>
 
-      {result.procurement_items.map((item, index) => (
-        <section className="bid-analysis-structured-card bid-analysis-procurement-item" key={`${item.item_name}-${index}`}>
-          <header>
-            <strong>{item.item_name || `采购项 ${index + 1}`}</strong>
-            <em>{item.quantity || '未明确'} {item.unit || ''}</em>
-          </header>
-          <dl className="bid-analysis-structured-fields">
-            <div><dt>适用范围</dt><dd>{item.applicable_scope || '未明确'}</dd></div>
-            {item.attributes.map((attribute, attributeIndex) => (
-              <div key={`${attribute.name}-${attributeIndex}`}>
-                <dt>{attribute.name || '参数'}</dt>
-                <dd>{attribute.value || '未明确'}</dd>
-              </div>
-            ))}
-          </dl>
-          {item.delivery_or_acceptance_requirements.length > 0 && (
-            <div className="bid-analysis-procurement-requirements">
-              <strong>交付与验收要求</strong>
-              <ul>
-                {item.delivery_or_acceptance_requirements.map((requirement, requirementIndex) => <li key={requirementIndex}>{requirement}</li>)}
-              </ul>
-            </div>
-          )}
-        </section>
-      ))}
+      <section className="bid-analysis-structured-card bid-analysis-procurement-item">
+        <header>
+          <strong>采购摘要</strong>
+          <em>{result.procurement_summary.package_amount || '金额未明确'}</em>
+        </header>
+        <dl className="bid-analysis-structured-fields">
+          {renderStringFields(procurementSummaryLabels, result.procurement_summary)}
+        </dl>
+      </section>
 
-      <div className="bid-analysis-structured-summary bid-analysis-procurement-rules-summary">
-        <strong>报价规则</strong>
-        <span>{result.extraction_status.quotation_rules === 'found' ? `已识别 ${quotationRuleGroups.reduce((total, group) => total + group.rules.length, 0)} 条` : '未识别到明确报价规则'}</span>
-      </div>
+      <section className="bid-analysis-structured-card bid-analysis-procurement-rules">
+        <header>
+          <strong>报价摘要</strong>
+          <em>{result.quotation_summary.pricing_method || '报价方式未明确'}</em>
+        </header>
+        <dl className="bid-analysis-structured-fields">
+          {renderStringFields(quotationSummaryLabels, result.quotation_summary)}
+        </dl>
+        <StringListBlock title="无效报价规则" items={result.quotation_summary.invalid_quote_rules} />
+        <StringListBlock title="其他明确规则" items={result.quotation_summary.other_explicit_rules} />
+      </section>
 
-      {quotationRuleGroups.map((group) => (
-        <section className="bid-analysis-structured-card bid-analysis-procurement-rules" key={group.key}>
-          <header><strong>{group.label}</strong><em>{group.rules.length} 条</em></header>
-          <ul>
-            {group.rules.map((rule, index) => <li key={index}>{rule}</li>)}
-          </ul>
-        </section>
-      ))}
+      <section className="bid-analysis-structured-card bid-analysis-procurement-rules">
+        <header>
+          <strong>报价表概况</strong>
+          <em>{result.quotation_table.exists ? '存在' : '未识别'}</em>
+        </header>
+        <dl className="bid-analysis-structured-fields">
+          {renderStringFields(quotationTableLabels, result.quotation_table)}
+        </dl>
+        <StringListBlock title="表头字段" items={result.quotation_table.columns} />
+        <StringListBlock title="代表性品类" items={result.quotation_table.representative_item_categories} />
+        <StringListBlock title="报价文件" items={result.quote_documents} />
+      </section>
     </div>
   );
 }

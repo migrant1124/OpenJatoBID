@@ -6,6 +6,40 @@ const { normalizeAndValidateOutline } = require('./outlineGenerationGuard.cjs');
 const { getBidAnalysisTasks } = require('./bidAnalysisTask.cjs');
 const { runOutlineGenerationTask, validateSourceDrivenOutline, __knowledgePatchRuntime } = require('./outlineGenerationTask.cjs');
 
+function buildProcurementSummaryResult() {
+  return {
+    schema_version: 2,
+    procurement_summary: {
+      target_name: '项目',
+      package_name: '标包',
+      package_amount: '预算',
+      procurement_scope: '采购范围',
+      delivery_period: '交货期',
+      delivery_location: '交货地点',
+      implementation_scope: '实施范围',
+    },
+    quotation_summary: {
+      pricing_method: '报价方式',
+      price_evaluation_method: '评标价格计算',
+      price_limit_rule: '限价规则',
+      settlement_method: '结算方式',
+      platform_or_transaction_requirements: '平台要求',
+      tax_and_fee_requirements: '税费要求',
+      invalid_quote_rules: [],
+      other_explicit_rules: [],
+    },
+    quotation_table: {
+      exists: false,
+      table_name: '',
+      item_count_or_range: '',
+      columns: [],
+      representative_item_categories: [],
+      source_note: '',
+    },
+    quote_documents: [],
+  };
+}
+
 test('目录生成保留招标文件规定的一级目录，并将全部节点默认设为 AI 编制', () => {
   const result = normalizeAndValidateOutline({
     outline: [{
@@ -46,16 +80,7 @@ test('目录生成实际流程会清除模型返回的人工和旧责任字段',
   const tasks = getBidAnalysisTasks('key');
   const taskContent = (task) => {
     if (task.id === 'responseFileRequirements') return '【技术文件目录状态】：明确\n\n# 技术方案\n## 实施方案';
-    if (task.id === 'procurementList') return JSON.stringify({
-      schema_version: 1,
-      extraction_status: { procurement_items: 'not_found', quotation_rules: 'not_found' },
-      procurement_items: [],
-      quotation_rules: {
-        pricing_method: [], price_limits: [], tax_and_invoice: [], cost_scope: [], calculation_and_rounding: [],
-        quote_documents_and_attachments: [], submission_method_or_platform: [], consistency_and_priority: [],
-        invalid_or_abnormal_price: [], settlement_and_payment: [], other_explicit_rules: [],
-      },
-    });
+    if (task.id === 'procurementList') return JSON.stringify(buildProcurementSummaryResult());
     if (task.id === 'projectInfo') return JSON.stringify({ project_name: '项目', project_number: '编号', project_type: '类型', project_budget: '预算', project_address: '地址' });
     if (task.id === 'partAInfo') return JSON.stringify({ company_name: '甲方', address: '地址', contact_person: '联系人', contact_phone: '电话' });
     if (task.id === 'deliveryAndServiceRequirements') return JSON.stringify({
@@ -142,16 +167,7 @@ test('目录生成拒绝同一二级目录下六个模型新增的并列三级�
   const tasks = getBidAnalysisTasks('key');
   const taskContent = (task) => {
     if (task.id === 'responseFileRequirements') return '【技术文件目录状态】：明确\n\n# 技术方案\n## 服务方案';
-    if (task.id === 'procurementList') return JSON.stringify({
-      schema_version: 1,
-      extraction_status: { procurement_items: 'not_found', quotation_rules: 'not_found' },
-      procurement_items: [],
-      quotation_rules: {
-        pricing_method: [], price_limits: [], tax_and_invoice: [], cost_scope: [], calculation_and_rounding: [],
-        quote_documents_and_attachments: [], submission_method_or_platform: [], consistency_and_priority: [],
-        invalid_or_abnormal_price: [], settlement_and_payment: [], other_explicit_rules: [],
-      },
-    });
+    if (task.id === 'procurementList') return JSON.stringify(buildProcurementSummaryResult());
     if (task.id === 'projectInfo') return JSON.stringify({ project_name: '项目', project_number: '编号', project_type: '类型', project_budget: '预算', project_address: '地址' });
     if (task.id === 'partAInfo') return JSON.stringify({ company_name: '甲方', address: '地址', contact_person: '联系人', contact_phone: '电话' });
     if (task.id === 'deliveryAndServiceRequirements') return JSON.stringify({
