@@ -1178,6 +1178,20 @@ async function loadImageWithRetry(source, context = {}, options = {}) {
   return null;
 }
 
+function getImagePixelDensity(source) {
+  try {
+    const url = new URL(String(source || ''));
+    const isInternalHtmlIllustration = url.protocol === 'yibiao-asset:'
+      && url.hostname === 'generated-images'
+      && url.pathname.startsWith('/technical-plan/illustrations/');
+    if (!isInternalHtmlIllustration) return 1;
+    const value = Number(url.searchParams.get('pixel-density'));
+    return Number.isFinite(value) && value >= 1 ? value : 1;
+  } catch {
+    return 1;
+  }
+}
+
 async function imageRunFromNode(node, context, options = {}) {
   let loaded = null;
   const imageLabel = compactText(node.alt || node.url || '未知图片');
@@ -1246,8 +1260,9 @@ async function imageRunFromNode(node, context, options = {}) {
     });
     return textRun(`[${message}]`, { color: 'C83220' });
   }
-  const sourceWidth = size.width || MAX_IMAGE_WIDTH;
-  const sourceHeight = size.height || Math.round(MAX_IMAGE_WIDTH * 0.62);
+  const pixelDensity = getImagePixelDensity(node.url);
+  const sourceWidth = (size.width || MAX_IMAGE_WIDTH) / pixelDensity;
+  const sourceHeight = (size.height || Math.round(MAX_IMAGE_WIDTH * 0.62)) / pixelDensity;
   const maxWidth = getImageMaxWidth(context);
   const maxHeight = getImageMaxHeight(context);
   const ratio = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight);
@@ -1261,6 +1276,7 @@ async function imageRunFromNode(node, context, options = {}) {
     bytes: loaded.buffer.length,
     source_width: sourceWidth,
     source_height: sourceHeight,
+    pixel_density: pixelDensity,
     max_width: maxWidth,
     max_height: maxHeight,
     scale_ratio: ratio,

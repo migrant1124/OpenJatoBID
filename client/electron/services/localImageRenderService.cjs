@@ -8,6 +8,9 @@ const MIN_CONCURRENCY = 1;
 const MAX_CONCURRENCY = 20;
 const MAX_CAPTURE_SEGMENT_HEIGHT = 8192;
 const HTML_DESIGN_WIDTH = 1240;
+const HTML_CAPTURE_SCALE = 2;
+const HTML_MIN_TEXT_FONT_SIZE = 24;
+const HTML_MAX_DESIGN_HEIGHT = 1800;
 const HTML_INITIAL_HEIGHT = 900;
 const LAYOUT_SETTLE_MS = 120;
 const PAUSE_POLL_MS = 40;
@@ -175,12 +178,12 @@ async function loadHtmlDocument(win, documentUrl, timeoutMs, options = {}) {
   });
 }
 
-async function setDeviceMetrics(webContents, width, height) {
+async function setDeviceMetrics(webContents, width, height, deviceScaleFactor = 1) {
   if (!webContents.debugger.isAttached()) webContents.debugger.attach('1.3');
   await webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
     width: Math.max(1, Math.round(width)),
     height: Math.max(1, Math.round(height)),
-    deviceScaleFactor: 1,
+    deviceScaleFactor: Math.max(1, Math.round(Number(deviceScaleFactor) || 1)),
     mobile: false,
   });
 }
@@ -218,6 +221,7 @@ function buildHtmlLayoutProbeScript() {
     const label=(element)=>{const tag=(element.tagName||'元素').toLowerCase();const className=String(element.className||'').trim().split(/\\s+/).filter(Boolean).slice(0,2).join('.');return className?tag+'.'+className:tag};
     const related=(left,right)=>left===right||left.contains(right)||right.contains(left);
     const rootRect=root.getBoundingClientRect();
+    const minFontSize=${HTML_MIN_TEXT_FONT_SIZE};
     const textEntries=[];
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     let node;
@@ -243,6 +247,8 @@ function buildHtmlLayoutProbeScript() {
         if(hasInvalidTransform(style.transform)){add('文字存在旋转、倒置、镜像或缩放变形：'+label(element));break}
         if(style.position==='fixed'||style.position==='sticky'){add('文字使用固定或粘性定位，截图布局不稳定：'+label(element));break}
       }
+      const fontSize=parseFloat(getComputedStyle(entry.element).fontSize||'0');
+      if(fontSize>0&&fontSize<minFontSize)add('文字字号过小：'+label(entry.element)+' 为 '+fontSize+'px，至少需要 '+minFontSize+'px');
       for(const rect of entry.rects){
         if(rect.left<rootRect.left-1||rect.right>rootRect.right+1||rect.top<rootRect.top-1||rect.bottom>rootRect.bottom+1){add('文字超出截图画布：'+label(entry.element));break}
         for(let element=entry.element.parentElement;element&&element!==root.parentElement;element=element.parentElement){
@@ -356,14 +362,14 @@ function createLocalImageRenderService(options = {}) {
     throwIfPaused(renderOptions);
     const safeWidth = Math.max(1, Math.ceil(width));
     const safeHeight = Math.max(1, Math.ceil(height));
+    const captureScale = Math.max(1, Math.round(Number(renderOptions.captureScale) || 1));
+    const maxSegmentHeight = Math.max(1, Math.floor(MAX_CAPTURE_SEGMENT_HEIGHT / captureScale));
     if (!webContents.debugger.isAttached()) webContents.debugger.attach('1.3');
     const buffers = [];
-    for (let top = 0; top < safeHeight; top += MAX_CAPTURE_SEGMENT_HEIGHT) {
+    for (let top = 0; top < safeHeight; top += maxSegmentHeight) {
       throwIfPaused(renderOptions);
-      const clipHeight = Math.min(MAX_CAPTURE_SEGMENT_HEIGHT, safeHeight - top);
-      await webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
-        width: safeWidth, height: Math.min(safeHeight, top + clipHeight), deviceScaleFactor: 1, mobile: false,
-      });
+      const clipHeight = Math.min(maxSegmentHeight, safeHeight - top);
+      await setDeviceMetrics(webContents, safeWidth, clipHeight, captureScale);
       throwIfPaused(renderOptions);
       const result = await webContents.debugger.sendCommand('Page.captureScreenshot', {
         format: 'png', fromSurface: true, captureBeyondViewport: true,
@@ -373,18 +379,24 @@ function createLocalImageRenderService(options = {}) {
       buffers.push(Buffer.from(result.data, 'base64'));
     }
     if (buffers.length === 1) return buffers[0];
-    const rgba = Buffer.alloc(estimateRgbaBytes(safeWidth, safeHeight), 255);
-    let offsetY = 0;
-    for (const buffer of buffers) {
+    const images = buffers.map((buffer) => {
       const image = nativeImage.createFromBuffer(buffer);
-      const { width: imageWidth, height: imageHeight } = image.getSize();
+      return { image, size: image.getSize() };
+    });
+    const totalWidth = Math.max(1, ...images.map(({ size }) => size.width));
+    const totalHeight = Math.max(1, images.reduce((total, { size }) => total + size.height, 0));
+    const rgba = Buffer.alloc(estimateRgbaBytes(totalWidth, totalHeight), 255);
+    let offsetY = 0;
+    for (const { image, size } of images) {
+      const imageWidth = size.width;
+      const imageHeight = size.height;
       const bitmap = image.toBitmap();
       for (let row = 0; row < imageHeight; row += 1) {
-        bitmap.copy(rgba, ((offsetY + row) * safeWidth) * 4, row * imageWidth * 4, (row + 1) * imageWidth * 4);
+        bitmap.copy(rgba, ((offsetY + row) * totalWidth) * 4, row * imageWidth * 4, (row + 1) * imageWidth * 4);
       }
       offsetY += imageHeight;
     }
-    const stitched = nativeImage.createFromBitmap(rgba, { width: safeWidth, height: safeHeight }).toPNG();
+    const stitched = nativeImage.createFromBitmap(rgba, { width: totalWidth, height: totalHeight }).toPNG();
     if (!stitched?.length) throw new Error('拼接截图失败');
     return stitched;
   }
@@ -410,8 +422,9 @@ function createLocalImageRenderService(options = {}) {
       await setDeviceMetrics(win.webContents, initialWidth, initialHeight);
       const metrics = await waitForLayoutReady(win.webContents, options.timeoutMs || 120000, options);
       const captureWidth = Math.max(Number(options.minWidth) || 1, metrics.width);
+      const captureScale = options.capture === false ? 1 : Math.max(1, Math.round(Number(options.captureScale) || 1));
       const task = activeTasks.get(taskId);
-      if (task) task.estimatedRgbaBytes = estimateRgbaBytes(captureWidth, metrics.height);
+      if (task) task.estimatedRgbaBytes = estimateRgbaBytes(captureWidth * captureScale, metrics.height * captureScale);
       const layoutIssues = options.kind === 'html' || options.kind === 'legacy-html'
         ? await probeHtmlLayoutIssues(win.webContents)
         : [];
@@ -421,7 +434,7 @@ function createLocalImageRenderService(options = {}) {
       return {
         width: captureWidth,
         height: metrics.height,
-        estimated_rgba_bytes: estimateRgbaBytes(captureWidth, metrics.height),
+        estimated_rgba_bytes: estimateRgbaBytes(captureWidth * captureScale, metrics.height * captureScale),
         layout_issues: layoutIssues,
         ...(buffer ? { buffer } : {}),
       };
@@ -450,6 +463,7 @@ function createLocalImageRenderService(options = {}) {
       return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width), {
         ...renderOptions,
         kind: 'html',
+        captureScale: HTML_CAPTURE_SCALE,
         initialWidth: width,
         initialHeight: HTML_INITIAL_HEIGHT,
         minWidth: width,
@@ -504,6 +518,8 @@ function disposeLocalImageRenderService() {
 
 module.exports = {
   HTML_DESIGN_WIDTH,
+  HTML_CAPTURE_SCALE,
+  HTML_MAX_DESIGN_HEIGHT,
   MAX_CAPTURE_SEGMENT_HEIGHT,
   MAX_CONCURRENCY,
   createLocalImageRenderService,
