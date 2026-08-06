@@ -893,7 +893,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
 
       setStep('environment', 'running', '正在采集应用、系统、代理和模型配置');
       config = configStore.load();
-      environmentSnapshot = createPiEnvironmentSnapshot(app, layout, config);
+      environmentSnapshot = await createPiEnvironmentSnapshot(app, layout, config);
       setStep('environment', 'success', '环境快照已采集');
 
       setStep('sdk', 'running', '正在加载 Pi SDK');
@@ -919,7 +919,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
 
       setStep('tools', 'running', '正在检查共享命令环境');
       try {
-        toolCheck = runPiToolEnvironmentSelfCheck(environment);
+        toolCheck = await runPiToolEnvironmentSelfCheck(environment);
         setStep('tools', toolCheck.success ? 'success' : 'error', toolCheck.summary);
       } catch (error) {
         topLevelError = topLevelError || error;
@@ -1071,7 +1071,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
 
           setStep('recheck', 'running', '正在重新检测工具、loopback 和 Pi Agent');
           const recheckTool = requestedActions.includes('rebuild-pi-tool-environment')
-            ? runPiToolEnvironmentSelfCheck(environment)
+            ? await runPiToolEnvironmentSelfCheck(environment)
             : toolCheck;
           const recheckLoopback = proxyInfo ? await runPiLoopbackSelfCheck(proxyInfo) : loopbackCheck;
           const recheckAgent = proxyInfo ? await runAgentLinkSelfCheck() : agentCheck;
