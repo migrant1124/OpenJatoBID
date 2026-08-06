@@ -86,11 +86,11 @@ const bridge = {
   },
   agent: {
     listRuntimes: () => ipcRenderer.invoke('agent:list-runtimes'),
-    run: (payload, runtimeId) => ipcRenderer.invoke('agent:run', payload, runtimeId),
-    selfCheck: (runtimeId) => ipcRenderer.invoke('agent:self-check', runtimeId),
+    run: (payload) => ipcRenderer.invoke('agent:run', payload),
+    selfCheck: () => ipcRenderer.invoke('agent:self-check'),
     exportSelfCheckReport: (payload) => ipcRenderer.invoke('agent:export-self-check-report', payload),
-    getStatus: (runtimeId) => ipcRenderer.invoke('agent:get-status', runtimeId),
-    restart: (reason, runtimeId) => ipcRenderer.invoke('agent:restart', reason, runtimeId),
+    getStatus: () => ipcRenderer.invoke('agent:get-status'),
+    restart: (reason) => ipcRenderer.invoke('agent:restart', reason),
     onStatus: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('agent:status', listener);
@@ -105,6 +105,17 @@ const bridge = {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('developer-token-stats:changed', listener);
       return () => ipcRenderer.removeListener('developer-token-stats:changed', listener);
+    },
+  },
+  developerAgentMonitor: {
+    openWindow: () => ipcRenderer.invoke('developer-agent-monitor:open-window'),
+    openWorkspace: (workspaceDir) => ipcRenderer.invoke('developer-agent-monitor:open-workspace', workspaceDir),
+    attach: () => ipcRenderer.invoke('developer-agent-monitor:attach'),
+    detach: () => ipcRenderer.invoke('developer-agent-monitor:detach'),
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('developer-agent-monitor:event', listener);
+      return () => ipcRenderer.removeListener('developer-agent-monitor:event', listener);
     },
   },
   developerExpansionReplaceTest: {

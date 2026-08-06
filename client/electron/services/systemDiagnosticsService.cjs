@@ -3,8 +3,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { validateChartDsl } = require('./chartDslValidator.cjs');
 
-const DIAGNOSTIC_IDS = ['app-version', 'build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'opencode', 'agent-tools', 'agent-run', 'chart-dsl', 'legacy-html', 'word-export', 'system-fonts', 'storage', 'network'];
-const SKIPPED_IDS = new Set(['build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'opencode', 'agent-tools', 'agent-run', 'legacy-html', 'word-export', 'system-fonts', 'network']);
+const DIAGNOSTIC_IDS = ['app-version', 'build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'pi-agent', 'agent-tools', 'agent-run', 'chart-dsl', 'legacy-html', 'word-export', 'system-fonts', 'storage', 'network'];
+const SKIPPED_IDS = new Set(['build-attestation', 'workspace-db', 'lan-license', 'lan-server', 'update-latest', 'update-download-auth', 'text-model', 'image-model', 'local-parser', 'mineru', 'pi-agent', 'agent-tools', 'agent-run', 'legacy-html', 'word-export', 'system-fonts', 'network']);
 
 function result(id, status, message, impact = '', action = '') {
   return { id, status, message, impact, action, checked_at: new Date().toISOString(), duration_ms: 0 };

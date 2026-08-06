@@ -208,7 +208,7 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   return { sqliteDatabase };
 }
 
-function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow }) {
+function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
   const configStore = createConfigStore(app);
   const licenseService = createLicenseService({ app, configStore });
   const analyticsService = createAnalyticsService({
@@ -299,10 +299,11 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     onDeveloperModeChange(developerMode) {
       if (!developerMode) {
         closeDeveloperTokenStatsWindow?.();
+        closeDeveloperAgentMonitorWindow?.();
       }
     },
   });
-  registerDeveloperIpc({ configStore, aiService, openDeveloperTokenStatsWindow, developerExpansionReplaceTestService });
+  registerDeveloperIpc({ configStore, aiService, agentService, openDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, developerExpansionReplaceTestService });
   registerAnalyticsIpc({ analyticsService });
   unregisterLicenseIpc = registerLicenseIpc({ licenseService, mainWindow });
   registerAiIpc({ aiService });

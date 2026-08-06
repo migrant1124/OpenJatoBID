@@ -20,7 +20,7 @@ function formatSource(source?: string) {
   if (source === 'text-model') return '文本模型';
   if (source === 'google-image-model') return 'Google 生图模型';
   if (source === 'openai-compatible-image-model') return '生图模型';
-  if (source === 'opencode-agent') return 'OpenCode Agent';
+  if (source === 'pi-agent') return 'Pi Agent';
   return source;
 }
 

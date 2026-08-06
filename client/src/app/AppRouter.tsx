@@ -8,7 +8,7 @@ const BidOpportunityPage = lazy(() => import('../features/bid-opportunity/pages/
 const BusinessBidPage = lazy(() => import('../features/business-bid/pages/BusinessBidPage'));
 const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
 const DeveloperDemoPage = lazy(() => import('../features/developer/pages/DeveloperDemoPage'));
-const OpenCodeAgentTestPage = lazy(() => import('../features/developer/pages/OpenCodeAgentTestPage'));
+const PiAgentMonitorPage = lazy(() => import('../features/developer/pages/PiAgentMonitorPage'));
 const DeveloperTestPage = lazy(() => import('../features/developer/pages/DeveloperTestPage'));
 const SystemDiagnosticsPage = lazy(() => import('../features/developer/pages/SystemDiagnosticsPage'));
 const ExportFormatPage = lazy(() => import('../features/export-format/pages/ExportFormatPage'));
@@ -78,8 +78,8 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
       return <Suspense fallback={null}><DeveloperTestPage /></Suspense>;
     case 'developer-expansion-replace-test':
       return <Suspense fallback={null}><ContentExpansionReplaceTestPage /></Suspense>;
-    case 'developer-opencode-agent-test':
-      return <Suspense fallback={null}><OpenCodeAgentTestPage /></Suspense>;
+    case 'developer-pi-agent-monitor':
+      return <Suspense fallback={null}><PiAgentMonitorPage /></Suspense>;
     case 'developer-system-diagnostics':
       return <Suspense fallback={null}><SystemDiagnosticsPage /></Suspense>;
     case 'settings':

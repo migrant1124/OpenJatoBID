@@ -154,9 +154,9 @@ const developerMenuItems: AppMenuItem[] = [
         icon: 'tool',
       },
       {
-        id: 'developer-opencode-agent-test',
-        label: 'OpenCode Agent测试',
-        description: '验证常驻 OpenCode Server、OpenCode AI proxy、agentService 的完整链路。',
+        id: 'developer-pi-agent-monitor',
+        label: 'Pi Agent监视器',
+        description: '查看 Pi Agent 运行状态、自检结果、实时事件流和任务工作区。',
         icon: 'tool',
       },
       {

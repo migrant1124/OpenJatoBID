@@ -204,9 +204,15 @@ function headingNumberExample(index: number, heading: HeadingStyleConfig): strin
   return formatOutlineNumber(sampleIds[index] || '1', heading);
 }
 
-function createDefaultExportFormat(): ExportFormatConfig {
+function createDefaultTemplateName(date = new Date()): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `Jato-${month}${day}`;
+}
+
+function createDefaultExportFormat(templateName = DEFAULT_EXPORT_FORMAT.template_name): ExportFormatConfig {
   return {
-    template_name: DEFAULT_EXPORT_FORMAT.template_name,
+    template_name: templateName,
     page: { ...DEFAULT_EXPORT_FORMAT.page },
     heading_level1_page_break_before: DEFAULT_EXPORT_FORMAT.heading_level1_page_break_before,
     heading_border: { ...DEFAULT_EXPORT_FORMAT.heading_border, level_cell_colors: [...DEFAULT_EXPORT_FORMAT.heading_border.level_cell_colors] },
@@ -252,7 +258,7 @@ function withExportFormatDefaults(source: ExportFormatConfig): ExportFormatConfi
 function ExportFormatPage({ mode = 'create', templateId = null, onBack }: ExportFormatPageProps) {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TemplateTab>('quick');
-  const [config, setConfig] = useState<ExportFormatConfig>(() => createDefaultExportFormat());
+  const [config, setConfig] = useState<ExportFormatConfig>(() => createDefaultExportFormat(mode === 'create' ? createDefaultTemplateName() : undefined));
   const [savedConfig, setSavedConfig] = useState<ExportFormatConfig | null>(null);
   const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(templateId);
   const [selectedLayoutPresetId, setSelectedLayoutPresetId] = useState('');
@@ -305,7 +311,7 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
           return;
         }
 
-        const defaultConfig = createDefaultExportFormat();
+        const defaultConfig = createDefaultExportFormat(createDefaultTemplateName());
         if (cancelled) return;
         setCurrentTemplateId(null);
         setConfig(defaultConfig);
@@ -425,9 +431,9 @@ function ExportFormatPage({ mode = 'create', templateId = null, onBack }: Export
       return;
     }
 
-    setConfig(createDefaultExportFormat());
+    setConfig(createDefaultExportFormat(mode === 'create' ? createDefaultTemplateName() : DEFAULT_EXPORT_FORMAT.template_name));
     showToast('已恢复默认模版设置，保存后生效', 'info');
-  }, [selectedLayoutPresetId, selectedThemePresetId, showToast]);
+  }, [mode, selectedLayoutPresetId, selectedThemePresetId, showToast]);
 
   const handleApplyLayoutPreset = useCallback((presetId: string) => {
     if (!presetId) return;

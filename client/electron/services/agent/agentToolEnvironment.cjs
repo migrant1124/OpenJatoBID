@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  getBundledOpencodeToolsBinDir,
+  getBundledAgentToolsBinDir,
 } = require('../../utils/paths.cjs');
 
 const SHIM_COMMANDS = [
@@ -938,7 +938,7 @@ function prependPathEntries(env, entries) {
 
 function ensureAgentToolEnvironment({ app, runtimeRoot, workspaceDir, writeInstructions = false } = {}) {
   const runtimeToolsBinDir = getRuntimeToolsBinDir(runtimeRoot);
-  const bundledToolsBinDir = getBundledOpencodeToolsBinDir(app);
+  const bundledToolsBinDir = getBundledAgentToolsBinDir(app);
   ensureRuntimeShims(runtimeToolsBinDir);
   verifyBundledTools(bundledToolsBinDir);
   const agentsPath = writeInstructions ? writeAgentInstructionsFile(workspaceDir) : '';

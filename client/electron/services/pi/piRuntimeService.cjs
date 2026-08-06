@@ -27,6 +27,13 @@ const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_RETRIES = 3;
 const STATUS_TICK_MS = 1000;
 const SELF_CHECK_OUTPUT_FILE = 'agent-self-check-result.json';
+const PI_RUNTIME_ID = 'pi';
+const PI_RUNTIME_NAME = 'Pi Agent';
+const PI_RUNTIME = Object.freeze({
+  id: PI_RUNTIME_ID,
+  displayName: PI_RUNTIME_NAME,
+  description: '使用内嵌 Pi SDK 智能体链路。',
+});
 
 function nowIso() {
   return new Date().toISOString();
@@ -182,10 +189,24 @@ function createRuntimeDiagnostics(limit = 500) {
   };
 }
 
-function createPiRuntimeService({ app, configStore, runtime, aiService, analyticsService }) {
-  const runtimeId = runtime.id;
-  const runtimeName = runtime.displayName;
-  let environment = preparePiEnvironment(app, runtimeId);
+function normalizeMonitorValue(value) {
+  if (value === undefined) return undefined;
+  try {
+    return JSON.parse(JSON.stringify(value, (_key, item) => {
+      if (typeof item === 'bigint') return String(item);
+      if (item instanceof Error) return { name: item.name, message: item.message, stack: item.stack || '' };
+      return item;
+    }));
+  } catch {
+    return String(value);
+  }
+}
+
+function createPiRuntimeService({ app, configStore, aiService, analyticsService, isMonitorActive, onMonitorEvent }) {
+  const runtime = PI_RUNTIME;
+  const runtimeId = PI_RUNTIME_ID;
+  const runtimeName = PI_RUNTIME_NAME;
+  let environment = preparePiEnvironment(app);
   const { layout } = environment;
   const diagnostics = createRuntimeDiagnostics(2000);
   const listeners = new Set();
@@ -205,6 +226,18 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
   let activeController = null;
   let statusTimer = null;
   let sdkVersion = '';
+
+  function emitMonitorEvent(event = {}) {
+    if (!isMonitorActive?.()) return;
+    try {
+      onMonitorEvent?.({
+        ...event,
+        task_id: event.task_id || activeTask?.task_id || '',
+        title: event.title || activeTask?.title || '',
+        at: event.at || nowIso(),
+      });
+    } catch {}
+  }
 
   function getActiveTaskSummary() {
     if (!activeTask) return null;
@@ -342,12 +375,15 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         streamedText = '';
       }
       if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
-        streamedText += event.assistantMessageEvent.delta || '';
+        const delta = event.assistantMessageEvent.delta || '';
+        streamedText += delta;
+        if (isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_delta', delta });
         return;
       }
       if (event.type === 'message_end' && event.message?.role === 'assistant') {
         const completedText = extractMessageText(event.message) || streamedText.trim();
         streamedText = '';
+        if (isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_end', text: completedText });
         touchActivity({
           task_token: taskToken,
           stage: 'assistant_text',
@@ -359,6 +395,14 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         return;
       }
       if (event.type === 'tool_execution_start') {
+        if (isMonitorActive?.()) {
+          emitMonitorEvent({
+            type: 'tool_start',
+            tool_call_id: event.toolCallId || '',
+            tool_name: event.toolName || '',
+            args: normalizeMonitorValue(event.args),
+          });
+        }
         touchActivity({
           task_token: taskToken,
           stage: 'tool',
@@ -371,12 +415,29 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         return;
       }
       if (event.type === 'tool_execution_update') {
+        if (isMonitorActive?.()) {
+          emitMonitorEvent({
+            type: 'tool_update',
+            tool_call_id: event.toolCallId || '',
+            tool_name: event.toolName || '',
+            partial_result: normalizeMonitorValue(event.partialResult),
+          });
+        }
         touchActivity({ task_token: taskToken, stage: 'tool', message: '', source: 'pi.tool.update', visible: false, activity: true });
         return;
       }
       if (event.type === 'tool_execution_end') {
         const details = event.result?.details || {};
         if (details.diff || details.patch) diffEntries.push({ tool: event.toolName, diff: details.diff || '', patch: details.patch || '' });
+        if (isMonitorActive?.()) {
+          emitMonitorEvent({
+            type: 'tool_end',
+            tool_call_id: event.toolCallId || '',
+            tool_name: event.toolName || '',
+            result: normalizeMonitorValue(event.result),
+            is_error: Boolean(event.isError),
+          });
+        }
         touchActivity({
           task_token: taskToken,
           stage: 'tool',
@@ -388,7 +449,8 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         });
         return;
       }
-      if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'message_start', 'message_end', 'compaction_start', 'compaction_end'].includes(event.type)) {
+      if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'compaction_start', 'compaction_end'].includes(event.type)) {
+        if (isMonitorActive?.()) emitMonitorEvent({ type: event.type });
         touchActivity({ task_token: taskToken, stage: event.type, message: '', source: `pi.${event.type}`, visible: false, activity: true });
       }
     });
@@ -452,6 +514,18 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
     const diffEntries = [];
     const cleanupAbort = bindAbort(payload.signal, activeController, () => session);
     const watchdog = startWatchdog(activeController, timeoutMs, taskToken);
+    let prompt = payload.prompt || createDefaultPrompt(payload.task || '请分析当前输入文件并输出结果。', outputFile);
+    if (isMonitorActive?.()) {
+      emitMonitorEvent({
+        type: 'task_start',
+        task_id: taskId,
+        title,
+        workspace_dir: layout.workspaceDir,
+        prompt,
+        output_file: outputFile,
+        files: (payload.files || []).map((file) => ({ path: String(file.path || ''), content: String(file.content || '') })),
+      });
+    }
 
     try {
       await clearDirectoryAsync(layout.workspaceDir);
@@ -467,7 +541,6 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
       session = created.session;
       sessionSnapshot = created.snapshot;
       unsubscribe = subscribeSession(session, taskToken, diffEntries);
-      let prompt = payload.prompt || createDefaultPrompt(payload.task || '请分析当前输入文件并输出结果。', outputFile);
       let assistantText = '';
       let validationResult = null;
       let retryCount = 0;
@@ -532,6 +605,15 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
             activity: true,
           });
           prompt = buildRetryPrompt(outputFile, error, retryCount, maxRetries);
+          emitMonitorEvent({
+            type: 'retry',
+            task_id: taskId,
+            title,
+            attempt: retryCount,
+            maximum: maxRetries,
+            message: compactText(error?.message || error, 600),
+            prompt,
+          });
         }
       }
 
@@ -560,6 +642,16 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         },
       };
       await writeJsonAsync(path.join(archive.taskDir, 'result.json'), result);
+      emitMonitorEvent({
+        type: 'task_end',
+        task_id: taskId,
+        title,
+        workspace_dir: archivedWorkspace,
+        output_file: outputFile,
+        output_content: output.content,
+        assistant_text: assistantText,
+        retry_count: retryCount,
+      });
       trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'success', { retryCount });
       return result;
     } catch (error) {
@@ -586,6 +678,15 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
           error: serializeDiagnosticError(error),
         };
       }
+      emitMonitorEvent({
+        type: 'task_error',
+        task_id: taskId,
+        title,
+        workspace_dir: archivedWorkspace || layout.workspaceDir,
+        output_file: outputFile,
+        output_content: output.content,
+        message: error?.message || String(error),
+      });
       trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'failed', { retryCount: retryAttempts.length });
       throw error;
     } finally {
@@ -714,7 +815,7 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
             pi_environment: ensureLoopbackNoProxy(environment.env),
           };
         } else if (id === 'rebuild-pi-tool-environment') {
-          environment = preparePiEnvironment(app, runtimeId);
+          environment = preparePiEnvironment(app);
           detail = { runtime_root: environment.layout.runtimeRoot };
         } else if (id === 'reset-pi-self-check-workspace') {
           clearDirectory(layout.workspaceDir);
@@ -872,22 +973,38 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         setStep('output', agentCheck.task_completed ? 'error' : 'skipped', agentCheck.output_message || '智能体任务失败，未执行输出校验');
       }
 
+      const failedModelProbes = Object.values(modelCheck?.probes || {}).filter((probe) => probe?.success === false);
+      if (agentCheck?.success && failedModelProbes.length) {
+        failedModelProbes.forEach((probe) => {
+          setStep(`model-${probe.id}`, 'warning', `${probe.message}，${probe.duration_ms} ms${probe.status ? `，HTTP ${probe.status}` : ''}；真实 Pi Agent 工具链路已通过`);
+        });
+      }
+
       const eventsBeforeDiagnosis = diagnostics.events.filter((event) => String(event.at || '') >= String(agentCheck?.checked_at || checkedAt));
+      // 真实 Agent 端到端结果优先，独立模型探针只负责提供诊断信息。
       const initialSuccess = Boolean(
         runtimeStarted
         && toolCheck?.success
-        && modelCheck?.success
-        && modelCheck?.agent_compatible
         && loopbackCheck?.success
         && agentCheck?.success
       );
 
       setStep('diagnosis', 'running', initialSuccess ? '正在生成自检结论' : '正在执行规则诊断和文本模型分析');
       if (initialSuccess) {
+        const hasModelProbeWarning = failedModelProbes.length > 0;
         diagnosis = {
           resolved: true,
-          final_summary: 'Pi SDK、当前文本模型、loopback、工具、资源和输出链路均正常。',
-          rules: { source: 'rules', category: 'normal', summary: '未发现异常', confidence: 'high', evidence: [], recommended_action_ids: [] },
+          final_summary: hasModelProbeWarning
+            ? 'Pi Agent 端到端链路正常，但独立文本模型探针存在非关键警告。'
+            : 'Pi SDK、当前文本模型、loopback、工具、资源和输出链路均正常。',
+          rules: {
+            source: 'rules',
+            category: hasModelProbeWarning ? 'model-probe-warning' : 'normal',
+            summary: hasModelProbeWarning ? '真实 Pi Agent 工具链路已通过，模型探针警告不影响使用' : '未发现异常',
+            confidence: 'high',
+            evidence: hasModelProbeWarning ? failedModelProbes.map((probe) => probe.message || `${probe.label}失败`) : [],
+            recommended_action_ids: [],
+          },
           ai: null,
         };
       } else {
@@ -961,8 +1078,6 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
           const recheckSuccess = Boolean(
             actionSuccess
             && recheckTool?.success
-            && modelCheck?.success
-            && modelCheck?.agent_compatible
             && recheckLoopback?.success
             && recheckAgent?.success
           );
@@ -1008,7 +1123,7 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
       diagnostics.record('self_check.end', { check_id: checkId, success: finalSuccess, repaired: Boolean(repair?.attempted && repair?.success) });
       const currentEvents = diagnostics.events.filter((event) => String(event.at || '') >= checkedAt);
       const conclusion = finalSuccess
-        ? repair?.attempted ? diagnosis.final_summary : 'Pi SDK、当前文本模型、loopback、工具、资源和输出链路均正常。'
+        ? diagnosis?.final_summary || 'Pi SDK、当前文本模型、loopback、工具、资源和输出链路均正常。'
         : diagnosis?.final_summary || 'Pi Agent 自检失败。';
       const result = {
         report_version: 3,
@@ -1053,6 +1168,7 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         sessionSnapshot: finalSessionSnapshot,
         toolCheck: result.tool_check,
         modelCheck,
+        agentCheck: finalAgentCheck,
         loopbackCheck: result.loopback_check,
         diagnosis,
         repair,
@@ -1105,6 +1221,7 @@ function createPiRuntimeService({ app, configStore, runtime, aiService, analytic
         sessionSnapshot: result.session_snapshot,
         toolCheck,
         modelCheck,
+        agentCheck,
         loopbackCheck,
         diagnosis,
         repair,

@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { getConfigFilePath } = require('../utils/paths.cjs');
-const { getDefaultAgentRuntimeId, normalizeAgentRuntimeId } = require('./agent/agentRuntimeRegistry.cjs');
 
 const textModelProviders = ['jinlong', 'volcengine', 'deepseek', 'agnes', 'custom'];
 const legacyTextModelProviders = ['longcat'];
@@ -12,6 +11,7 @@ const updateChannels = ['cloudflare-r2', 'github'];
 const DEFAULT_TEXT_CONTEXT_LENGTH_LIMIT = 400000;
 const DEFAULT_TEXT_CONCURRENCY_LIMIT = 10;
 const DEFAULT_IMAGE_CONCURRENCY_LIMIT = 2;
+const DEFAULT_AGENT_RUNTIME_ID = 'pi';
 const DEFAULT_HEADING_BORDER_CELL_COLORS = ['#eef5ff', '#f3f7ff', '#f8fbff', '#fbfdff', '#ffffff', '#ffffff'];
 const openAICompatibleImageSizes = ['auto', '1024x1024', '1536x1024', '1024x1536', '2048x2048', '2048x1152', '3840x2160', '2160x3840'];
 const googleImageSizes = ['512', '1K', '2K', '4K'];
@@ -246,7 +246,7 @@ const defaultConfig = {
   gpu_hardware_acceleration_enabled: true,
   gpu_hardware_acceleration_configured: true,
   export_format: defaultExportFormat,
-  agent_runtime: getDefaultAgentRuntimeId(),
+  agent_runtime: DEFAULT_AGENT_RUNTIME_ID,
   agent_mode_scenarios: defaultAgentModeScenarios,
   developer_mode: false,
   developer_token_stats_auto_open: false,
@@ -679,7 +679,7 @@ function normalizeConfig(config) {
     gpu_hardware_acceleration_enabled: gpuHardwareAccelerationEnabled,
     gpu_hardware_acceleration_configured: gpuHardwareAccelerationConfigured === false ? true : gpuHardwareAccelerationConfigured,
     export_format: normalizeExportFormat(source.export_format),
-    agent_runtime: normalizeAgentRuntimeId(source.agent_runtime),
+    agent_runtime: DEFAULT_AGENT_RUNTIME_ID,
     agent_mode_scenarios: normalizeAgentModeScenarios(source.agent_mode_scenarios),
     developer_mode: source.developer_mode === undefined ? defaultConfig.developer_mode : Boolean(source.developer_mode),
     developer_token_stats_auto_open: source.developer_token_stats_auto_open === undefined ? defaultConfig.developer_token_stats_auto_open : Boolean(source.developer_token_stats_auto_open),
