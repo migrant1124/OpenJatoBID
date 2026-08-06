@@ -1864,15 +1864,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             <span />
             <strong>智能体配置</strong>
           </div>
-          <div className="settings-list">
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <strong>智能体运行时</strong>
-                <span>客户端统一使用 Pi Agent 作为智能体执行引擎。</span>
-              </div>
-              <strong>{FIXED_AGENT_RUNTIME_NAME}</strong>
-            </div>
-          </div>
           <div className={`agent-self-check-status is-${agentSelfCheckStatus}`}>
             <div>
               <strong>智能体自检</strong>
