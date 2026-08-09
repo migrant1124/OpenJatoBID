@@ -497,6 +497,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     activeTasks.set(type, task);
     const taskField = getTaskField(type);
     let currentTask = task;
+    let outlineConfirmationWaiter = null;
     const taskControl = {
       queueScopeId,
       pauseRequested: false,
@@ -512,6 +513,45 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         const state = updateWorkspaceState(definition, { [taskField]: pausingTask });
         emit(pausingTask, buildSnapshot(definition, state, pausingTask));
         return pausingTask;
+      },
+      waitForOutlineConfirmation(confirmation) {
+        if (type !== 'outline-generation') throw new Error('当前任务不支持目录确认');
+        if (outlineConfirmationWaiter) throw new Error('当前已有目录确认正在等待处理');
+        const waitingTask = persistTaskUpdate({
+          status: 'running',
+          stats: {
+            ...(currentTask.stats || {}),
+            outline_confirmation: {
+              ...confirmation,
+              status: 'waiting',
+            },
+          },
+        });
+        return new Promise((resolve, reject) => {
+          outlineConfirmationWaiter = { resolve, reject, taskId: waitingTask.task_id, confirmation };
+        });
+      },
+      confirmOutline(action) {
+        if (!outlineConfirmationWaiter) throw new Error('当前没有等待确认的目录任务');
+        const waiter = outlineConfirmationWaiter;
+        outlineConfirmationWaiter = null;
+        const nextStatus = action === 'continue' ? 'confirmed' : 'canceled';
+        persistTaskUpdate({
+          status: 'running',
+          stats: {
+            ...(currentTask.stats || {}),
+            outline_confirmation: {
+              ...(waiter.confirmation || {}),
+              status: nextStatus,
+              confirmed_at: now(),
+            },
+          },
+        });
+        if (action === 'continue') {
+          waiter.resolve({ action });
+        } else {
+          waiter.reject(new Error('已取消本次目录生成，请调整配置后重新生成'));
+        }
       },
     };
     activeTaskControls.set(type, taskControl);
@@ -542,6 +582,13 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
       }
       return currentTask;
     };
+
+    function persistTaskUpdate(partial) {
+      const nextTask = updateTask(partial);
+      const nextState = updateWorkspaceState(definition, { [taskField]: nextTask });
+      emit(nextTask, buildSnapshot(definition, nextState, nextTask));
+      return nextTask;
+    }
 
     const previousState = loadWorkspaceState(definition) || {};
     const state = updateWorkspaceState(definition, { ...initialPartial, [taskField]: currentTask });
@@ -847,6 +894,13 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         outlineExpansionMode: payload?.outline_expansion_mode === 'original-only' ? 'original-only' : 'ai-complement',
         referenceKnowledgeDocumentIds: Array.isArray(payload?.reference_knowledge_document_ids) ? payload.reference_knowledge_document_ids : [],
       });
+    },
+    confirmOutlineGeneration(payload = {}) {
+      const control = activeTaskControls.get('outline-generation');
+      if (!control?.confirmOutline) throw new Error('当前没有等待确认的目录任务。');
+      const action = payload.action === 'cancel' ? 'cancel' : 'continue';
+      control.confirmOutline(action);
+      return activeTasks.get('outline-generation') || null;
     },
     startGlobalFactsGeneration(payload) {
       return startManagedTask('global-facts-generation', payload, runGlobalFactsTask, {

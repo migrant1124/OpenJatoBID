@@ -6,6 +6,7 @@ const { createAgentOpenAiProxy } = require('../agent/agentOpenAiProxy.cjs');
 const { trackAgentRuntime } = require('../agent/agentRuntimeAnalytics.cjs');
 const { preparePiEnvironment } = require('./piEnvironment.cjs');
 const { createPiSession, loadPiModules } = require('./piSessionFactory.cjs');
+const { restorePiErrorMessage } = require('./piRetryErrorNormalizer.cjs');
 const {
   SAFE_REPAIR_ACTIONS,
   analyzePiSelfCheckWithModel,
@@ -34,6 +35,17 @@ const PI_RUNTIME = Object.freeze({
   displayName: PI_RUNTIME_NAME,
   description: '使用内嵌 Pi SDK 智能体链路。',
 });
+
+const SELF_CHECK_OUTPUT_SCHEMA = {
+  type: 'object',
+  required: ['message', 'input', 'node'],
+  additionalProperties: false,
+  properties: {
+    message: { const: 'YIBIAO_PI_AGENT_SELF_CHECK_OK' },
+    input: { const: 'YIBIAO_PI_AGENT_SELF_CHECK_INPUT' },
+    node: { const: 'YIBIAO_PI_NODE_OK' },
+  },
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -202,7 +214,7 @@ function normalizeMonitorValue(value) {
   }
 }
 
-function createPiRuntimeService({ app, configStore, aiService, analyticsService, isMonitorActive, onMonitorEvent }) {
+function createPiRuntimeService({ app, configStore, aiService, analyticsService, isMonitorActive, onMonitorEvent, requestUserQuestion }) {
   const runtime = PI_RUNTIME;
   const runtimeId = PI_RUNTIME_ID;
   const runtimeName = PI_RUNTIME_NAME;
@@ -368,7 +380,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     await fs.promises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf-8');
   }
 
-  function subscribeSession(session, taskToken, diffEntries) {
+  function subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts) {
     let streamedText = '';
     return session.subscribe((event) => {
       if (event.type === 'message_start' && event.message?.role === 'assistant') {
@@ -449,11 +461,114 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         });
         return;
       }
+      if (event.type === 'auto_retry_start') {
+        const errorMessage = restorePiErrorMessage(event.errorMessage || '模型服务暂时不可用');
+        const delaySeconds = Math.max(0, Math.round(Number(event.delayMs || 0) / 1000));
+        const retryMessage = `模型请求遇到临时错误，${delaySeconds} 秒后进行第 ${event.attempt}/${event.maxAttempts} 次重试：${compactText(errorMessage, 160)}`;
+        nativeRetryAttempts.push({
+          attempt: Number(event.attempt || nativeRetryAttempts.length + 1),
+          maximum: Number(event.maxAttempts || 0),
+          delay_ms: Number(event.delayMs || 0),
+          error: errorMessage,
+          at: nowIso(),
+        });
+        if (isMonitorActive?.()) {
+          emitMonitorEvent({
+            type: 'auto_retry_start',
+            attempt: event.attempt,
+            maximum: event.maxAttempts,
+            delay_ms: event.delayMs,
+            message: errorMessage,
+          });
+        }
+        touchActivity({
+          task_token: taskToken,
+          stage: 'model_retry',
+          message: retryMessage,
+          source: 'pi.auto-retry.start',
+          visible: true,
+          activity: true,
+          meta: { attempt: event.attempt, maximum: event.maxAttempts, delay_ms: event.delayMs, error: errorMessage },
+        });
+        return;
+      }
+      if (event.type === 'auto_retry_end') {
+        const finalError = restorePiErrorMessage(event.finalError || '');
+        const retryMessage = event.success
+          ? `模型请求已恢复，第 ${event.attempt} 次重试成功`
+          : `模型请求重试 ${event.attempt} 次后仍失败${finalError ? `：${compactText(finalError, 160)}` : ''}`;
+        if (isMonitorActive?.()) {
+          emitMonitorEvent({
+            type: 'auto_retry_end',
+            attempt: event.attempt,
+            success: Boolean(event.success),
+            final_error: finalError,
+            message: retryMessage,
+          });
+        }
+        touchActivity({
+          task_token: taskToken,
+          stage: 'model_retry',
+          message: retryMessage,
+          source: 'pi.auto-retry.end',
+          visible: true,
+          activity: true,
+          meta: { attempt: event.attempt, success: Boolean(event.success), error: finalError },
+        });
+        return;
+      }
       if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'compaction_start', 'compaction_end'].includes(event.type)) {
         if (isMonitorActive?.()) emitMonitorEvent({ type: event.type });
         touchActivity({ task_token: taskToken, stage: event.type, message: '', source: `pi.${event.type}`, visible: false, activity: true });
       }
     });
+  }
+
+  async function waitForUserQuestion(request, signal, taskToken) {
+    if (!activeTask || activeTask.task_token !== taskToken) {
+      throw new Error('当前 Agent 任务已结束，无法继续提问');
+    }
+    if (typeof requestUserQuestion !== 'function') throw new Error('用户提问通道未初始化');
+    activeTask.waiting_for_user = true;
+    touchActivity({
+      task_token: taskToken,
+      stage: 'waiting_for_user',
+      message: 'Agent 正在等待您的回答',
+      source: 'pi.user-question.waiting',
+      visible: true,
+      activity: true,
+    });
+    let answered = false;
+    try {
+      const result = await requestUserQuestion({
+        ...request,
+        task_id: activeTask.task_id,
+        task_title: activeTask.title,
+      }, signal);
+      if (activeTask?.task_token === taskToken) {
+        activeTask.user_question_answers.push({
+          question: String(request.question || ''),
+          answer: String(result.answer || ''),
+          selected_option: String(result.selected_option || ''),
+          is_custom: Boolean(result.is_custom),
+          answered_at: nowIso(),
+        });
+      }
+      answered = true;
+      return result;
+    } finally {
+      if (activeTask?.task_token === taskToken) {
+        activeTask.waiting_for_user = false;
+        touchActivity({
+          task_token: taskToken,
+          stage: answered ? 'running' : activeTask.stage,
+          message: answered ? '已收到回答，Agent 正在继续执行' : '',
+          source: 'pi.user-question.settled',
+          visible: answered,
+          activity: true,
+        });
+      }
+    }
   }
 
   function bindAbort(parentSignal, controller, getSession) {
@@ -473,7 +588,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
 
   function startWatchdog(controller, timeoutMs, taskToken) {
     return setInterval(() => {
-      if (!activeTask) return;
+      if (!activeTask || activeTask.waiting_for_user) return;
       const idleMs = Date.now() - new Date(activeTask.last_activity_at).getTime();
       if (idleMs < timeoutMs || controller.signal.aborted) return;
       const error = new Error('Pi Agent 长时间无进展，已停止本轮任务');
@@ -492,6 +607,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     const timeoutMs = normalizeTimeoutMs(payload.timeout_ms);
     const maxRetries = normalizeMaxRetries(payload.max_retries);
     const retryAttempts = [];
+    const nativeRetryAttempts = [];
     const taskToken = crypto.randomUUID();
     const startedAt = nowIso();
     activeTask = {
@@ -504,6 +620,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       last_progress_at: startedAt,
       task_token: taskToken,
       onActivity: payload.onActivity,
+      waiting_for_user: false,
+      user_question_answers: [],
     };
     activeController = new AbortController();
     setPhase('running', activeTask.progress_text);
@@ -525,6 +643,16 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         output_file: outputFile,
         files: (payload.files || []).map((file) => ({ path: String(file.path || ''), content: String(file.content || '') })),
       });
+      emitMonitorEvent({
+        type: 'task_input',
+        task_id: taskId,
+        title,
+        stage_index: 1,
+        workflow_stage: 'initial',
+        prompt,
+        output_file: outputFile,
+        files: (payload.files || []).map((file) => ({ path: String(file.path || ''), content: String(file.content || '') })),
+      });
     }
 
     try {
@@ -537,10 +665,12 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         proxyInfo,
         config: configStore.load(),
         timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+        jsonValidationSchemas: payload.json_validation_schemas,
+        requestUserQuestion: (request, signal) => waitForUserQuestion(request, signal, taskToken),
       });
       session = created.session;
       sessionSnapshot = created.snapshot;
-      unsubscribe = subscribeSession(session, taskToken, diffEntries);
+      unsubscribe = subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts);
       let assistantText = '';
       let validationResult = null;
       let retryCount = 0;
@@ -569,7 +699,19 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
             session_id: session.sessionId,
             retry_count: attemptIndex,
             retry_attempts: [...retryAttempts],
+            native_retry_count: nativeRetryAttempts.length,
+            native_retry_attempts: [...nativeRetryAttempts],
           };
+          emitMonitorEvent({
+            type: 'task_output',
+            task_id: taskId,
+            title,
+            stage_index: attemptIndex + 1,
+            workflow_stage: attemptIndex ? 'repair' : 'initial',
+            output_file: outputFile,
+            output_content: output.content,
+            assistant_text: assistantText,
+          });
           if (typeof payload.validateOutput === 'function') {
             try {
               validationResult = await payload.validateOutput(candidate, {
@@ -614,6 +756,16 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
             message: compactText(error?.message || error, 600),
             prompt,
           });
+          emitMonitorEvent({
+            type: 'task_input',
+            task_id: taskId,
+            title,
+            stage_index: retryCount + 1,
+            workflow_stage: 'repair',
+            prompt,
+            output_file: outputFile,
+            files: [],
+          });
         }
       }
 
@@ -635,6 +787,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         session_id: session.sessionId,
         retry_count: retryCount,
         retry_attempts: retryAttempts,
+        native_retry_count: nativeRetryAttempts.length,
+        native_retry_attempts: nativeRetryAttempts,
         validation_result: validationResult,
         diagnostics: {
           session: sessionSnapshot,
@@ -651,6 +805,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         output_content: output.content,
         assistant_text: assistantText,
         retry_count: retryCount,
+        native_retry_count: nativeRetryAttempts.length,
       });
       trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'success', { retryCount });
       return result;
@@ -669,6 +824,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         error.agentPartialOutput = output.content;
         error.agentPartialOutputChars = output.content.length;
         error.agentRetryAttempts = retryAttempts;
+        error.agentNativeRetryAttempts = nativeRetryAttempts;
         error.agentDiagnostics = {
           session: sessionSnapshot,
           session_messages: Array.isArray(session?.messages) ? [...session.messages] : [],
@@ -723,12 +879,19 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
 1. 使用 read 工具读取 self-check-input.txt。
 2. 使用 bash 工具执行 node -e "console.log('YIBIAO_PI_NODE_OK')"。
 3. 使用 write 工具将 JSON 写入 ${SELF_CHECK_OUTPUT_FILE}，格式为 {"message":"YIBIAO_PI_AGENT_SELF_CHECK_OK","input":"YIBIAO_PI_AGENT_SELF_CHECK_INPUT","node":"YIBIAO_PI_NODE_OK"}。
-4. 不要访问当前工作区以外的文件。`,
+4. 使用 json-validation 工具校验 ${SELF_CHECK_OUTPUT_FILE}。程序已预置 Schema，只传 file_path，不要传入 schema。
+5. 不要访问当前工作区以外的文件。`,
+        json_validation_schemas: { [SELF_CHECK_OUTPUT_FILE]: SELF_CHECK_OUTPUT_SCHEMA },
         timeout_ms: 5 * 60 * 1000,
         max_retries: 0,
       });
       const sessionSnapshot = result.diagnostics?.session || {};
       const snapshotValidation = validatePiSessionSnapshot(sessionSnapshot);
+      const validationToolSucceeded = (result.diagnostics?.events || []).some((event) => (
+        (event.event === 'pi.tool.end' || event.source === 'pi.tool.end')
+        && event.meta?.tool === 'json-validation'
+        && event.meta?.is_error === false
+      ));
       let output = null;
       let outputValid = false;
       let outputMessage = '';
@@ -741,13 +904,15 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       } catch (error) {
         outputMessage = `Pi Agent 自检输出不是合法 JSON：${error?.message || String(error)}`;
       }
-      const success = snapshotValidation.resourcesValid && snapshotValidation.toolsValid && outputValid;
+      const success = snapshotValidation.resourcesValid && snapshotValidation.toolsValid && validationToolSucceeded && outputValid;
       return {
         success,
         task_completed: true,
         checked_at: taskCheckedAt,
         duration_ms: Date.now() - taskStartedAt,
-        message: success ? 'Pi Agent 极简任务执行成功' : outputMessage || 'Pi Agent 极简任务未通过校验',
+        message: success
+          ? 'Pi Agent 极简任务执行成功'
+          : !validationToolSucceeded ? 'Pi Agent 未成功执行 json-validation 工具' : outputMessage || 'Pi Agent 极简任务未通过校验',
         session_id: result.session_id || '',
         workspace_dir: result.workspace_dir || layout.workspaceDir,
         output_file: SELF_CHECK_OUTPUT_FILE,

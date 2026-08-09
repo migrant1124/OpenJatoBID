@@ -21,6 +21,7 @@ export {
 export { ToastProvider, useToast } from './ToastProvider';
 export type { ToastAction, ToastOptions, ToastType } from './ToastProvider';
 export { AiHttpErrorDialogProvider } from './AiHttpErrorDialogProvider';
+export { AgentQuestionDialogProvider } from './AgentQuestionDialogProvider';
 export {
   DocumentParseNoticeProvider,
   isLibreOfficeRequiredMessage,

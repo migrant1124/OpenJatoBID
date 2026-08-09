@@ -96,6 +96,29 @@ const RECOVERABLE_ALIGNED_OUTLINE_ERRORS = [
 const RECOVERABLE_FINAL_REVIEW_ERRORS = ['模型返回的最终目录审核结果格式无效'];
 const DEFAULT_EFFECTIVE_SECTION_WORDS = 3000;
 const MAX_WORD_CONTROL_OUTLINE_ADJUSTMENTS = 2;
+const OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE = 'outline-semantic-review.json';
+const OUTLINE_SEMANTIC_REVIEW_SCHEMA = {
+  type: 'object',
+  required: ['status', 'summary', 'issues'],
+  additionalProperties: false,
+  properties: {
+    status: { enum: ['passed', 'warning'] },
+    summary: { type: 'string', minLength: 1 },
+    issues: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['severity', 'message'],
+        additionalProperties: false,
+        properties: {
+          severity: { enum: ['info', 'warning'] },
+          node_id: { type: 'string' },
+          message: { type: 'string', minLength: 1 },
+        },
+      },
+    },
+  },
+};
 
 function normalizeOutlineWordControlOptions(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -3433,7 +3456,72 @@ async function enhanceOutlineWithKnowledgeAdditions(aiService, payload, outline,
   }
 }
 
-async function runOutlineGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, updateTask, payload }) {
+function normalizeOutlineSemanticReview(value) {
+  const review = requireObject(value, 'OutlineSemanticReview');
+  const status = requireField(review.status, 'OutlineSemanticReview.status');
+  if (!['passed', 'warning'].includes(status)) throw new Error('目录语义审查状态必须为 passed 或 warning');
+  const summary = requireField(review.summary, 'OutlineSemanticReview.summary');
+  if (!String(summary).trim()) throw new Error('目录语义审查摘要不能为空');
+  const issues = requireArray(review.issues, 'OutlineSemanticReview.issues').map((issue, index) => {
+    const item = requireObject(issue, `OutlineSemanticReview.issues[${index}]`);
+    const severity = requireField(item.severity, `OutlineSemanticReview.issues[${index}].severity`);
+    if (!['info', 'warning'].includes(severity)) throw new Error('目录语义审查问题级别必须为 info 或 warning');
+    const message = requireField(item.message, `OutlineSemanticReview.issues[${index}].message`);
+    if (!String(message).trim()) throw new Error('目录语义审查问题说明不能为空');
+    return {
+      severity,
+      ...(item.node_id ? { node_id: String(item.node_id) } : {}),
+      message: String(message),
+    };
+  });
+  return { status, summary: String(summary), issues };
+}
+
+// Pi 仅评价已经通过确定性校验的目录，审查结果绝不回写目录结构。
+async function reviewValidatedOutlineWithAgent(agentService, outline, context) {
+  if (typeof agentService?.runTask !== 'function') {
+    return { status: 'unavailable', summary: 'Pi Agent 未初始化，已跳过语义审查。', issues: [] };
+  }
+  let reviewed = null;
+  try {
+    const result = await agentService.runTask({
+      title: '技术方案目录语义审查',
+      output_file: OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE,
+      files: [
+        { path: 'validated-outline.json', content: JSON.stringify(outline, null, 2) },
+        { path: 'outline-review-context.json', content: JSON.stringify(context, null, 2) },
+      ],
+      prompt: `请只读审查当前工作区内已通过程序校验的技术方案目录。
+
+要求：
+1. 必须先读取 validated-outline.json 和 outline-review-context.json。
+2. 不得编辑或重排目录，也不得访问当前工作区外的文件。
+3. 只检查目录标题是否明显偏离项目、评分要点是否可能缺少承接、相邻章节是否明显重复。
+4. 将审查结果写入 ${OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE}，格式为 {"status":"passed 或 warning","summary":"简短中文结论","issues":[{"severity":"info 或 warning","node_id":"可选目录编号","message":"具体说明"}]}。
+5. 使用 json-validation 校验该文件；程序已预置 Schema，只传 file_path。`,
+      json_validation_schemas: { [OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE]: OUTLINE_SEMANTIC_REVIEW_SCHEMA },
+      timeout_ms: FINAL_AGENT_TIMEOUT_MS,
+      max_retries: 1,
+      validateOutput: (resultForValidation) => {
+        reviewed = normalizeOutlineSemanticReview(JSON.parse(String(resultForValidation?.output_content || '{}')));
+        return reviewed;
+      },
+    });
+    return {
+      ...(reviewed || normalizeOutlineSemanticReview(JSON.parse(String(result.output_content || '{}')))),
+      checked_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      status: 'unavailable',
+      summary: `Pi Agent 语义审查未完成：${error?.message || String(error)}`,
+      issues: [],
+      checked_at: new Date().toISOString(),
+    };
+  }
+}
+
+async function runOutlineGenerationTask({ aiService, agentService, workspaceStore, knowledgeBaseService, updateTask, payload, taskControl }) {
   let logs = ['开始生成目录。'];
   let currentProgress = 5;
   function log(message, progress = currentProgress) {
@@ -3521,6 +3609,18 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
 
   log(sourceKind === 'format' ? '正在按格式要求提取一级目录和固定节点。' : '正在按所选知识库文档提取一级目录。', 10);
   const sourceOutline = await generateSourceOutline(aiService, { sourceKind, sourceContent }, log);
+  if (taskControl?.waitForOutlineConfirmation) {
+    log('一级目录来源骨架已生成，请确认后继续补充下级目录。', 28);
+    await taskControl.waitForOutlineConfirmation({
+      source_kind: sourceKind,
+      root_items: (sourceOutline.outline || []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+      })),
+    });
+    logs = [...logs, '已确认一级目录，继续补充下级目录。'];
+  }
   log('目录来源骨架已固定，开始提取技术评分项。', 28);
   const groups = await extractRequirementGroups(aiService, taskPayload, undefined, log);
   log('技术评分项已提取，开始在一级目录内部补充下级目录。', 52);
@@ -3565,12 +3665,23 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     }
   }
   const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
-  log('一级目录来源与技术评分下级映射校验通过。', 99);
+  log('一级目录来源与技术评分下级映射校验通过，正在进行只读语义审查。', 99);
+  const semanticReview = await reviewValidatedOutlineWithAgent(agentService, qualityResult.outline, {
+    project_overview: overview,
+    source_kind: sourceKind,
+    source_root_titles: (sourceOutline.outline || []).map((item) => item.title),
+  });
+  logs = [...logs, semanticReview.status === 'unavailable'
+    ? 'Pi Agent 语义审查未完成，已保留确定性校验通过的目录。'
+    : `Pi Agent 语义审查完成：${semanticReview.summary}`];
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...qualityResult.outline, project_overview: overview },
     outlineWordControlSnapshot: wordControlOptions,
     requirementResponseMatrix: qualityResult.matrix,
-    outlineQualityReview: qualityResult.review,
+    outlineQualityReview: {
+      ...(qualityResult.review || {}),
+      semantic_review: semanticReview,
+    },
     contentGenerationTask: undefined,
     contentGenerationSections: {},
     contentGenerationPlans: {},
@@ -3585,5 +3696,8 @@ module.exports = {
   validateSourceDrivenOutline,
   __knowledgePatchRuntime: {
     applyKnowledgeAdditions,
+  },
+  __outlineSemanticReview: {
+    normalizeOutlineSemanticReview,
   },
 };

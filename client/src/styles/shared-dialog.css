@@ -175,6 +175,49 @@
   gap: 10px;
 }
 
+/* Agent 询问使用单一全局 Dialog，任务完成前不允许意外关闭。 */
+.agent-question-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.agent-question-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 40px));
+  max-height: min(680px, calc(100vh - 40px));
+  gap: 16px;
+  padding: 24px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+  box-shadow: var(--yb-shadow-lg);
+  transform: translate(-50%, -50%);
+}
+
+.agent-question-head h2 { margin: 0; color: var(--yb-text); font-size: 20px; }
+.agent-question-body { display: grid; min-height: 0; gap: 12px; overflow: auto; }
+.agent-question-copy { color: var(--yb-text); line-height: 1.7; }
+.agent-question-copy p { margin: 0; }
+.agent-question-options { display: grid; gap: 8px; }
+.agent-question-option { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; background: var(--yb-fill-tertiary); border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius); cursor: pointer; }
+.agent-question-option.is-selected { background: var(--yb-primary-bg); border-color: var(--yb-primary-border); }
+.agent-question-option input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--yb-primary); }
+.agent-question-option-copy { display: grid; gap: 3px; }
+.agent-question-option-copy strong { color: var(--yb-text); }
+.agent-question-option-copy strong em { margin-left: 8px; padding: 1px 6px; color: var(--yb-primary-deep); font-size: 11px; font-style: normal; background: var(--yb-primary-bg); border-radius: var(--yb-radius-xs); }
+.agent-question-option-copy small { color: var(--yb-text-soft); line-height: 1.5; }
+.agent-question-custom-answer { width: 100%; min-height: 82px; padding: 10px 12px; color: var(--yb-text); background: #fff; border: 1px solid var(--yb-border); border-radius: var(--yb-radius); outline: none; resize: vertical; }
+.agent-question-actions { display: flex; justify-content: flex-end; }
+
 /* [8731-8785] (rewritten) yb-switch-control (renamed from settings-switch-control, shared by settings/export-format/outline-edit; values unchanged) */
 .yb-switch-control {
   position: relative;

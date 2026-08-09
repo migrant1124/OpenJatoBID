@@ -279,8 +279,33 @@ export interface AgentRunFile {
   content: string;
 }
 
+export interface AgentQuestionOption {
+  id: string;
+  label: string;
+  description?: string;
+  recommended: boolean;
+  custom: boolean;
+}
+
+export interface AgentQuestion {
+  question_id: string;
+  task_id: string;
+  task_title: string;
+  question: string;
+  options: AgentQuestionOption[];
+  asked_at: string;
+}
+
+export interface AgentQuestionAnswer {
+  question_id: string;
+  option_id: string;
+  custom_answer?: string;
+}
+
 export type AgentMonitorEventType =
   | 'task_start'
+  | 'task_input'
+  | 'task_output'
   | 'task_end'
   | 'task_error'
   | 'assistant_delta'
@@ -289,6 +314,8 @@ export type AgentMonitorEventType =
   | 'tool_update'
   | 'tool_end'
   | 'retry'
+  | 'auto_retry_start'
+  | 'auto_retry_end'
   | 'agent_start'
   | 'agent_end'
   | 'agent_settled'
@@ -321,6 +348,12 @@ export interface AgentMonitorEvent {
   maximum?: number;
   message?: string;
   retry_count?: number;
+  native_retry_count?: number;
+  stage_index?: number;
+  workflow_stage?: string;
+  delay_ms?: number;
+  success?: boolean;
+  final_error?: string;
 }
 
 export interface AgentMonitorSnapshot {
@@ -338,6 +371,7 @@ export interface AgentRunPayload {
   files?: AgentRunFile[];
   timeout_ms?: number;
   max_retries?: number;
+  json_validation_schemas?: Record<string, unknown>;
   agent?: string;
 }
 
@@ -366,6 +400,14 @@ export interface AgentRunResult {
   session_id?: string;
   retry_count?: number;
   retry_attempts?: AgentRetryAttempt[];
+  native_retry_count?: number;
+  native_retry_attempts?: Array<{
+    attempt: number;
+    maximum?: number;
+    delay_ms?: number;
+    error?: string;
+    at: string;
+  }>;
   validation_result?: unknown;
   active_task?: AgentRuntimeActiveTask | null;
   agent_request_log?: unknown[];
@@ -581,7 +623,10 @@ export interface YibiaoBridge {
     exportSelfCheckReport: (payload: AgentSelfCheckResult) => Promise<AgentSelfCheckReportExportResult>;
     getStatus: () => Promise<AgentRuntimeStatus>;
     restart: (reason?: string) => Promise<AgentRuntimeStatus>;
+    getPendingQuestion: () => Promise<AgentQuestion | null>;
+    answerQuestion: (payload: AgentQuestionAnswer) => Promise<{ success: boolean }>;
     onStatus: (callback: (status: AgentRuntimeStatus) => void) => () => void;
+    onQuestion: (callback: (question: AgentQuestion | null) => void) => () => void;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;
@@ -681,6 +726,7 @@ export interface YibiaoBridge {
     startBidSectionExtraction: (payload?: unknown) => Promise<unknown>;
     startBidAnalysis: (payload: unknown) => Promise<unknown>;
     startOutlineGeneration: (payload: unknown) => Promise<unknown>;
+    confirmOutlineGeneration: (payload: { action: 'continue' | 'cancel' }) => Promise<unknown>;
     startGlobalFactsGeneration: (payload: unknown) => Promise<unknown>;
     startContentGeneration: (payload: unknown) => Promise<unknown>;
     pauseContentGeneration: () => Promise<unknown>;

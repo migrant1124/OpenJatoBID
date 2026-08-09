@@ -530,6 +530,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             contentGenerationPlans: outlineDataReset ? {} : prev.contentGenerationPlans,
             contentIllustrationPlan: outlineDataReset ? undefined : prev.contentIllustrationPlan,
             contentGenerationRuntime: outlineDataReset ? undefined : prev.contentGenerationRuntime,
+            outlineQualityReview: outlineDataReset ? undefined : prev.outlineQualityReview,
             outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
           };
         }
@@ -550,6 +551,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               ? technicalPlan.referenceKnowledgeDocumentIds
               : prev.referenceKnowledgeDocumentIds,
             outlineData: nextOutlineData,
+            outlineQualityReview: hasOwnField(technicalPlan, 'outlineQualityReview') ? technicalPlan.outlineQualityReview : prev.outlineQualityReview,
             globalFactsTask: hasOwnField(technicalPlan, 'globalFactsTask') ? trimTaskLogs(technicalPlan.globalFactsTask) : prev.globalFactsTask,
             globalFacts: hasOwnField(technicalPlan, 'globalFacts') ? (technicalPlan.globalFacts || []) : prev.globalFacts,
             contentGenerationTask: hasOwnField(technicalPlan, 'contentGenerationTask') ? trimTaskLogs(technicalPlan.contentGenerationTask) : (outlineDataChanged ? undefined : prev.contentGenerationTask),
@@ -983,6 +985,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           formatRequirementsContent={state.bidAnalysisTasks.responseFileRequirements?.content || ''}
           referenceKnowledgeDocumentIds={state.referenceKnowledgeDocumentIds}
           outlineData={state.outlineData}
+          outlineQualityReview={state.outlineQualityReview}
           task={state.outlineGenerationTask}
           contentTaskStatus={state.contentGenerationTask?.status}
           onOutlineConfigChange={async ({ referenceKnowledgeDocumentIds, outlineExpansionMode, wordControlOptions }) => {

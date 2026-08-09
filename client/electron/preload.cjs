@@ -91,10 +91,17 @@ const bridge = {
     exportSelfCheckReport: (payload) => ipcRenderer.invoke('agent:export-self-check-report', payload),
     getStatus: () => ipcRenderer.invoke('agent:get-status'),
     restart: (reason) => ipcRenderer.invoke('agent:restart', reason),
+    getPendingQuestion: () => ipcRenderer.invoke('agent:get-pending-question'),
+    answerQuestion: (payload) => ipcRenderer.invoke('agent:answer-question', payload),
     onStatus: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('agent:status', listener);
       return () => ipcRenderer.removeListener('agent:status', listener);
+    },
+    onQuestion: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('agent:question-state', listener);
+      return () => ipcRenderer.removeListener('agent:question-state', listener);
     },
   },
   developerTokenStats: {
@@ -195,6 +202,7 @@ const bridge = {
     startBidSectionExtraction: (payload) => ipcRenderer.invoke('tasks:start-bid-section-extraction', payload),
     startBidAnalysis: (payload) => ipcRenderer.invoke('tasks:start-bid-analysis', payload),
     startOutlineGeneration: (payload) => ipcRenderer.invoke('tasks:start-outline-generation', payload),
+    confirmOutlineGeneration: (payload) => ipcRenderer.invoke('tasks:confirm-outline-generation', payload),
     startGlobalFactsGeneration: (payload) => ipcRenderer.invoke('tasks:start-global-facts-generation', payload),
     startContentGeneration: (payload) => ipcRenderer.invoke('tasks:start-content-generation', payload),
     pauseContentGeneration: () => ipcRenderer.invoke('tasks:pause-content-generation'),
