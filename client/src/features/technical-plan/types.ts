@@ -109,6 +109,12 @@ export interface BackgroundTaskState {
       illustration_generation_html_completed?: number;
       illustration_generation_step_label?: string;
     };
+    outline_confirmation?: {
+      status: 'waiting' | 'confirmed' | 'canceled';
+      source_kind?: 'format' | 'knowledge';
+      root_items?: Array<{ id?: string; title?: string; description?: string }>;
+      confirmed_at?: string;
+    };
   };
 }
 

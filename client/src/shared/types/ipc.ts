@@ -271,19 +271,95 @@ export interface AgentRuntimeStatus {
     queued: number;
     limit: number;
   };
-  opencode?: {
-    pid: number;
-    base_url?: string;
-    port?: number;
-    last_exit_code?: number | null;
-    last_exit_signal?: string;
-  };
   runtime_details?: Record<string, unknown>;
 }
 
 export interface AgentRunFile {
   path: string;
   content: string;
+}
+
+export interface AgentQuestionOption {
+  id: string;
+  label: string;
+  description?: string;
+  recommended: boolean;
+  custom: boolean;
+}
+
+export interface AgentQuestion {
+  question_id: string;
+  task_id: string;
+  task_title: string;
+  question: string;
+  options: AgentQuestionOption[];
+  asked_at: string;
+}
+
+export interface AgentQuestionAnswer {
+  question_id: string;
+  option_id: string;
+  custom_answer?: string;
+}
+
+export type AgentMonitorEventType =
+  | 'task_start'
+  | 'task_input'
+  | 'task_output'
+  | 'task_end'
+  | 'task_error'
+  | 'assistant_delta'
+  | 'assistant_end'
+  | 'tool_start'
+  | 'tool_update'
+  | 'tool_end'
+  | 'retry'
+  | 'auto_retry_start'
+  | 'auto_retry_end'
+  | 'agent_start'
+  | 'agent_end'
+  | 'agent_settled'
+  | 'turn_start'
+  | 'turn_end'
+  | 'compaction_start'
+  | 'compaction_end';
+
+export interface AgentMonitorEvent {
+  sequence: number;
+  at: string;
+  type: AgentMonitorEventType;
+  task_id: string;
+  title?: string;
+  workspace_dir?: string;
+  prompt?: string;
+  output_file?: string;
+  files?: AgentRunFile[];
+  output_content?: string;
+  assistant_text?: string;
+  delta?: string;
+  text?: string;
+  tool_call_id?: string;
+  tool_name?: string;
+  args?: unknown;
+  partial_result?: unknown;
+  result?: unknown;
+  is_error?: boolean;
+  attempt?: number;
+  maximum?: number;
+  message?: string;
+  retry_count?: number;
+  native_retry_count?: number;
+  stage_index?: number;
+  workflow_stage?: string;
+  delay_ms?: number;
+  success?: boolean;
+  final_error?: string;
+}
+
+export interface AgentMonitorSnapshot {
+  attached_at: string;
+  active_task?: AgentRuntimeActiveTask | null;
+  workspace_dir?: string;
 }
 
 export interface AgentRunPayload {
@@ -295,6 +371,7 @@ export interface AgentRunPayload {
   files?: AgentRunFile[];
   timeout_ms?: number;
   max_retries?: number;
+  json_validation_schemas?: Record<string, unknown>;
   agent?: string;
 }
 
@@ -323,11 +400,19 @@ export interface AgentRunResult {
   session_id?: string;
   retry_count?: number;
   retry_attempts?: AgentRetryAttempt[];
+  native_retry_count?: number;
+  native_retry_attempts?: Array<{
+    attempt: number;
+    maximum?: number;
+    delay_ms?: number;
+    error?: string;
+    at: string;
+  }>;
   validation_result?: unknown;
   active_task?: AgentRuntimeActiveTask | null;
-  opencode_request_log?: unknown[];
-  opencode_stderr_tail?: string;
-  opencode_stdout_tail?: string;
+  agent_request_log?: unknown[];
+  agent_stderr_tail?: string;
+  agent_stdout_tail?: string;
   diagnostics?: Record<string, unknown>;
 }
 
@@ -392,17 +477,9 @@ export interface AgentSelfCheckDiagnostics {
   agent_output_path?: string;
   agent_partial_output_chars?: number;
   agent_partial_output?: string;
-  opencode_binary_path?: string;
-  opencode_base_url?: string;
-  opencode_port?: number;
-  opencode_exit_code?: number | null;
-  opencode_exit_signal?: string;
-  opencode_spawn_error?: string;
-  opencode_last_health_error?: string;
-  opencode_last_health_cause?: string;
-  opencode_stdout_tail?: string;
-  opencode_stderr_tail?: string;
-  opencode_request_log?: unknown[];
+  agent_request_log?: unknown[];
+  agent_stdout_tail?: string;
+  agent_stderr_tail?: string;
   isolation_check?: AgentIsolationCheckResult | null;
 }
 
@@ -410,7 +487,7 @@ export interface AgentSelfCheckEnvironmentSnapshot {
   app?: Record<string, unknown>;
   process?: Record<string, unknown>;
   paths?: Record<string, unknown>;
-  opencode?: Record<string, unknown>;
+  pi?: Record<string, unknown>;
   text_model?: Record<string, unknown>;
 }
 
@@ -448,7 +525,6 @@ export interface AgentSelfCheckResult {
   output_file: string;
   output_path: string;
   output_content?: string;
-  opencode_binary_path?: string;
   conclusion?: string;
   sdk_version?: string;
   model_config?: Record<string, unknown>;
@@ -465,7 +541,7 @@ export interface AgentSelfCheckResult {
   tool_check_summary?: string;
   tool_check_environment?: Record<string, unknown> | null;
   tool_checks?: AgentToolCheckResult[];
-  opencode_request_log?: unknown[];
+  agent_request_log?: unknown[];
   proxy_diagnostics?: { events: unknown[] };
   workspace_snapshot?: Record<string, unknown> | null;
   agent_result?: Record<string, unknown>;
@@ -542,18 +618,28 @@ export interface YibiaoBridge {
   };
   agent: {
     listRuntimes: () => Promise<AgentRuntimeDescriptor[]>;
-    run: (payload: AgentRunPayload, runtimeId?: string) => Promise<AgentRunResult>;
-    selfCheck: (runtimeId?: string) => Promise<AgentSelfCheckResult>;
+    run: (payload: AgentRunPayload) => Promise<AgentRunResult>;
+    selfCheck: () => Promise<AgentSelfCheckResult>;
     exportSelfCheckReport: (payload: AgentSelfCheckResult) => Promise<AgentSelfCheckReportExportResult>;
-    getStatus: (runtimeId?: string) => Promise<AgentRuntimeStatus>;
-    restart: (reason?: string, runtimeId?: string) => Promise<AgentRuntimeStatus>;
+    getStatus: () => Promise<AgentRuntimeStatus>;
+    restart: (reason?: string) => Promise<AgentRuntimeStatus>;
+    getPendingQuestion: () => Promise<AgentQuestion | null>;
+    answerQuestion: (payload: AgentQuestionAnswer) => Promise<{ success: boolean }>;
     onStatus: (callback: (status: AgentRuntimeStatus) => void) => () => void;
+    onQuestion: (callback: (question: AgentQuestion | null) => void) => () => void;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;
     get: () => Promise<DeveloperTextTokenStats>;
     reset: () => Promise<DeveloperTextTokenStats>;
     onChanged: (callback: (stats: DeveloperTextTokenStats) => void) => () => void;
+  };
+  developerAgentMonitor: {
+    openWindow: () => Promise<{ success: boolean }>;
+    openWorkspace: (workspaceDir: string) => Promise<{ success: boolean; path: string }>;
+    attach: () => Promise<AgentMonitorSnapshot>;
+    detach: () => Promise<{ success: boolean }>;
+    onEvent: (callback: (event: AgentMonitorEvent) => void) => () => void;
   };
   developerExpansionReplaceTest: {
     run: (payload: DeveloperExpansionReplaceTestPayload) => Promise<DeveloperExpansionReplaceTestResult>;
@@ -640,6 +726,7 @@ export interface YibiaoBridge {
     startBidSectionExtraction: (payload?: unknown) => Promise<unknown>;
     startBidAnalysis: (payload: unknown) => Promise<unknown>;
     startOutlineGeneration: (payload: unknown) => Promise<unknown>;
+    confirmOutlineGeneration: (payload: { action: 'continue' | 'cancel' }) => Promise<unknown>;
     startGlobalFactsGeneration: (payload: unknown) => Promise<unknown>;
     startContentGeneration: (payload: unknown) => Promise<unknown>;
     pauseContentGeneration: () => Promise<unknown>;

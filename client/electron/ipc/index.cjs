@@ -1,4 +1,4 @@
-const { ipcMain, shell } = require('electron');
+const { clipboard, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { registerAnalyticsIpc } = require('./analyticsIpc.cjs');
 const { registerAgentIpc } = require('./agentIpc.cjs');
@@ -115,6 +115,7 @@ const workspaceDatabaseChannels = [
   'tasks:start-bid-section-extraction',
   'tasks:start-bid-analysis',
   'tasks:start-outline-generation',
+  'tasks:confirm-outline-generation',
   'tasks:start-global-facts-generation',
   'tasks:start-content-generation',
   'tasks:pause-content-generation',
@@ -208,7 +209,7 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   return { sqliteDatabase };
 }
 
-function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow }) {
+function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
   const configStore = createConfigStore(app);
   const licenseService = createLicenseService({ app, configStore });
   const analyticsService = createAnalyticsService({
@@ -299,10 +300,11 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     onDeveloperModeChange(developerMode) {
       if (!developerMode) {
         closeDeveloperTokenStatsWindow?.();
+        closeDeveloperAgentMonitorWindow?.();
       }
     },
   });
-  registerDeveloperIpc({ configStore, aiService, openDeveloperTokenStatsWindow, developerExpansionReplaceTestService });
+  registerDeveloperIpc({ configStore, aiService, agentService, openDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, developerExpansionReplaceTestService });
   registerAnalyticsIpc({ analyticsService });
   unregisterLicenseIpc = registerLicenseIpc({ licenseService, mainWindow });
   registerAiIpc({ aiService });
@@ -405,7 +407,12 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     } catch (error) {
       const preview = externalUrl.length > 300 ? `${externalUrl.slice(0, 300)}...` : externalUrl;
       console.warn('[app] 打开外部链接失败', { url: preview, message: error.message || String(error) });
-      return { success: false, message: '外部链接打开失败' };
+      try {
+        clipboard.writeText(externalUrl);
+        return { success: false, message: '外部链接打开失败，链接已复制到剪贴板' };
+      } catch {
+        return { success: false, message: '外部链接打开失败' };
+      }
     }
   });
 

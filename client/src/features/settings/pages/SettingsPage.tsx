@@ -4,13 +4,15 @@ import { getAppVersion } from '../../../shared/runtime/appVersion';
 import { FloatingToolbar, InputWithAction, useToast } from '../../../shared/ui';
 import { showUpdateReadyToast } from '../../../shared/updateToast';
 import type { FloatingToolbarGroup } from '../../../shared/ui';
-import type { AgentModeScenariosConfig, AgentRuntimeDescriptor, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, LocalRenderingConfig, TextModelConfig, TextModelProfiles, TextModelProvider } from '../../../shared/types';
+import type { AgentModeScenariosConfig, AgentSelfCheckResult, AgentToolCheckResult, AiRequestMode, ClientConfig, ConfiguredTextModelProvider, FileParserProvider, ImageModelConfig, ImageModelProfiles, ImageModelProvider, ImageModelSize, ImageModelStatus, LicenseRuntimeStatus, LocalRenderingConfig, TextModelConfig, TextModelProfiles, TextModelProvider } from '../../../shared/types';
 import type { SettingsPageState } from '../types';
 import logoUrl from '../../../../assets/logo.png';
 
 type SettingsTab = 'general' | 'text-model' | 'image-model' | 'components' | 'agent' | 'about';
 type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'error' | 'disabled';
 type AgentSelfCheckUiStatus = 'untested' | 'checking' | 'normal' | 'busy' | 'error';
+const FIXED_AGENT_RUNTIME_ID = 'pi';
+const FIXED_AGENT_RUNTIME_NAME = 'Pi Agent';
 
 const settingsTabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'general', label: '通用' },
@@ -483,7 +485,7 @@ const initialState: SettingsPageState = {
     enabled: true,
     html_concurrency_limit: 5,
   },
-  agentRuntime: 'opencode',
+  agentRuntime: FIXED_AGENT_RUNTIME_ID,
   agentModeScenarios: { ...defaultAgentModeScenarios },
   general: {
     developer_mode: false,
@@ -516,7 +518,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
   const [updateVersion, setUpdateVersion] = useState('');
   const [updateError, setUpdateError] = useState('');
   const [licenseStatus, setLicenseStatus] = useState<LicenseRuntimeStatus | null>(initialLicenseStatus);
-  const [agentRuntimes, setAgentRuntimes] = useState<AgentRuntimeDescriptor[]>([]);
   const [agentSelfCheckStatus, setAgentSelfCheckStatus] = useState<AgentSelfCheckUiStatus>('untested');
   const [agentSelfCheckResult, setAgentSelfCheckResult] = useState<AgentSelfCheckResult | null>(null);
   const [exportingAgentSelfCheckReport, setExportingAgentSelfCheckReport] = useState(false);
@@ -526,8 +527,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     void loadTextConfig();
     void getAppVersion().then(setAppVersion);
     void window.yibiao?.license?.getStatus().then(setLicenseStatus).catch(() => setLicenseStatus(null));
-    void window.yibiao?.agent?.listRuntimes?.().then((runtimes) => setAgentRuntimes(runtimes || [])).catch(() => setAgentRuntimes([]));
-
     const unsubs: Array<() => void> = [];
     unsubs.push(
       window.yibiao?.onUpdateProgress(({ percent }) => {
@@ -580,7 +579,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           mineru_token: config.file_parser.mineru_token || '',
         },
         localRendering: config.local_rendering || initialState.localRendering,
-        agentRuntime: config.agent_runtime || 'opencode',
+        agentRuntime: FIXED_AGENT_RUNTIME_ID,
         agentModeScenarios: normalizeAgentModeScenarios(config.agent_mode_scenarios),
         general: {
           developer_mode: Boolean(config.developer_mode),
@@ -630,7 +629,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         mineru_token: state.fileParser.mineru_token || '',
       },
       local_rendering: state.localRendering,
-      agent_runtime: state.agentRuntime || 'opencode',
+      agent_runtime: FIXED_AGENT_RUNTIME_ID,
       agent_mode_scenarios: state.agentModeScenarios,
       gpu_hardware_acceleration_enabled: state.general.gpu_hardware_acceleration_enabled,
       gpu_hardware_acceleration_configured: state.general.gpu_hardware_acceleration_configured,
@@ -787,15 +786,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     }));
   };
 
-  const updateAgentRuntime = (runtimeId: string) => {
-    setAgentSelfCheckStatus('untested');
-    setAgentSelfCheckResult(null);
-    setState((prev) => ({
-      ...prev,
-      agentRuntime: runtimeId || 'opencode',
-    }));
-  };
-
   const updateTextModelProvider = (provider: TextModelProvider) => {
     setTextModels([]);
     setState((prev) => ({
@@ -904,7 +894,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       setSavedConfig(config);
       onDeveloperModeChange?.(Boolean(config.developer_mode));
 
-      const result = await window.yibiao?.agent.selfCheck(config.agent_runtime);
+      const result = await window.yibiao?.agent.selfCheck();
       if (!result) {
         throw new Error('智能体自检未返回结果');
       }
@@ -920,8 +910,8 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
       const message = error instanceof Error ? error.message : '智能体自检失败';
       const failedResult: AgentSelfCheckResult = {
         success: false,
-        runtime_id: state.agentRuntime || 'opencode',
-        runtime_name: agentRuntimes.find((runtime) => runtime.id === state.agentRuntime)?.display_name || '智能体',
+        runtime_id: FIXED_AGENT_RUNTIME_ID,
+        runtime_name: FIXED_AGENT_RUNTIME_NAME,
         status: 'error',
         message,
         checked_at: new Date().toISOString(),
@@ -932,7 +922,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         workspace_dir: '',
         output_file: '',
         output_path: '',
-        opencode_binary_path: '',
         steps: [],
         error: { message },
         diagnostics: { message },
@@ -1222,10 +1211,10 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
 
     if (activeTab === 'agent') {
       return JSON.stringify({
-        agentRuntime: state.agentRuntime || 'opencode',
+        agentRuntime: FIXED_AGENT_RUNTIME_ID,
         scenarios: state.agentModeScenarios,
       }) !== JSON.stringify({
-        agentRuntime: savedConfig.agent_runtime || 'opencode',
+        agentRuntime: FIXED_AGENT_RUNTIME_ID,
         scenarios: normalizeAgentModeScenarios(savedConfig.agent_mode_scenarios),
       });
     }
@@ -1875,21 +1864,6 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             <span />
             <strong>智能体配置</strong>
           </div>
-          <div className="settings-list">
-            <label className="settings-row">
-              <div className="settings-row-copy">
-                <strong>智能体运行时</strong>
-                <span>OpenCode 为当前默认链路；Pi Agent 用于专项验证，保存后才会成为后续业务任务的默认运行时。</span>
-              </div>
-              <select value={state.agentRuntime} onChange={(event) => updateAgentRuntime(event.target.value)}>
-                {(agentRuntimes.length ? agentRuntimes : [{ id: 'opencode', display_name: 'OpenCode Agent', description: '', is_default: true }]).map((runtime) => (
-                  <option key={runtime.id} value={runtime.id}>
-                    {runtime.display_name}{runtime.is_default ? '（默认）' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
           <div className={`agent-self-check-status is-${agentSelfCheckStatus}`}>
             <div>
               <strong>智能体自检</strong>
@@ -1962,7 +1936,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
                 <div className={`agent-isolation-check is-${agentSelfCheckResult.isolation_check.success ? 'success' : 'error'}`}>
                   <div className="agent-isolation-check-head">
                     <div>
-                      <strong>OpenCode 逻辑隔离</strong>
+                      <strong>Pi 运行隔离</strong>
                       <span>{agentSelfCheckResult.isolation_check.success ? '运行路径、权限和 Skill 来源均符合预期' : '发现隔离配置或路径越界'}</span>
                     </div>
                     <em>{agentSelfCheckResult.isolation_check.success ? '通过' : '异常'}</em>
@@ -1992,9 +1966,9 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
                         {agentSelfCheckResult.isolation_check.loaded_skills.map((skill, index) => (
                           <code
                             key={`${skill.name}-${skill.location || 'builtin'}-${index}`}
-                            title={skill.location && skill.location !== '<built-in>' ? skill.location : 'OpenCode 内建'}
+                            title={skill.location && skill.location !== '<built-in>' ? skill.location : 'Pi 内建'}
                           >
-                            {skill.name} · {skill.location && skill.location !== '<built-in>' ? skill.location : 'OpenCode 内建'}
+                            {skill.name} · {skill.location && skill.location !== '<built-in>' ? skill.location : 'Pi 内建'}
                           </code>
                         ))}
                       </div>

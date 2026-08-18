@@ -122,40 +122,24 @@ function getPlatformArchKey() {
   return `${process.platform}-${process.arch}`;
 }
 
-function getBundledOpencodeBinaryPath(app) {
-  if (!app.isPackaged && process.env.YIBIAO_OPENCODE_BIN) {
-    return process.env.YIBIAO_OPENCODE_BIN;
-  }
-
-  const binaryName = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
-  const platformArch = getPlatformArchKey();
-
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'opencode', platformArch, binaryName);
-  }
-
-  return path.join(__dirname, '..', '..', 'vendor', 'opencode', platformArch, binaryName);
-}
-
-function getBundledOpencodeToolsBinDir(app) {
-  if (!app.isPackaged && process.env.YIBIAO_OPENCODE_TOOLS_BIN_DIR) {
-    return process.env.YIBIAO_OPENCODE_TOOLS_BIN_DIR;
+function getBundledAgentToolsBinDir(app) {
+  if (!app.isPackaged && process.env.YIBIAO_AGENT_TOOLS_BIN_DIR) {
+    return process.env.YIBIAO_AGENT_TOOLS_BIN_DIR;
   }
 
   const platformArch = getPlatformArchKey();
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'opencode-tools', platformArch, 'bin');
+    return path.join(process.resourcesPath, 'agent-tools', platformArch, 'bin');
   }
 
-  return path.join(__dirname, '..', '..', 'vendor', 'opencode-tools', platformArch, 'bin');
+  return path.join(__dirname, '..', '..', 'vendor', 'agent-tools', platformArch, 'bin');
 }
 
 module.exports = {
   getAgentCacheDir,
   getAgentRuntimeDir,
   getAiLogsDir,
-  getBundledOpencodeBinaryPath,
-  getBundledOpencodeToolsBinDir,
+  getBundledAgentToolsBinDir,
   getDeveloperLogsDir,
   getDuplicateCheckContentDir,
   getDuplicateCheckDir,

@@ -4571,3 +4571,62 @@
     flex-direction: column;
   }
 }
+/* 目录来源骨架确认：展示固定的一级目录，确认后才继续生成下级结构。 */
+.outline-root-confirmation-card {
+  width: min(780px, calc(100vw - 48px));
+  max-height: min(780px, calc(100vh - 32px));
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.outline-root-confirmation-card .content-regenerate-card-head {
+  gap: 4px;
+}
+
+.outline-root-confirmation-list {
+  display: grid;
+  min-height: 0;
+  max-height: 470px;
+  gap: 4px;
+  padding-right: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.outline-root-confirmation-list > div {
+  display: grid;
+  grid-template-columns: minmax(152px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 5px 12px;
+  background: var(--yb-fill-tertiary);
+  border: 1px solid var(--yb-border-soft);
+  border-radius: var(--yb-radius);
+}
+
+.outline-root-confirmation-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--yb-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-root-confirmation-list span {
+  min-width: 0;
+  padding-left: 10px;
+  overflow: hidden;
+  color: var(--yb-text-soft);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 1px solid var(--yb-border-soft);
+}
+.outline-semantic-review { display: grid; gap: 6px; padding: 12px; color: var(--yb-text); background: var(--yb-fill-tertiary); border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius); }
+.outline-semantic-review.is-warning { background: var(--yb-warning-bg); border-color: rgba(250, 173, 20, 0.35); }
+.outline-semantic-review.is-unavailable { color: var(--yb-text-soft); }
+.outline-semantic-review p, .outline-semantic-review ul { margin: 0; font-size: 13px; line-height: 1.55; }
+.outline-semantic-review ul { padding-left: 18px; }

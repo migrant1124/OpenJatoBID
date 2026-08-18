@@ -20,8 +20,8 @@
     "generate-build-attestation": "node scripts/generate-build-attestation.cjs",
     "test:update": "node --test electron/services/updateService.test.cjs",
     "test:technical-plan-guards": "node --test electron/services/technicalPlanTaskGuards.test.cjs electron/services/technicalPlanTaskGuards.recovery.test.cjs",
-    "prepare-opencode-tools": "node scripts/prepare-opencode-tools.cjs",
-    "verify-opencode-tools": "node scripts/verify-opencode-tools.cjs",
+    "prepare-agent-tools": "node scripts/prepare-agent-tools.cjs",
+    "verify-agent-tools": "node scripts/verify-agent-tools.cjs",
     "smoke:electron-native": "electron scripts/electron-native-smoke.cjs",
     "start": "electron ."
   },
@@ -42,15 +42,8 @@
     ],
     "extraResources": [
       {
-        "from": "vendor/opencode",
-        "to": "opencode",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "vendor/opencode-tools",
-        "to": "opencode-tools",
+        "from": "vendor/agent-tools",
+        "to": "agent-tools",
         "filter": [
           "**/*"
         ]
@@ -141,6 +134,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "adm-zip": "^0.5.17",
+    "ajv": "^8.17.1",
     "better-sqlite3": "^12.10.0",
     "cfb": "^1.2.2",
     "chardet": "^2.1.1",
@@ -161,6 +155,7 @@
     "react-dom": "^19.1.1",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
+    "typebox": "^1.1.38",
     "undici": "^7.25.0",
     "xlsx": "^0.18.5"
   },

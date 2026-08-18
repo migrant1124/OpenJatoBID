@@ -3,13 +3,13 @@ const http = require('node:http');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const {
   BUNDLED_COMMANDS,
   SHIM_COMMANDS,
 } = require('../agent/agentToolEnvironment.cjs');
 
-const EXPECTED_PI_TOOLS = ['read', 'bash', 'edit', 'write', 'find', 'ls'];
+const EXPECTED_PI_TOOLS = ['read', 'bash', 'edit', 'write', 'find', 'ls', 'json-validation', 'ask-user'];
 const CRITICAL_COMMANDS = new Set(['node', ...BUNDLED_COMMANDS]);
 const COMMANDS = ['node', ...BUNDLED_COMMANDS, ...SHIM_COMMANDS];
 const MODEL_CHECK_TIMEOUT_MS = 30000;
@@ -123,28 +123,73 @@ function sanitizeProxyEnvironment(env = process.env) {
       : redactProxyText(env[key])]));
 }
 
-function runPowerShellSnapshot(script) {
+function runChildProcess(file, args, options = {}) {
+  const startedAt = Date.now();
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+    const child = spawn(file, args, {
+      cwd: options.cwd,
+      env: options.env,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { child.kill(); } catch {}
+    }, options.timeout || 10000);
+    child.stdout?.setEncoding('utf-8');
+    child.stderr?.setEncoding('utf-8');
+    child.stdout?.on('data', (chunk) => { stdout += chunk; });
+    child.stderr?.on('data', (chunk) => { stderr += chunk; });
+    const finish = (exitCode, error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        exit_code: exitCode ?? (error ? 1 : 0),
+        duration_ms: Date.now() - startedAt,
+        stdout,
+        stderr: stderr || error?.message || '',
+        timed_out: timedOut,
+      });
+    };
+    child.once('error', (error) => finish(1, error));
+    child.once('close', (code) => finish(code));
+  });
+}
+
+async function runPowerShellSnapshot(script) {
   if (process.platform !== 'win32') return { supported: false };
   const prefix = [
     '[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)',
     '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
     '$OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
   ].join('; ');
-  const child = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `${prefix}; ${script}`], {
-    encoding: 'utf-8',
+  const child = await runChildProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `${prefix}; ${script}`], {
     timeout: 10000,
-    windowsHide: true,
   });
   return {
-    exit_code: child.status ?? (child.error ? 1 : 0),
+    exit_code: child.exit_code,
     stdout: redactProxyText(child.stdout),
-    stderr: redactProxyText(child.stderr || child.error?.message),
-    timed_out: child.error?.code === 'ETIMEDOUT',
+    stderr: redactProxyText(child.stderr),
+    timed_out: child.timed_out,
   };
 }
 
 // 采集报告所需的应用、系统和代理环境摘要。
-function createPiEnvironmentSnapshot(app, layout, config) {
+async function createPiEnvironmentSnapshot(app, layout, config) {
+  const windowsProxy = process.platform === 'win32'
+    ? await Promise.all([
+      runPowerShellSnapshot('netsh winhttp show proxy'),
+      runPowerShellSnapshot("Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -ErrorAction SilentlyContinue | Select-Object ProxyEnable,ProxyServer,AutoConfigURL | ConvertTo-Json -Compress"),
+    ]).then(([winhttp, internetSettings]) => ({
+      winhttp,
+      internet_settings: internetSettings,
+    }))
+    : null;
   return {
     app: {
       version: app?.getVersion?.() || '',
@@ -182,10 +227,7 @@ function createPiEnvironmentSnapshot(app, layout, config) {
     },
     text_model: summarizeTextModelConfig(config),
     proxy_environment: sanitizeProxyEnvironment(),
-    windows_proxy: process.platform === 'win32' ? {
-      winhttp: runPowerShellSnapshot('netsh winhttp show proxy'),
-      internet_settings: runPowerShellSnapshot("Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -ErrorAction SilentlyContinue | Select-Object ProxyEnable,ProxyServer,AutoConfigURL | ConvertTo-Json -Compress"),
-    } : null,
+    windows_proxy: windowsProxy,
   };
 }
 
@@ -273,48 +315,46 @@ function compactOutput(value, maxLength = 500) {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-function executeCommand(environment, command, cwd) {
+async function executeCommand(environment, command, cwd) {
   const commandLine = getCommandLine(command);
   const args = process.platform === 'win32'
     ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `${environment.shellCommandPrefix}\n${commandLine}`]
     : ['-c', commandLine];
-  const startedAt = Date.now();
-  const child = spawnSync(environment.shellPath, args, {
+  const child = await runChildProcess(environment.shellPath, args, {
     cwd,
     env: environment.env,
-    encoding: 'utf-8',
     timeout: 10000,
-    windowsHide: true,
   });
   return {
-    exit_code: child.status ?? (child.error ? 1 : 0),
-    duration_ms: Date.now() - startedAt,
+    exit_code: child.exit_code,
+    duration_ms: child.duration_ms,
     stdout: compactOutput(child.stdout),
-    stderr: compactOutput(child.stderr || child.error?.message),
-    timed_out: child.error?.code === 'ETIMEDOUT',
+    stderr: compactOutput(child.stderr),
+    timed_out: child.timed_out,
   };
 }
 
 // 在 Pi 实际 Shell 环境中逐项执行共享命令，关键命令失败时判定自检失败。
-function runPiToolEnvironmentSelfCheck(environment) {
+async function runPiToolEnvironmentSelfCheck(environment) {
   const checkDir = path.join(environment.layout.tempDir, `pi-tool-check-${Date.now()}`);
   try {
     fs.mkdirSync(checkDir, { recursive: true });
     fs.writeFileSync(path.join(checkDir, 'tool-check-input.txt'), 'alpha\nbeta\nalpha\ngamma\n', 'utf-8');
-    const items = COMMANDS.map((command) => {
+    const items = [];
+    for (const command of COMMANDS) {
       prepareCommandFixture(checkDir, command);
-      const execution = executeCommand(environment, command, checkDir);
+      const execution = await executeCommand(environment, command, checkDir);
       const critical = CRITICAL_COMMANDS.has(command);
       const success = execution.exit_code === 0 && !execution.timed_out;
-      return {
+      items.push({
         id: command,
         label: command,
         status: success ? 'success' : critical ? 'error' : 'warning',
         message: success ? '可用' : execution.timed_out ? '执行超时' : execution.stderr || `执行失败，exit=${execution.exit_code}`,
         detail: getExpectedCommandPath(environment, command),
         ...execution,
-      };
-    });
+      });
+    }
     const successCount = items.filter((item) => item.status === 'success').length;
     const warningCount = items.filter((item) => item.status === 'warning').length;
     const errorCount = items.filter((item) => item.status === 'error').length;
@@ -434,7 +474,6 @@ async function runTextModelProbe(config, options) {
           },
         },
       }];
-      body.tool_choice = { type: 'function', function: { name: 'diagnostic_echo' } };
     }
 
     const response = await fetch(`${trimBaseUrl(config.base_url)}/chat/completions`, {
@@ -839,7 +878,7 @@ function validatePiSessionSnapshot(snapshot = {}) {
 }
 
 // 将 Pi 自检信息转换为 Renderer 使用的公共诊断区。
-function createPiDiagnosticSections({ layout, sdkVersion, sessionSnapshot = {}, toolCheck, modelCheck, loopbackCheck, diagnosis, repair } = {}) {
+function createPiDiagnosticSections({ layout, sdkVersion, sessionSnapshot = {}, toolCheck, modelCheck, agentCheck, loopbackCheck, diagnosis, repair } = {}) {
   const validation = validatePiSessionSnapshot(sessionSnapshot);
   const toolStatus = !toolCheck?.success || !validation.toolsValid
     ? 'error'
@@ -893,11 +932,19 @@ function createPiDiagnosticSections({ layout, sdkVersion, sessionSnapshot = {}, 
   ];
   if (modelCheck) {
     const allModelProbesPassed = Object.values(modelCheck.probes || {}).every((probe) => probe?.success);
+    const agentSucceeded = agentCheck?.success === true;
+    const modelCapabilityPassed = modelCheck.agent_compatible && modelCheck.success;
     sections.push({
       id: 'pi-text-model',
       title: '当前文本模型',
-      status: allModelProbesPassed ? 'success' : modelCheck.agent_compatible && modelCheck.success ? 'warning' : 'error',
-      summary: allModelProbesPassed ? '普通、流式和工具调用能力均已通过' : modelCheck.agent_compatible && modelCheck.success ? 'Pi Agent 所需能力正常，但存在非关键探针警告' : '文本模型未完全满足 Pi Agent 能力要求',
+      status: allModelProbesPassed ? 'success' : agentSucceeded || modelCapabilityPassed ? 'warning' : 'error',
+      summary: allModelProbesPassed
+        ? '普通、流式和工具调用能力均已通过'
+        : agentSucceeded
+          ? '真实 Pi Agent 工具链路已通过，但存在非关键模型探针警告'
+          : modelCapabilityPassed
+            ? 'Pi Agent 所需能力正常，但存在非关键探针警告'
+            : '文本模型未完全满足 Pi Agent 能力要求',
       details: [
         { label: '服务商', value: modelCheck.config?.provider || '-' },
         { label: '模型', value: modelCheck.config?.model_name || '-' },
@@ -910,7 +957,7 @@ function createPiDiagnosticSections({ layout, sdkVersion, sessionSnapshot = {}, 
       items: Object.values(modelCheck.probes || {}).map((probe) => ({
         id: `model-${probe.id}`,
         label: probe.label,
-        status: probe.success ? 'success' : 'error',
+        status: probe.success ? 'success' : agentSucceeded ? 'warning' : 'error',
         message: `${probe.message || (probe.success ? '成功' : '失败')}，${probe.duration_ms || 0} ms${probe.status ? `，HTTP ${probe.status}` : ''}`,
       })),
     });

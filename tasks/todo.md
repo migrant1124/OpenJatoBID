@@ -376,3 +376,12 @@
 - [x] T180 第一阶段：新增 Agent runtime registry、coordinator、IPC/preload/types/config/settings 最小接入；默认运行时仍为 OpenCode，设置页可选择 Pi Agent 并对选中运行时执行自检。
 - [x] T181 第二阶段：新增 Pi SDK 依赖、Pi 独立运行目录、Pi Session、共享工具环境、自检诊断和本地 analytics 适配；Pi SDK 加载、runtime 创建和结构化自检失败链路已验证。
 - [-] T182 验证：CJS 语法检查、客户端构建、registry smoke、Pi runtime smoke、Pi self-check smoke、Electron native smoke、OpenCode 隔离/自检测试、workflow dry-run 和差异检查通过；`npm audit` 仍报告 25 项依赖漏洞，真实文本模型下 Pi 自检通过与 Electron UI 人工验收待执行。
+
+## 阶段 22：Pi Agent 韧性与受控目录交互
+
+> 来源：用户确认选择性吸收 `OpenBidKit_Yibiao` 在 `d786b72..0eae3db` 的 Agent 能力。只增强主项目既有 Pi runtime 与格式驱动目录链路；不替换 `outlineGenerationTask.cjs`，不迁入上游删除确定性校验的四个提交，不引入上游 JSON 状态文件作为业务权威状态，不修改发布、更新或 Analytics。
+
+- [x] T183 运行时韧性与可观测性：外部链接打开失败时复制链接；Pi 启用原生网络重试并与既有结果修复重试分开统计；监视器展示多轮任务输入、阶段输出和原生网络重试事件。
+- [x] T184 Pi 互动和结构化工具：新增 `ask-user`、`json-validation` 工具及对应 IPC、preload、类型和全局 Dialog；JSON 校验仅允许当前 Agent 工作区相对路径，预置 Schema 优先。
+- [x] T185 受控目录交互：在既有来源一级目录生成后停点确认，确认后才继续生成下级目录；最终目录经确定性校验后由 Pi 只读语义审查，审查结果只持久化展示，不允许 Agent 覆盖目录。
+- [-] T186 验证：聚焦 Node 测试、全部受改 CJS 语法检查、客户端构建、差异检查和 Electron 启动已通过；待用户在配置了真实模型的环境中完成多轮监视、提问 Dialog、目录确认和语义审查人工验收。

@@ -1,14 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { dialog } = require('electron');
-const {
-  getAgentRuntimeDefinition,
-  createAgentRuntime,
-  listAgentRuntimeDescriptors,
-  normalizeAgentRuntimeId,
-} = require('./agent/agentRuntimeRegistry.cjs');
+const { createPiRuntimeService } = require('./pi/piRuntimeService.cjs');
 const { buildPiSelfCheckReportMarkdown } = require('./pi/piSelfCheckService.cjs');
-const { buildSelfCheckReportMarkdown: buildOpenCodeSelfCheckReportMarkdown } = require('./opencode/opencodeSelfCheckService.cjs');
+
+const PI_RUNTIME_ID = 'pi';
+const PI_RUNTIME_NAME = 'Pi Agent';
 
 function nowIso() {
   return new Date().toISOString();
@@ -28,14 +26,22 @@ function sanitizeReportFilename(value) {
   return String(value || '智能体自检报告').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 80) || '智能体自检报告';
 }
 
-function createStoppedStatus(runtimeId) {
-  const definition = getAgentRuntimeDefinition(runtimeId);
+function createRuntimeDescriptor() {
   return {
-    runtime_id: runtimeId,
-    runtime_name: definition.displayName,
+    id: PI_RUNTIME_ID,
+    display_name: PI_RUNTIME_NAME,
+    description: '使用内嵌 Pi SDK 智能体链路。',
+    is_default: true,
+  };
+}
+
+function createStoppedStatus() {
+  return {
+    runtime_id: PI_RUNTIME_ID,
+    runtime_name: PI_RUNTIME_NAME,
     phase: 'stopped',
     healthy: false,
-    message: `${definition.displayName} 未启动`,
+    message: `${PI_RUNTIME_NAME} 未启动`,
     updated_at: nowIso(),
     active_task: null,
     queued_count: 0,
@@ -45,19 +51,16 @@ function createStoppedStatus(runtimeId) {
   };
 }
 
-function normalizeRuntimeStatus(runtimeId, rawStatus = {}) {
-  const definition = getAgentRuntimeDefinition(runtimeId);
+function normalizeRuntimeStatus(rawStatus = {}) {
   const runtimeDetails = rawStatus.runtime_details && typeof rawStatus.runtime_details === 'object'
     ? rawStatus.runtime_details
-    : rawStatus.opencode && typeof rawStatus.opencode === 'object'
-      ? rawStatus.opencode
-      : {};
+    : {};
   return {
-    runtime_id: runtimeId,
-    runtime_name: definition.displayName,
+    runtime_id: PI_RUNTIME_ID,
+    runtime_name: PI_RUNTIME_NAME,
     phase: rawStatus.phase || 'stopped',
     healthy: Boolean(rawStatus.healthy),
-    message: rawStatus.message || `${definition.displayName} 未启动`,
+    message: rawStatus.message || `${PI_RUNTIME_NAME} 未启动`,
     updated_at: rawStatus.updated_at || nowIso(),
     last_health_at: rawStatus.last_health_at || '',
     last_health_error: rawStatus.last_health_error || '',
@@ -71,59 +74,31 @@ function normalizeRuntimeStatus(runtimeId, rawStatus = {}) {
   };
 }
 
-function createResultDiagnostics(rawResult = {}) {
-  const diagnostics = rawResult.diagnostics && typeof rawResult.diagnostics === 'object'
-    ? { ...rawResult.diagnostics }
-    : {};
-  if (Array.isArray(rawResult.opencode_request_log)) diagnostics.request_log = rawResult.opencode_request_log;
-  if (rawResult.opencode_stderr_tail) diagnostics.stderr_tail = rawResult.opencode_stderr_tail;
-  if (rawResult.opencode_stdout_tail) diagnostics.stdout_tail = rawResult.opencode_stdout_tail;
-  return diagnostics;
-}
-
-function normalizeRunResult(runtimeId, rawResult = {}) {
-  const {
-    opencode_request_log: _requestLog,
-    opencode_stderr_tail: _stderrTail,
-    opencode_stdout_tail: _stdoutTail,
-    ...result
-  } = rawResult || {};
+function normalizeRunResult(rawResult = {}) {
   return {
-    ...result,
-    runtime_id: runtimeId,
-    diagnostics: createResultDiagnostics(rawResult),
+    ...rawResult,
+    runtime_id: PI_RUNTIME_ID,
+    diagnostics: rawResult.diagnostics && typeof rawResult.diagnostics === 'object'
+      ? { ...rawResult.diagnostics }
+      : {},
   };
 }
 
-function normalizeRunError(runtimeId, error) {
+function normalizeRunError(error) {
   if (!error || typeof error !== 'object') return error;
-  const diagnostics = error.agentDiagnostics && typeof error.agentDiagnostics === 'object'
+  error.agentRuntimeId = PI_RUNTIME_ID;
+  error.agentDiagnostics = error.agentDiagnostics && typeof error.agentDiagnostics === 'object'
     ? { ...error.agentDiagnostics }
     : {};
-  if (Array.isArray(error.openCodeRequestLog)) diagnostics.request_log = error.openCodeRequestLog;
-  if (error.openCodeStderrTail) diagnostics.stderr_tail = error.openCodeStderrTail;
-  if (error.openCodeStdoutTail) diagnostics.stdout_tail = error.openCodeStdoutTail;
-  if (error.openCodeRoute || error.openCodeMethod || error.openCodeStatus || error.openCodeCause) {
-    diagnostics.request = {
-      route: error.openCodeRoute || '',
-      method: error.openCodeMethod || '',
-      status: Number(error.openCodeStatus || 0),
-      duration_ms: Number(error.openCodeDurationMs || 0),
-      cause: error.openCodeCause || '',
-    };
-  }
-  error.agentRuntimeId = runtimeId;
-  error.agentDiagnostics = diagnostics;
   return error;
 }
 
-function normalizeSelfCheckResult(runtimeId, rawResult = {}) {
-  const definition = getAgentRuntimeDefinition(runtimeId);
+function normalizeSelfCheckResult(rawResult = {}) {
   return {
     ...rawResult,
     success: Boolean(rawResult.success),
-    runtime_id: runtimeId,
-    runtime_name: definition.displayName,
+    runtime_id: PI_RUNTIME_ID,
+    runtime_name: PI_RUNTIME_NAME,
     status: rawResult.status || (rawResult.success ? 'normal' : 'error'),
     message: rawResult.message || (rawResult.success ? '智能体自检正常' : '智能体自检失败'),
     checked_at: rawResult.checked_at || nowIso(),
@@ -142,52 +117,85 @@ function normalizeSelfCheckResult(runtimeId, rawResult = {}) {
     error: rawResult.error || undefined,
     detail_text: rawResult.detail_text || '',
     runtime_status: rawResult.runtime_status
-      ? normalizeRuntimeStatus(runtimeId, rawResult.runtime_status)
+      ? normalizeRuntimeStatus(rawResult.runtime_status)
       : undefined,
   };
 }
 
-function buildSelfCheckReportMarkdown(result = {}) {
-  const lines = [
-    `# ${result.runtime_name || '智能体'}自检报告`,
-    '',
-    `- 结果：${result.success ? '通过' : result.status === 'busy' ? '跳过' : '失败'}`,
-    `- 信息：${result.message || '-'}`,
-    `- 检查时间：${result.checked_at || '-'}`,
-    `- 耗时：${result.duration_ms || 0} ms`,
-    `- 运行目录：${result.runtime_root || '-'}`,
-    `- 工作区：${result.workspace_dir || '-'}`,
-    '',
-  ];
-  if (result.conclusion) lines.push('## 结论', '', result.conclusion, '');
-  if (Array.isArray(result.steps) && result.steps.length) {
-    lines.push('## 检查步骤', '');
-    result.steps.forEach((step) => lines.push(`- ${step.label}：${step.status}${step.message ? ` - ${step.message}` : ''}`));
-    lines.push('');
-  }
-  if (Array.isArray(result.sections)) {
-    result.sections.forEach((section) => {
-      lines.push(`## ${section.title}`, '', section.summary || section.status, '');
-      (section.details || []).forEach((item) => lines.push(`- ${item.label}：${item.value}`));
-      (section.items || []).forEach((item) => lines.push(`- ${item.label}：${item.message || item.detail || item.status}`));
-      lines.push('');
-    });
-  }
-  if (result.detail_text) lines.push('## 详细信息', '', '```text', result.detail_text, '```', '');
-  return lines.join('\n');
-}
-
-function createAgentService({ app, configStore, mainWindow, aiService, analyticsService }) {
-  const runtimes = new Map();
-  const runtimeUnsubscribers = new Map();
+function createAgentService({ app, configStore, aiService, analyticsService }) {
   const listeners = new Set();
+  const monitorListeners = new Set();
+  const questionListeners = new Set();
   const queue = [];
+  let runtime = null;
+  let runtimeUnsubscribe = null;
   let activeEntry = null;
   let queueDraining = false;
   let closing = false;
+  let monitorSequence = 0;
+  let monitorFlushTimer = null;
+  let pendingQuestion = null;
+  const pendingAssistantDeltas = new Map();
+  const pendingToolUpdates = new Map();
 
-  function getSelectedRuntimeId() {
-    return normalizeAgentRuntimeId(configStore.load().agent_runtime);
+  function clearPendingMonitorEvents() {
+    if (monitorFlushTimer) clearTimeout(monitorFlushTimer);
+    monitorFlushTimer = null;
+    pendingAssistantDeltas.clear();
+    pendingToolUpdates.clear();
+  }
+
+  function dispatchMonitorEvent(event = {}) {
+    if (!monitorListeners.size) return;
+    const normalized = {
+      ...event,
+      sequence: ++monitorSequence,
+      at: event.at || nowIso(),
+    };
+    monitorListeners.forEach((listener) => {
+      try { listener(normalized); } catch {}
+    });
+  }
+
+  function flushPendingMonitorEvents() {
+    if (monitorFlushTimer) clearTimeout(monitorFlushTimer);
+    monitorFlushTimer = null;
+    if (!monitorListeners.size) {
+      clearPendingMonitorEvents();
+      return;
+    }
+    pendingAssistantDeltas.forEach((event) => dispatchMonitorEvent(event));
+    pendingAssistantDeltas.clear();
+    pendingToolUpdates.forEach((event) => dispatchMonitorEvent(event));
+    pendingToolUpdates.clear();
+  }
+
+  function scheduleMonitorFlush() {
+    if (!monitorFlushTimer) {
+      monitorFlushTimer = setTimeout(flushPendingMonitorEvents, 50);
+    }
+  }
+
+  function emitMonitorEvent(event = {}) {
+    if (!monitorListeners.size) return;
+    if (event.type === 'assistant_delta') {
+      const key = String(event.task_id || 'active');
+      const previous = pendingAssistantDeltas.get(key);
+      pendingAssistantDeltas.set(key, {
+        ...event,
+        delta: `${previous?.delta || ''}${event.delta || ''}`,
+      });
+      scheduleMonitorFlush();
+      return;
+    }
+    if (event.type === 'tool_update') {
+      const key = `${event.task_id || 'active'}:${event.tool_call_id || event.tool_name || 'tool'}`;
+      pendingToolUpdates.set(key, event);
+      scheduleMonitorFlush();
+      return;
+    }
+    flushPendingMonitorEvents();
+    dispatchMonitorEvent(event);
   }
 
   function emitStatus() {
@@ -197,20 +205,97 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     });
   }
 
-  function ensureRuntime(runtimeId) {
-    const normalizedId = normalizeAgentRuntimeId(runtimeId);
-    if (runtimes.has(normalizedId)) return runtimes.get(normalizedId);
-    const runtime = createAgentRuntime(normalizedId, { app, configStore, mainWindow, aiService, analyticsService });
-    runtimes.set(normalizedId, runtime);
-    const unsubscribe = runtime.onStatus?.(() => emitStatus());
-    if (unsubscribe) runtimeUnsubscribers.set(normalizedId, unsubscribe);
+  function getPendingQuestion() {
+    return pendingQuestion?.question || null;
+  }
+
+  function emitQuestionState() {
+    const question = getPendingQuestion();
+    questionListeners.forEach((listener) => {
+      try { listener(question); } catch {}
+    });
+  }
+
+  function clearPendingQuestion(entry) {
+    if (!entry || pendingQuestion !== entry) return;
+    entry.signal?.removeEventListener?.('abort', entry.onAbort);
+    pendingQuestion = null;
+    emitQuestionState();
+  }
+
+  function rejectPendingQuestion(error) {
+    const entry = pendingQuestion;
+    if (!entry) return;
+    clearPendingQuestion(entry);
+    entry.reject(error);
+  }
+
+  // 在 Agent 工具调用和用户界面之间保持一个待答问题，避免并发问题互相覆盖。
+  function requestUserQuestion(request = {}, signal) {
+    if (closing) return Promise.reject(new Error('Agent 服务正在关闭'));
+    if (signal?.aborted) return Promise.reject(createAbortError(signal));
+    if (pendingQuestion) return Promise.reject(new Error('已有 Agent 问题正在等待用户回答'));
+
+    const sourceOptions = Array.isArray(request.options) ? request.options : [];
+    const question = {
+      question_id: crypto.randomUUID(),
+      task_id: safeText(request.task_id),
+      task_title: safeText(request.task_title) || 'Pi Agent 任务',
+      question: safeText(request.question),
+      options: sourceOptions.map((option, index) => ({
+        id: `option-${index + 1}`,
+        label: safeText(option?.label),
+        description: safeText(option?.description),
+        recommended: index === 0,
+        custom: option?.custom === true,
+      })),
+      asked_at: nowIso(),
+    };
+
+    return new Promise((resolve, reject) => {
+      const entry = { question, resolve, reject, signal, onAbort: null };
+      entry.onAbort = () => {
+        if (pendingQuestion !== entry) return;
+        clearPendingQuestion(entry);
+        reject(createAbortError(signal));
+      };
+      pendingQuestion = entry;
+      signal?.addEventListener?.('abort', entry.onAbort, { once: true });
+      emitQuestionState();
+    });
+  }
+
+  function answerQuestion(payload = {}) {
+    const entry = pendingQuestion;
+    if (!entry || payload.question_id !== entry.question.question_id) {
+      throw new Error('当前 Agent 问题已失效');
+    }
+    const option = entry.question.options.find((item) => item.id === payload.option_id);
+    if (!option) throw new Error('请选择一个有效选项');
+    const answer = option.custom ? safeText(payload.custom_answer) : option.label;
+    if (!answer) throw new Error('请输入具体要求');
+    clearPendingQuestion(entry);
+    entry.resolve({ answer, selected_option: option.label, is_custom: option.custom });
+    return { success: true };
+  }
+
+  function ensureRuntime() {
+    if (runtime) return runtime;
+    runtime = createPiRuntimeService({
+      app,
+      configStore,
+      aiService,
+      analyticsService,
+      isMonitorActive: () => monitorListeners.size > 0,
+      onMonitorEvent: emitMonitorEvent,
+      requestUserQuestion,
+    });
+    runtimeUnsubscribe = runtime.onStatus?.(() => emitStatus()) || null;
     return runtime;
   }
 
-  function getRuntimeStatus(runtimeId) {
-    const normalizedId = normalizeAgentRuntimeId(runtimeId);
-    const runtime = runtimes.get(normalizedId);
-    return runtime ? normalizeRuntimeStatus(normalizedId, runtime.getStatus()) : createStoppedStatus(normalizedId);
+  function getRuntimeStatus() {
+    return runtime ? normalizeRuntimeStatus(runtime.getStatus()) : createStoppedStatus();
   }
 
   function getQueuedTasks() {
@@ -219,18 +304,15 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
       title: entry.title,
       queued_at: entry.queuedAt,
       position: index + 1,
-      runtime_id: entry.runtimeId,
     }));
   }
 
-  function getCoordinatorStatus() {
-    const selectedRuntimeId = getSelectedRuntimeId();
-    const activeRuntimeId = activeEntry?.runtimeId || '';
-    const sourceStatus = getRuntimeStatus(activeRuntimeId || selectedRuntimeId);
+  function getStatus() {
+    const sourceStatus = getRuntimeStatus();
     return {
       ...sourceStatus,
-      selected_runtime_id: selectedRuntimeId,
-      active_runtime_id: activeRuntimeId,
+      selected_runtime_id: PI_RUNTIME_ID,
+      active_runtime_id: activeEntry ? PI_RUNTIME_ID : '',
       queued_count: queue.length,
       queued_tasks: getQueuedTasks(),
       active_task: sourceStatus.active_task || (activeEntry ? {
@@ -244,10 +326,6 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
         idle_seconds: 0,
       } : null),
     };
-  }
-
-  function getStatus(runtimeId) {
-    return runtimeId ? getRuntimeStatus(runtimeId) : getCoordinatorStatus();
   }
 
   function createAbortError(signal) {
@@ -279,12 +357,10 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
           entry.startedAt = nowIso();
           emitStatus();
           try {
-            const runtime = ensureRuntime(entry.runtimeId);
-            const rawResult = await runtime.runTask(entry.payload);
-            entry.resolve(normalizeRunResult(entry.runtimeId, rawResult));
+            const rawResult = await ensureRuntime().runTask(entry.payload);
+            entry.resolve(normalizeRunResult(rawResult));
           } catch (error) {
-            const normalizedError = normalizeRunError(entry.runtimeId, error);
-            entry.reject(normalizedError);
+            entry.reject(normalizeRunError(error));
           } finally {
             activeEntry = null;
             emitStatus();
@@ -297,15 +373,13 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     })();
   }
 
-  function runTask(payload = {}, runtimeId, userTaskContextProvider) {
+  function enqueueTask(payload = {}, userTaskContextProvider) {
     if (closing) return Promise.reject(new Error('Agent 服务正在关闭'));
-    const targetRuntimeId = normalizeAgentRuntimeId(runtimeId || getSelectedRuntimeId());
     if (payload.signal?.aborted) return Promise.reject(createAbortError(payload.signal));
     const taskId = payload.task_id || require('node:crypto').randomUUID();
     const title = payload.title || '易标智能体任务';
     return new Promise((resolve, reject) => {
       const entry = {
-        runtimeId: targetRuntimeId,
         taskId,
         title,
         queuedAt: nowIso(),
@@ -328,7 +402,7 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
           source: 'agent-coordinator.queue',
           visible: true,
           activity: false,
-          meta: { runtime_id: targetRuntimeId, position: queue.length },
+          meta: { runtime_id: PI_RUNTIME_ID, position: queue.length },
         });
       } catch {}
       emitStatus();
@@ -336,30 +410,34 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     });
   }
 
-  function bindSelectedRuntime(userTaskContextProvider) {
-    const runtimeId = getSelectedRuntimeId();
+  function runTask(payload = {}) {
+    return enqueueTask(payload, null);
+  }
+
+  function bindTaskContext(userTaskContextProvider) {
     return {
-      runtimeId,
-      runTask: (payload) => runTask(payload, runtimeId, userTaskContextProvider),
-      getStatus: () => getStatus(runtimeId),
+      runtimeId: PI_RUNTIME_ID,
+      runTask: (payload) => enqueueTask(payload, userTaskContextProvider),
+      getStatus,
     };
   }
 
-  async function warmup(runtimeId) {
-    const targetRuntimeId = normalizeAgentRuntimeId(runtimeId || getSelectedRuntimeId());
-    const runtime = ensureRuntime(targetRuntimeId);
-    await runtime.warmup();
-    return getStatus(targetRuntimeId);
+  function bindSelectedRuntime(userTaskContextProvider) {
+    return bindTaskContext(userTaskContextProvider);
   }
 
-  async function selfCheck(runtimeId) {
-    const targetRuntimeId = normalizeAgentRuntimeId(runtimeId || getSelectedRuntimeId());
+  async function warmup() {
+    const piRuntime = ensureRuntime();
+    await piRuntime.warmup();
+    return getStatus();
+  }
+
+  async function selfCheck() {
     if (activeEntry || queue.length) {
-      const definition = getAgentRuntimeDefinition(targetRuntimeId);
       return {
         success: false,
-        runtime_id: targetRuntimeId,
-        runtime_name: definition.displayName,
+        runtime_id: PI_RUNTIME_ID,
+        runtime_name: PI_RUNTIME_NAME,
         status: 'busy',
         message: 'Agent 正在处理其他任务，请耐心等待',
         checked_at: nowIso(),
@@ -373,14 +451,12 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
         steps: [],
         sections: [],
         detail_text: 'Agent 全局队列正在执行任务，本次自检已跳过。',
-        runtime_status: getCoordinatorStatus(),
+        runtime_status: getStatus(),
       };
     }
-    const definition = getAgentRuntimeDefinition(targetRuntimeId);
     const entry = {
-      runtimeId: targetRuntimeId,
-      taskId: `${targetRuntimeId}-self-check`,
-      title: `${definition.displayName} 自检`,
+      taskId: `${PI_RUNTIME_ID}-self-check`,
+      title: `${PI_RUNTIME_NAME} 自检`,
       queuedAt: nowIso(),
       startedAt: nowIso(),
       payload: {},
@@ -388,8 +464,7 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     activeEntry = entry;
     emitStatus();
     try {
-      const runtime = ensureRuntime(targetRuntimeId);
-      return normalizeSelfCheckResult(targetRuntimeId, await runtime.runSelfCheck());
+      return normalizeSelfCheckResult(await ensureRuntime().runSelfCheck());
     } finally {
       activeEntry = null;
       emitStatus();
@@ -397,21 +472,13 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     }
   }
 
-  async function restart(reason, runtimeId) {
-    const targetRuntimeId = normalizeAgentRuntimeId(runtimeId || getSelectedRuntimeId());
-    const runtime = ensureRuntime(targetRuntimeId);
-    await runtime.restart(reason || 'manual');
-    return getStatus(targetRuntimeId);
+  async function restart(reason) {
+    await ensureRuntime().restart(reason || 'manual');
+    return getStatus();
   }
 
   function handleConfigChanged(nextConfig = {}, previousConfig = {}) {
-    runtimes.forEach((runtime) => runtime.handleConfigChanged?.(nextConfig, previousConfig));
-    const nextRuntimeId = normalizeAgentRuntimeId(nextConfig.agent_runtime);
-    const previousRuntimeId = normalizeAgentRuntimeId(previousConfig.agent_runtime);
-    if (nextRuntimeId !== previousRuntimeId) {
-      emitStatus();
-      void warmup(nextRuntimeId).catch(() => emitStatus());
-    }
+    runtime?.handleConfigChanged?.(nextConfig, previousConfig);
   }
 
   function onStatus(listener) {
@@ -420,12 +487,34 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
     return () => listeners.delete(listener);
   }
 
+  function onMonitorEvent(listener) {
+    if (typeof listener !== 'function') return () => {};
+    monitorListeners.add(listener);
+    return () => {
+      monitorListeners.delete(listener);
+      if (!monitorListeners.size) clearPendingMonitorEvents();
+    };
+  }
+
+  function onQuestion(listener) {
+    if (typeof listener !== 'function') return () => {};
+    questionListeners.add(listener);
+    return () => questionListeners.delete(listener);
+  }
+
+  function getMonitorSnapshot() {
+    const runtimeStatus = getRuntimeStatus();
+    return {
+      attached_at: nowIso(),
+      active_task: runtimeStatus.active_task || null,
+      workspace_dir: runtimeStatus.active_task ? safeText(runtimeStatus.runtime_details?.workspace_dir) : '',
+    };
+  }
+
   async function exportSelfCheckReport(result = {}) {
-    const markdown = result.runtime_id === 'pi'
-      ? buildPiSelfCheckReportMarkdown(result)
-      : buildOpenCodeSelfCheckReportMarkdown(result);
+    const markdown = buildPiSelfCheckReportMarkdown(result);
     const defaultDir = app?.getPath ? app.getPath('documents') : process.env.USERPROFILE || process.cwd();
-    const defaultName = `${sanitizeReportFilename(`${result.runtime_name || '智能体'}自检报告`)}-${formatTimestampForFilename(result.checked_at)}.md`;
+    const defaultName = `${sanitizeReportFilename(`${result.runtime_name || PI_RUNTIME_NAME}自检报告`)}-${formatTimestampForFilename(result.checked_at)}.md`;
     const saveResult = await dialog.showSaveDialog({
       title: '导出智能体自检报告',
       defaultPath: path.join(defaultDir, defaultName),
@@ -438,36 +527,43 @@ function createAgentService({ app, configStore, mainWindow, aiService, analytics
 
   async function close() {
     closing = true;
+    rejectPendingQuestion(new Error('Agent 服务正在关闭'));
+    monitorListeners.clear();
+    questionListeners.clear();
+    clearPendingMonitorEvents();
     const error = new Error('Agent 服务正在关闭');
     while (queue.length) {
       const entry = queue.shift();
       entry.cleanup?.();
       entry.reject(error);
     }
-    await Promise.all(Array.from(runtimes.values()).map((runtime) => runtime.close?.().catch(() => undefined)));
-    runtimeUnsubscribers.forEach((unsubscribe) => {
-      try { unsubscribe(); } catch {}
-    });
-    runtimeUnsubscribers.clear();
-    runtimes.clear();
+    if (runtime) await runtime.close?.().catch(() => undefined);
+    try { runtimeUnsubscribe?.(); } catch {}
+    runtimeUnsubscribe = null;
+    runtime = null;
     emitStatus();
   }
 
   return {
-    listRuntimes: () => listAgentRuntimeDescriptors(),
+    listRuntimes: () => [createRuntimeDescriptor()],
     bindSelectedRuntime,
+    bindTaskContext,
     warmup,
     runTask,
     selfCheck,
     getStatus,
     restart,
-    markRestartPending: (reason, runtimeId) => {
-      const runtime = ensureRuntime(runtimeId || getSelectedRuntimeId());
-      runtime.markRestartPending?.(reason);
-      return getStatus(runtimeId);
+    markRestartPending: (reason) => {
+      ensureRuntime().markRestartPending?.(reason);
+      return getStatus();
     },
     handleConfigChanged,
     onStatus,
+    onMonitorEvent,
+    getPendingQuestion,
+    answerQuestion,
+    onQuestion,
+    getMonitorSnapshot,
     exportSelfCheckReport,
     close,
   };

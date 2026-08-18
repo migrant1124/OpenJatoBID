@@ -1512,3 +1512,31 @@ T162 → T163 → T164 → T165 → T166
 ```text
 T173 → T174 → T175 → T176
 ```
+
+## 21. Pi Agent 韧性与受控目录交互
+
+> 用户已确认选择性吸收源项目的 Pi Agent 能力。主项目保留现有格式驱动目录、人工编制保护、来源骨架锁定、评分映射、字数规划和确定性质量 Gate；不直接替换为上游 `outlineGenerationTaskV2.cjs`，不吸收上游删除业务校验的提交。
+
+### 21.1 T183 运行时韧性与可观测性
+
+- 在 `app:open-external` 失败时复制经过既有白名单校验的 URL，并返回可操作提示。
+- 启用 Pi SDK 原生 Provider 重试，新增对当前网关短暂不可用错误的规范化；原生网络重试事件单独上报，不能计入既有输出校验/修复重试。
+- 监视器记录每轮工作流输入和上一轮输出，并展示阶段与原生重试事件。
+
+### 21.2 T184 Pi 互动和结构化工具
+
+- 增加 `ask-user` 工具：仅用于实质影响结果的单一问题，Renderer 全局 Dialog 返回答案；不暴露内部文件名或字段名。
+- 增加 `json-validation` 工具：JSON.parse 与 Ajv Schema 校验；只能读取当前工作区的相对文件路径，任务可预置 Schema。
+- 同步 Pi Session、自检工具清单、Agent IPC/preload、共享类型和 App Provider；不新增独立状态库。
+
+### 21.3 T185 目录确认和只读语义审查
+
+- `outlineGenerationTask.cjs` 在生成来源一级目录后持久化 `waiting-outline-confirmation` 状态，页面显示只读目录确认 Dialog；继续后复用原有生成、字数调整和确定性验证。
+- 最终目录通过既有 `validateSourceDrivenOutline()` 和 `applyOutlineQualityRules()` 后，Pi 仅输出结构化语义审查结果；结果写入 `outlineQualityReview`，不得由 Agent 修改最终目录。
+- 任务异常关闭时，未完成确认状态标记为“请重新生成目录”，不得用 Agent 工作区 JSON 覆盖 SQLite Store。
+
+### 21.4 T186 验证门
+
+- 自动化：JSON 路径边界/Schema、提问选项约束、目录确认等待/继续/取消、语义审查只读、来源骨架与评分映射保护。
+- 静态：受改 CJS `node --check`、`npm.cmd run build`、`git diff --check`。
+- 运行：完整重启 Electron，验证监视器多轮记录、提问 Dialog、目录确认和最终审查结果；不调用真实模型、不打包、不提交、不推送。

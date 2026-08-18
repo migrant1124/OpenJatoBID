@@ -4,7 +4,20 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { normalizeAndValidateOutline } = require('./outlineGenerationGuard.cjs');
 const { getBidAnalysisTasks } = require('./bidAnalysisTask.cjs');
-const { runOutlineGenerationTask, validateSourceDrivenOutline, __knowledgePatchRuntime } = require('./outlineGenerationTask.cjs');
+const { runOutlineGenerationTask, validateSourceDrivenOutline, __knowledgePatchRuntime, __outlineSemanticReview } = require('./outlineGenerationTask.cjs');
+
+test('目录语义审查只接受展示型结论，不能携带目录修改结果', () => {
+  const review = __outlineSemanticReview.normalizeOutlineSemanticReview({
+    status: 'warning',
+    summary: '一处评分承接需要人工复核',
+    issues: [{ severity: 'warning', node_id: '2.1', message: '建议确认评分要点是否已由本节承接。' }],
+  });
+  assert.equal(review.status, 'warning');
+  assert.equal(review.issues[0].node_id, '2.1');
+  assert.throws(() => __outlineSemanticReview.normalizeOutlineSemanticReview({
+    status: 'rewrite', summary: '通过', issues: [],
+  }), /状态必须为 passed 或 warning/u);
+});
 
 function buildProcurementSummaryResult() {
   return {
@@ -146,6 +159,7 @@ test('目录生成实际流程会清除模型返回的人工和旧责任字段',
       return structuredClone(state);
     },
   };
+  const confirmations = [];
 
   await runOutlineGenerationTask({
     aiService,
@@ -153,10 +167,16 @@ test('目录生成实际流程会清除模型返回的人工和旧责任字段',
     workspaceStore,
     knowledgeBaseService: {},
     updateTask: () => undefined,
+    taskControl: {
+      waitForOutlineConfirmation: async (confirmation) => {
+        confirmations.push(confirmation);
+      },
+    },
     payload: { reference_knowledge_document_ids: [] },
   });
 
   const generated = state.outlineData.outline[0].children[0];
+  assert.deepEqual(confirmations[0].root_items.map((item) => item.title), ['技术方案']);
   assert.equal(generated.manual_input_required, undefined);
   assert.equal(generated.source_requirement_id, undefined);
   assert.equal(generated.deep_writing, undefined);

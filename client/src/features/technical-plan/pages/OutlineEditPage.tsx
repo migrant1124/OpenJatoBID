@@ -24,6 +24,7 @@ interface OutlineEditPageProps {
   formatRequirementsContent: string;
   referenceKnowledgeDocumentIds: string[];
   outlineData: OutlineData | null;
+  outlineQualityReview?: Record<string, unknown>;
   task?: BackgroundTaskState;
   contentTaskStatus?: BackgroundTaskState['status'];
   onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode; wordControlOptions: OutlineWordControlOptions }) => Promise<void>;
@@ -335,6 +336,7 @@ function OutlineEditPage({
   formatRequirementsContent,
   referenceKnowledgeDocumentIds,
   outlineData,
+  outlineQualityReview,
   task,
   contentTaskStatus,
   onOutlineConfigChange,
@@ -369,6 +371,7 @@ function OutlineEditPage({
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [sortDirty, setSortDirty] = useState(false);
   const [savingSort, setSavingSort] = useState(false);
+  const [confirmingOutline, setConfirmingOutline] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
   const logListRef = useRef<HTMLDivElement | null>(null);
@@ -384,6 +387,8 @@ function OutlineEditPage({
     ? findOutlineItemLevel(activeOutlineData.outline, selectedItem.id)
     : 0;
   const taskRunning = task?.status === 'running';
+  const outlineConfirmation = task?.stats?.outline_confirmation;
+  const awaitingOutlineConfirmation = taskRunning && outlineConfirmation?.status === 'waiting';
   const taskFailed = task?.status === 'error';
   const generating = startingOutline || taskRunning;
   const isExpansionWorkflow = workflowKind === 'existing-plan-expansion';
@@ -402,6 +407,9 @@ function OutlineEditPage({
   const statusText = generating ? '运行中' : taskFailed ? '失败' : outlineData ? '已完成' : '未开始';
   const aiStatusTitle = generating ? 'AI 正在工作' : taskFailed ? '生成失败' : outlineData ? '目录已生成' : '等待生成';
   const statusMessage = taskFailed ? task?.error || latestLog || '目录生成失败，请查看开发者日志。' : latestLog || '点击生成目录后，这里会显示目录生成、审核和修正过程。';
+  const semanticReview = outlineQualityReview?.semantic_review && typeof outlineQualityReview.semantic_review === 'object'
+    ? outlineQualityReview.semantic_review as { status?: string; summary?: string; issues?: Array<{ severity?: string; message?: string }> }
+    : null;
   const startedAt = task?.started_at ? Date.parse(task.started_at) : NaN;
   const updatedAt = task?.updated_at ? Date.parse(task.updated_at) : NaN;
   const effectiveStartedAt = Number.isFinite(startedAt) ? startedAt : localStartAt;
@@ -592,6 +600,21 @@ function OutlineEditPage({
       setStartingOutline(false);
       setLocalStartAt(null);
       showToast(error instanceof Error ? error.message : '启动目录生成任务失败', 'error');
+    }
+  };
+
+  const confirmGeneratedRoots = async (action: 'continue' | 'cancel') => {
+    if (confirmingOutline) return;
+    try {
+      setConfirmingOutline(true);
+      const tasks = window.yibiao?.tasks;
+      if (!tasks) throw new Error('目录确认通道不可用');
+      await tasks.confirmOutlineGeneration({ action });
+      if (action === 'cancel') showToast('已取消本次目录生成', 'info');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '提交目录确认失败', 'error');
+    } finally {
+      setConfirmingOutline(false);
     }
   };
 
@@ -1236,6 +1259,13 @@ function OutlineEditPage({
               </div>
             )}
           </div>
+          {semanticReview && (
+            <div className={`outline-semantic-review is-${semanticReview.status || 'unavailable'}`}>
+              <strong>Pi 语义审查</strong>
+              <p>{semanticReview.summary || '未返回审查结论'}</p>
+              {semanticReview.issues?.length ? <ul>{semanticReview.issues.map((issue, index) => <li key={`${issue.message || ''}-${index}`}>{issue.message || '未说明问题'}</li>)}</ul> : null}
+            </div>
+          )}
           <div className="outline-progress-log" ref={logListRef}>
             {progressLogs.length ? progressLogs.map((item, index) => (
               <p className={index === progressLogs.length - 1 ? 'is-latest' : ''} key={`${item}-${index}`}>{item}</p>
@@ -1361,6 +1391,39 @@ function OutlineEditPage({
         </aside>
       </section>
 
+      <Dialog.Root open={awaitingOutlineConfirmation}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content
+            className="content-regenerate-card outline-root-confirmation-card"
+            aria-describedby={undefined}
+            onEscapeKeyDown={(event) => event.preventDefault()}
+            onPointerDownOutside={(event) => event.preventDefault()}
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <div className="content-regenerate-card-head">
+              <span className="section-kicker">目录确认</span>
+              <Dialog.Title>确认一级目录</Dialog.Title>
+              <Dialog.Description>
+                以下一级目录已按{outlineConfirmation?.source_kind === 'knowledge' ? '参考知识库' : '招标文件格式要求'}固定。确认后才会补充下级目录和评分响应。
+              </Dialog.Description>
+            </div>
+            <div className="outline-root-confirmation-list">
+              {outlineConfirmation?.root_items?.map((item, index) => (
+                <div key={`${item.id || index}-${item.title || ''}`}>
+                  <strong>{item.id || index + 1}. {item.title || '未命名目录'}</strong>
+                  {item.description && <span>{item.description}</span>}
+                </div>
+              ))}
+            </div>
+            <div className="content-regenerate-actions">
+              <button type="button" className="secondary-action" disabled={confirmingOutline} onClick={() => { void confirmGeneratedRoots('cancel'); }}>取消本次生成</button>
+              <button type="button" className="primary-action" disabled={confirmingOutline} onClick={() => { void confirmGeneratedRoots('continue'); }}>{confirmingOutline ? '正在提交...' : '确认并继续'}</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <Dialog.Root open={generationDialogOpen} onOpenChange={setGenerationDialogOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="content-regenerate-modal" />
@@ -1375,7 +1438,7 @@ function OutlineEditPage({
                   <label className="outline-agent-debug-option">
                     <span>
                       <strong>强制 Agent 修复目录</strong>
-                      <small>本次目录生成会在最终保存前强制进入 OpenCode Agent 修复链路，用于验证 Agent workspace、结果 JSON 和程序校验。</small>
+                      <small>本次目录生成会在最终保存前强制进入 Pi Agent 修复链路，用于验证 Agent workspace、结果 JSON 和程序校验。</small>
                     </span>
                     <span className="yb-switch-control">
                       <input

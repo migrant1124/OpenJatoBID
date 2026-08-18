@@ -73,7 +73,7 @@ test('normal HTML illustration follows the upstream prompt, persists source, ren
   assert.match(renderedHtml, /<section>架构图<\/section>/);
   assert.deepEqual(sourceEvents, [{ mode: 'normal', source_path: 'illustrations/revision/html/html-1.html' }]);
   assert.deepEqual(sequence, ['source-saved', 'probe', 'render']);
-  assert.equal(result.asset_url, 'yibiao-asset://generated-images/html-1.png');
+  assert.equal(result.asset_url, 'yibiao-asset://generated-images/html-1.png?pixel-density=2');
   assert.equal(result.source_path, 'illustrations/revision/html/html-1.html');
 });
 
