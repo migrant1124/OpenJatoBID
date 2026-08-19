@@ -33,3 +33,12 @@ test('requested management ref must be reachable from origin main before any sec
   assert.match(workflow, /git merge-base --is-ancestor "\$REQUESTED_SHA" "\$MAIN_SHA"/);
   assert.match(workflow, /fetch-depth: 0/);
 });
+
+test('management version accepts an optional v prefix and reuses the normalized value', async () => {
+  const workflow = await fs.readFile(workflowPath, 'utf8');
+  assert.ok(workflow.includes('MANAGEMENT_VERSION="${MANAGEMENT_VERSION#v}"'));
+  assert.ok(workflow.includes('^\u005b0-9\u005d+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'));
+  assert.ok(workflow.includes('echo "version=$MANAGEMENT_VERSION" >> "$GITHUB_OUTPUT"'));
+  assert.ok(workflow.includes('MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}'));
+  assert.match(workflow, /name: Jato-AI-BID-Management-\$\{\{ steps\.validate-version\.outputs\.version \}\}-win-x64/);
+});
