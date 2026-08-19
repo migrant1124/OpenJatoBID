@@ -80,6 +80,16 @@ test('client release publishes only the normalized EXE and manifest whitelist', 
   assert.doesNotMatch(workflow, /latest\*?\.yml|\.blockmap/);
 });
 
+test('Worker test license is preflighted before dependencies and release side effects', async () => {
+  const workflow = await readWorkflow();
+  const preflightIndex = workflow.indexOf('Preflight Worker test license');
+  const installIndex = workflow.indexOf('Install client dependencies');
+  const draftIndex = workflow.indexOf('Create or refresh Draft Release with exact assets');
+  assert.ok(preflightIndex >= 0 && preflightIndex < installIndex && preflightIndex < draftIndex);
+  assert.match(workflow, /WORKER_RELEASE_VERIFY_MODE: license/);
+  assert.match(workflow, /Preflight Worker test license[\s\S]+JATOBID_UPDATE_TEST_LICENSE_JSON/);
+});
+
 test('R2 and Worker release gates keep the required order and rollback behavior', async () => {
   const workflow = await readWorkflow();
   const draftIndex = workflow.indexOf('Create or refresh Draft Release with exact assets');

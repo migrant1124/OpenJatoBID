@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
-import { verifyWorkerRelease } from './verify-worker-release.mjs';
+import { preflightWorkerLicense, validateTestLicense, verifyWorkerRelease } from './verify-worker-release.mjs';
+
+const NOW = Date.parse('2026-08-19T00:00:00.000Z');
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function createLicense(overrides = {}) {
+  return {
+    algorithm: 'ECDSA_P256_SHA256',
+    publicKey: 'test-public-key',
+    signature: 'test-signature',
+    payload: {
+      employeeId: 'test',
+      expiresAt: '2027-08-19T00:00:00.000Z',
+      offlineValidUntil: '2026-09-18T00:00:00.000Z',
+      ...overrides,
+    },
+  };
 }
 
 test('verifies latest metadata and a full Header-authenticated EXE download', async () => {
@@ -31,9 +47,10 @@ test('verifies latest metadata and a full Header-authenticated EXE download', as
 
   const result = await verifyWorkerRelease({
     baseUrl: 'https://updates.example.test',
-    license: { payload: { employeeId: 'test' } },
+    license: createLicense(),
     version: '1.3.2',
     fetchImpl,
+    now: NOW,
   });
   assert.equal(result.sha256, sha256(body));
   assert.equal(calls[2].options.headers['X-Jato-License'].includes('.'), false);
@@ -61,10 +78,37 @@ test('rejects a download whose bytes do not match the manifest', async () => {
   await assert.rejects(
     verifyWorkerRelease({
       baseUrl: 'https://updates.example.test',
-      license: {},
+      license: createLicense(),
       version: '1.3.2',
       fetchImpl,
+      now: NOW,
     }),
     /does not match/,
   );
+});
+
+test('rejects an expired offline window before contacting the Worker', () => {
+  assert.throws(
+    () => validateTestLicense(createLicense({ offlineValidUntil: '2026-08-16T17:05:41.537Z' }), NOW),
+    /offline window expired.*Renew the test device license/,
+  );
+});
+
+test('preflights the signed license against the Worker before release publication', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    return new Response('{}');
+  };
+  const result = await preflightWorkerLicense({
+    baseUrl: 'https://updates.example.test',
+    license: createLicense(),
+    fetchImpl,
+    now: NOW,
+  });
+  assert.equal(result.offlineValidUntil, '2026-09-18T00:00:00.000Z');
+  assert.deepEqual(calls, [
+    'https://updates.example.test/health',
+    'https://updates.example.test/updates/latest',
+  ]);
 });

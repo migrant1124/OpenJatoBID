@@ -6,6 +6,40 @@ function encodeLicenseHeader(license) {
   return Buffer.from(JSON.stringify(license), 'utf8').toString('base64url');
 }
 
+export function validateTestLicense(license, now = Date.now()) {
+  if (!license || typeof license !== 'object' || !license.payload || typeof license.payload !== 'object') {
+    throw new Error('JATOBID_UPDATE_TEST_LICENSE_JSON must contain a signed license envelope.');
+  }
+  const offlineValidUntil = Date.parse(license.payload.offlineValidUntil);
+  const expiresAt = Date.parse(license.payload.expiresAt);
+  if (!Number.isFinite(offlineValidUntil) || !Number.isFinite(expiresAt)) {
+    throw new Error('JATOBID_UPDATE_TEST_LICENSE_JSON has invalid license time fields.');
+  }
+  if (expiresAt <= now) {
+    throw new Error(`JATOBID_UPDATE_TEST_LICENSE_JSON license expired at ${license.payload.expiresAt}.`);
+  }
+  if (offlineValidUntil <= now) {
+    throw new Error(`JATOBID_UPDATE_TEST_LICENSE_JSON offline window expired at ${license.payload.offlineValidUntil}. Renew the test device license in the management application and update the GitHub Actions secret.`);
+  }
+  return license;
+}
+
+export async function preflightWorkerLicense({ baseUrl, license, fetchImpl = fetch, now = Date.now() }) {
+  validateTestLicense(license, now);
+  const origin = String(baseUrl || '').replace(/\/+$/, '');
+  const health = await fetchImpl(`${origin}/health`, { headers: { 'User-Agent': 'jatobid-release-check' } });
+  if (!health.ok) throw new Error(`Worker health check failed: ${health.status}`);
+  const response = await fetchImpl(`${origin}/updates/latest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': 'jatobid-release-check' },
+    body: JSON.stringify({ license }),
+  });
+  if (!response.ok) {
+    throw new Error(`Worker rejected JATOBID_UPDATE_TEST_LICENSE_JSON with status ${response.status}. Renew the test device license in the management application and confirm the Worker trusts the same issuer public key.`);
+  }
+  return { offlineValidUntil: license.payload.offlineValidUntil };
+}
+
 async function responseSha256(response) {
   const hash = crypto.createHash('sha256');
   let size = 0;
@@ -20,7 +54,8 @@ async function responseSha256(response) {
   return { size, sha256: hash.digest('hex') };
 }
 
-export async function verifyWorkerRelease({ baseUrl, license, version, fetchImpl = fetch }) {
+export async function verifyWorkerRelease({ baseUrl, license, version, fetchImpl = fetch, now = Date.now() }) {
+  validateTestLicense(license, now);
   const origin = String(baseUrl || '').replace(/\/+$/, '');
   const health = await fetchImpl(`${origin}/health`, { headers: { 'User-Agent': 'jatobid-release-check' } });
   if (!health.ok) throw new Error(`Worker health check failed: ${health.status}`);
@@ -62,10 +97,17 @@ export async function verifyWorkerRelease({ baseUrl, license, version, fetchImpl
 async function main() {
   const baseUrl = String(process.env.UPDATE_WORKER_BASE_URL || 'https://bidupdat.migrant1124.workers.dev').trim();
   const version = String(process.env.RELEASE_VERSION || '').trim();
+  const mode = String(process.env.WORKER_RELEASE_VERIFY_MODE || 'release').trim();
   const licenseText = String(process.env.JATOBID_UPDATE_TEST_LICENSE_JSON || '').trim();
-  if (!version) throw new Error('RELEASE_VERSION is required.');
   if (!licenseText) throw new Error('JATOBID_UPDATE_TEST_LICENSE_JSON is required for Worker release verification.');
-  const result = await verifyWorkerRelease({ baseUrl, version, license: JSON.parse(licenseText) });
+  const license = JSON.parse(licenseText);
+  if (mode === 'license') {
+    const result = await preflightWorkerLicense({ baseUrl, license });
+    console.log(`Verified Worker test license through ${result.offlineValidUntil}.`);
+    return;
+  }
+  if (!version) throw new Error('RELEASE_VERSION is required.');
+  const result = await verifyWorkerRelease({ baseUrl, version, license });
   console.log(`Verified Worker release ${result.version}: ${result.fileName}, ${result.size} bytes, SHA-256 ${result.sha256}.`);
 }
 
