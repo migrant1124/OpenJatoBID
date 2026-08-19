@@ -14,13 +14,15 @@ test('management build is manual, independent, internal and retained for thirty 
   assert.doesNotMatch(workflow, /gh release|publish-r2|R2_ACCESS_KEY_ID/);
 });
 
-test('temporary credentials are removed before the exact Artifact is uploaded', async () => {
+test('temporary credentials are created by a dedicated script and removed before upload', async () => {
   const workflow = await fs.readFile(workflowPath, 'utf8');
   const createIndex = workflow.indexOf('Create temporary initial administrator credential');
   const buildIndex = workflow.indexOf('Build and verify Windows management application');
   const removeIndex = workflow.indexOf('Remove temporary initial administrator credential');
   const uploadIndex = workflow.indexOf('Upload management Artifact for internal distribution');
   assert.ok(createIndex < buildIndex && buildIndex < removeIndex && removeIndex < uploadIndex);
+  assert.match(workflow, /run: node scripts\/write-initial-admin-credential\.cjs/);
+  assert.doesNotMatch(workflow, /node -e .*MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON/);
   assert.match(workflow, /if: \$\{\{ always\(\) \}\}/);
   assert.match(workflow, /management\/release-artifact\/\*/);
 });

@@ -67,12 +67,7 @@ jobs:
       - name: Create temporary initial administrator credential
         env:
           MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON: ${{ secrets.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON }}
-        run: |
-          if [ -z "$MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON" ]; then
-            echo "MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON is required."
-            exit 1
-          fi
-          node -e "JSON.parse(process.env.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON); require('node:fs').writeFileSync('initial-admin.private.json', process.env.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON, 'utf8')"
+        run: node scripts/write-initial-admin-credential.cjs
 
       - name: Test management application
         run: npm test
