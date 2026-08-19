@@ -1,4 +1,5 @@
 name: Release Client
+run-name: Release Client ${{ inputs.tag_name }} @ ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -35,6 +36,7 @@ jobs:
     env:
       TAG_NAME: ${{ inputs.tag_name }}
       CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+      WORKFLOW_SOURCE_SHA: ${{ github.sha }}
       CSC_LINK: ''
       WIN_CSC_LINK: ''
       CSC_KEY_PASSWORD: ''
@@ -65,6 +67,9 @@ jobs:
           }
           $commitSha = (git rev-parse HEAD).Trim()
           $tagCommitSha = (git rev-list -n 1 $env:TAG_NAME).Trim()
+          if ($env:WORKFLOW_SOURCE_SHA -cne $tagCommitSha) {
+            throw "GitHub Actions workflow source commit $env:WORKFLOW_SOURCE_SHA does not match release tag commit $tagCommitSha. Start a new workflow run from the tag commit; rerunning an older run reuses its original workflow."
+          }
           if ($commitSha -cne $tagCommitSha) {
             throw "Checkout commit $commitSha does not match tag commit $tagCommitSha."
           }

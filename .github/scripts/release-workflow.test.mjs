@@ -58,6 +58,8 @@ test('client release validates stable tag, exact confirmation, and tag commit be
   assert.ok(validateIndex >= 0 && validateIndex < draftIndex && validateIndex < r2Index);
   assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
   assert.match(workflow, /PUBLISH \$env:TAG_NAME/);
+  assert.match(workflow, /WORKFLOW_SOURCE_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /workflow source commit \$env:WORKFLOW_SOURCE_SHA does not match release tag commit \$tagCommitSha/);
   assert.match(workflow, /git rev-list -n 1 \$env:TAG_NAME/);
 });
 
