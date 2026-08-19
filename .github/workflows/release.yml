@@ -20,7 +20,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION || 'v1.17.8' }}
   RIPGREP_VERSION: ${{ vars.RIPGREP_VERSION || '14.1.1' }}
   FD_VERSION: ${{ vars.FD_VERSION || 'v10.3.0' }}
   JQ_VERSION: ${{ vars.JQ_VERSION || 'jq-1.7.1' }}
@@ -105,29 +104,18 @@ jobs:
         working-directory: client
         run: npm run test:update
 
-      - name: Prepare OpenCode binary
-        working-directory: client
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENCODE_VERSION: ${{ env.OPENCODE_VERSION }}
-        run: node scripts/prepare-opencode-binary.cjs --platform win32 --arch x64
-
-      - name: Verify OpenCode binary
-        working-directory: client
-        run: node scripts/verify-opencode-binary.cjs --platform win32 --arch x64
-
-      - name: Prepare OpenCode tools
+      - name: Prepare Agent tools
         working-directory: client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RIPGREP_VERSION: ${{ env.RIPGREP_VERSION }}
           FD_VERSION: ${{ env.FD_VERSION }}
           JQ_VERSION: ${{ env.JQ_VERSION }}
-        run: node scripts/prepare-opencode-tools.cjs --platform win32 --arch x64
+        run: node scripts/prepare-agent-tools.cjs --platform win32 --arch x64
 
-      - name: Verify OpenCode tools
+      - name: Verify Agent tools
         working-directory: client
-        run: node scripts/verify-opencode-tools.cjs --platform win32 --arch x64
+        run: node scripts/verify-agent-tools.cjs --platform win32 --arch x64
 
       - name: Rebuild Electron native dependencies
         working-directory: client
@@ -169,13 +157,9 @@ jobs:
         working-directory: client
         run: npx electron-builder --win nsis --publish never
 
-      - name: Verify packaged OpenCode binary
+      - name: Verify packaged Agent tools
         working-directory: client
-        run: node scripts/verify-packaged-opencode-binary.cjs --platform win32 --arch x64 --release release
-
-      - name: Verify packaged OpenCode tools
-        working-directory: client
-        run: node scripts/verify-packaged-opencode-tools.cjs --platform win32 --arch x64 --release release
+        run: node scripts/verify-packaged-agent-tools.cjs --platform win32 --arch x64 --release release
 
       - name: Prepare exact release whitelist and manifest
         env:

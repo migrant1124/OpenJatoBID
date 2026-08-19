@@ -39,6 +39,17 @@ test('client release rejects hosted runners, Actions artifacts, and npm cache', 
   assert.doesNotMatch(workflow, /\bsudo\b|\bapt\b|awscli-exe-linux|unzip -q|shell: bash/);
 });
 
+test('client release references existing Agent tool scripts', async () => {
+  const workflow = await readWorkflow();
+  assert.doesNotMatch(workflow, /OpenCode|opencode|OPENCODE_VERSION/);
+  const scriptPaths = [...workflow.matchAll(/run: node (scripts\/[\w.-]+\.cjs)[^\n]*/g)]
+    .map((match) => match[1]);
+  assert.ok(scriptPaths.length > 0);
+  for (const scriptPath of scriptPaths) {
+    await fs.access(path.join(root, 'client', scriptPath));
+  }
+});
+
 test('client release validates stable tag, exact confirmation, and tag commit before uploads', async () => {
   const workflow = await readWorkflow();
   const validateIndex = workflow.indexOf('Validate release tag, confirmation, and checkout commit');
