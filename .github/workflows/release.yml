@@ -99,7 +99,8 @@ jobs:
             .github/scripts/publish-r2-release.test.mjs `
             .github/scripts/verify-worker-release.test.mjs `
             .github/scripts/release-workflow.test.mjs `
-            analytics/worker/src/routes/updates.test.js
+            analytics/worker/src/routes/updates.test.js `
+            client/scripts/package-build-config.test.cjs
 
       - name: Install client dependencies
         working-directory: client
