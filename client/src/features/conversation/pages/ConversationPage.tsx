@@ -126,6 +126,18 @@ function ConversationPage() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ block: 'end' }); }, [workspace.snapshot?.messages]);
 
+  useEffect(() => {
+    const closeMenus = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      document.querySelectorAll<HTMLDetailsElement>('.conversation-page details[open]').forEach((menu) => {
+        if (!menu.contains(target)) menu.open = false;
+      });
+    };
+    document.addEventListener('click', closeMenus);
+    return () => document.removeEventListener('click', closeMenus);
+  }, []);
+
   const openRename = (thread?: ConversationThread) => {
     if (thread && thread.threadId !== workspace.activeThreadId) workspace.selectThread(thread.threadId);
     setRenameValue(thread?.title || currentThread?.title || '');
