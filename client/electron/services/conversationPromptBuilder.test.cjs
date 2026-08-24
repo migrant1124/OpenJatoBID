@@ -24,3 +24,15 @@ test('workspace exposes attachment content as files instead of inlining it into 
   assert.equal(result.files.find((item) => item.path === 'attachments/a1/content.md').content, '机密正文');
   assert.match(result.files.find((item) => item.path === 'attachment-manifest.md').content, /材料\.docx/);
 });
+
+test('workspace sends images separately from text files and keeps base64 out of the prompt workspace', () => {
+  const result = buildConversationWorkspace({
+    messages: [],
+    currentMessage: { sequence: 1, contentMarkdown: '识别图片' },
+    attachments: [{ attachmentId: 'i1', fileName: '现场.webp', mimeType: 'image/jpeg', imageData: 'base64-secret' }],
+    contextLengthLimit: 48000,
+  });
+  assert.deepEqual(result.images, [{ type: 'image', data: 'base64-secret', mimeType: 'image/jpeg' }]);
+  assert.doesNotMatch(JSON.stringify(result.files), /base64-secret/);
+  assert.match(result.files.find((item) => item.path === 'attachment-manifest.md').content, /multimodal_image_index: 1/);
+});

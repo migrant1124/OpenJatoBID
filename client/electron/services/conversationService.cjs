@@ -74,6 +74,7 @@ function createConversationService({ app, configStore, store, attachmentService,
     const activeMessageId = activeTasksByThread.get(threadId);
     if (activeMessageId) await cancelMessage({ threadId, assistantMessageId: activeMessageId });
     const result = store.softDeleteThread(threadId);
+    if (!store.listThreads().length) store.createThread();
     emit({ type: 'thread-list-changed' });
     return result;
   }
@@ -99,11 +100,13 @@ function createConversationService({ app, configStore, store, attachmentService,
   async function loadReadyAttachments(threadId) {
     const attachments = store.listReadyAttachments(threadId, true);
     return Promise.all(attachments.map(async (attachment) => {
-      const markdownPath = path.resolve(attachment.markdownPath);
-      if (markdownPath !== rootDir && !markdownPath.startsWith(`${rootDir}${path.sep}`)) {
+      const contentPath = path.resolve(attachment.markdownPath);
+      if (contentPath !== rootDir && !contentPath.startsWith(`${rootDir}${path.sep}`)) {
         throw conversationError('ATTACHMENT_NOT_READY', '附件解析内容不在当前会话工作区。');
       }
-      return { ...attachment, contentMarkdown: await fs.readFile(markdownPath, 'utf8') };
+      return attachment.mimeType?.startsWith('image/')
+        ? { ...attachment, imageData: await fs.readFile(contentPath, 'base64') }
+        : { ...attachment, contentMarkdown: await fs.readFile(contentPath, 'utf8') };
     }));
   }
 
@@ -154,6 +157,7 @@ function createConversationService({ app, configStore, store, attachmentService,
             prompt: runInput.prompt,
             session_instructions: CONVERSATION_SYSTEM_INSTRUCTION,
             files: runInput.files,
+            images: runInput.images,
             max_retries: 0,
             signal: controller.signal,
             onActivity(event) {

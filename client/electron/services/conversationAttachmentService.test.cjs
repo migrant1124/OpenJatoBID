@@ -105,3 +105,10 @@ test('attachment errors exposed to Renderer never include source paths', () => {
   assert.equal(publicProcessingError('copying').includes('D:\\private'), false);
   assert.equal(publicProcessingError('parsing').includes('D:\\private'), false);
 });
+
+test('common image formats are normalized for multimodal requests without document parsing', async () => {
+  const { IMAGE_MIME_TYPES, normalizeImageForModel } = loadService();
+  const result = await normalizeImageForModel(path.join(__dirname, '..', '..', 'assets', 'icon_16.png'), 'image/png');
+  assert.equal(result.mimeType, 'image/png');
+  assert.deepEqual([...IMAGE_MIME_TYPES.keys()], ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+});

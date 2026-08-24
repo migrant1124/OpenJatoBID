@@ -27,6 +27,31 @@ const MAX_BODY_BYTES = 20 * 1024 * 1024;
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 600000;
 const SERVER_TIMEOUT_BUFFER_MS = 10000;
 const DEFAULT_LOOPBACK_PROBE_TIMEOUT_MS = 1500;
+const IMAGE_UNSUPPORTED_MESSAGE = '当前文本模型不支持图片识别，请在设置中更换支持图片输入的多模态模型。';
+
+function requestContainsImage(body) {
+  return body?.messages?.some((message) => Array.isArray(message?.content)
+    && message.content.some((part) => ['image', 'image_url', 'input_image'].includes(part?.type))) || false;
+}
+
+function isImageUnsupportedError(error) {
+  const detail = [error?.message, error?.aiHttpErrorDetail, error?.raw_response_body].filter(Boolean).join(' ');
+  return /image|vision|multimodal|image_url|input_image|图片|图像|视觉/i.test(detail)
+    && /unsupported|not support|does not support|only supports? text|image_url is only supported|不支持|仅支持文本|无法.{0,6}(识别|处理|读取)/i.test(detail);
+}
+
+function notifyImageUnsupported(error) {
+  if (error?.imageUnsupportedNotified) return;
+  error.imageUnsupportedNotified = true;
+  emitAiHttpErrorToWindows({
+    status: error?.status || error?.statusCode || 400,
+    statusText: '',
+    contentType: 'text/html; charset=utf-8',
+    body: `<!doctype html><html lang="zh-CN"><body style="font-family:sans-serif;padding:24px"><h2>模型不支持图片</h2><p>${IMAGE_UNSUPPORTED_MESSAGE}</p></body></html>`,
+    source: 'text-model',
+    createdAt: new Date().toISOString(),
+  });
+}
 
 function normalizeTimeoutMs(value, fallback = DEFAULT_UPSTREAM_TIMEOUT_MS) {
   const number = Number(value);
@@ -1005,6 +1030,10 @@ async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQ
         streamHandedOff = stream;
         return proxyResponse;
       } catch (error) {
+        if (privacyMode && requestContainsImage(requestBody) && isImageUnsupportedError(error)) {
+          error.conversationImageUnsupported = true;
+          notifyImageUnsupported(error);
+        }
         recordAgentAiFailure({
           app,
           config,
@@ -1247,7 +1276,9 @@ function createAgentOpenAiProxy({
       if (!res.headersSent) {
         sendJson(res, statusCode, {
           error: {
-            message: privacyMode ? '模型请求失败' : error.message || `${runtimeMeta.displayName} AI proxy failed`,
+            message: error?.conversationImageUnsupported
+              ? IMAGE_UNSUPPORTED_MESSAGE
+              : privacyMode ? '模型请求失败' : error.message || `${runtimeMeta.displayName} AI proxy failed`,
             type: 'proxy_error',
           },
         });
@@ -1390,7 +1421,10 @@ function createAgentOpenAiProxy({
 
 module.exports = {
   createAgentOpenAiProxy,
+  IMAGE_UNSUPPORTED_MESSAGE,
+  isImageUnsupportedError,
   normalizeAgentProxyRequestBody,
+  requestContainsImage,
   summarizeProxyConfig,
   summarizeRequestBody,
 };

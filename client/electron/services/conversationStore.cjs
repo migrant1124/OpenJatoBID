@@ -234,7 +234,7 @@ function createConversationStore({ db }) {
     if (!existing) throw new Error('附件不存在。');
     if (existing.status === 'removed' && partial.status !== 'removed') return toAttachment(existing);
     const fields = {
-      status: 'status', progress: 'progress', error: 'error', markdownPath: 'markdown_path', markdownChars: 'markdown_chars',
+      status: 'status', progress: 'progress', error: 'error', markdownPath: 'markdown_path', mimeType: 'mime_type', markdownChars: 'markdown_chars',
       parserProvider: 'parser_provider', parserLabel: 'parser_label', originMessageId: 'origin_message_id',
     };
     const entries = Object.entries(fields).filter(([key]) => Object.prototype.hasOwnProperty.call(partial, key));

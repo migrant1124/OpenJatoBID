@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { dialog } = require('electron');
 const { parseDocumentWithConfig, resolveFileParser } = require('./fileService.cjs');
@@ -8,11 +9,17 @@ const { parseDocumentWithConfig, resolveFileParser } = require('./fileService.cj
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 500 * 1024 * 1024;
+const MAX_MODEL_IMAGE_BYTES = 2 * 1024 * 1024;
+const IMAGE_MIME_TYPES = new Map([
+  ['.png', 'image/png'], ['.jpg', 'image/jpeg'], ['.jpeg', 'image/jpeg'],
+  ['.webp', 'image/webp'], ['.gif', 'image/gif'], ['.bmp', 'image/bmp'],
+]);
 
 const parserLabels = {
   local: '本地解析',
   'mineru-accurate-api': 'MinerU 精准解析 API',
   'mineru-agent-api': 'MinerU-Agent 轻量解析 API',
+  'multimodal-image': '多模态图片',
 };
 
 function createError(code, message) {
@@ -64,6 +71,26 @@ function sha256File(filePath) {
   });
 }
 
+function imageMimeType(filePath) {
+  return IMAGE_MIME_TYPES.get(path.extname(filePath).toLowerCase()) || '';
+}
+
+let imageProcessorPromise;
+async function normalizeImageForModel(filePath, sourceMimeType) {
+  imageProcessorPromise ||= import(pathToFileURL(path.join(__dirname, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'utils', 'image-process.js')).href);
+  const { processImage } = await imageProcessorPromise;
+  const result = await processImage(await fsp.readFile(filePath), sourceMimeType, {
+    autoResizeImages: true,
+    resizeOptions: { maxWidth: 1600, maxHeight: 1600, maxBytes: MAX_MODEL_IMAGE_BYTES },
+  });
+  if (!result.ok) throw createError('ATTACHMENT_UNSUPPORTED', '无法读取该图片，请确认文件完整且格式受支持。');
+  return {
+    buffer: Buffer.from(result.data, 'base64'),
+    mimeType: result.mimeType,
+    extension: result.mimeType === 'image/png' ? '.png' : result.mimeType === 'image/jpeg' ? '.jpg' : `.${result.mimeType.split('/')[1]}`,
+  };
+}
+
 function resolveAttachmentDirectory(rootDir, target) {
   const expected = path.resolve(rootDir, 'threads', target.thread_id, 'attachments', target.attachment_id);
   const actual = path.resolve(path.dirname(path.dirname(target.stored_file_path)));
@@ -99,19 +126,21 @@ function createConversationAttachmentService({ app, configStore, store, emitEven
       directory,
       originalPath: path.join(directory, 'original', safeFileName(fileName)),
       markdownPath: path.join(directory, 'parsed', 'content.md'),
+      imageBasePath: path.join(directory, 'parsed', 'image'),
     };
   }
 
   async function prepareSelectedFile(threadId, filePath, config) {
     const stat = await fsp.stat(filePath);
     if (stat.size > MAX_FILE_BYTES) throw createError('ATTACHMENT_FILE_TOO_LARGE', '单个附件不能超过 200MB。');
-    const parser = resolveFileParser(config, filePath);
+    const imageMime = imageMimeType(filePath);
+    const parser = imageMime ? { supported: true, provider: 'multimodal-image' } : resolveFileParser(config, filePath);
     if (!parser.supported) throw createError('ATTACHMENT_UNSUPPORTED', '当前文件解析方式不支持该格式。');
     const sha256 = await sha256File(filePath);
     const attachmentId = crypto.randomUUID();
     const fileName = path.basename(filePath);
     const paths = attachmentPaths(threadId, attachmentId, fileName);
-    return { attachmentId, threadId, filePath, fileName, stat, parser, sha256, paths };
+    return { attachmentId, threadId, filePath, fileName, stat, parser, imageMime, sha256, paths };
   }
 
   async function processSelectedFile(prepared, config) {
@@ -128,6 +157,17 @@ function createConversationAttachmentService({ app, configStore, store, emitEven
       stage = 'parsing';
       if (attachment.status === 'removed') return attachment;
       emit(attachment, '正在解析');
+      if (prepared.imageMime) {
+        const normalized = await normalizeImageForModel(paths.originalPath, prepared.imageMime);
+        const imagePath = `${paths.imageBasePath}${normalized.extension}`;
+        await fsp.mkdir(path.dirname(imagePath), { recursive: true });
+        await fsp.writeFile(imagePath, normalized.buffer);
+        attachment = store.updateAttachment(attachmentId, {
+          status: 'ready', progress: 100, markdownPath: imagePath, mimeType: normalized.mimeType, markdownChars: 0, error: null,
+        });
+        if (attachment.status !== 'removed') emit(attachment, '图片处理完成');
+        return attachment;
+      }
       const markdown = await parseDocumentWithConfig(app, paths.originalPath, config, {
         preserveImages: false,
         assetScope: `conversation-${threadId}-${attachmentId}`,
@@ -150,7 +190,7 @@ function createConversationAttachmentService({ app, configStore, store, emitEven
       return attachment;
     } catch (error) {
       attachment = store.updateAttachment(attachmentId, {
-        status: 'error', progress: 0, error: publicProcessingError(stage),
+        status: 'error', progress: 0, error: prepared.imageMime ? '图片处理失败，请确认文件完整且格式受支持。' : publicProcessingError(stage),
       });
       if (attachment.status !== 'removed') emit(attachment, '解析失败');
       return attachment;
@@ -165,7 +205,7 @@ function createConversationAttachmentService({ app, configStore, store, emitEven
       title: '选择对话附件',
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: parserLabels[provider] || '支持的文档', extensions: ['txt', 'md', 'markdown', 'doc', 'docx', 'wps', 'pdf', 'xls', 'xlsx'] },
+        { name: `${parserLabels[provider] || '支持的文档'}和图片`, extensions: ['txt', 'md', 'markdown', 'doc', 'docx', 'wps', 'pdf', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
         { name: '所有文件', extensions: ['*'] },
       ],
     });
@@ -201,7 +241,8 @@ function createConversationAttachmentService({ app, configStore, store, emitEven
       sizeBytes: prepared.stat.size,
       sha256: prepared.sha256,
       storedFilePath: prepared.paths.originalPath,
-      markdownPath: prepared.paths.markdownPath,
+      markdownPath: prepared.imageMime ? '' : prepared.paths.markdownPath,
+      mimeType: prepared.imageMime || undefined,
       parserProvider: prepared.parser.provider,
       parserLabel: parserLabels[prepared.parser.provider] || '本地解析',
       status: 'selected',
@@ -306,6 +347,8 @@ module.exports = {
   MAX_ATTACHMENTS,
   MAX_FILE_BYTES,
   MAX_TOTAL_BYTES,
+  IMAGE_MIME_TYPES,
+  normalizeImageForModel,
   resolveAttachmentDirectory,
   publicSelectionError,
   publicProcessingError,

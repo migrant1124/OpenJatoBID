@@ -11,6 +11,31 @@ test('reasoning negotiation only falls back for explicit capability errors', () 
   assert.equal(isReasoningUnsupported(new Error('HTTP 503 upstream unavailable')), false);
 });
 
+test('deleting the last thread creates exactly one replacement thread', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.transaction = (fn) => (...args) => {
+    db.exec('BEGIN');
+    try { const result = fn(...args); db.exec('COMMIT'); return result; } catch (error) { db.exec('ROLLBACK'); throw error; }
+  };
+  createConversationSchema(db);
+  const store = createConversationStore({ db });
+  const thread = store.createThread();
+  const service = createConversationService({
+    app: { getPath: () => os.tmpdir() },
+    configStore: { load: () => ({}) },
+    store,
+    attachmentService: { cleanupExpiredAttachments: async () => {} },
+    agentService: {},
+    exportService: {},
+  });
+  await service.deleteThread({ threadId: thread.threadId });
+  const threads = service.listThreads();
+  assert.equal(threads.length, 1);
+  assert.notEqual(threads[0].threadId, thread.threadId);
+  await service.close();
+  db.close();
+});
+
 test('send returns placeholders immediately, streams in memory, and persists once on completion', async () => {
   const db = new DatabaseSync(':memory:');
   db.transaction = (fn) => (...args) => {

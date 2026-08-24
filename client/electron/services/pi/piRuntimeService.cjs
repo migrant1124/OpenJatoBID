@@ -700,7 +700,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       for (let attemptIndex = 0; attemptIndex <= maxRetries; attemptIndex += 1) {
         try {
           if (activeController.signal.aborted) throw activeController.signal.reason;
-          await session.prompt(prompt, { expandPromptTemplates: false });
+          await session.prompt(prompt, { expandPromptTemplates: false, images: payload.images || [] });
           if (activeController.signal.aborted) throw activeController.signal.reason;
           const assistantError = getAssistantError(session.messages);
           if (assistantError) {
