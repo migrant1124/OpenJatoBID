@@ -263,11 +263,11 @@ function emitProxyActivity(onActivity, activityContext, event = {}) {
   }
 }
 
-function summarizeProxyConfig(config) {
+function summarizeProxyConfig(config, privacyMode = false) {
   return {
     provider: config?.text_model_provider || '',
     model_name: config?.model_name || '',
-    endpoint: normalizeEndpointSummary(config?.base_url),
+    ...(privacyMode ? {} : { endpoint: normalizeEndpointSummary(config?.base_url) }),
     has_api_key: Boolean(config?.api_key),
     request_mode: config?.request_mode || '',
     context_length_limit: Number(config?.context_length_limit || 0),
@@ -275,7 +275,7 @@ function summarizeProxyConfig(config) {
   };
 }
 
-function summarizeRequestBody(body) {
+function summarizeRequestBody(body, privacyMode = false) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const tools = Array.isArray(body?.tools) ? body.tools : [];
   return {
@@ -289,7 +289,7 @@ function summarizeRequestBody(body) {
         ? 'object'
         : body?.tool_choice === undefined ? '' : String(body.tool_choice),
     response_format_type: body?.response_format?.type || '',
-    prompt_hash: createPromptHash(body),
+    ...(privacyMode ? {} : { prompt_hash: createPromptHash(body) }),
   };
 }
 
@@ -364,8 +364,9 @@ function normalizeAgentProxyRequestBody(config, sourceBody) {
     delete normalized.temperature;
   }
 
-  if (config.reasoning_effort) {
-    normalized.reasoning_effort = config.reasoning_effort;
+  const reasoningEffort = source.reasoning_effort || config.reasoning_effort;
+  if (reasoningEffort) {
+    normalized.reasoning_effort = reasoningEffort;
   } else {
     delete normalized.reasoning_effort;
   }
@@ -719,11 +720,11 @@ function writeAgentAiPendingLog({ app, config, runtimeMeta, requestId, requestBo
   });
 }
 
-function recordAgentAiSuccess({ app, config, runtimeMeta, requestId, requestBody, response, responseData, content, usage, startedAt, stream, attempt, diagnostics }) {
+function recordAgentAiSuccess({ app, config, runtimeMeta, requestId, requestBody, response, responseData, content, usage, startedAt, stream, attempt, diagnostics, privacyMode = false }) {
   const normalizedUsage = normalizeTokenUsage(usage);
   recordProxyTextTokenStats(config, usage);
 
-  safeWriteAgentAiLog(app, config, {
+  if (!privacyMode) safeWriteAgentAiLog(app, config, {
     request_id: requestId,
     log_title: getAgentAiLogTitle(requestBody, runtimeMeta),
     type: 'chat',
@@ -744,8 +745,7 @@ function recordAgentAiSuccess({ app, config, runtimeMeta, requestId, requestBody
     status: response.status,
     provider: config.text_model_provider || '',
     model_name: config.model_name || '',
-    endpoint_host: normalizeEndpointHost(config.base_url),
-    request_hash: createPromptHash(requestBody),
+    ...(privacyMode ? {} : { endpoint_host: normalizeEndpointHost(config.base_url), request_hash: createPromptHash(requestBody) }),
     messages_count: Array.isArray(requestBody.messages) ? requestBody.messages.length : 0,
     usage: normalizedUsage,
   });
@@ -758,16 +758,16 @@ function recordAgentAiSuccess({ app, config, runtimeMeta, requestId, requestBody
     content_type: response.headers.get('content-type') || '',
     upstream_request_id: response.headers.get('x-request-id') || '',
     stream: Boolean(stream),
-    request: summarizeRequestBody(requestBody),
+    request: summarizeRequestBody(requestBody, privacyMode),
     response: summarizeResponseData(responseData, content),
   });
 }
 
-function recordAgentAiFailure({ app, config, runtimeMeta, requestId, requestBody, error, responseData, startedAt, attempt, diagnostics }) {
+function recordAgentAiFailure({ app, config, runtimeMeta, requestId, requestBody, error, responseData, startedAt, attempt, diagnostics, privacyMode = false }) {
   recordProxyTextTokenStats(config, null);
 
   const errorMessage = safeErrorMessage(error);
-  safeWriteAgentAiLog(app, config, {
+  if (!privacyMode) safeWriteAgentAiLog(app, config, {
     request_id: requestId,
     log_title: getAgentAiLogTitle(requestBody, runtimeMeta),
     type: 'chat-error',
@@ -787,23 +787,22 @@ function recordAgentAiFailure({ app, config, runtimeMeta, requestId, requestBody
     status: error?.status || error?.statusCode || 0,
     provider: config.text_model_provider || '',
     model_name: config.model_name || '',
-    endpoint_host: normalizeEndpointHost(config.base_url),
-    request_hash: createPromptHash(requestBody),
+    ...(privacyMode ? {} : { endpoint_host: normalizeEndpointHost(config.base_url), request_hash: createPromptHash(requestBody) }),
     messages_count: Array.isArray(requestBody.messages) ? requestBody.messages.length : 0,
-    error: errorMessage,
+    error: privacyMode ? (error?.code || error?.name || 'request_failed') : errorMessage,
   });
 
   appendProxyDiagnostic(diagnostics, 'proxy.upstream.failed', {
     request_id: requestId,
     attempt,
     duration_ms: Date.now() - startedAt,
-    request: summarizeRequestBody(requestBody),
-    error: summarizeProxyError(error),
-    response_excerpt: String(responseData || error?.raw_response_body || '').slice(0, 2000),
+    request: summarizeRequestBody(requestBody, privacyMode),
+    error: privacyMode ? { name: error?.name || 'Error', code: error?.code || '', status: error?.status || error?.statusCode || 0 } : summarizeProxyError(error),
+    ...(privacyMode ? {} : { response_excerpt: String(responseData || error?.raw_response_body || '').slice(0, 2000) }),
   });
 }
 
-async function prepareProxyResponse({ app, config, runtimeMeta, requestId, requestBody, response, startedAt, attempt, diagnostics, onActivity, activityContext, streamTimeout }) {
+async function prepareProxyResponse({ app, config, runtimeMeta, requestId, requestBody, response, startedAt, attempt, diagnostics, onActivity, activityContext, streamTimeout, privacyMode = false }) {
   const stream = Boolean(requestBody.stream);
   const contentType = response.headers.get('content-type') || '';
   const isSse = stream || contentType.toLowerCase().includes('text/event-stream');
@@ -824,6 +823,7 @@ async function prepareProxyResponse({ app, config, runtimeMeta, requestId, reque
         stream: true,
         attempt,
         diagnostics,
+        privacyMode,
       });
       emitProxyActivity(onActivity, activityContext, {
         stage: 'model_stream',
@@ -845,10 +845,10 @@ async function prepareProxyResponse({ app, config, runtimeMeta, requestId, reque
         streamTimeout?.clear?.();
         emitProxyActivity(onActivity, activityContext, {
           stage: 'model_request',
-          message: safeErrorMessage(error),
+          message: privacyMode ? '模型流式请求失败' : safeErrorMessage(error),
           source: 'proxy.upstream.failed',
           activity: true,
-          meta: { request_id: requestId, attempt, error: safeErrorMessage(error) },
+          meta: { request_id: requestId, attempt, error: privacyMode ? (error?.code || error?.name || 'request_failed') : safeErrorMessage(error) },
         });
       },
     });
@@ -882,6 +882,7 @@ async function prepareProxyResponse({ app, config, runtimeMeta, requestId, reque
     stream: false,
     attempt,
     diagnostics,
+    privacyMode,
   });
   emitProxyActivity(onActivity, activityContext, {
     stage: 'model_request',
@@ -897,14 +898,14 @@ async function prepareProxyResponse({ app, config, runtimeMeta, requestId, reque
   });
 }
 
-async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQueue, openAiBody, signal, timeoutMs, diagnostics, onActivity, activityContext }) {
+async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQueue, openAiBody, signal, timeoutMs, diagnostics, onActivity, activityContext, privacyMode = false }) {
   const requestId = createAiRequestId();
   let queuedConfig = null;
   try { queuedConfig = configStore.load(); } catch {}
   appendProxyDiagnostic(diagnostics, 'proxy.chat.queued', {
     request_id: requestId,
-    config: summarizeProxyConfig(queuedConfig || {}),
-    request: summarizeRequestBody(openAiBody),
+    config: summarizeProxyConfig(queuedConfig || {}, privacyMode),
+    request: summarizeRequestBody(openAiBody, privacyMode),
   });
   emitProxyActivity(onActivity, activityContext, {
     stage: 'model_request',
@@ -932,8 +933,8 @@ async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQ
           request_id: requestId,
           attempt,
           timeout_ms: timeoutMs,
-          config: summarizeProxyConfig(config),
-          request: summarizeRequestBody(requestBody),
+          config: summarizeProxyConfig(config, privacyMode),
+          request: summarizeRequestBody(requestBody, privacyMode),
         });
         emitProxyActivity(onActivity, activityContext, {
           stage: 'model_request',
@@ -949,11 +950,10 @@ async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQ
           attempt,
           provider: config.text_model_provider || '',
           model_name: config.model_name || '',
-          endpoint_host: normalizeEndpointHost(config.base_url),
-          request_hash: createPromptHash(requestBody),
+          ...(privacyMode ? {} : { endpoint_host: normalizeEndpointHost(config.base_url), request_hash: createPromptHash(requestBody) }),
           messages_count: Array.isArray(requestBody.messages) ? requestBody.messages.length : 0,
         });
-        writeAgentAiPendingLog({ app, config, runtimeMeta, requestId, requestBody });
+        if (!privacyMode) writeAgentAiPendingLog({ app, config, runtimeMeta, requestId, requestBody });
 
         const response = await fetch(`${trimBaseUrl(config.base_url)}/chat/completions`, {
           method: 'POST',
@@ -1000,6 +1000,7 @@ async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQ
           onActivity,
           activityContext,
           streamTimeout: stream ? timeout : null,
+          privacyMode,
         });
         streamHandedOff = stream;
         return proxyResponse;
@@ -1014,13 +1015,14 @@ async function requestAgentChatCompletion({ app, configStore, runtimeMeta, textQ
           startedAt,
           attempt,
           diagnostics,
+          privacyMode,
         });
         emitProxyActivity(onActivity, activityContext, {
           stage: 'model_request',
-          message: safeErrorMessage(error),
+          message: privacyMode ? '模型请求失败' : safeErrorMessage(error),
           source: 'proxy.upstream.failed',
           activity: true,
-          meta: { request_id: requestId, attempt, error: safeErrorMessage(error) },
+          meta: { request_id: requestId, attempt, error: privacyMode ? (error?.code || error?.name || 'request_failed') : safeErrorMessage(error) },
         });
         throw error;
       } finally {
@@ -1098,16 +1100,17 @@ async function handleChatCompletions({ req, res, app, configStore, runtimeMeta, 
   const controller = new AbortController();
   const requestBody = await readJson(req);
   const activityContext = getActivityContext?.() || null;
+  const privacyMode = activityContext?.privacy_mode === 'conversation';
   bindAbortToRequestLifecycle({ req, res, controller, diagnostics, onActivity, activityContext });
   appendProxyDiagnostic(diagnostics, 'proxy.chat.received', {
-    request: summarizeRequestBody(requestBody),
+    request: summarizeRequestBody(requestBody, privacyMode),
   });
   emitProxyActivity(onActivity, activityContext, {
     stage: 'model_request',
     message: '',
     source: 'proxy.chat.received',
     activity: true,
-    meta: { request: summarizeRequestBody(requestBody) },
+    meta: { request: summarizeRequestBody(requestBody, privacyMode) },
   });
   const upstream = await requestAgentChatCompletion({
     app,
@@ -1120,6 +1123,7 @@ async function handleChatCompletions({ req, res, app, configStore, runtimeMeta, 
     diagnostics,
     onActivity,
     activityContext,
+    privacyMode,
   });
 
   res.statusCode = upstream.status;
@@ -1230,17 +1234,20 @@ function createAgentOpenAiProxy({
         },
       });
     } catch (error) {
-      emitAiHttpErrorToWindows(error);
+      const privacyMode = getActivityContext?.()?.privacy_mode === 'conversation';
+      if (!privacyMode) emitAiHttpErrorToWindows(error);
       appendProxyDiagnostic(diagnostics, 'proxy.http.failed', {
         method: req.method || '',
         path: req.url || '',
-        error: summarizeProxyError(error),
+        error: privacyMode
+          ? { name: error?.name || 'Error', code: error?.code || '', status: error?.status || error?.statusCode || 0 }
+          : summarizeProxyError(error),
       });
       const statusCode = error.statusCode || error.status || 500;
       if (!res.headersSent) {
         sendJson(res, statusCode, {
           error: {
-            message: error.message || `${runtimeMeta.displayName} AI proxy failed`,
+            message: privacyMode ? '模型请求失败' : error.message || `${runtimeMeta.displayName} AI proxy failed`,
             type: 'proxy_error',
           },
         });
@@ -1383,4 +1390,7 @@ function createAgentOpenAiProxy({
 
 module.exports = {
   createAgentOpenAiProxy,
+  normalizeAgentProxyRequestBody,
+  summarizeProxyConfig,
+  summarizeRequestBody,
 };

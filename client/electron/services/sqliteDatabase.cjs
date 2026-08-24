@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 22;
+const schemaVersion = 23;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -966,6 +966,78 @@ function createExportTemplatesSchema(db) {
   `);
 }
 
+function createConversationSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversation_threads (
+      thread_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      title_locked INTEGER NOT NULL DEFAULT 0 CHECK (title_locked IN (0, 1)),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_conversation_threads_status_updated
+    ON conversation_threads(status, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      message_id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+      content_markdown TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL CHECK (status IN ('pending', 'queued', 'streaming', 'completed', 'canceled', 'error')),
+      source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'quick-action', 'regenerate')),
+      parent_message_id TEXT,
+      task_id TEXT,
+      runtime_id TEXT,
+      error_code TEXT,
+      error_message TEXT,
+      metadata_json TEXT,
+      sequence INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL,
+      UNIQUE(thread_id, sequence)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_thread_sequence
+    ON conversation_messages(thread_id, sequence);
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_task
+    ON conversation_messages(task_id);
+
+    CREATE TABLE IF NOT EXISTS conversation_attachments (
+      attachment_id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      origin_message_id TEXT,
+      source TEXT NOT NULL DEFAULT 'selected-file' CHECK (source IN ('selected-file', 'composer-overflow-text')),
+      file_name TEXT NOT NULL,
+      extension TEXT NOT NULL,
+      mime_type TEXT,
+      size_bytes INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      stored_file_path TEXT NOT NULL,
+      markdown_path TEXT,
+      markdown_chars INTEGER NOT NULL DEFAULT 0,
+      parser_provider TEXT,
+      parser_label TEXT,
+      status TEXT NOT NULL CHECK (status IN ('selected', 'copying', 'parsing', 'ready', 'error', 'removed')),
+      progress INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+      FOREIGN KEY (origin_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_conversation_attachments_thread_status
+    ON conversation_attachments(thread_id, status, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_attachments_thread_sha_ready
+    ON conversation_attachments(thread_id, sha256) WHERE status != 'removed';
+  `);
+}
+
 const schemaHealthTableGroups = [
   {
     version: 1,
@@ -1046,9 +1118,19 @@ const schemaHealthTableGroups = [
     tables: ['technical_plan_response_templates'],
     repair: createTechnicalPlanResponseTemplatesSchema,
   },
+  {
+    version: 23,
+    tables: ['conversation_threads', 'conversation_messages', 'conversation_attachments'],
+    repair: createConversationSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
+  {
+    version: 23,
+    table: 'conversation_threads',
+    columns: { title_locked: 'INTEGER NOT NULL DEFAULT 0 CHECK (title_locked IN (0, 1))' },
+  },
   {
     version: 1,
     table: 'technical_plan_meta',
@@ -1417,6 +1499,11 @@ const migrations = [
     description: '知识库文档新增结构化进度详情',
     up: addKnowledgeDocumentProgressDetail,
   },
+  {
+    version: 23,
+    description: '新增智能体对话线程、消息与附件表结构',
+    up: createConversationSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -1512,6 +1599,7 @@ function createSqliteDatabase(app, options = {}) {
 }
 
 module.exports = {
+  createConversationSchema,
   createSqliteDatabase,
   schemaVersion,
 };

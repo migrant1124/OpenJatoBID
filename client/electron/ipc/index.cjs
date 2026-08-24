@@ -4,6 +4,7 @@ const { registerAnalyticsIpc } = require('./analyticsIpc.cjs');
 const { registerAgentIpc } = require('./agentIpc.cjs');
 const { registerAiIpc } = require('./aiIpc.cjs');
 const { registerConfigIpc } = require('./configIpc.cjs');
+const { registerConversationIpc } = require('./conversationIpc.cjs');
 const { registerDeveloperIpc } = require('./developerIpc.cjs');
 const { registerDiagnosticsIpc } = require('./diagnosticsIpc.cjs');
 const { registerDuplicateCheckIpc } = require('./duplicateCheckIpc.cjs');
@@ -21,6 +22,9 @@ const { createAnalyticsQueueStore } = require('../services/analyticsQueueStore.c
 const { createAnalyticsService } = require('../services/analyticsService.cjs');
 const { createAiService } = require('../services/aiService.cjs');
 const { createConfigStore } = require('../services/configStore.cjs');
+const { createConversationAttachmentService } = require('../services/conversationAttachmentService.cjs');
+const { createConversationService } = require('../services/conversationService.cjs');
+const { createConversationStore } = require('../services/conversationStore.cjs');
 const { createDeveloperExpansionReplaceTestService } = require('../services/developerExpansionReplaceTest.cjs');
 const { createDuplicateCheckService } = require('../services/duplicateCheckService.cjs');
 const { createDuplicateCheckStore } = require('../services/duplicateCheckStore.cjs');
@@ -66,6 +70,19 @@ function sendToWebContents(webContents, channel, payload) {
 }
 
 const workspaceDatabaseChannels = [
+  'conversation:list-threads',
+  'conversation:create-thread',
+  'conversation:get-thread',
+  'conversation:rename-thread',
+  'conversation:delete-thread',
+  'conversation:select-attachments',
+  'conversation:create-text-attachment',
+  'conversation:remove-attachment',
+  'conversation:send-message',
+  'conversation:cancel-message',
+  'conversation:regenerate-message',
+  'conversation:quick-action',
+  'conversation:export-message-word',
   'technical-plan:load-state',
   'technical-plan:import-tender-document',
   'technical-plan:import-original-plan-document',
@@ -186,7 +203,7 @@ function registerWorkspaceDatabaseStatusIpc({ mainWindow }) {
   };
 }
 
-function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus }) {
+function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus }) {
   const sqliteDatabase = createSqliteDatabase(app, { onStatus: updateStatus });
   const knowledgeBaseStore = createKnowledgeBaseStore({ app, db: sqliteDatabase.db });
   const knowledgeBaseService = createKnowledgeBaseService({ app, aiService, configStore, knowledgeBaseStore });
@@ -194,6 +211,22 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   const duplicateCheckStore = createDuplicateCheckStore({ app, db: sqliteDatabase.db });
   const rejectionCheckStore = createRejectionCheckStore({ app, db: sqliteDatabase.db, fileService, technicalPlanStore });
   const templateStore = createTemplateStore({ db: sqliteDatabase.db });
+  const conversationStore = createConversationStore({ db: sqliteDatabase.db });
+  let conversationService = null;
+  const conversationAttachmentService = createConversationAttachmentService({
+    app,
+    configStore,
+    store: conversationStore,
+    emitEvent: (event) => conversationService?.emitEvent(event),
+  });
+  conversationService = createConversationService({
+    app,
+    configStore,
+    store: conversationStore,
+    attachmentService: conversationAttachmentService,
+    agentService,
+    exportService,
+  });
   const duplicateCheckService = createDuplicateCheckService({ app, configStore, workspaceStore: duplicateCheckStore });
   const taskService = createTaskService({ aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService, localImageRenderService });
 
@@ -204,9 +237,10 @@ function registerWorkspaceDatabaseServices({ app, configStore, aiService, agentS
   registerRejectionCheckIpc({ rejectionCheckStore });
   registerTemplateIpc({ templateStore });
   registerTaskIpc({ taskService });
+  const unregisterConversationIpc = registerConversationIpc({ conversationService, mainWindow });
   exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
-  return { sqliteDatabase };
+  return { sqliteDatabase, conversationService, unregisterConversationIpc };
 }
 
 function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
@@ -228,6 +262,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   const diagnosticsService = createSystemDiagnosticsService({ app, configStore, localImageRenderService });
   const unregisterDiagnosticsIpc = registerDiagnosticsIpc({ diagnosticsService });
   let unregisterLicenseIpc = null;
+  let conversationService = null;
+  let unregisterConversationIpc = null;
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
   let workspaceDatabaseStarted = false;
@@ -236,6 +272,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   const closeServices = async () => {
     unregisterDiagnosticsIpc?.();
     unregisterLicenseIpc?.();
+    unregisterConversationIpc?.();
+    await conversationService?.close?.();
     localImageRenderService.dispose?.();
     await agentService.close?.();
   };
@@ -332,7 +370,9 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     databaseStatus.updateStatus({ phase: 'checking', ready: false, message: '正在检查本地数据库' });
     setTimeout(() => {
       try {
-        registerWorkspaceDatabaseServices({ app, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus: databaseStatus.updateStatus });
+        const workspaceServices = registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus: databaseStatus.updateStatus });
+        conversationService = workspaceServices.conversationService;
+        unregisterConversationIpc = workspaceServices.unregisterConversationIpc;
       } catch (error) {
         databaseStatus.updateStatus({
           phase: 'error',

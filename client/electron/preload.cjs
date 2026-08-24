@@ -104,6 +104,26 @@ const bridge = {
       return () => ipcRenderer.removeListener('agent:question-state', listener);
     },
   },
+  conversation: {
+    listThreads: (input) => ipcRenderer.invoke('conversation:list-threads', input),
+    createThread: () => ipcRenderer.invoke('conversation:create-thread'),
+    getThread: (input) => ipcRenderer.invoke('conversation:get-thread', input),
+    renameThread: (input) => ipcRenderer.invoke('conversation:rename-thread', input),
+    deleteThread: (input) => ipcRenderer.invoke('conversation:delete-thread', input),
+    selectAttachments: (input) => ipcRenderer.invoke('conversation:select-attachments', input),
+    createTextAttachment: (input) => ipcRenderer.invoke('conversation:create-text-attachment', input),
+    removeAttachment: (input) => ipcRenderer.invoke('conversation:remove-attachment', input),
+    sendMessage: (input) => ipcRenderer.invoke('conversation:send-message', input),
+    cancelMessage: (input) => ipcRenderer.invoke('conversation:cancel-message', input),
+    regenerateMessage: (input) => ipcRenderer.invoke('conversation:regenerate-message', input),
+    quickAction: (input) => ipcRenderer.invoke('conversation:quick-action', input),
+    exportMessageWord: (input) => ipcRenderer.invoke('conversation:export-message-word', input),
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('conversation:event', listener);
+      return () => ipcRenderer.removeListener('conversation:event', listener);
+    },
+  },
   developerTokenStats: {
     openWindow: () => ipcRenderer.invoke('developer-token-stats:open-window'),
     get: () => ipcRenderer.invoke('developer-token-stats:get'),

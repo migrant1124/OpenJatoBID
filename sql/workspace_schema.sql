@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 18;
+PRAGMA user_version = 23;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -801,3 +801,75 @@ CREATE TABLE IF NOT EXISTS export_templates (
 
 CREATE INDEX IF NOT EXISTS idx_export_templates_updated
 ON export_templates(updated_at DESC);
+
+-- ============================================================================
+-- Jato Agent 对话模式（v23）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS conversation_threads (
+  thread_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  title_locked INTEGER NOT NULL DEFAULT 0 CHECK (title_locked IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_threads_status_updated
+ON conversation_threads(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  message_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content_markdown TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK (status IN ('pending', 'queued', 'streaming', 'completed', 'canceled', 'error')),
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'quick-action', 'regenerate')),
+  parent_message_id TEXT,
+  task_id TEXT,
+  runtime_id TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  metadata_json TEXT,
+  sequence INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL,
+  UNIQUE(thread_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_messages_thread_sequence
+ON conversation_messages(thread_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_conversation_messages_task
+ON conversation_messages(task_id);
+
+CREATE TABLE IF NOT EXISTS conversation_attachments (
+  attachment_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  origin_message_id TEXT,
+  source TEXT NOT NULL DEFAULT 'selected-file' CHECK (source IN ('selected-file', 'composer-overflow-text')),
+  file_name TEXT NOT NULL,
+  extension TEXT NOT NULL,
+  mime_type TEXT,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  stored_file_path TEXT NOT NULL,
+  markdown_path TEXT,
+  markdown_chars INTEGER NOT NULL DEFAULT 0,
+  parser_provider TEXT,
+  parser_label TEXT,
+  status TEXT NOT NULL CHECK (status IN ('selected', 'copying', 'parsing', 'ready', 'error', 'removed')),
+  progress INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+  FOREIGN KEY (origin_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_attachments_thread_status
+ON conversation_attachments(thread_id, status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_attachments_thread_sha_ready
+ON conversation_attachments(thread_id, sha256) WHERE status != 'removed';
