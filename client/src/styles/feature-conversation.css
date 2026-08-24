@@ -1,5 +1,6 @@
 .conversation-page {
   display: grid;
+  width: 100%;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
   height: 100%;
