@@ -6,7 +6,7 @@ import { MarkdownRenderer, useToast } from '../../../shared/ui';
 import { PromptLibraryDialog } from '../../prompt-library/components/PromptLibraryDialog';
 import type { ConversationAttachment, ConversationMessage, ConversationThread } from '../types';
 import { graphemeLength, useConversationWorkspace } from '../hooks/useConversationWorkspace';
-import { mergePromptAtSelection } from '../utils/promptInsertion';
+import { replaceDraftWithPrompt } from '../utils/promptInsertion';
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -208,11 +208,9 @@ function ConversationPage() {
 
   const insertPrompt = (prompt: string) => {
     const textarea = composerRef.current;
-    const start = textarea?.selectionStart;
-    const end = textarea?.selectionEnd;
-    const merged = mergePromptAtSelection(workspace.draft, prompt, start, end);
-    workspace.setDraft(merged.text);
-    window.setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(merged.caret, merged.caret); }, 0);
+    const replacement = replaceDraftWithPrompt(prompt);
+    workspace.setDraft(replacement.text);
+    window.setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(replacement.caret, replacement.caret); }, 0);
   };
 
   const threadPanel = useMemo(() => (
