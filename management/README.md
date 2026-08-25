@@ -35,7 +35,7 @@ Jato-AI-BID-Management-<version>-win-x64.zip
 SHA256SUMS.txt
 ```
 
-制品先上传到私有 R2 的 `management/<version>/`，再进入标签为 `management-v<version>` 的独立 GitHub Draft Release。公共仓库不生成可下载的 Actions Artifact；管理端 Release 不自动公开，不写 `latest.json`，也不经过客户端更新 Worker。同一管理端版本不可覆盖或重建，失败后应先核对并清理对应 Draft/tag/R2 目录，或改用新版本。管理端版本与客户端版本独立，兼容性以局域网 API v1 为准。
+制品先进入标签为 `management-v<version>` 的独立 GitHub Draft Release，再上传到私有 R2 的 `management/<version>/`。如果 R2 上传或回读中断，重试会下载并校验完整 Draft 的原始制品后继续，不会因重新生成随机凭据摘要而覆盖同版本内容；新建或修复 Draft 只有在对应 R2 三个对象全部不存在时才会构建，任一对象已存在或 R2 查询异常都会在修改 Draft 前硬阻断。公共仓库不生成可下载的 Actions Artifact；管理端 Release 不自动公开，不写 `latest.json`，也不经过客户端更新 Worker。管理端版本与客户端版本独立，兼容性以局域网 API v1 为准。
 
 ## 数据与运行方式
 

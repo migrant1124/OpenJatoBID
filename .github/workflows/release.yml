@@ -35,8 +35,71 @@ env:
   JQ_VERSION: ${{ vars.JQ_VERSION || 'jq-1.7.1' }}
 
 jobs:
+  release-preflight:
+    name: Inspect existing release state
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      client_mode: ${{ steps.client-state.outputs.client_mode }}
+    env:
+      TAG_NAME: ${{ inputs.tag_name }}
+      CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+    steps:
+      - name: Checkout exact client tag
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag_name }}
+
+      - name: Inspect published client Release
+        id: client-state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TAG_NAME -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Invalid release tag: $env:TAG_NAME"
+          }
+          $expectedConfirmation = "PUBLISH $env:TAG_NAME"
+          if ($env:CONFIRM_RELEASE -cne $expectedConfirmation) {
+            throw "confirm_release must exactly equal '$expectedConfirmation'."
+          }
+
+          $releaseOutput = gh release view $env:TAG_NAME --json isDraft,isPrerelease,tagName,assets 2>&1
+          $releaseExitCode = $LASTEXITCODE
+          if ($releaseExitCode -ne 0) {
+            if (($releaseOutput | Out-String) -notmatch 'release not found') {
+              throw "Unable to inspect client Release $env:TAG_NAME`: $releaseOutput"
+            }
+            "client_mode=release" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
+          }
+
+          $release = $releaseOutput | ConvertFrom-Json
+          if ($release.isDraft) {
+            "client_mode=release" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
+          }
+          if ($release.isPrerelease -or $release.tagName -cne $env:TAG_NAME) {
+            throw "Existing client Release $env:TAG_NAME is not a published stable release."
+          }
+          $version = $env:TAG_NAME.Substring(1)
+          $expectedAssets = @("Jato-AI-BID-$version-win-x64.exe", 'manifest.json') | Sort-Object
+          $actualAssets = @($release.assets | ForEach-Object { $_.name }) | Sort-Object
+          if (($expectedAssets -join "`n") -cne ($actualAssets -join "`n")) {
+            throw "Published client Release $env:TAG_NAME does not contain the exact official asset whitelist."
+          }
+          "client_mode=skip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Client Release $env:TAG_NAME is already published; only management release work will continue."
+          exit 0
+
   release-client:
     name: Release Windows client
+    needs: release-preflight
+    if: ${{ needs.release-preflight.outputs.client_mode == 'release' }}
     runs-on: windows-2022
     timeout-minutes: 180
     defaults:
@@ -358,6 +421,7 @@ jobs:
 
   release-management:
     name: Release Windows management application
+    needs: release-preflight
     runs-on: windows-2022
     timeout-minutes: 180
     defaults:
@@ -414,47 +478,131 @@ jobs:
           echo "version=$MANAGEMENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "tag_name=management-v$MANAGEMENT_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Validate management tag is unused
+      - name: Inspect management Draft Release state
+        id: management-state
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+          MANAGEMENT_COMMIT_SHA: ${{ steps.trusted-ref.outputs.commit_sha }}
         run: |
           $ErrorActionPreference = 'Stop'
-          git rev-parse --verify "refs/tags/$env:MANAGEMENT_TAG^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            throw "Management tag $env:MANAGEMENT_TAG already exists; use a new management version."
-          }
-          gh release view $env:MANAGEMENT_TAG 1>$null 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            throw "Management Release $env:MANAGEMENT_TAG already exists; use a new management version."
+          $releaseOutput = gh release view $env:MANAGEMENT_TAG --json isDraft,targetCommitish,assets 2>&1
+          $releaseExitCode = $LASTEXITCODE
+          if ($releaseExitCode -ne 0) {
+            if (($releaseOutput | Out-String) -notmatch 'release not found') {
+              throw "Unable to inspect management Release $($env:MANAGEMENT_TAG): $releaseOutput"
+            }
+            git show-ref --verify --quiet "refs/tags/$env:MANAGEMENT_TAG"
+            $tagExitCode = $LASTEXITCODE
+            if ($tagExitCode -eq 0) {
+              throw "Management tag $env:MANAGEMENT_TAG exists without a Draft Release."
+            }
+            if ($tagExitCode -ne 1) {
+              throw "Unable to inspect management tag $env:MANAGEMENT_TAG."
+            }
+            "mode=build" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
           }
 
+          $release = $releaseOutput | ConvertFrom-Json
+          if (-not $release.isDraft) {
+            throw "Management Release $env:MANAGEMENT_TAG is already public and cannot be replaced."
+          }
+          if ($release.targetCommitish -cne $env:MANAGEMENT_COMMIT_SHA) {
+            throw "Management Draft Release targets $($release.targetCommitish), expected $env:MANAGEMENT_COMMIT_SHA."
+          }
+          git show-ref --verify --quiet "refs/tags/$env:MANAGEMENT_TAG"
+          $tagExitCode = $LASTEXITCODE
+          if ($tagExitCode -eq 0) {
+            $tagCommit = (git rev-list -n 1 $env:MANAGEMENT_TAG).Trim()
+            if ($LASTEXITCODE -ne 0 -or $tagCommit -cne $env:MANAGEMENT_COMMIT_SHA) {
+              throw "Management tag $env:MANAGEMENT_TAG does not match $env:MANAGEMENT_COMMIT_SHA."
+            }
+          } elseif ($tagExitCode -ne 1) {
+            throw "Unable to inspect management tag $env:MANAGEMENT_TAG."
+          }
+
+          $expectedAssets = @(
+            "Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.exe",
+            "Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.zip",
+            'SHA256SUMS.txt'
+          ) | Sort-Object
+          $actualAssets = @($release.assets | ForEach-Object { $_.name }) | Sort-Object
+          if (($expectedAssets -join "`n") -ceq ($actualAssets -join "`n")) {
+            "mode=resume" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            "mode=rebuild" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+          exit 0
+
+      - name: Refuse management build after R2 upload started
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        shell: pwsh
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $endpoint = "https://$($env:R2_ACCOUNT_ID).r2.cloudflarestorage.com"
+          $bucketOutput = aws s3api head-bucket --endpoint-url $endpoint --no-cli-pager --bucket jatoaibid 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to inspect R2 bucket jatoaibid`: $bucketOutput"
+          }
+          $expectedAssets = @(
+            "Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.exe",
+            "Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.zip",
+            'SHA256SUMS.txt'
+          )
+          foreach ($file in $expectedAssets) {
+            $key = "management/$env:MANAGEMENT_VERSION/$file"
+            $headOutput = aws s3api head-object --endpoint-url $endpoint --no-cli-pager --bucket jatoaibid --key $key 2>&1
+            $headExitCode = $LASTEXITCODE
+            if ($headExitCode -eq 0) {
+              throw "Refusing to build management release because R2 object already exists: $key"
+            }
+            if (($headOutput | Out-String) -notmatch '404|Not Found|NoSuchKey|NotFound') {
+              throw "Unable to inspect R2 object $key`: $headOutput"
+            }
+          }
+          exit 0
+
       - name: Install management dependencies
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         run: npm ci
 
       - name: Create temporary initial administrator credential
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         env:
           MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON: ${{ secrets.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON }}
         run: node scripts/write-initial-admin-credential.cjs
 
       - name: Test management application
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         run: npm test
 
       - name: Sync independent management version
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         env:
           MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
         run: npm version "$MANAGEMENT_VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build and verify Windows management application
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         run: npm run dist:win
 
       - name: Prepare exact management Artifact
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         env:
           MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
@@ -464,6 +612,49 @@ jobs:
         if: ${{ always() }}
         working-directory: management
         run: rm -f initial-admin.private.json
+
+      - name: Download existing management Draft assets
+        if: ${{ steps.management-state.outputs.mode == 'resume' }}
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path management/release-artifact -Force | Out-Null
+          gh release download $env:MANAGEMENT_TAG --dir management/release-artifact
+
+      - name: Create or repair management Draft Release
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+          MANAGEMENT_COMMIT_SHA: ${{ steps.trusted-ref.outputs.commit_sha }}
+          MANAGEMENT_MODE: ${{ steps.management-state.outputs.mode }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            "## 管理端 $env:MANAGEMENT_VERSION",
+            '',
+            "源码提交：``$env:MANAGEMENT_COMMIT_SHA``"
+          ) | Out-File -FilePath management-release-notes.md -Encoding utf8
+
+          if ($env:MANAGEMENT_MODE -ceq 'build') {
+            gh release create $env:MANAGEMENT_TAG --title "Management $env:MANAGEMENT_VERSION" --notes-file management-release-notes.md --draft --target $env:MANAGEMENT_COMMIT_SHA
+          } else {
+            $existingAssets = gh release view $env:MANAGEMENT_TAG --json assets --jq '.assets[].name'
+            foreach ($file in $existingAssets) {
+              if (-not [string]::IsNullOrWhiteSpace($file)) {
+                gh release delete-asset $env:MANAGEMENT_TAG $file --yes
+              }
+            }
+          }
+          gh release upload $env:MANAGEMENT_TAG `
+            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.exe" `
+            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.zip" `
+            "management/release-artifact/SHA256SUMS.txt"
 
       - name: Upload and verify immutable management R2 version directory
         shell: pwsh
@@ -475,27 +666,6 @@ jobs:
           RELEASE_ASSETS_DIR: management/release-artifact
           R2_RELEASE_ACTION: publish-management
         run: node .github/scripts/publish-r2-release.mjs
-
-      - name: Create management Draft Release
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
-          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
-          MANAGEMENT_COMMIT_SHA: ${{ steps.trusted-ref.outputs.commit_sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          @(
-            "## 管理端 $env:MANAGEMENT_VERSION",
-            '',
-            "源码提交：``$env:MANAGEMENT_COMMIT_SHA``"
-          ) | Out-File -FilePath management-release-notes.md -Encoding utf8
-
-          gh release create $env:MANAGEMENT_TAG --title "Management $env:MANAGEMENT_VERSION" --notes-file management-release-notes.md --draft --target $env:MANAGEMENT_COMMIT_SHA
-          gh release upload $env:MANAGEMENT_TAG `
-            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.exe" `
-            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.zip" `
-            "management/release-artifact/SHA256SUMS.txt"
 
       - name: Clean transient management release files
         if: ${{ always() }}

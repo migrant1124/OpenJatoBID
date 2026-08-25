@@ -101,6 +101,9 @@ test('accepts only the exact management EXE, ZIP and checksum whitelist', async 
     'management/1.4.3/SHA256SUMS.txt',
   ]);
 
+  await fs.writeFile(path.join(root, exeName), 'changed-management-exe');
+  await assert.rejects(readAndValidateManagementArtifacts(root, '1.4.3'), /Invalid management artifact/);
+  await fs.writeFile(path.join(root, exeName), 'management-exe');
   await fs.writeFile(path.join(root, 'extra.txt'), 'not allowed');
   await assert.rejects(readAndValidateManagementArtifacts(root, '1.4.3'), /exactly/);
 });

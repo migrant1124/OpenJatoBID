@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
@@ -23,12 +25,18 @@ async function readClientJob() {
   return workflow.slice(workflow.indexOf('  release-client:'), workflow.indexOf('  release-management:'));
 }
 
+function extractRunScript(workflow, stepName) {
+  const step = workflow.slice(workflow.indexOf(`      - name: ${stepName}`));
+  const run = step.slice(step.indexOf('        run: |\n') + '        run: |\n'.length).split(/\n(?: {6}- name:| {2}[a-z0-9-]+:)/)[0];
+  return run.replace(/^ {10}/gm, '');
+}
+
 async function readNoticeWorkflow() {
   const workflow = await fs.readFile(path.join(root, '.github/workflows/release-notice.yml'), 'utf8');
   return workflow.replace(/\r\n/g, '\n');
 }
 
-test('client and management share one manual GitHub-hosted Windows workflow', async () => {
+test('client and management share one manual GitHub-hosted Windows workflow with recovery preflight', async () => {
   const workflow = await readWorkflow();
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^\s+push:/m);
@@ -36,10 +44,11 @@ test('client and management share one manual GitHub-hosted Windows workflow', as
   assert.match(workflow, /confirm_release:/);
   assert.match(workflow, /management_version:/);
   assert.match(workflow, /management_ref:/);
+  assert.match(workflow, /^  release-preflight:/m);
   assert.match(workflow, /^  release-client:/m);
   assert.match(workflow, /^  release-management:/m);
-  assert.equal([...workflow.matchAll(/^  [a-z0-9-]+:\n\s+name:/gm)].length, 2);
-  assert.equal([...workflow.matchAll(/^    runs-on: windows-2022$/gm)].length, 2);
+  assert.equal([...workflow.matchAll(/^  [a-z0-9-]+:\n\s+name:/gm)].length, 3);
+  assert.equal([...workflow.matchAll(/^    runs-on: windows-2022$/gm)].length, 3);
   assert.doesNotMatch(workflow, /self-hosted|\[self-hosted, Windows, X64, jatobid-release\]/);
   assert.match(workflow, /timeout-minutes: 180/);
   assert.match(workflow, /shell: pwsh/);
@@ -51,11 +60,50 @@ test('client and management share one manual GitHub-hosted Windows workflow', as
   assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY: 'false'/);
 });
 
-test('combined release keeps both jobs independent and avoids cross-job artifact transfer', async () => {
+test('client and management wait only for preflight and avoid cross-job artifact transfer', async () => {
   const workflow = await readWorkflow();
   assert.doesNotMatch(workflow, /windows-latest|ubuntu-latest|actions\/(?:upload|download)-artifact/);
-  assert.doesNotMatch(workflow, /\bneeds:/);
+  assert.equal([...workflow.matchAll(/^    needs: release-preflight$/gm)].length, 2);
   assert.doesNotMatch(workflow, /\bsudo\b|\bapt\b|awscli-exe-linux|unzip -q/);
+});
+
+test('published stable client releases are verified and skipped before release jobs start', async () => {
+  const workflow = await readWorkflow();
+  const preflight = workflow.slice(workflow.indexOf('  release-preflight:'), workflow.indexOf('  release-client:'));
+  const client = await readClientJob();
+  assert.match(preflight, /gh release view \$env:TAG_NAME --json isDraft,isPrerelease,tagName,assets/);
+  assert.match(preflight, /release not found/);
+  assert.match(preflight, /client_mode=skip/);
+  assert.match(preflight, /client_mode=release/);
+  assert.match(preflight, /exit 0/);
+  assert.match(client, /needs: release-preflight/);
+  assert.match(client, /if: \$\{\{ needs\.release-preflight\.outputs\.client_mode == 'release' \}\}/);
+});
+
+test('published client preflight exits zero and emits skip', async (t) => {
+  const workflow = await readWorkflow();
+  const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'jatobid-client-preflight-'));
+  t.after(() => fs.rm(outputDirectory, { recursive: true, force: true }));
+  const outputPath = path.join(outputDirectory, 'github-output.txt');
+  const release = JSON.stringify({
+    isDraft: false,
+    isPrerelease: false,
+    tagName: 'v1.7.2',
+    assets: [{ name: 'Jato-AI-BID-1.7.2-win-x64.exe' }, { name: 'manifest.json' }],
+  }).replace(/'/g, "''");
+  const script = `function gh { $global:LASTEXITCODE = 0; '${release}' }\n${extractRunScript(workflow, 'Inspect published client Release')}`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-Command', script], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      TAG_NAME: 'v1.7.2',
+      CONFIRM_RELEASE: 'PUBLISH v1.7.2',
+      GITHUB_OUTPUT: outputPath,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(await fs.readFile(outputPath, 'utf8'), /client_mode=skip/);
 });
 
 test('client release references existing Agent tool scripts', async () => {

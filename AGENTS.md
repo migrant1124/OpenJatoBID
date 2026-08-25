@@ -104,12 +104,12 @@
 
 ## 发布与打包
 
-- Release workflow（`.github/workflows/release.yml`）只允许手动 `workflow_dispatch`，以四个输入在两个独立 Windows 2022 GitHub-hosted job 中发布客户端和管理端：`tag_name`、`confirm_release`、`management_version`、`management_ref`。客户端 `tag_name` 必须为稳定版 `vX.Y.Z`，确认值必须精确等于 `PUBLISH vX.Y.Z`。
+- Release workflow（`.github/workflows/release.yml`）只允许手动 `workflow_dispatch`，使用四个输入：`tag_name`、`confirm_release`、`management_version`、`management_ref`。Windows 2022 GitHub-hosted 预检后，客户端与管理端 job 独立执行；客户端 `tag_name` 必须为稳定版 `vX.Y.Z`，确认值必须精确等于 `PUBLISH vX.Y.Z`。已正式发布且资产白名单正确的客户端版本会被跳过，以支持只补发失败的管理端。
 - 客户端 job 在 `client/` 下 `npm ci`，从 tag 同步版本，`electron-builder --win nsis --publish never` 只构建 Windows NSIS EXE。
 - 官方发布只上传 `Jato-AI-BID-<version>-win-x64.exe` 和 `manifest.json`；GitHub Release 先保持 Draft，私有 R2 发布、`latest.json` 提升和 Worker 完整 EXE 下载验证成功后才转为正式 Release。
 - 官方构建在打包前运行 `npm run generate-build-attestation`，需要 GitHub Actions Secret `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`；缺少私钥时 release workflow 直接失败，本地脚本生成未签名开发构建。
 - 当前未接入代码签名；Windows/macOS 未签名提示是已知发布约束，不要在普通功能改动里临时绕过。
-- 管理端 job 使用一次性的独立 `management-v<version>` 标签，只保持 GitHub Draft Release；EXE、ZIP、`SHA256SUMS.txt` 先写入私有 R2 `management/<version>/`，不生成公共 Actions Artifact，不写 `latest.json`、不经过 Worker、不自动公开。管理端本地打包仍为 `cd management; npm run dist:win`。
+- 管理端 job 使用独立 `management-v<version>` GitHub Draft Release；首次构建先保存 Draft 资产再写入私有 R2 `management/<version>/`，失败重试复用完整 Draft 原始资产，不覆盖同版本内容。不生成公共 Actions Artifact，不写 `latest.json`、不经过 Worker、不自动公开。管理端本地打包仍为 `cd management; npm run dist:win`。
 
 ## 验证标准
 
