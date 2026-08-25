@@ -117,7 +117,12 @@
 .conversation-icon-button:disabled { opacity: .35; cursor: default; }
 
 .conversation-composer { padding: 12px 16px 14px; border-top: 1px solid #edf1f7; background: #fff; }
-.conversation-composer textarea { width: 100%; min-height: 82px; max-height: 180px; resize: vertical; border: 1px solid #d9e0ec; border-radius: 12px; padding: 12px 13px; outline: none; line-height: 1.55; }
+.conversation-composer-input { position: relative; }
+.conversation-composer-resize-handle { position: absolute; z-index: 2; top: -5px; right: 0; left: 0; height: 10px; cursor: ns-resize; touch-action: none; outline: none; }
+.conversation-composer-resize-handle::after { position: absolute; top: 3px; left: 50%; width: 34px; height: 3px; border-radius: 2px; background: #c8d1de; content: ''; transform: translateX(-50%); }
+.conversation-composer-resize-handle:hover::after,
+.conversation-composer-resize-handle:focus-visible::after { background: #2174fd; }
+.conversation-composer textarea { display: block; width: 100%; min-height: 82px; max-height: 396px; resize: none; border: 1px solid #d9e0ec; border-radius: 12px; padding: 12px 13px; outline: none; line-height: 1.55; }
 .conversation-composer textarea:focus { border-color: #2174fd; box-shadow: 0 0 0 3px rgb(33 116 253 / 9%); }
 .conversation-composer-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 8px; }
 .conversation-composer-bar > span { justify-self: end; color: #8a94a6; font-size: 12px; }

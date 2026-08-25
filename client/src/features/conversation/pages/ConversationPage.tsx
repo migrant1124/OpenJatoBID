@@ -38,6 +38,12 @@ function formatBytes(value: number) {
 const attachmentStatus: Record<ConversationAttachment['status'], string> = {
   selected: '等待处理', copying: '正在复制', parsing: '正在解析', ready: '解析完成', error: '解析失败', removed: '已移除',
 };
+const COMPOSER_MIN_HEIGHT = 82;
+const COMPOSER_MAX_HEIGHT = 396;
+
+function clampComposerHeight(value: number) {
+  return Math.min(COMPOSER_MAX_HEIGHT, Math.max(COMPOSER_MIN_HEIGHT, value));
+}
 
 function IconButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -135,8 +141,10 @@ function ConversationPage() {
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ConversationAttachment | null>(null);
   const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
+  const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_HEIGHT);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const currentThread = workspace.snapshot?.thread;
   const allAttachments = workspace.snapshot?.attachments || [];
   const activeGeneration = Boolean(workspace.activeMessage);
@@ -206,6 +214,12 @@ function ConversationPage() {
     else void workspace.removeAttachment(attachment).catch((error) => showToast(error instanceof Error ? error.message : '移除失败', 'error'));
   };
 
+  const resizeComposer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const resize = composerResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    setComposerHeight(clampComposerHeight(resize.startHeight + resize.startY - event.clientY));
+  };
+
   const insertPrompt = (prompt: string) => {
     const textarea = composerRef.current;
     const replacement = replaceDraftWithPrompt(prompt);
@@ -256,10 +270,16 @@ function ConversationPage() {
 
           <div className="conversation-composer">
             {workspace.draftAttachments.length > 0 && <div className="conversation-attachment-tray">{workspace.draftAttachments.map((attachment) => <AttachmentCard key={attachment.attachmentId} attachment={attachment} removable onRemove={() => requestRemove(attachment)} />)}</div>}
-            <textarea ref={composerRef} value={workspace.draft} disabled={workspace.converting} aria-label="对话输入" placeholder="输入问题，Enter 发送，Shift + Enter 换行"
-              onChange={(event) => workspace.setDraft(event.target.value)} onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSend) void workspace.send(); }
-              }} />
+            <div className="conversation-composer-input">
+              <div className="conversation-composer-resize-handle" role="separator" aria-label="调节输入框高度" aria-orientation="horizontal" aria-valuemin={COMPOSER_MIN_HEIGHT} aria-valuemax={COMPOSER_MAX_HEIGHT} aria-valuenow={composerHeight} tabIndex={0}
+                onPointerDown={(event) => { composerResizeRef.current = { pointerId: event.pointerId, startY: event.clientY, startHeight: composerHeight }; event.currentTarget.setPointerCapture(event.pointerId); }}
+                onPointerMove={resizeComposer} onPointerUp={(event) => { composerResizeRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { composerResizeRef.current = null; }}
+                onKeyDown={(event) => { if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return; event.preventDefault(); setComposerHeight((height) => clampComposerHeight(height + (event.key === 'ArrowUp' ? 10 : -10))); }} />
+              <textarea ref={composerRef} value={workspace.draft} disabled={workspace.converting} aria-label="对话输入" placeholder="输入问题，Enter 发送，Shift + Enter 换行" style={{ height: composerHeight }}
+                onChange={(event) => workspace.setDraft(event.target.value)} onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSend) void workspace.send(); }
+                }} />
+            </div>
             <div className="conversation-composer-bar">
               <div className="conversation-composer-tools"><button className="conversation-attach-button" type="button" disabled={workspace.busy || workspace.converting} onClick={() => void workspace.selectAttachments()} aria-label="添加附件"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg><span>添加附件</span></button><button className="conversation-prompt-button" type="button" onClick={() => setPromptLibraryOpen(true)} aria-label="打开提示词库"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="7" r="2" /><circle cx="18" cy="5" r="2" /><circle cx="18" cy="18" r="2" /><path d="M8 7h4a4 4 0 0 1 4 4v5M8 7l7-1" /></svg><span>提示词库</span></button></div>
               <span className={characterCount > 10000 ? 'is-overflow' : ''}>{workspace.converting ? '正在将超长文本转换为 TXT 附件' : `${characterCount} / 10000`}</span>

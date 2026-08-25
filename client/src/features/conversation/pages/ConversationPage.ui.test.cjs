@@ -28,3 +28,10 @@ test('批量删除期间不加载即将删除的会话', () => {
   assert.match(workspaceSource, /event\.type === 'thread-list-changed'[\s\S]*if \(deletingThreadsRef\.current\) return;[\s\S]*loadThreads\(query\)/);
   assert.match(workspaceSource, /deletingThreadsRef\.current = true;[\s\S]*activeThreadRef\.current = '';[\s\S]*finally[\s\S]*loadThreads\(query, ''\)/);
 });
+
+test('对话输入框仅通过上边沿调节高度', () => {
+  assert.match(pageSource, /conversation-composer-resize-handle/);
+  assert.match(cssSource, /\.conversation-composer-resize-handle \{[^}]*cursor: ns-resize;/);
+  assert.match(cssSource, /\.conversation-composer textarea \{[^}]*resize: none;/);
+  assert.doesNotMatch(cssSource, /\.conversation-composer textarea \{[^}]*resize: vertical;/);
+});
