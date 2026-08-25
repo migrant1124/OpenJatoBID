@@ -27,7 +27,7 @@ npm run dist:win
 
 产物写入 `management/release/`，包括 NSIS 安装程序、ZIP 和解包目录。打包脚本会强制按 Electron ABI 重建 `better-sqlite3`，在系统临时目录完成 electron-builder 输出，复制回 `release/` 后再由 Electron 实际创建内存数据库验证，最后恢复本机 Node ABI 对应的依赖。
 
-需要云端按需构建时，手动运行 GitHub Actions 的 `Build Management` 工作流，输入独立的管理端版本和代码 ref。ref 必须是当前 `origin/main` 可达的提交、标签或分支；工作流会在注入 Secret 前完成该信任检查。随后才从 `MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON` Secret 临时生成私有凭据，完成测试、构建和原生模块验证后删除临时文件，只上传以下内部 Artifact，保留 30 天：
+需要云端发布时，手动运行 GitHub Actions 的 `Release Client and Management` 工作流，输入独立的管理端版本和代码 ref。ref 必须是当前 `origin/main` 可达的提交、标签或分支；工作流会在注入 Secret 前完成该信任检查。随后才从 `MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON` Secret 临时生成私有凭据，完成测试、构建和原生模块验证后删除临时文件，并生成以下三项制品：
 
 ```text
 Jato-AI-BID-Management-<version>-win-x64.exe
@@ -35,7 +35,7 @@ Jato-AI-BID-Management-<version>-win-x64.zip
 SHA256SUMS.txt
 ```
 
-管理端 Artifact 不进入 GitHub Release 或 R2，也不会随客户端 `v*` 标签自动构建。管理端版本与客户端版本独立，兼容性以局域网 API v1 为准。
+制品先上传到私有 R2 的 `management/<version>/`，再进入标签为 `management-v<version>` 的独立 GitHub Draft Release。公共仓库不生成可下载的 Actions Artifact；管理端 Release 不自动公开，不写 `latest.json`，也不经过客户端更新 Worker。同一管理端版本不可覆盖或重建，失败后应先核对并清理对应 Draft/tag/R2 目录，或改用新版本。管理端版本与客户端版本独立，兼容性以局域网 API v1 为准。
 
 ## 数据与运行方式
 

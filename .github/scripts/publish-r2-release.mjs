@@ -8,8 +8,10 @@ import { pathToFileURL } from 'node:url';
 
 const R2_BUCKET = 'jatoaibid';
 const RELEASE_PREFIX = 'release';
+const MANAGEMENT_PREFIX = 'management';
 const KEEP_VERSION_COUNT = 2;
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const MANAGEMENT_VERSION_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 
 function requireEnv(name) {
@@ -145,6 +147,44 @@ export async function readAndValidateManifest(assetsDir, tagName) {
   return manifest;
 }
 
+export async function readAndValidateManagementArtifacts(assetsDir, version) {
+  if (!MANAGEMENT_VERSION_PATTERN.test(String(version || ''))) {
+    throw new Error(`Invalid management version: ${version}`);
+  }
+  const exeName = `Jato-AI-BID-Management-${version}-win-x64.exe`;
+  const zipName = `Jato-AI-BID-Management-${version}-win-x64.zip`;
+  const expectedNames = [exeName, zipName, 'SHA256SUMS.txt'];
+  const entries = (await fsp.readdir(assetsDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+  if (entries.length !== expectedNames.length || entries.some((entry, index) => entry !== [...expectedNames].sort()[index])) {
+    throw new Error(`Management release directory must contain exactly: ${expectedNames.join(', ')}`);
+  }
+
+  const checksums = new Map();
+  for (const line of (await fsp.readFile(path.join(assetsDir, 'SHA256SUMS.txt'), 'utf8')).split(/\r?\n/).filter(Boolean)) {
+    const match = line.match(/^([0-9a-f]{64})  (.+)$/i);
+    if (!match || checksums.has(match[2])) throw new Error('Invalid management SHA256SUMS.txt.');
+    checksums.set(match[2], match[1].toLowerCase());
+  }
+  if (checksums.size !== 2 || !checksums.has(exeName) || !checksums.has(zipName)) {
+    throw new Error('Management SHA256SUMS.txt must contain exactly the EXE and ZIP checksums.');
+  }
+
+  const files = [];
+  for (const name of expectedNames) {
+    const filePath = path.join(assetsDir, name);
+    const stat = await fsp.stat(filePath);
+    const sha256 = await sha256File(filePath);
+    if (stat.size <= 0 || (checksums.has(name) && checksums.get(name) !== sha256)) {
+      throw new Error(`Invalid management artifact: ${name}`);
+    }
+    files.push({ name, key: `${MANAGEMENT_PREFIX}/${version}/${name}`, size: stat.size, sha256 });
+  }
+  return { version, files };
+}
+
 async function putFile(config, key, filePath, sha256) {
   await runCommand('aws', [
     ...awsCommandArgs(config, 'put-object'),
@@ -196,6 +236,32 @@ async function putAndVerifyFile(config, key, filePath, expectedSha256 = '') {
   await verifyRemoteFile(config, key, filePath, stat.size, sha256);
 }
 
+export async function putAndVerifyImmutableFile(
+  config,
+  key,
+  filePath,
+  expectedSize,
+  expectedSha256,
+  { download = downloadObject, upload = putAndVerifyFile } = {},
+) {
+  const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'jatobid-r2-existing-'));
+  const downloadedPath = path.join(temporaryDirectory, path.basename(filePath));
+  try {
+    if (await download(config, key, downloadedPath, true)) {
+      const stat = await fsp.stat(downloadedPath);
+      const digest = await sha256File(downloadedPath);
+      if (stat.size !== expectedSize || digest !== expectedSha256) {
+        throw new Error(`R2 object already exists with different content: ${key}`);
+      }
+      console.log(`Reused matching immutable R2 object: ${key}`);
+      return;
+    }
+    await upload(config, key, filePath, expectedSha256);
+  } finally {
+    await fsp.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
 async function putAndVerifyJson(config, key, value) {
   const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'jatobid-r2-json-'));
   const filePath = path.join(temporaryDirectory, path.basename(key));
@@ -228,6 +294,19 @@ async function publishVersion(config) {
     `${RELEASE_PREFIX}/${manifest.version}/manifest.json`,
     path.join(config.assetsDir, 'manifest.json'),
   );
+}
+
+async function publishManagement(config) {
+  const release = await readAndValidateManagementArtifacts(config.assetsDir, config.managementVersion);
+  for (const file of release.files) {
+    await putAndVerifyImmutableFile(
+      config,
+      file.key,
+      path.join(config.assetsDir, file.name),
+      file.size,
+      file.sha256,
+    );
+  }
 }
 
 export function buildLatestJson(manifest, githubRelease = {}) {
@@ -334,6 +413,7 @@ function createConfig() {
     awsEnv: createAwsCliEnv({ accessKeyId, secretAccessKey }),
     action: requireEnv('R2_RELEASE_ACTION'),
     tagName: String(process.env.TAG_NAME || '').trim(),
+    managementVersion: String(process.env.MANAGEMENT_VERSION || '').trim(),
     assetsDir: path.resolve(process.env.RELEASE_ASSETS_DIR || 'release-assets'),
     githubReleaseJson: path.resolve(process.env.GITHUB_RELEASE_JSON || 'github-release.json'),
     previousLatestPath: path.resolve(process.env.PREVIOUS_LATEST_PATH || '.release-state/previous-latest.json'),
@@ -343,6 +423,7 @@ function createConfig() {
 async function main() {
   const config = createConfig();
   if (config.action === 'publish') return publishVersion(config);
+  if (config.action === 'publish-management') return publishManagement(config);
   if (config.action === 'promote') return promoteLatest(config);
   if (config.action === 'rollback') return rollbackLatest(config);
   if (config.action === 'cleanup') return cleanupVersions(config);

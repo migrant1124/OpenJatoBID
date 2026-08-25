@@ -34,7 +34,9 @@ Windows 正式发布制品统一命名为 `Jato-AI-BID-<version>-win-x64.exe`。
 
 客户端自动更新不直接访问 GitHub Release 或 R2：先向 Cloudflare Worker 提交本地许可证查询 `release/latest.json`，再携带 `X-Jato-License` Header 经 Worker 从私有 R2 下载 EXE，并在打开前强制校验文件大小和 SHA-256。GitHub Release 只作为客户端正式版本的长期归档。
 
-客户端正式发布由 `.github/workflows/release.yml` 手动 `workflow_dispatch` 触发，不再因推送 `v*` 标签自动发布。输入 `tag_name` 必须是稳定版 `vX.Y.Z`，`confirm_release` 必须精确等于 `PUBLISH vX.Y.Z`。工作流在 Windows 自托管 Runner 构建 Windows x64 NSIS EXE，先创建 Draft Release，只上传 `Jato-AI-BID-<version>-win-x64.exe` 和 `manifest.json`；随后通过 AWS CLI v2 将同一目录发布到私有 R2、提升 `release/latest.json`，并经 Cloudflare Worker 完整下载 EXE 验证后才转为正式 Release。验证或正式化失败时恢复上一个 `latest.json`，成功后只保留当前版本和发布前稳定版本。所需 GitHub Secrets 为 `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`、`JATOBID_RELEASE_FORBIDDEN_TERMS`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` 和用于发布后验证的 `JATOBID_UPDATE_TEST_LICENSE_JSON`；所需 GitHub Variables 为 `R2_ACCOUNT_ID` 和 `UPDATE_WORKER_BASE_URL`。测试许可证必须是管理端签发的完整 ECDSA envelope，且 `offlineValidUntil` 尚未到期；到期后需在持有原签名密钥的管理端重新登录或续期测试设备，将新 envelope 更新到同名 GitHub Secret，不能直接修改 JSON 日期。
+客户端和管理端统一由 `.github/workflows/release.yml` 手动 `workflow_dispatch` 触发，不再因推送标签自动发布。四个输入分别是客户端稳定标签 `tag_name`、整次发布确认 `confirm_release`（必须精确等于 `PUBLISH <tag_name>`）、管理端独立版本 `management_version` 和来自 `main` 历史的管理端源码 `management_ref`。两个 Windows 2022 GitHub-hosted job 独立并行：客户端保持 Draft → 私有 R2 → `latest.json` → Worker 完整下载验证 → 正式 Release 的原流程；管理端使用一次性的 `management-v<version>` 独立标签，先上传并校验私有 R2 `management/<version>/` 中的 EXE、ZIP、`SHA256SUMS.txt`，再创建只含相同制品的 Draft Release。管理端不生成公共 Actions Artifact，不写 `latest.json`、不经过 Worker，也不自动公开 Release。
+
+所需 GitHub Secrets 为 `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`、`JATOBID_RELEASE_FORBIDDEN_TERMS`、`MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` 和用于客户端发布后验证的 `JATOBID_UPDATE_TEST_LICENSE_JSON`；所需 GitHub Variables 为 `R2_ACCOUNT_ID` 和 `UPDATE_WORKER_BASE_URL`。测试许可证必须是管理端签发的完整 ECDSA envelope，且 `offlineValidUntil` 尚未到期；到期后需在持有原签名密钥的管理端重新登录或续期测试设备，将新 envelope 更新到同名 GitHub Secret，不能直接修改 JSON 日期。
 
 ### 数据说明
 

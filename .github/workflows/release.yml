@@ -1,5 +1,5 @@
-name: Release Client
-run-name: Release Client ${{ inputs.tag_name }} @ ${{ github.sha }}
+name: Release Client and Management
+run-name: Release Client ${{ inputs.tag_name }} and Management ${{ inputs.management_version }} @ ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -12,12 +12,21 @@ on:
         description: 'Type PUBLISH vX.Y.Z to publish the selected tag'
         required: true
         type: string
+      management_version:
+        description: 'Independent management version, for example 1.4.3 or v1.4.3'
+        required: true
+        type: string
+      management_ref:
+        description: 'Commit, tag, or ref from main history to build for management'
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: openjatobid-client-release
+  group: openjatobid-release
   cancel-in-progress: false
 
 env:
@@ -28,7 +37,7 @@ env:
 jobs:
   release-client:
     name: Release Windows client
-    runs-on: [self-hosted, Windows, X64, jatobid-release]
+    runs-on: windows-2022
     timeout-minutes: 180
     defaults:
       run:
@@ -78,7 +87,7 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "commit_sha=$commitSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Self-hosted Windows tool preflight
+      - name: GitHub-hosted Windows tool preflight
         run: |
           $ErrorActionPreference = 'Stop'
           git --version
@@ -87,7 +96,7 @@ jobs:
           $awsVersion = (aws --version 2>&1 | Out-String).Trim()
           Write-Host $awsVersion
           if ($awsVersion -notmatch '^aws-cli/2\.') {
-            throw 'AWS CLI v2 is required on the self-hosted release runner.'
+            throw 'AWS CLI v2 is required on the GitHub-hosted release runner.'
           }
           gh --version
 
@@ -99,6 +108,7 @@ jobs:
             .github/scripts/publish-r2-release.test.mjs `
             .github/scripts/verify-worker-release.test.mjs `
             .github/scripts/release-workflow.test.mjs `
+            .github/scripts/build-management-workflow.test.mjs `
             analytics/worker/src/routes/updates.test.js `
             client/scripts/package-build-config.test.cjs
 
@@ -339,6 +349,164 @@ jobs:
             '.release-notice-main',
             'github-release.json',
             'release_notes.md'
+          )
+          foreach ($target in $paths) {
+            if (Test-Path -LiteralPath $target) {
+              Remove-Item -LiteralPath $target -Recurse -Force
+            }
+          }
+
+  release-management:
+    name: Release Windows management application
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      CLIENT_TAG: ${{ inputs.tag_name }}
+      CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+    steps:
+      - name: Checkout requested management ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.management_ref }}
+          fetch-depth: 0
+
+      - name: Validate requested ref is trusted main history
+        id: trusted-ref
+        run: |
+          set -euo pipefail
+          if [[ ! "$CLIENT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid client release tag: $CLIENT_TAG"
+            exit 1
+          fi
+          if [[ "$CONFIRM_RELEASE" != "PUBLISH $CLIENT_TAG" ]]; then
+            echo "confirm_release must exactly equal 'PUBLISH $CLIENT_TAG'."
+            exit 1
+          fi
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          REQUESTED_SHA="$(git rev-parse HEAD)"
+          MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
+          if ! git merge-base --is-ancestor "$REQUESTED_SHA" "$MAIN_SHA"; then
+            echo "Requested ref $REQUESTED_SHA is not reachable from origin/main."
+            exit 1
+          fi
+          echo "commit_sha=$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: management/package-lock.json
+
+      - name: Validate independent management version
+        id: validate-version
+        env:
+          MANAGEMENT_VERSION: ${{ inputs.management_version }}
+        run: |
+          MANAGEMENT_VERSION="${MANAGEMENT_VERSION#v}"
+          if [[ ! "$MANAGEMENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid management version: $MANAGEMENT_VERSION"
+            exit 1
+          fi
+          echo "version=$MANAGEMENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=management-v$MANAGEMENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate management tag is unused
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git rev-parse --verify "refs/tags/$env:MANAGEMENT_TAG^{commit}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Management tag $env:MANAGEMENT_TAG already exists; use a new management version."
+          }
+          gh release view $env:MANAGEMENT_TAG 1>$null 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Management Release $env:MANAGEMENT_TAG already exists; use a new management version."
+          }
+
+      - name: Install management dependencies
+        working-directory: management
+        run: npm ci
+
+      - name: Create temporary initial administrator credential
+        working-directory: management
+        env:
+          MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON: ${{ secrets.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON }}
+        run: node scripts/write-initial-admin-credential.cjs
+
+      - name: Test management application
+        working-directory: management
+        run: npm test
+
+      - name: Sync independent management version
+        working-directory: management
+        env:
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+        run: npm version "$MANAGEMENT_VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build and verify Windows management application
+        working-directory: management
+        run: npm run dist:win
+
+      - name: Prepare exact management Artifact
+        working-directory: management
+        env:
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+        run: node scripts/prepare-release-artifacts.cjs
+
+      - name: Remove temporary initial administrator credential
+        if: ${{ always() }}
+        working-directory: management
+        run: rm -f initial-admin.private.json
+
+      - name: Upload and verify immutable management R2 version directory
+        shell: pwsh
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+          RELEASE_ASSETS_DIR: management/release-artifact
+          R2_RELEASE_ACTION: publish-management
+        run: node .github/scripts/publish-r2-release.mjs
+
+      - name: Create management Draft Release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANAGEMENT_TAG: ${{ steps.validate-version.outputs.tag_name }}
+          MANAGEMENT_VERSION: ${{ steps.validate-version.outputs.version }}
+          MANAGEMENT_COMMIT_SHA: ${{ steps.trusted-ref.outputs.commit_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            "## 管理端 $env:MANAGEMENT_VERSION",
+            '',
+            "源码提交：``$env:MANAGEMENT_COMMIT_SHA``"
+          ) | Out-File -FilePath management-release-notes.md -Encoding utf8
+
+          gh release create $env:MANAGEMENT_TAG --title "Management $env:MANAGEMENT_VERSION" --notes-file management-release-notes.md --draft --target $env:MANAGEMENT_COMMIT_SHA
+          gh release upload $env:MANAGEMENT_TAG `
+            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.exe" `
+            "management/release-artifact/Jato-AI-BID-Management-$env:MANAGEMENT_VERSION-win-x64.zip" `
+            "management/release-artifact/SHA256SUMS.txt"
+
+      - name: Clean transient management release files
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $paths = @(
+            'management/initial-admin.private.json',
+            'management/release-artifact',
+            'management/release',
+            'management-release-notes.md'
           )
           foreach ($target in $paths) {
             if (Test-Path -LiteralPath $target) {

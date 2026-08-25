@@ -26,7 +26,7 @@
 
 ## R2 发布权限
 
-客户端正式发布由 GitHub Actions 的 Windows 自托管 Runner 构建，并通过 S3 API 直接写入私有 R2 bucket。
+客户端与管理端由 GitHub Actions 的 Windows 2022 GitHub-hosted Runner 构建，并通过 S3 API 直接写入私有 R2 bucket。
 
 GitHub Secrets：
 
@@ -47,6 +47,11 @@ R2 API Token 或 S3 凭证必须限制到 bucket `jatoaibid`，权限为对象�
 - `release/<version>/Jato-AI-BID-<version>-win-x64.exe`
 - `release/<version>/manifest.json`
 - `release/latest.json`
+- `management/<version>/Jato-AI-BID-Management-<version>-win-x64.exe`
+- `management/<version>/Jato-AI-BID-Management-<version>-win-x64.zip`
+- `management/<version>/SHA256SUMS.txt`
+
+管理端目录按版本不可变：同名对象内容一致时复用，不一致时发布失败；不创建管理端 `latest.json`，也不自动清理历史管理端版本。
 
 ## 正式发布审核
 
@@ -56,7 +61,9 @@ R2 API Token 或 S3 凭证必须限制到 bucket `jatoaibid`，权限为对象�
 2. 运行 `.github/workflows/release.yml` 的 `workflow_dispatch`。
 3. `tag_name` 输入稳定版本 tag，例如 `v1.3.2`。
 4. `confirm_release` 必须精确输入 `PUBLISH v1.3.2`。
-5. 工作流会先创建 GitHub Draft Release，再发布 R2 版本目录，提升 `latest.json`，通过 Worker 完整下载 EXE 验证后才公开 GitHub Release。
+5. `management_version` 输入独立管理端版本，例如 `1.4.3` 或 `v1.4.3`。
+6. `management_ref` 输入 `main` 历史中要构建的 commit、tag 或 ref，默认 `main`。
+7. 两个 job 独立并行：客户端先创建 Draft Release，再发布 R2、提升 `latest.json`，通过 Worker 完整下载 EXE 验证后才公开；管理端创建 `management-v<version>` Draft Release 并发布不可变 R2 版本目录，但不自动公开。
 
 如果 Worker 验证或 GitHub Release 正式化失败，workflow 会用 `.release-state/previous-latest.json` 回滚 R2 `release/latest.json`。成功后才清理多余旧版本，只保留当前版本和发布前稳定版本。
 

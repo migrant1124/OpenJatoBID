@@ -23,7 +23,7 @@ concurrency:
 jobs:
   repair-release-notice:
     name: Repair published release notice
-    runs-on: [self-hosted, Windows, X64, jatobid-release]
+    runs-on: windows-2022
     timeout-minutes: 15
     defaults:
       run:

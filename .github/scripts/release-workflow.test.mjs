@@ -18,41 +18,48 @@ async function readWorkflow() {
   return workflow.replace(/\r\n/g, '\n');
 }
 
+async function readClientJob() {
+  const workflow = await readWorkflow();
+  return workflow.slice(workflow.indexOf('  release-client:'), workflow.indexOf('  release-management:'));
+}
+
 async function readNoticeWorkflow() {
   const workflow = await fs.readFile(path.join(root, '.github/workflows/release-notice.yml'), 'utf8');
   return workflow.replace(/\r\n/g, '\n');
 }
 
-test('client release is one manual self-hosted Windows job', async () => {
+test('client and management share one manual GitHub-hosted Windows workflow', async () => {
   const workflow = await readWorkflow();
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^\s+push:/m);
   assert.match(workflow, /tag_name:/);
   assert.match(workflow, /confirm_release:/);
+  assert.match(workflow, /management_version:/);
+  assert.match(workflow, /management_ref:/);
   assert.match(workflow, /^  release-client:/m);
-  assert.equal([...workflow.matchAll(/^  [a-z0-9-]+:\n\s+name:/gm)].length, 1);
-  assert.match(workflow, /runs-on: \[self-hosted, Windows, X64, jatobid-release\]/);
+  assert.match(workflow, /^  release-management:/m);
+  assert.equal([...workflow.matchAll(/^  [a-z0-9-]+:\n\s+name:/gm)].length, 2);
+  assert.equal([...workflow.matchAll(/^    runs-on: windows-2022$/gm)].length, 2);
+  assert.doesNotMatch(workflow, /self-hosted|\[self-hosted, Windows, X64, jatobid-release\]/);
   assert.match(workflow, /timeout-minutes: 180/);
   assert.match(workflow, /shell: pwsh/);
   assert.match(workflow, /contents: write/);
-  assert.match(workflow, /group: openjatobid-client-release/);
+  assert.match(workflow, /group: openjatobid-release/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /CSC_LINK: ''/);
   assert.match(workflow, /WIN_CSC_LINK: ''/);
   assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY: 'false'/);
 });
 
-test('client release rejects hosted runners, Actions artifacts, and npm cache', async () => {
+test('combined release keeps both jobs independent and avoids cross-job artifact transfer', async () => {
   const workflow = await readWorkflow();
-  assert.doesNotMatch(workflow, /windows-latest|ubuntu-latest/);
-  assert.doesNotMatch(workflow, /actions\/upload-artifact|actions\/download-artifact/);
-  assert.doesNotMatch(workflow, /cache:\s*npm|cache-dependency-path/);
+  assert.doesNotMatch(workflow, /windows-latest|ubuntu-latest|actions\/(?:upload|download)-artifact/);
   assert.doesNotMatch(workflow, /\bneeds:/);
-  assert.doesNotMatch(workflow, /\bsudo\b|\bapt\b|awscli-exe-linux|unzip -q|shell: bash/);
+  assert.doesNotMatch(workflow, /\bsudo\b|\bapt\b|awscli-exe-linux|unzip -q/);
 });
 
 test('client release references existing Agent tool scripts', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   assert.doesNotMatch(workflow, /OpenCode|opencode|OPENCODE_VERSION/);
   const scriptPaths = [...workflow.matchAll(/run: node (scripts\/[\w.-]+\.cjs)[^\n]*/g)]
     .map((match) => match[1]);
@@ -63,7 +70,7 @@ test('client release references existing Agent tool scripts', async () => {
 });
 
 test('client release validates stable tag, exact confirmation, and tag commit before uploads', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   const validateIndex = workflow.indexOf('Validate release tag, confirmation, and checkout commit');
   const draftIndex = workflow.indexOf('Create or refresh Draft Release with exact assets');
   const r2Index = workflow.indexOf('Upload and verify R2 version directory');
@@ -76,7 +83,7 @@ test('client release validates stable tag, exact confirmation, and tag commit be
 });
 
 test('manual release attestation and manifest use the validated tag commit SHA', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   const script = await fs.readFile(path.join(root, 'client/scripts/generate-build-attestation.cjs'), 'utf8');
   assert.match(workflow, /Generate signed build attestation[\s\S]+GIT_COMMIT_SHA: \$\{\{ steps\.release\.outputs\.commit_sha \}\}/);
   assert.match(workflow, /build-attestation\.json[\s\S]+gitCommitSha[\s\S]+GIT_COMMIT_SHA/);
@@ -84,7 +91,7 @@ test('manual release attestation and manifest use the validated tag commit SHA',
 });
 
 test('client release publishes only the normalized EXE and manifest whitelist', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   assert.match(workflow, /Jato-AI-BID-\$env:RELEASE_VERSION-win-x64\.exe/);
   assert.match(workflow, /client\/release-publish\/manifest\.json/);
   assert.doesNotMatch(workflow, /Jato-AI-BID-[^\n]+\.msi|Jato-AI-BID-[^\n]+\.zip/);
@@ -93,7 +100,7 @@ test('client release publishes only the normalized EXE and manifest whitelist', 
 });
 
 test('Worker test license is preflighted before dependencies and release side effects', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   const preflightIndex = workflow.indexOf('Preflight Worker test license');
   const installIndex = workflow.indexOf('Install client dependencies');
   const draftIndex = workflow.indexOf('Create or refresh Draft Release with exact assets');
@@ -103,7 +110,7 @@ test('Worker test license is preflighted before dependencies and release side ef
 });
 
 test('R2 and Worker release gates keep the required order and rollback behavior', async () => {
-  const workflow = await readWorkflow();
+  const workflow = await readClientJob();
   const draftIndex = workflow.indexOf('Create or refresh Draft Release with exact assets');
   const r2PublishIndex = workflow.indexOf('Upload and verify R2 version directory');
   const promoteIndex = workflow.indexOf('Promote R2 latest.json');
@@ -171,6 +178,8 @@ test('published release notices have a manual repair workflow', async () => {
   assert.match(workflow, /gh release view \$env:TAG_NAME --json isDraft,isPrerelease/);
   assert.match(workflow, /Create release notice from the selected tag[\s\S]+create-release-notes\.mjs/);
   assert.match(workflow, /Publish release notice to main[\s\S]+git push origin HEAD:main/);
+  assert.match(workflow, /runs-on: windows-2022/);
+  assert.doesNotMatch(workflow, /self-hosted/);
   assert.doesNotMatch(workflow, /gh release create|gh release edit|R2_RELEASE_ACTION/);
 });
 
