@@ -6,6 +6,7 @@ const test = require('node:test');
 const pageSource = fs.readFileSync(path.join(__dirname, 'ConversationPage.tsx'), 'utf8');
 const workspaceSource = fs.readFileSync(path.join(__dirname, '../hooks/useConversationWorkspace.ts'), 'utf8');
 const cssSource = fs.readFileSync(path.join(__dirname, '../../../styles/feature-conversation.css'), 'utf8');
+const toastCssSource = fs.readFileSync(path.join(__dirname, '../../../styles/shared-toast.css'), 'utf8');
 const promptLibrarySource = fs.readFileSync(path.join(__dirname, '../../prompt-library/components/PromptLibraryDialog.tsx'), 'utf8');
 
 test('会话列表按时间归类、悬停显示菜单并支持批量删除', () => {
@@ -38,6 +39,7 @@ test('对话输入框仅通过上边沿调节高度', () => {
 });
 
 test('系统提示词分组默认显示', () => {
+  assert.match(toastCssSource, /\.app-toast-viewport \{[^}]*z-index: 2147483647;/);
   assert.doesNotMatch(cssSource, /\.prompt-group-list section > div:first-child > button:last-child/);
   assert.match(cssSource, /\.prompt-group-row:hover \.prompt-row-menu,[\s\S]*opacity: 1;/);
   assert.match(cssSource, /\.prompt-library-primary-tools \{[^}]*repeat\(2,[^}]*\}/);
