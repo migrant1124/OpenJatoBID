@@ -141,6 +141,19 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
     return () => window.removeEventListener('keydown', handleShortcut);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeMenus = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      document.querySelectorAll<HTMLDetailsElement>('.prompt-library-dialog details[open]').forEach((menu) => {
+        if (!menu.contains(target)) menu.open = false;
+      });
+    };
+    document.addEventListener('click', closeMenus);
+    return () => document.removeEventListener('click', closeMenus);
+  }, [open]);
+
   const choosePrompt = async (prompt: PromptItem, viewGroupId = prompt.groupId) => {
     if ((prompt.promptId === selectedPromptId && viewGroupId === selectedGroupId) || !(await saveCurrent())) return;
     selectPromptDraft(prompt, viewGroupId);
