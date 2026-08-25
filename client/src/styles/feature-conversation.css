@@ -152,6 +152,8 @@
 .conversation-dialog .primary-action { background: #2174fd; color: #fff; }
 .conversation-dialog .secondary-action { background: #eef2f7; color: #344054; }
 .conversation-dialog .danger-action { background: #d14343; color: #fff; }
+.conversation-dialog .danger-action:hover:not(:disabled),
+.conversation-dialog .danger-action:focus-visible { background: #d14343; box-shadow: 0 0 0 3px rgb(209 67 67 / 18%), 0 4px 12px rgb(209 67 67 / 22%); }
 .conversation-dialog button:disabled { opacity: .45; cursor: default; }
 .conversation-attachments-dialog { width: min(620px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 48px)); overflow: auto; }
 .conversation-attachments-dialog > div { display: grid; gap: 8px; margin-top: 16px; }

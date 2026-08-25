@@ -12,4 +12,5 @@ test('会话列表按时间归类、悬停显示菜单并支持批量删除', ()
   assert.match(pageSource, /批量删除会话/);
   assert.match(pageSource, /workspace\.deleteThreads/);
   assert.match(cssSource, /\.conversation-thread-item:hover \.conversation-more-menu[\s\S]*opacity: 1/);
+  assert.match(cssSource, /\.conversation-dialog \.danger-action:hover:not\(:disabled\)[\s\S]*background: #d14343;[\s\S]*box-shadow:/);
 });
