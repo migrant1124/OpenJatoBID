@@ -292,6 +292,42 @@ jobs:
           R2_RELEASE_ACTION: cleanup
         run: node .github/scripts/publish-r2-release.mjs
 
+      - name: Checkout main for release notice
+        if: ${{ success() }}
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: .release-notice-main
+          fetch-depth: 1
+
+      - name: Publish release notice to main
+        if: ${{ success() }}
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item -LiteralPath 'remote-notice.json' -Destination '.release-notice-main/remote-notice.json' -Force
+          Push-Location '.release-notice-main'
+          try {
+            git config user.name 'github-actions[bot]'
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the Git author name.' }
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the Git author email.' }
+            git add remote-notice.json
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to stage the generated release notice.' }
+            git diff --cached --quiet
+            if ($LASTEXITCODE -eq 1) {
+              git commit -m "chore: update release notice for $env:TAG_NAME"
+              if ($LASTEXITCODE -ne 0) { throw 'Unable to commit the generated release notice.' }
+              git push origin HEAD:main
+              if ($LASTEXITCODE -ne 0) { throw 'Unable to push the generated release notice.' }
+            } elseif ($LASTEXITCODE -ne 0) {
+              throw 'Unable to compare the generated release notice.'
+            }
+          } finally {
+            Pop-Location
+          }
+
       - name: Clean transient release files
         if: ${{ always() }}
         run: |
@@ -300,6 +336,7 @@ jobs:
             'client/release-publish',
             'client/release',
             '.release-state',
+            '.release-notice-main',
             'github-release.json',
             'release_notes.md'
           )

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const STABLE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
+const COMMIT_PREFIX_PATTERN = /^(?:(?:feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert)(?:\([^)]*\))?!?\s*[:：]|功能\s*[:：])\s*/i;
+const AUTOMATED_NOTICE_COMMIT_PATTERN = /^chore: update release notice for v\d+\.\d+\.\d+$/i;
 
 function runGit(args) {
   return new Promise((resolve, reject) => {
@@ -61,21 +63,75 @@ export function validateReleaseNotesCompliance(content, forbiddenTerms) {
   }
 }
 
+export function filterReleaseLog(logOutput) {
+  return String(logOutput || '')
+    .split(/\r?\n/)
+    .filter((line) => {
+      const subject = line.replace(/^-\s*/, '').replace(/\s+\([0-9a-f]{7,40}\)\s*$/i, '').trim();
+      return !AUTOMATED_NOTICE_COMMIT_PATTERN.test(subject);
+    })
+    .join('\n');
+}
+
+export function createConciseCommitSummaries(logOutput) {
+  const seen = new Set();
+  return filterReleaseLog(logOutput)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^-\s*/, '').replace(/\s+\([0-9a-f]{7,40}\)\s*$/i, '').trim())
+    .map((line) => line.replace(COMMIT_PREFIX_PATTERN, '').trim())
+    .filter((line) => line && !seen.has(line) && seen.add(line));
+}
+
+export function selectPreviousStableTag(tagList) {
+  return String(tagList || '').split(/\r?\n/).find((tag) => STABLE_TAG_PATTERN.test(tag.trim()))?.trim() || '';
+}
+
+export function createRemoteNotice({ tagName, logOutput, tagCommitTime }) {
+  if (!STABLE_TAG_PATTERN.test(String(tagName || ''))) {
+    throw new Error(`Invalid release tag: ${tagName || '(empty)'}`);
+  }
+  const summaries = createConciseCommitSummaries(logOutput);
+  const content = [
+    '## 更新内容',
+    '',
+    ...(summaries.length > 0
+      ? summaries.map((summary) => `- ${summary}`)
+      : ['- 本版本没有可列出的普通提交。']),
+    '',
+  ].join('\n');
+  const timestamp = String(tagCommitTime || '').replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2}).*$/, '$1 $2');
+  return {
+    code: 0,
+    notice: {
+      id: `release-${tagName}`,
+      projectName: 'yibiao-client',
+      enabled: true,
+      title: `Jato AI BID ${tagName} 正式发布`,
+      content,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+  };
+}
+
 export async function createReleaseNotes({
   tagName,
   repository,
   forbiddenTerms,
   outputPath = 'release_notes.md',
+  noticeOutputPath = 'remote-notice.json',
 }) {
   if (!STABLE_TAG_PATTERN.test(String(tagName || ''))) {
     throw new Error(`Invalid release tag: ${tagName || '(empty)'}`);
   }
-  const previousTag = await runGit(['describe', '--tags', '--abbrev=0', `${tagName}^`]).catch(() => '');
+  const tagList = await runGit(['tag', '--merged', `${tagName}^`, '--sort=-version:refname']);
+  const previousTag = selectPreviousStableTag(tagList);
   const range = previousTag ? `${previousTag}..${tagName}` : tagName;
   const compareUrl = previousTag
     ? `https://github.com/${repository}/compare/${previousTag}...${tagName}`
     : `https://github.com/${repository}/commits/${tagName}`;
-  const logOutput = await runGit(['log', range, '--no-merges', '--pretty=format:- %s (%h)']).catch(() => '');
+  const logOutput = filterReleaseLog(await runGit(['log', range, '--no-merges', '--pretty=format:- %s (%h)']));
+  const tagCommitTime = await runGit(['log', '-1', '--format=%aI', tagName]);
   const body = [
     '## 更新内容',
     '',
@@ -85,8 +141,18 @@ export async function createReleaseNotes({
     '',
   ].join('\n');
   validateReleaseNotesCompliance(body, forbiddenTerms);
-  await fsp.writeFile(outputPath, body, 'utf8');
-  return { previousTag, range, compareUrl, outputPath: path.resolve(outputPath) };
+  const notice = createRemoteNotice({ tagName, logOutput, tagCommitTime });
+  await Promise.all([
+    fsp.writeFile(outputPath, body, 'utf8'),
+    fsp.writeFile(noticeOutputPath, `${JSON.stringify(notice, null, 2)}\n`, 'utf8'),
+  ]);
+  return {
+    previousTag,
+    range,
+    compareUrl,
+    outputPath: path.resolve(outputPath),
+    noticeOutputPath: path.resolve(noticeOutputPath),
+  };
 }
 
 async function main() {
@@ -96,6 +162,7 @@ async function main() {
   if (!repository) throw new Error('GITHUB_REPOSITORY is required.');
   const result = await createReleaseNotes({ tagName, repository, forbiddenTerms });
   console.log(`Created compliant release notes for ${tagName}.`);
+  console.log(`Created release notice: ${result.noticeOutputPath}`);
   console.log(`Compare URL: ${result.compareUrl}`);
 }
 

@@ -1,0 +1,88 @@
+name: Repair Release Notice
+run-name: Repair Release Notice ${{ inputs.tag_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Published stable release tag, for example v1.7.2'
+        required: true
+        type: string
+      confirm_notice:
+        description: 'Type UPDATE NOTICE vX.Y.Z to update the notice on main'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openjatobid-release-notice
+  cancel-in-progress: false
+
+jobs:
+  repair-release-notice:
+    name: Repair published release notice
+    runs-on: [self-hosted, Windows, X64, jatobid-release]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG_NAME: ${{ inputs.tag_name }}
+      CONFIRM_NOTICE: ${{ inputs.confirm_notice }}
+    steps:
+      - name: Checkout main with full history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 26
+
+      - name: Validate published stable release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TAG_NAME -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Invalid release tag: $env:TAG_NAME"
+          }
+          if ($env:CONFIRM_NOTICE -cne "UPDATE NOTICE $env:TAG_NAME") {
+            throw "confirm_notice must exactly equal 'UPDATE NOTICE $env:TAG_NAME'."
+          }
+          git rev-parse "$env:TAG_NAME^{commit}" 1>$null
+          if ($LASTEXITCODE -ne 0) { throw "Release tag $env:TAG_NAME does not exist." }
+          $release = gh release view $env:TAG_NAME --json isDraft,isPrerelease | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Unable to read release $env:TAG_NAME." }
+          if ($release.isDraft -or $release.isPrerelease) {
+            throw "Release $env:TAG_NAME must be a published stable release."
+          }
+
+      - name: Create release notice from the selected tag
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          JATOBID_RELEASE_FORBIDDEN_TERMS: ${{ secrets.JATOBID_RELEASE_FORBIDDEN_TERMS }}
+        run: node .github/scripts/create-release-notes.mjs
+
+      - name: Publish release notice to main
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the Git author name.' }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the Git author email.' }
+          git add remote-notice.json
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to stage the generated release notice.' }
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m "chore: update release notice for $env:TAG_NAME"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to commit the generated release notice.' }
+            git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to push the generated release notice.' }
+          } elseif ($LASTEXITCODE -ne 0) {
+            throw 'Unable to compare the generated release notice.'
+          }

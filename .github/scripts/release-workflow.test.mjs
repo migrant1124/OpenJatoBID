@@ -2,12 +2,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { parseForbiddenTerms, validateReleaseNotesCompliance } from './create-release-notes.mjs';
+import {
+  createConciseCommitSummaries,
+  createRemoteNotice,
+  filterReleaseLog,
+  parseForbiddenTerms,
+  selectPreviousStableTag,
+  validateReleaseNotesCompliance,
+} from './create-release-notes.mjs';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 
 async function readWorkflow() {
   const workflow = await fs.readFile(path.join(root, '.github/workflows/release.yml'), 'utf8');
+  return workflow.replace(/\r\n/g, '\n');
+}
+
+async function readNoticeWorkflow() {
+  const workflow = await fs.readFile(path.join(root, '.github/workflows/release-notice.yml'), 'utf8');
   return workflow.replace(/\r\n/g, '\n');
 }
 
@@ -99,6 +111,8 @@ test('R2 and Worker release gates keep the required order and rollback behavior'
   const publishIndex = workflow.indexOf('Publish the verified GitHub Release');
   const rollbackIndex = workflow.indexOf('Roll back latest.json after verification or finalization failure');
   const cleanupIndex = workflow.indexOf('Remove R2 versions outside the current and previous stable pair');
+  const noticeCheckoutIndex = workflow.indexOf('Checkout main for release notice');
+  const noticePublishIndex = workflow.indexOf('Publish release notice to main');
   const transientCleanupIndex = workflow.indexOf('Clean transient release files');
   assert.ok(
     draftIndex < r2PublishIndex
@@ -107,11 +121,57 @@ test('R2 and Worker release gates keep the required order and rollback behavior'
     && workerIndex < publishIndex
     && publishIndex < rollbackIndex
     && rollbackIndex < cleanupIndex
+    && cleanupIndex < noticeCheckoutIndex
+    && noticeCheckoutIndex < noticePublishIndex
+    && noticePublishIndex < transientCleanupIndex
     && cleanupIndex < transientCleanupIndex,
   );
   assert.match(workflow, /if: \$\{\{ failure\(\) && hashFiles\('\.release-state\/previous-latest\.json'\) != '' \}\}/);
   assert.match(workflow, /Remove R2 versions outside the current and previous stable pair[\s\S]+if: \$\{\{ success\(\) \}\}/);
   assert.match(workflow, /Clean transient release files[\s\S]+if: \$\{\{ always\(\) \}\}/);
+});
+
+test('release notice uses concise commit subjects and is published to main after release success', async () => {
+  const workflow = await readWorkflow();
+  const summaries = createConciseCommitSummaries([
+    '- feat(prompt): 新增提示词库 (abc1234)',
+    '- fix: 修复公告读取 (def5678)',
+    '- 功能：新增提示词库 (fedcba9)',
+    '- chore: update release notice for v1.7.1 (0123456)',
+  ].join('\n'));
+  assert.deepEqual(summaries, ['新增提示词库', '修复公告读取']);
+  assert.equal(filterReleaseLog([
+    '- feat: 新增提示词库 (abc1234)',
+    '- chore: update release notice for v1.7.1 (0123456)',
+  ].join('\n')), '- feat: 新增提示词库 (abc1234)');
+  assert.equal(selectPreviousStableTag('preview-2\nv1.7.1\nv1.7.0'), 'v1.7.1');
+  assert.equal(selectPreviousStableTag('preview-2\nbuild-123'), '');
+
+  const notice = createRemoteNotice({
+    tagName: 'v1.7.2',
+    logOutput: '- feat: 新增提示词库 (abc1234)',
+    tagCommitTime: '2026-08-25T12:43:48+08:00',
+  });
+  assert.equal(notice.code, 0);
+  assert.equal(notice.notice.id, 'release-v1.7.2');
+  assert.equal(notice.notice.projectName, 'yibiao-client');
+  assert.equal(notice.notice.content, '## 更新内容\n\n- 新增提示词库\n');
+  assert.equal(notice.notice.updatedAt, '2026-08-25 12:43:48');
+
+  assert.match(workflow, /Checkout main for release notice[\s\S]+ref: main[\s\S]+path: \.release-notice-main/);
+  assert.match(workflow, /Publish release notice to main[\s\S]+git push origin HEAD:main/);
+});
+
+test('published release notices have a manual repair workflow', async () => {
+  const workflow = await readNoticeWorkflow();
+  assert.match(workflow, /^on:\n  workflow_dispatch:/m);
+  assert.match(workflow, /confirm_notice:/);
+  assert.match(workflow, /UPDATE NOTICE \$env:TAG_NAME/);
+  assert.match(workflow, /Checkout main with full history[\s\S]+ref: main/);
+  assert.match(workflow, /gh release view \$env:TAG_NAME --json isDraft,isPrerelease/);
+  assert.match(workflow, /Create release notice from the selected tag[\s\S]+create-release-notes\.mjs/);
+  assert.match(workflow, /Publish release notice to main[\s\S]+git push origin HEAD:main/);
+  assert.doesNotMatch(workflow, /gh release create|gh release edit|R2_RELEASE_ACTION/);
 });
 
 test('R2 publication uses private jatoaibid bucket and configured variables', async () => {
