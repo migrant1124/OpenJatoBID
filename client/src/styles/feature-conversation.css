@@ -179,7 +179,13 @@
 .prompt-item-title { min-width: 0; flex: 1; overflow: hidden; border: 0; background: transparent; color: #344054; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .prompt-group-title { display: flex; align-items: center; gap: 7px; padding: 8px 7px; }
 .prompt-group-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prompt-group-chevron { width: 13px; color: #7f8b9c; font-size: 17px; line-height: 1; text-align: center; }
+.prompt-group-chevron { flex: 0 0 auto; width: 30px; height: 30px; color: #2c78f4; transform: rotate(-90deg); transition: transform 120ms ease; }
+.prompt-group-chevron.is-expanded { transform: rotate(0); }
+.prompt-group-chevron.is-yellow { color: #f4c431; }
+.prompt-group-chevron.is-green { color: #42b967; }
+.prompt-group-chevron.is-purple { color: #9a5ac7; }
+.prompt-group-chevron.is-red { color: #ee6380; }
+.prompt-group-chevron.is-cyan { color: #35acc0; }
 .prompt-row-menu { position: relative; flex: 0 0 auto; margin-left: auto; opacity: 0; }
 .prompt-group-row:hover .prompt-row-menu,
 .prompt-item-row:hover .prompt-row-menu,

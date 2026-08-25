@@ -42,6 +42,8 @@ test('系统提示词分组默认显示', () => {
   assert.match(toastCssSource, /\.app-toast-viewport \{[^}]*z-index: 2147483647;/);
   assert.doesNotMatch(cssSource, /\.prompt-group-list section > div:first-child > button:last-child/);
   assert.match(cssSource, /\.prompt-group-row:hover \.prompt-row-menu,[\s\S]*opacity: 1;/);
+  assert.match(promptLibrarySource, /<svg className=\{`prompt-group-chevron[\s\S]*group\?\.iconKey[\s\S]*<path d="M5 8\.5 12 15\.5 19 8\.5Z"/);
+  assert.match(cssSource, /\.prompt-group-chevron\.is-yellow \{ color: #f4c431; \}[\s\S]*\.prompt-group-chevron\.is-cyan \{ color: #35acc0; \}/);
   assert.match(cssSource, /\.prompt-library-primary-tools \{[^}]*repeat\(2,[^}]*\}/);
   assert.match(cssSource, /\.prompt-library-primary-tools > button \{[^}]*height: 24px;[^}]*font-size: 11px;/);
   assert.match(cssSource, /\.prompt-library-actions \.prompt-import-menu button \{[^}]*white-space: nowrap;/);

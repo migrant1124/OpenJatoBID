@@ -400,7 +400,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
     return <section key={groupId} className={groupId === selectedGroupId ? 'is-active' : ''}>
       <div className="prompt-group-row">
         {batchDeleteMode && <input type="checkbox" aria-label={`选择分组 ${groupName}`} checked={groupChecked} onChange={(event) => toggleGroupSelection(groupId, event.target.checked)} />}
-        <button type="button" className="prompt-group-title" onClick={() => void chooseGroup(groupId)}><span className="prompt-group-chevron" aria-hidden="true">{expanded ? '⌄' : '›'}</span><strong>{groupName}</strong></button>
+        <button type="button" className="prompt-group-title" onClick={() => void chooseGroup(groupId)}><svg className={`prompt-group-chevron is-${group?.iconKey || 'blue'}${expanded ? ' is-expanded' : ''}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 8.5 12 15.5 19 8.5Z" fill="currentColor" /></svg><strong>{groupName}</strong></button>
         {!batchDeleteMode && <details className="prompt-row-menu"><summary aria-label={`分组操作 ${groupName}`}>•••</summary><div>
           <button type="button" onClick={(event) => { closeRowMenu(event); if (favoriteOnly) setDeleteGroupTarget({ groupId, groupName, favoriteOnly: true }); else if (group) void deleteGroup(group); }}>删除分组</button>
           <button type="button" onClick={(event) => { closeRowMenu(event); void startBatchDelete(); }}>批量删除</button>
