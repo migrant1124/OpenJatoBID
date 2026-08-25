@@ -49,19 +49,22 @@
 .conversation-thread-tools input:focus,
 .conversation-dialog input:focus { border-color: #2174fd; box-shadow: 0 0 0 3px rgb(33 116 253 / 10%); }
 .conversation-thread-tools > button { border: 0; border-radius: 9px; padding: 10px 12px; background: #2174fd; color: #fff; font-weight: 600; cursor: pointer; }
-.conversation-thread-panel > h2 { margin: 14px 14px 8px; font-size: 13px; color: #667085; }
+.conversation-thread-heading { display: flex; align-items: center; justify-content: space-between; margin: 10px 10px 4px 14px; }
+.conversation-thread-heading h2 { margin: 0; font-size: 13px; color: #667085; }
+.conversation-thread-heading button { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: #7b8799; cursor: pointer; }
+.conversation-thread-heading button:hover { background: #f1f5fa; color: #2174fd; }
 .conversation-thread-panel > footer { padding: 10px 14px; border-top: 1px solid #edf1f7; color: #8a94a6; font-size: 12px; }
 .conversation-thread-list { overflow: auto; padding: 0 8px 10px; }
+.conversation-thread-group h3 { margin: 9px 10px 4px; color: #98a2b3; font-size: 11px; font-weight: 500; }
 
 .conversation-thread-item { position: relative; display: flex; align-items: flex-start; border-radius: 10px; margin: 2px 0; }
 .conversation-thread-item.is-active { background: #eef5ff; box-shadow: inset 3px 0 #2174fd; }
-.conversation-thread-main { flex: 1; min-width: 0; padding: 6px 34px 6px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; display: grid; gap: 2px; }
-.conversation-thread-main strong,
-.conversation-thread-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
-.conversation-thread-main strong { font-size: 13px; color: #2d3b52; }
-.conversation-thread-main span { font-size: 12px; color: #8791a3; }
-.conversation-thread-main time { font-size: 11px; line-height: 1.2; color: #a0a8b7; }
-.conversation-more-menu { position: absolute; right: 7px; top: 3px; z-index: 2; }
+.conversation-thread-main { flex: 1; min-width: 0; padding: 8px 34px 8px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.conversation-thread-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.3; color: #2d3b52; }
+.conversation-more-menu { position: absolute; right: 7px; top: 4px; z-index: 2; opacity: 0; pointer-events: none; }
+.conversation-thread-item:hover .conversation-more-menu,
+.conversation-more-menu:focus-within,
+.conversation-more-menu[open] { opacity: 1; pointer-events: auto; }
 .conversation-more-menu summary,
 .conversation-header-menu summary { list-style: none; cursor: pointer; border-radius: 7px; padding: 3px 6px; color: #7b8799; }
 .conversation-more-menu summary::-webkit-details-marker,
@@ -149,9 +152,15 @@
 .conversation-dialog .primary-action { background: #2174fd; color: #fff; }
 .conversation-dialog .secondary-action { background: #eef2f7; color: #344054; }
 .conversation-dialog .danger-action { background: #d14343; color: #fff; }
+.conversation-dialog button:disabled { opacity: .45; cursor: default; }
 .conversation-attachments-dialog { width: min(620px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 48px)); overflow: auto; }
 .conversation-attachments-dialog > div { display: grid; gap: 8px; margin-top: 16px; }
 .conversation-attachments-dialog .conversation-attachment-card { max-width: none; }
+.conversation-batch-delete-list { display: grid; gap: 2px; max-height: min(360px, 50vh); margin-top: 14px; overflow: auto; }
+.conversation-batch-delete-list label { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.conversation-batch-delete-list label:hover { background: #f5f7fb; }
+.conversation-batch-delete-list input { flex: 0 0 auto; width: 16px; height: 16px; padding: 0; accent-color: #2174fd; }
+.conversation-batch-delete-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .conversation-drawer-overlay { display: none; position: fixed; inset: 0; background: rgb(15 23 42 / 38%); z-index: 980; }
 .conversation-thread-drawer { display: none; position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); padding: 10px; z-index: 981; }

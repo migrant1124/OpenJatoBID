@@ -167,6 +167,13 @@ export function useConversationWorkspace() {
     await loadThreads(query, '');
   }, [activeThreadId, loadThreads, query]);
 
+  const deleteThreads = useCallback(async (threadIds: string[]) => {
+    for (const threadId of new Set(threadIds)) await conversationApi().deleteThread({ threadId });
+    setSnapshot(null);
+    setActiveThreadId('');
+    await loadThreads(query, '');
+  }, [loadThreads, query]);
+
   const selectAttachments = useCallback(async () => {
     if (!activeThreadId || busy || converting) return;
     setBusy(true);
@@ -257,7 +264,7 @@ export function useConversationWorkspace() {
 
   return {
     threads, snapshot, activeThreadId, query, setQuery, draft, setDraft, busy, converting, draftAttachments, activeMessage,
-    createThread, selectThread, renameThread, deleteThread, selectAttachments, removeAttachment, send, stop,
+    createThread, selectThread, renameThread, deleteThread, deleteThreads, selectAttachments, removeAttachment, send, stop,
     quickAction, regenerate, exportWord, copyMessage,
   };
 }

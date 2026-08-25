@@ -12,6 +12,21 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
+function threadGroupLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '更早';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 7);
+  const thirtyDaysAgo = new Date(today); thirtyDaysAgo.setDate(today.getDate() - 30);
+  if (date >= today) return '今天';
+  if (date >= yesterday) return '昨天';
+  if (date >= sevenDaysAgo) return '7 天内';
+  if (date >= thirtyDaysAgo) return '30 天内';
+  return '更早';
+}
+
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
@@ -40,8 +55,6 @@ function ThreadItem({ thread, active, onSelect, onRename, onDelete }: {
     <div className={`conversation-thread-item${active ? ' is-active' : ''}`}>
       <button type="button" className="conversation-thread-main" onClick={onSelect}>
         <strong>{thread.title}</strong>
-        <span>{thread.lastMessagePreview || '开始一段新对话'}</span>
-        <time>{formatTime(thread.updatedAt)}</time>
       </button>
       <details className="conversation-more-menu">
         <summary aria-label="会话操作">•••</summary>
@@ -114,6 +127,9 @@ function ConversationPage() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(() => new Set());
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ConversationAttachment | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -124,6 +140,14 @@ function ConversationPage() {
   const canSend = !workspace.busy && !workspace.converting && !activeGeneration
     && (Boolean(workspace.draft.trim()) || workspace.draftAttachments.length > 0)
     && workspace.draftAttachments.every((item) => item.status === 'ready');
+  const groupedThreads = useMemo(() => {
+    const groups = new Map<string, ConversationThread[]>();
+    workspace.threads.forEach((thread) => {
+      const label = threadGroupLabel(thread.updatedAt);
+      groups.set(label, [...(groups.get(label) || []), thread]);
+    });
+    return [...groups];
+  }, [workspace.threads]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ block: 'end' }); }, [workspace.snapshot?.messages]);
 
@@ -158,6 +182,21 @@ function ConversationPage() {
     try { await workspace.deleteThread(); setDeleteOpen(false); } catch (error) { showToast(error instanceof Error ? error.message : '删除失败', 'error'); }
   };
 
+  const confirmBatchDelete = async () => {
+    if (!selectedThreadIds.size) return;
+    setBatchDeleting(true);
+    try {
+      await workspace.deleteThreads([...selectedThreadIds]);
+      showToast(`已删除 ${selectedThreadIds.size} 个会话`, 'success');
+      setBatchDeleteOpen(false);
+      setSelectedThreadIds(new Set());
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '批量删除失败', 'error');
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
   const requestRemove = (attachment: ConversationAttachment) => {
     if (attachment.source === 'composer-overflow-text' && !attachment.originMessageId) setRemoveTarget(attachment);
     else void workspace.removeAttachment(attachment).catch((error) => showToast(error instanceof Error ? error.message : '移除失败', 'error'));
@@ -169,10 +208,12 @@ function ConversationPage() {
         <input value={workspace.query} onChange={(event) => workspace.setQuery(event.target.value)} placeholder="搜索会话标题" aria-label="搜索会话标题" />
         <button type="button" onClick={() => { void workspace.createThread(); setThreadPanelOpen(false); }}>＋ 新建对话</button>
       </div>
-      <h2>会话列表</h2>
+      <div className="conversation-thread-heading"><h2>会话列表</h2><button type="button" aria-label="批量删除会话" title="批量删除会话" onClick={() => { setSelectedThreadIds(new Set()); setBatchDeleteOpen(true); }}>⚙</button></div>
       <div className="conversation-thread-list">
-        {workspace.threads.map((thread) => <ThreadItem key={thread.threadId} thread={thread} active={thread.threadId === workspace.activeThreadId}
-          onSelect={() => { workspace.selectThread(thread.threadId); setThreadPanelOpen(false); }} onRename={() => openRename(thread)} onDelete={() => requestDelete(thread)} />)}
+        {groupedThreads.map(([label, threads]) => <section className="conversation-thread-group" key={label}><h3>{label}</h3>
+          {threads.map((thread) => <ThreadItem key={thread.threadId} thread={thread} active={thread.threadId === workspace.activeThreadId}
+            onSelect={() => { workspace.selectThread(thread.threadId); setThreadPanelOpen(false); }} onRename={() => openRename(thread)} onDelete={() => requestDelete(thread)} />)}
+        </section>)}
       </div>
       <footer>共 {workspace.threads.length} 个会话</footer>
     </aside>
@@ -222,6 +263,7 @@ function ConversationPage() {
       <Dialog.Root open={threadPanelOpen} onOpenChange={setThreadPanelOpen}><Dialog.Portal><Dialog.Overlay className="conversation-drawer-overlay" /><Dialog.Content className="conversation-thread-drawer"><Dialog.Title className="sr-only">会话列表</Dialog.Title>{threadPanel}</Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={renameOpen} onOpenChange={setRenameOpen}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog"><Dialog.Title>重命名会话</Dialog.Title><Dialog.Description>输入 1–80 个字符的会话标题。</Dialog.Description><input value={renameValue} maxLength={80} onChange={(event) => setRenameValue(event.target.value)} /><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="primary-action" onClick={() => void confirmRename()}>保存</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog"><Dialog.Title>删除会话</Dialog.Title><Dialog.Description>会话将从列表中移除，相关附件按维护策略延迟清理。</Dialog.Description><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="danger-action" onClick={() => void confirmDelete()}>删除</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
+      <Dialog.Root open={batchDeleteOpen} onOpenChange={(open) => { if (!batchDeleting) setBatchDeleteOpen(open); }}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog conversation-batch-delete-dialog"><Dialog.Title>批量删除会话</Dialog.Title><Dialog.Description>选择需要删除的会话，删除后无法恢复。</Dialog.Description><div className="conversation-batch-delete-list"><label><input type="checkbox" checked={workspace.threads.length > 0 && selectedThreadIds.size === workspace.threads.length} onChange={(event) => setSelectedThreadIds(event.target.checked ? new Set(workspace.threads.map((thread) => thread.threadId)) : new Set())} />全选</label>{workspace.threads.map((thread) => <label key={thread.threadId}><input type="checkbox" checked={selectedThreadIds.has(thread.threadId)} onChange={(event) => setSelectedThreadIds((current) => { const next = new Set(current); if (event.target.checked) next.add(thread.threadId); else next.delete(thread.threadId); return next; })} /><span>{thread.title}</span></label>)}</div><footer><Dialog.Close className="secondary-action" disabled={batchDeleting}>取消</Dialog.Close><button type="button" className="danger-action" disabled={!selectedThreadIds.size || batchDeleting} onClick={() => void confirmBatchDelete()}>{batchDeleting ? '删除中…' : `删除所选（${selectedThreadIds.size}）`}</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={attachmentsOpen} onOpenChange={setAttachmentsOpen}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog conversation-attachments-dialog"><Dialog.Title>本会话附件</Dialog.Title><Dialog.Description>附件仅在当前会话中持续可用，不显示本机路径。</Dialog.Description><div>{allAttachments.length ? allAttachments.map((attachment) => <AttachmentCard key={attachment.attachmentId} attachment={attachment} removable={attachment.status !== 'removed'} detailed onRemove={() => requestRemove(attachment)} />) : <p>暂无附件。</p>}</div><footer><Dialog.Close className="primary-action">关闭</Dialog.Close></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={Boolean(removeTarget)} onOpenChange={(open) => !open && setRemoveTarget(null)}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog"><Dialog.Title>删除超长文本附件</Dialog.Title><Dialog.Description>删除后将不再保留原输入文本，是否继续？</Dialog.Description><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="danger-action" onClick={() => { if (removeTarget) void workspace.removeAttachment(removeTarget); setRemoveTarget(null); }}>删除</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
     </main>
