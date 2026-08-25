@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import agentLogoUrl from '../../../../assets/icon_64.png';
 import { MarkdownRenderer, useToast } from '../../../shared/ui';
 import type { ConversationAttachment, ConversationMessage, ConversationThread } from '../types';
 import { graphemeLength, useConversationWorkspace } from '../hooks/useConversationWorkspace';
@@ -79,7 +80,7 @@ function MessageCard({ message, attachments = [], generationActive, onQuickActio
   const moreActionsDisabled = generationActive || streaming;
   return (
     <article className={`conversation-message is-${message.role}`}>
-      {assistant && <div className="conversation-agent-avatar" aria-hidden="true">J</div>}
+      {assistant && <img className="conversation-agent-avatar" src={agentLogoUrl} alt="" />}
       <div className="conversation-message-body">
         {assistant && <header><strong>Jato Agent</strong><time>{formatTime(message.createdAt)}</time></header>}
         <div className="conversation-message-content">

@@ -53,15 +53,15 @@
 .conversation-thread-panel > footer { padding: 10px 14px; border-top: 1px solid #edf1f7; color: #8a94a6; font-size: 12px; }
 .conversation-thread-list { overflow: auto; padding: 0 8px 10px; }
 
-.conversation-thread-item { position: relative; display: flex; align-items: flex-start; border-radius: 10px; margin: 3px 0; }
+.conversation-thread-item { position: relative; display: flex; align-items: flex-start; border-radius: 10px; margin: 2px 0; }
 .conversation-thread-item.is-active { background: #eef5ff; box-shadow: inset 3px 0 #2174fd; }
-.conversation-thread-main { flex: 1; min-width: 0; padding: 11px 34px 11px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; display: grid; gap: 5px; }
+.conversation-thread-main { flex: 1; min-width: 0; padding: 6px 34px 6px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; display: grid; gap: 2px; }
 .conversation-thread-main strong,
-.conversation-thread-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-thread-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
 .conversation-thread-main strong { font-size: 13px; color: #2d3b52; }
 .conversation-thread-main span { font-size: 12px; color: #8791a3; }
-.conversation-thread-main time { font-size: 11px; color: #a0a8b7; }
-.conversation-more-menu { position: absolute; right: 7px; top: 8px; z-index: 2; }
+.conversation-thread-main time { font-size: 11px; line-height: 1.2; color: #a0a8b7; }
+.conversation-more-menu { position: absolute; right: 7px; top: 3px; z-index: 2; }
 .conversation-more-menu summary,
 .conversation-header-menu summary { list-style: none; cursor: pointer; border-radius: 7px; padding: 3px 6px; color: #7b8799; }
 .conversation-more-menu summary::-webkit-details-marker,
@@ -88,7 +88,7 @@
 .conversation-empty-state p { margin: 0; }
 .conversation-message { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 22px; }
 .conversation-message.is-user { justify-content: flex-end; }
-.conversation-agent-avatar { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #2174fd; color: #fff; font-size: 13px; font-weight: 700; }
+.conversation-agent-avatar { flex: 0 0 auto; width: 32px; height: 32px; object-fit: contain; }
 .conversation-message-body { min-width: 0; max-width: 76%; }
 .conversation-message.is-user .conversation-message-body { max-width: 72%; display: grid; justify-items: end; }
 .conversation-message-body > header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
