@@ -84,8 +84,7 @@
 
 .conversation-message-list { overflow: auto; padding: 20px clamp(14px, 3vw, 36px); background: linear-gradient(180deg, #fbfcfe 0%, #fff 36%); }
 .conversation-empty-state { min-height: 100%; display: grid; place-content: center; justify-items: center; text-align: center; color: #8490a2; }
-.conversation-empty-state > span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; background: #2174fd; color: #fff; font-weight: 700; }
-.conversation-empty-state h3 { margin: 14px 0 6px; color: #344054; }
+.conversation-empty-state h3 { margin: 0 0 6px; color: #344054; }
 .conversation-empty-state p { margin: 0; }
 .conversation-message { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 22px; }
 .conversation-message.is-user { justify-content: flex-end; }

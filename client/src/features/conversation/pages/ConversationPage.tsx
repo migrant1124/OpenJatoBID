@@ -194,7 +194,7 @@ function ConversationPage() {
           </header>
 
           <div className="conversation-message-list">
-            {!workspace.snapshot?.messages.length && <div className="conversation-empty-state"><span>J</span><h3>开始与 Jato Agent 对话</h3><p>输入问题，或上传文档后围绕材料继续提问。</p></div>}
+            {!workspace.snapshot?.messages.length && <div className="conversation-empty-state"><h3>开始与 Jato Agent 对话</h3><p>输入问题，或上传文档后围绕材料继续提问。</p></div>}
             {workspace.snapshot?.messages.map((message) => <MessageCard key={message.messageId} message={message} attachments={allAttachments.filter((attachment) => attachment.originMessageId === message.messageId)} generationActive={activeGeneration}
               onQuickAction={(action) => void workspace.quickAction(message.messageId, action)} onRegenerate={() => void workspace.regenerate(message.messageId)}
               onExport={() => void workspace.exportWord(message.messageId)} onCopy={() => void workspace.copyMessage(message.contentMarkdown)} />)}
