@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 23;
+const schemaVersion = 24;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -1081,6 +1081,34 @@ function createPromptLibrarySchema(db) {
   `);
 }
 
+function seedBundledPromptLibrary(db, library = require('../resources/bundled-prompt-library.json')) {
+  const at = new Date().toISOString();
+  const groupIds = new Map();
+  const findGroupById = db.prepare('SELECT group_id, deleted_at FROM prompt_groups WHERE group_id = ?');
+  const insertGroup = db.prepare(`INSERT INTO prompt_groups
+    (group_id, group_name, description, icon_key, sort_order, is_system, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const group of library.groups || []) {
+    const existing = findGroupById.get(group.groupId);
+    if (existing) {
+      groupIds.set(group.groupId, existing.deleted_at ? '' : existing.group_id);
+      continue;
+    }
+    insertGroup.run(group.groupId, group.groupName, group.description || '', group.iconKey || 'blue', Number(group.sortOrder || 0), group.isSystem ? 1 : 0, at, at);
+    groupIds.set(group.groupId, group.groupId);
+  }
+
+  const findPromptById = db.prepare('SELECT 1 FROM prompt_items WHERE prompt_id = ?');
+  const insertPrompt = db.prepare(`INSERT INTO prompt_items
+    (prompt_id, group_id, title, content_markdown, source, source_file_name, content_chars, is_favorite, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'manual', NULL, ?, ?, ?, ?, ?)`);
+  for (const prompt of library.prompts || []) {
+    const groupId = groupIds.get(prompt.groupId);
+    if (!groupId || findPromptById.get(prompt.promptId)) continue;
+    insertPrompt.run(prompt.promptId, groupId, prompt.title, prompt.contentMarkdown || '', Number(prompt.contentChars || 0), prompt.isFavorite ? 1 : 0, Number(prompt.sortOrder || 0), at, at);
+  }
+}
+
 const schemaHealthTableGroups = [
   {
     version: 1,
@@ -1555,6 +1583,11 @@ const migrations = [
       createPromptLibrarySchema(db);
     },
   },
+  {
+    version: 24,
+    description: '初始化安装包内置提示词',
+    up: seedBundledPromptLibrary,
+  },
 ];
 
 function timestampForFileName() {
@@ -1652,6 +1685,7 @@ function createSqliteDatabase(app, options = {}) {
 module.exports = {
   createConversationSchema,
   createPromptLibrarySchema,
+  seedBundledPromptLibrary,
   createSqliteDatabase,
   schemaVersion,
 };
