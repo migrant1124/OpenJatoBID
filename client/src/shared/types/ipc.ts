@@ -660,6 +660,7 @@ export interface PromptItem {
   contentChars: number;
   source: 'manual' | 'single-import' | 'batch-import';
   sourceFileName?: string;
+  isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -762,14 +763,16 @@ export interface YibiaoBridge {
     listGroups: () => Promise<PromptGroup[]>;
     createGroup: (input: { groupName: string; description?: string; iconKey?: string }) => Promise<PromptGroup>;
     deleteGroup: (input: { groupId: string }) => Promise<{ success: true }>;
+    batchDelete: (input: { groupIds: string[]; promptIds: string[]; favoritePromptIds: string[] }) => Promise<{ success: true }>;
     listPrompts: (input?: { groupId?: string; query?: string }) => Promise<PromptItem[]>;
     getPrompt: (input: { promptId: string }) => Promise<PromptItem>;
-    createPrompt: (input: { groupId: string; title?: string; contentMarkdown?: string }) => Promise<PromptItem>;
+    createPrompt: (input: { groupId: string; title?: string; contentMarkdown?: string; isFavorite?: boolean }) => Promise<PromptItem>;
     updatePrompt: (input: { promptId: string; groupId?: string; title?: string; contentMarkdown?: string }) => Promise<PromptItem>;
     deletePrompt: (input: { promptId: string }) => Promise<{ success: true }>;
+    setFavorite: (input: { promptId: string; isFavorite: boolean }) => Promise<PromptItem>;
     importSingle: (input: { groupId: string }) => Promise<{ success: boolean; canceled?: boolean; prompt?: PromptItem }>;
     prepareBatchImport: (input: { groupId: string }) => Promise<{ canceled: boolean; items: PromptImportItem[] }>;
-    commitBatchImport: (input: { items: Array<Pick<PromptImportItem, 'importId' | 'title' | 'groupId'>> }) => Promise<{ successCount: number; failedCount: number; results: Array<{ importId: string; success: boolean; error?: string }> }>;
+    commitBatchImport: (input: { items: Array<Pick<PromptImportItem, 'importId' | 'title' | 'groupId'> & { isFavorite?: boolean }> }) => Promise<{ successCount: number; failedCount: number; results: Array<{ importId: string; promptId?: string; success: boolean; error?: string }> }>;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;

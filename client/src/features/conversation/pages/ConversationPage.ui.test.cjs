@@ -35,3 +35,8 @@ test('对话输入框仅通过上边沿调节高度', () => {
   assert.match(cssSource, /\.conversation-composer textarea \{[^}]*resize: none;/);
   assert.doesNotMatch(cssSource, /\.conversation-composer textarea \{[^}]*resize: vertical;/);
 });
+
+test('系统提示词分组默认显示', () => {
+  assert.doesNotMatch(cssSource, /\.prompt-group-list section > div:first-child > button:last-child/);
+  assert.match(cssSource, /\.prompt-group-row:hover \.prompt-row-menu,[\s\S]*opacity: 1;/);
+});

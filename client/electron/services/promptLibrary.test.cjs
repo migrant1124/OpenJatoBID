@@ -23,10 +23,8 @@ test('提示词分组和提示词 CRUD 持久化并执行软删除约束', () =>
   const prompt = store.createPrompt({ groupId: group.groupId, title: '实施方案', contentMarkdown: '第一版' });
   assert.equal(store.updatePrompt({ promptId: prompt.promptId, contentMarkdown: '第二版' }).contentMarkdown, '第二版');
   assert.equal(store.listPrompts({ query: '技术方案' }).length, 1);
-  assert.throws(() => store.deleteGroup(group.groupId), /仍有提示词/);
-  store.deletePrompt(prompt.promptId);
-  assert.equal(store.listPrompts({ groupId: group.groupId }).length, 0);
   assert.equal(store.deleteGroup(group.groupId).success, true);
+  assert.equal(store.listPrompts({ groupId: group.groupId }).length, 0);
   db.close();
 });
 

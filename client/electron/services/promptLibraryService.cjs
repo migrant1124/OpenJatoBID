@@ -86,14 +86,15 @@ function createPromptLibraryService({ app, configStore, store, dialogApi = dialo
       const prepared = preparedImports.get(item.importId);
       if (!prepared) { results.push({ importId: item.importId, success: false, error: '导入预览已失效，请重新选择文件。' }); continue; }
       try {
-        store.createPrompt({
+        const prompt = store.createPrompt({
           groupId: item.groupId,
           title: String(item.title || '').trim().slice(0, 100) || prepared.title,
           contentMarkdown: prepared.content,
           source: 'batch-import',
           sourceFileName: prepared.fileName,
+          isFavorite: Boolean(item.isFavorite),
         });
-        results.push({ importId: item.importId, success: true });
+        results.push({ importId: item.importId, promptId: prompt.promptId, success: true });
       } catch (error) {
         results.push({ importId: item.importId, success: false, error: error.message || String(error) });
       } finally {
@@ -107,11 +108,13 @@ function createPromptLibraryService({ app, configStore, store, dialogApi = dialo
     listGroups: () => store.listGroups(),
     createGroup: (input) => store.createGroup(input),
     deleteGroup: (input) => store.deleteGroup(input.groupId),
+    batchDelete: (input) => store.batchDelete(input),
     listPrompts: (input) => store.listPrompts(input),
     getPrompt: (input) => store.getPrompt(input.promptId),
     createPrompt: (input) => store.createPrompt(input),
     updatePrompt: (input) => store.updatePrompt(input),
     deletePrompt: (input) => store.deletePrompt(input.promptId),
+    setFavorite: (input) => store.setFavorite(input),
     importSingle,
     prepareBatchImport,
     commitBatchImport,
