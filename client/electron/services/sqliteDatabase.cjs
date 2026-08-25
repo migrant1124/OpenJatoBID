@@ -1038,6 +1038,49 @@ function createConversationSchema(db) {
   `);
 }
 
+function createPromptLibrarySchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prompt_groups (
+      group_id TEXT PRIMARY KEY,
+      group_name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      icon_key TEXT NOT NULL DEFAULT 'blue',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_prompt_groups_sort
+    ON prompt_groups(sort_order, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_prompt_groups_name
+    ON prompt_groups(group_name);
+
+    CREATE TABLE IF NOT EXISTS prompt_items (
+      prompt_id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content_markdown TEXT NOT NULL DEFAULT '',
+      source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'single-import', 'batch-import')),
+      source_file_name TEXT,
+      content_chars INTEGER NOT NULL DEFAULT 0,
+      is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+      last_used_at TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      FOREIGN KEY (group_id) REFERENCES prompt_groups(group_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_prompt_items_group_sort
+    ON prompt_items(group_id, sort_order, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_prompt_items_title
+    ON prompt_items(title);
+  `);
+}
+
 const schemaHealthTableGroups = [
   {
     version: 1,
@@ -1122,6 +1165,11 @@ const schemaHealthTableGroups = [
     version: 23,
     tables: ['conversation_threads', 'conversation_messages', 'conversation_attachments'],
     repair: createConversationSchema,
+  },
+  {
+    version: 23,
+    tables: ['prompt_groups', 'prompt_items'],
+    repair: createPromptLibrarySchema,
   },
 ];
 
@@ -1501,8 +1549,11 @@ const migrations = [
   },
   {
     version: 23,
-    description: '新增智能体对话线程、消息与附件表结构',
-    up: createConversationSchema,
+    description: '新增智能体对话与提示词仓库表结构',
+    up(db) {
+      createConversationSchema(db);
+      createPromptLibrarySchema(db);
+    },
   },
 ];
 
@@ -1600,6 +1651,7 @@ function createSqliteDatabase(app, options = {}) {
 
 module.exports = {
   createConversationSchema,
+  createPromptLibrarySchema,
   createSqliteDatabase,
   schemaVersion,
 };

@@ -11,6 +11,7 @@ const { registerDuplicateCheckIpc } = require('./duplicateCheckIpc.cjs');
 const { registerExportIpc } = require('./exportIpc.cjs');
 const { registerFileIpc } = require('./fileIpc.cjs');
 const { registerKnowledgeBaseIpc } = require('./knowledgeBaseIpc.cjs');
+const { registerPromptLibraryIpc } = require('./promptLibraryIpc.cjs');
 const { registerLicenseIpc } = require('./licenseIpc.cjs');
 const { registerRejectionCheckIpc } = require('./rejectionCheckIpc.cjs');
 const { registerTaskIpc } = require('./taskIpc.cjs');
@@ -32,6 +33,8 @@ const { createExportService } = require('../services/exportService.cjs');
 const { createFileService } = require('../services/fileService.cjs');
 const { createKnowledgeBaseService } = require('../services/knowledgeBaseService.cjs');
 const { createKnowledgeBaseStore } = require('../services/knowledgeBaseStore.cjs');
+const { createPromptLibraryService } = require('../services/promptLibraryService.cjs');
+const { createPromptLibraryStore } = require('../services/promptLibraryStore.cjs');
 const { createLicenseService } = require('../services/licenseService.cjs');
 const { initLocalImageRenderService } = require('../services/localImageRenderService.cjs');
 const { createSystemDiagnosticsService } = require('../services/systemDiagnosticsService.cjs');
@@ -83,6 +86,17 @@ const workspaceDatabaseChannels = [
   'conversation:regenerate-message',
   'conversation:quick-action',
   'conversation:export-message-word',
+  'prompt-library:list-groups',
+  'prompt-library:create-group',
+  'prompt-library:delete-group',
+  'prompt-library:list-prompts',
+  'prompt-library:get-prompt',
+  'prompt-library:create-prompt',
+  'prompt-library:update-prompt',
+  'prompt-library:delete-prompt',
+  'prompt-library:import-single',
+  'prompt-library:prepare-batch-import',
+  'prompt-library:commit-batch-import',
   'technical-plan:load-state',
   'technical-plan:import-tender-document',
   'technical-plan:import-original-plan-document',
@@ -212,6 +226,8 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const rejectionCheckStore = createRejectionCheckStore({ app, db: sqliteDatabase.db, fileService, technicalPlanStore });
   const templateStore = createTemplateStore({ db: sqliteDatabase.db });
   const conversationStore = createConversationStore({ db: sqliteDatabase.db });
+  const promptLibraryStore = createPromptLibraryStore({ db: sqliteDatabase.db });
+  const promptLibraryService = createPromptLibraryService({ app, configStore, store: promptLibraryStore });
   let conversationService = null;
   const conversationAttachmentService = createConversationAttachmentService({
     app,
@@ -238,6 +254,7 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   registerTemplateIpc({ templateStore });
   registerTaskIpc({ taskService });
   const unregisterConversationIpc = registerConversationIpc({ conversationService, mainWindow });
+  registerPromptLibraryIpc({ promptLibraryService });
   exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
   return { sqliteDatabase, conversationService, unregisterConversationIpc };

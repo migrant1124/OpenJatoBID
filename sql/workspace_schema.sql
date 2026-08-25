@@ -873,3 +873,46 @@ CREATE INDEX IF NOT EXISTS idx_conversation_attachments_thread_status
 ON conversation_attachments(thread_id, status, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_attachments_thread_sha_ready
 ON conversation_attachments(thread_id, sha256) WHERE status != 'removed';
+
+-- ============================================================================
+-- 提示词仓库（v23）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS prompt_groups (
+  group_id TEXT PRIMARY KEY,
+  group_name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  icon_key TEXT NOT NULL DEFAULT 'blue',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompt_groups_sort
+ON prompt_groups(sort_order, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prompt_groups_name
+ON prompt_groups(group_name);
+
+CREATE TABLE IF NOT EXISTS prompt_items (
+  prompt_id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content_markdown TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'single-import', 'batch-import')),
+  source_file_name TEXT,
+  content_chars INTEGER NOT NULL DEFAULT 0,
+  is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+  last_used_at TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  FOREIGN KEY (group_id) REFERENCES prompt_groups(group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompt_items_group_sort
+ON prompt_items(group_id, sort_order, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prompt_items_title
+ON prompt_items(title);

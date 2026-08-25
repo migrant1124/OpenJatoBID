@@ -641,6 +641,39 @@ export type ConversationEvent =
   | { type: 'message-error'; threadId: string; messageId: string; errorCode: string; message: string; partialContent?: string }
   | { type: 'attachment-progress'; threadId: string; attachmentId: string; status: ConversationAttachmentStatus; progress: number; message: string };
 
+export interface PromptGroup {
+  groupId: string;
+  groupName: string;
+  description: string;
+  iconKey: string;
+  isSystem: boolean;
+  promptCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptItem {
+  promptId: string;
+  groupId: string;
+  title: string;
+  contentMarkdown: string;
+  contentChars: number;
+  source: 'manual' | 'single-import' | 'batch-import';
+  sourceFileName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptImportItem {
+  importId: string;
+  fileName: string;
+  title: string;
+  preview: string;
+  groupId: string;
+  status: 'ready' | 'error';
+  error?: string;
+}
+
 export interface YibiaoBridge {
   appName: string;
   platform: string;
@@ -724,6 +757,19 @@ export interface YibiaoBridge {
     quickAction: (input: { threadId: string; assistantMessageId: string; action: 'continue' | 'refine' | 'formal' }) => Promise<ConversationSendMessageResult>;
     exportMessageWord: (input: { threadId: string; assistantMessageId: string }) => Promise<WordExportResult>;
     onEvent: (callback: (event: ConversationEvent) => void) => () => void;
+  };
+  promptLibrary: {
+    listGroups: () => Promise<PromptGroup[]>;
+    createGroup: (input: { groupName: string; description?: string; iconKey?: string }) => Promise<PromptGroup>;
+    deleteGroup: (input: { groupId: string }) => Promise<{ success: true }>;
+    listPrompts: (input?: { groupId?: string; query?: string }) => Promise<PromptItem[]>;
+    getPrompt: (input: { promptId: string }) => Promise<PromptItem>;
+    createPrompt: (input: { groupId: string; title?: string; contentMarkdown?: string }) => Promise<PromptItem>;
+    updatePrompt: (input: { promptId: string; groupId?: string; title?: string; contentMarkdown?: string }) => Promise<PromptItem>;
+    deletePrompt: (input: { promptId: string }) => Promise<{ success: true }>;
+    importSingle: (input: { groupId: string }) => Promise<{ success: boolean; canceled?: boolean; prompt?: PromptItem }>;
+    prepareBatchImport: (input: { groupId: string }) => Promise<{ canceled: boolean; items: PromptImportItem[] }>;
+    commitBatchImport: (input: { items: Array<Pick<PromptImportItem, 'importId' | 'title' | 'groupId'>> }) => Promise<{ successCount: number; failedCount: number; results: Array<{ importId: string; success: boolean; error?: string }> }>;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;

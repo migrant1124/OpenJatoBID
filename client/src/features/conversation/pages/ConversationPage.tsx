@@ -3,8 +3,10 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import agentLogoUrl from '../../../../assets/icon_64.png';
 import { MarkdownRenderer, useToast } from '../../../shared/ui';
+import { PromptLibraryDialog } from '../../prompt-library/components/PromptLibraryDialog';
 import type { ConversationAttachment, ConversationMessage, ConversationThread } from '../types';
 import { graphemeLength, useConversationWorkspace } from '../hooks/useConversationWorkspace';
+import { mergePromptAtSelection } from '../utils/promptInsertion';
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -132,7 +134,9 @@ function ConversationPage() {
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(() => new Set());
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ConversationAttachment | null>(null);
+  const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const currentThread = workspace.snapshot?.thread;
   const allAttachments = workspace.snapshot?.attachments || [];
   const activeGeneration = Boolean(workspace.activeMessage);
@@ -202,6 +206,15 @@ function ConversationPage() {
     else void workspace.removeAttachment(attachment).catch((error) => showToast(error instanceof Error ? error.message : '移除失败', 'error'));
   };
 
+  const insertPrompt = (prompt: string) => {
+    const textarea = composerRef.current;
+    const start = textarea?.selectionStart;
+    const end = textarea?.selectionEnd;
+    const merged = mergePromptAtSelection(workspace.draft, prompt, start, end);
+    workspace.setDraft(merged.text);
+    window.setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(merged.caret, merged.caret); }, 0);
+  };
+
   const threadPanel = useMemo(() => (
     <aside className="conversation-thread-panel">
       <div className="conversation-thread-tools">
@@ -245,12 +258,12 @@ function ConversationPage() {
 
           <div className="conversation-composer">
             {workspace.draftAttachments.length > 0 && <div className="conversation-attachment-tray">{workspace.draftAttachments.map((attachment) => <AttachmentCard key={attachment.attachmentId} attachment={attachment} removable onRemove={() => requestRemove(attachment)} />)}</div>}
-            <textarea value={workspace.draft} disabled={workspace.converting} aria-label="对话输入" placeholder="输入问题，Enter 发送，Shift + Enter 换行"
+            <textarea ref={composerRef} value={workspace.draft} disabled={workspace.converting} aria-label="对话输入" placeholder="输入问题，Enter 发送，Shift + Enter 换行"
               onChange={(event) => workspace.setDraft(event.target.value)} onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSend) void workspace.send(); }
               }} />
             <div className="conversation-composer-bar">
-              <button className="conversation-attach-button" type="button" disabled={workspace.busy || workspace.converting} onClick={() => void workspace.selectAttachments()} aria-label="添加附件"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg><span>添加附件</span></button>
+              <div className="conversation-composer-tools"><button className="conversation-attach-button" type="button" disabled={workspace.busy || workspace.converting} onClick={() => void workspace.selectAttachments()} aria-label="添加附件"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg><span>添加附件</span></button><button className="conversation-prompt-button" type="button" onClick={() => setPromptLibraryOpen(true)} aria-label="打开提示词库"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="7" r="2" /><circle cx="18" cy="5" r="2" /><circle cx="18" cy="18" r="2" /><path d="M8 7h4a4 4 0 0 1 4 4v5M8 7l7-1" /></svg><span>提示词库</span></button></div>
               <span className={characterCount > 10000 ? 'is-overflow' : ''}>{workspace.converting ? '正在将超长文本转换为 TXT 附件' : `${characterCount} / 10000`}</span>
               {activeGeneration
                 ? <button className="conversation-stop-button" type="button" onClick={() => void workspace.stop()}>■ 停止</button>
@@ -266,6 +279,7 @@ function ConversationPage() {
       <Dialog.Root open={batchDeleteOpen} onOpenChange={(open) => { if (!batchDeleting) setBatchDeleteOpen(open); }}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog conversation-batch-delete-dialog"><Dialog.Title>批量删除会话</Dialog.Title><Dialog.Description>选择需要删除的会话，删除后无法恢复。</Dialog.Description><div className="conversation-batch-delete-list"><label><input type="checkbox" checked={workspace.threads.length > 0 && selectedThreadIds.size === workspace.threads.length} onChange={(event) => setSelectedThreadIds(event.target.checked ? new Set(workspace.threads.map((thread) => thread.threadId)) : new Set())} />全选</label>{workspace.threads.map((thread) => <label key={thread.threadId}><input type="checkbox" checked={selectedThreadIds.has(thread.threadId)} onChange={(event) => setSelectedThreadIds((current) => { const next = new Set(current); if (event.target.checked) next.add(thread.threadId); else next.delete(thread.threadId); return next; })} /><span>{thread.title}</span></label>)}</div><footer><Dialog.Close className="secondary-action" disabled={batchDeleting}>取消</Dialog.Close><button type="button" className="danger-action" disabled={!selectedThreadIds.size || batchDeleting} onClick={() => void confirmBatchDelete()}>{batchDeleting ? '删除中…' : `删除所选（${selectedThreadIds.size}）`}</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={attachmentsOpen} onOpenChange={setAttachmentsOpen}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog conversation-attachments-dialog"><Dialog.Title>本会话附件</Dialog.Title><Dialog.Description>附件仅在当前会话中持续可用，不显示本机路径。</Dialog.Description><div>{allAttachments.length ? allAttachments.map((attachment) => <AttachmentCard key={attachment.attachmentId} attachment={attachment} removable={attachment.status !== 'removed'} detailed onRemove={() => requestRemove(attachment)} />) : <p>暂无附件。</p>}</div><footer><Dialog.Close className="primary-action">关闭</Dialog.Close></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
       <Dialog.Root open={Boolean(removeTarget)} onOpenChange={(open) => !open && setRemoveTarget(null)}><Dialog.Portal><Dialog.Overlay className="content-regenerate-modal" /><Dialog.Content className="conversation-dialog"><Dialog.Title>删除超长文本附件</Dialog.Title><Dialog.Description>删除后将不再保留原输入文本，是否继续？</Dialog.Description><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="danger-action" onClick={() => { if (removeTarget) void workspace.removeAttachment(removeTarget); setRemoveTarget(null); }}>删除</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
+      <PromptLibraryDialog open={promptLibraryOpen} onOpenChange={setPromptLibraryOpen} onInsert={insertPrompt} />
     </main>
   );
 }

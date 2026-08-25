@@ -6,6 +6,7 @@ const test = require('node:test');
 const pageSource = fs.readFileSync(path.join(__dirname, 'ConversationPage.tsx'), 'utf8');
 const workspaceSource = fs.readFileSync(path.join(__dirname, '../hooks/useConversationWorkspace.ts'), 'utf8');
 const cssSource = fs.readFileSync(path.join(__dirname, '../../../styles/feature-conversation.css'), 'utf8');
+const promptLibrarySource = fs.readFileSync(path.join(__dirname, '../../prompt-library/components/PromptLibraryDialog.tsx'), 'utf8');
 
 test('会话列表按时间归类、悬停显示菜单并支持批量删除', () => {
   assert.match(pageSource, /'今天'[\s\S]*'昨天'[\s\S]*'7 天内'[\s\S]*'30 天内'[\s\S]*'更早'/);
@@ -17,6 +18,9 @@ test('会话列表按时间归类、悬停显示菜单并支持批量删除', ()
   assert.match(cssSource, /\.conversation-attach-button \{[^}]*display: inline-flex;[^}]*align-items: center;[^}]*gap: 2px;/);
   assert.match(cssSource, /\.conversation-thread-item:hover \.conversation-more-menu[\s\S]*opacity: 1/);
   assert.match(cssSource, /\.conversation-dialog \.danger-action:hover:not\(:disabled\)[\s\S]*background: #d14343;[\s\S]*box-shadow:/);
+  assert.match(pageSource, /conversation-prompt-button[\s\S]*提示词库/);
+  assert.match(promptLibrarySource, />插入到输入框<\/button>/);
+  assert.match(promptLibrarySource, /window\.setTimeout\(\(\) => \{ void saveCurrent\(\); \}, 800\)/);
 });
 
 test('批量删除期间不加载即将删除的会话', () => {

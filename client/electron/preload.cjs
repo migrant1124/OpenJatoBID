@@ -124,6 +124,19 @@ const bridge = {
       return () => ipcRenderer.removeListener('conversation:event', listener);
     },
   },
+  promptLibrary: {
+    listGroups: () => ipcRenderer.invoke('prompt-library:list-groups'),
+    createGroup: (input) => ipcRenderer.invoke('prompt-library:create-group', input),
+    deleteGroup: (input) => ipcRenderer.invoke('prompt-library:delete-group', input),
+    listPrompts: (input) => ipcRenderer.invoke('prompt-library:list-prompts', input),
+    getPrompt: (input) => ipcRenderer.invoke('prompt-library:get-prompt', input),
+    createPrompt: (input) => ipcRenderer.invoke('prompt-library:create-prompt', input),
+    updatePrompt: (input) => ipcRenderer.invoke('prompt-library:update-prompt', input),
+    deletePrompt: (input) => ipcRenderer.invoke('prompt-library:delete-prompt', input),
+    importSingle: (input) => ipcRenderer.invoke('prompt-library:import-single', input),
+    prepareBatchImport: (input) => ipcRenderer.invoke('prompt-library:prepare-batch-import', input),
+    commitBatchImport: (input) => ipcRenderer.invoke('prompt-library:commit-batch-import', input),
+  },
   developerTokenStats: {
     openWindow: () => ipcRenderer.invoke('developer-token-stats:open-window'),
     get: () => ipcRenderer.invoke('developer-token-stats:get'),
