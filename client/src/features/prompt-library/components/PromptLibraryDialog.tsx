@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PromptGroup, PromptImportItem, PromptItem } from '../../../shared/types/ipc';
-import { useToast } from '../../../shared/ui';
+import { MarkdownRenderer, useToast } from '../../../shared/ui';
 
 type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error';
 const FAVORITES_GROUP_ID = 'prompt-group-favorites';
@@ -40,6 +40,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   const [batchItems, setBatchItems] = useState<PromptImportItem[]>([]);
   const [importing, setImporting] = useState(false);
   const [inserting, setInserting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Pick<PromptItem, 'promptId' | 'title'> | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<{ groupId: string; groupName: string; favoriteOnly?: boolean } | null>(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
@@ -67,6 +68,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
     setContent(next.contentMarkdown);
     setPast([]);
     setFuture([]);
+    setEditing(false);
     setSaveStatus('saved');
     savedRef.current = { promptId: next.promptId, title: next.title, content: next.contentMarkdown };
   }, []);
@@ -206,6 +208,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
       setGroups((items) => items.map((group) => group.groupId === selectedGroupId ? { ...group, promptCount: group.promptCount + 1 } : group));
       setExpandedGroupIds((items) => new Set(items).add(selectedGroupId || targetGroupId));
       selectPromptDraft(prompt, selectedGroupId || targetGroupId);
+      setEditing(true);
       window.setTimeout(() => editorRef.current?.focus(), 0);
     } catch (error) { showToast(errorMessage(error), 'error'); }
   };
@@ -357,6 +360,10 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
     setContent(next);
   };
 
+  const finishEditing = async () => {
+    if (await saveCurrent()) setEditing(false);
+  };
+
   const favoritePrompts = prompts.filter((prompt) => prompt.isFavorite);
   const ungroupedPrompts = prompts.filter((prompt) => prompt.groupId === UNGROUPED_GROUP_ID);
   const batchSelectionCount = selectedGroupIds.size + selectedPromptIds.size + selectedFavoritePromptIds.size;
@@ -429,11 +436,11 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
             <section className="prompt-library-editor">
               {selectedPromptId ? <>
                 <div className="prompt-editor-title"><input value={title} maxLength={100} disabled={inserting} aria-label="提示词标题" onChange={(event) => setTitle(event.target.value)} />{selectedGroupId !== FAVORITES_GROUP_ID && <button type="button" title="删除提示词" disabled={inserting} onClick={() => setDeleteTarget({ promptId: selectedPromptId, title: title.trim() || '未命名提示词' })}>•••</button>}</div>
-                <div className="prompt-editor-toolbar">{selectedGroupName && <span>{selectedGroupName}</span>}<button type="button" disabled={!past.length} onClick={undo}>↶ 撤销</button><button type="button" disabled={!future.length} onClick={redo}>↷ 重做</button></div>
-                <textarea ref={editorRef} value={content} disabled={inserting} aria-label="提示词内容" placeholder="输入提示词内容，支持 Markdown" onChange={(event) => updateContent(event.target.value)} onKeyDown={(event) => {
+                <div className="prompt-editor-toolbar">{selectedGroupName && <span>{selectedGroupName}</span>}{editing ? <><button type="button" disabled={!past.length} onClick={undo}>↶ 撤销</button><button type="button" disabled={!future.length} onClick={redo}>↷ 重做</button><button type="button" onClick={() => void finishEditing()}>完成</button></> : <button type="button" onClick={() => { setEditing(true); window.setTimeout(() => editorRef.current?.focus(), 0); }}>编辑</button>}</div>
+                {editing ? <textarea ref={editorRef} value={content} disabled={inserting} aria-label="提示词内容" placeholder="输入提示词内容，支持 Markdown" onChange={(event) => updateContent(event.target.value)} onKeyDown={(event) => {
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); }
-                }} />
+                }} /> : <div className="prompt-markdown-preview markdown-viewer">{content.trim() ? <MarkdownRenderer allowRawHtml={false}>{content}</MarkdownRenderer> : <p className="prompt-markdown-empty">暂无内容，点击“编辑”添加提示词。</p>}</div>}
                 <footer className={`prompt-save-status is-${saveStatus}`}><span>{statusText}</span><span>共 {Array.from(content).length} 字</span></footer>
               </> : <div className="prompt-library-empty"><strong>暂无提示词</strong><span>新建或导入提示词后即可在这里编辑。</span></div>}
             </section>

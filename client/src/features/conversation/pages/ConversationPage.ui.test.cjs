@@ -47,6 +47,9 @@ test('系统提示词分组默认显示', () => {
   assert.match(cssSource, /\.prompt-library-actions \.prompt-import-menu button \{[^}]*white-space: nowrap;/);
   assert.match(promptLibrarySource, /prompt-library-actions"><details className="prompt-import-menu"/);
   assert.match(promptLibrarySource, /querySelectorAll<HTMLDetailsElement>\('\.prompt-library-dialog details\[open\]'\)[\s\S]*if \(!menu\.contains\(target\)\) menu\.open = false;/);
+  assert.match(promptLibrarySource, /const \[editing, setEditing\] = useState\(false\)/);
+  assert.match(promptLibrarySource, /editing \? <textarea[\s\S]*<MarkdownRenderer allowRawHtml=\{false\}>\{content\}<\/MarkdownRenderer>/);
+  assert.match(cssSource, /\.prompt-markdown-preview\.markdown-viewer \{[^}]*min-height: 0;[^}]*overflow: auto;/);
   assert.match(promptLibrarySource, /selectedGroupId \|\| UNGROUPED_GROUP_ID/);
   assert.match(promptLibrarySource, /const importSingle = async \(\) => \{[\s\S]*?const targetGroupId = favorite \? UNGROUPED_GROUP_ID : selectedGroupId \|\| UNGROUPED_GROUP_ID;/);
   assert.match(promptLibrarySource, /if \(!groups\.length\) \{ showToast\('请先新建分组，再批量导入提示词。', 'info'\); return; \}/);

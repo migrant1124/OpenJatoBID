@@ -214,6 +214,8 @@
 .prompt-editor-toolbar button:disabled { opacity: .35; cursor: default; }
 .prompt-library-editor > textarea { width: 100%; min-height: 0; resize: none; border: 1px solid #dce3ed; border-radius: 9px; padding: 13px; color: #263449; font-family: inherit; line-height: 1.65; outline: none; }
 .prompt-library-editor > textarea:focus { border-color: #2174fd; box-shadow: 0 0 0 3px rgb(33 116 253 / 8%); }
+.prompt-markdown-preview.markdown-viewer { width: 100%; min-height: 0; overflow: auto; border: 1px solid #dce3ed; border-radius: 9px; padding: 13px; background: #fff; }
+.prompt-markdown-empty { color: #8a94a6; }
 .prompt-save-status { display: flex; justify-content: space-between; padding-top: 8px; color: #8a94a6; font-size: 12px; }
 .prompt-save-status.is-error { color: #d14343; }
 .prompt-library-empty { grid-row: 1 / -1; display: grid; place-content: center; gap: 5px; color: #8a94a6; text-align: center; }
