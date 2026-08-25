@@ -440,7 +440,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
                 {editing ? <textarea ref={editorRef} value={content} disabled={inserting} aria-label="提示词内容" placeholder="输入提示词内容，支持 Markdown" onChange={(event) => updateContent(event.target.value)} onKeyDown={(event) => {
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); }
-                }} /> : <div className="prompt-markdown-preview markdown-viewer">{content.trim() ? <MarkdownRenderer allowRawHtml={false}>{content}</MarkdownRenderer> : <p className="prompt-markdown-empty">暂无内容，点击“编辑”添加提示词。</p>}</div>}
+                }} /> : <div className="prompt-markdown-preview markdown-viewer">{content.trim() ? <MarkdownRenderer allowRawHtml={true}>{content}</MarkdownRenderer> : <p className="prompt-markdown-empty">暂无内容，点击“编辑”添加提示词。</p>}</div>}
                 <footer className={`prompt-save-status is-${saveStatus}`}><span>{statusText}</span><span>共 {Array.from(content).length} 字</span></footer>
               </> : <div className="prompt-library-empty"><strong>暂无提示词</strong><span>新建或导入提示词后即可在这里编辑。</span></div>}
             </section>
