@@ -40,6 +40,11 @@ export const appMenuItems: AppMenuItem[] = [
     ],
   },
   {
+    id: 'conversation',
+    label: '对话模式',
+    description: '实时对话生成方案或优化',
+  },
+  {
     id: 'template-settings',
     label: '模板设置',
     description: '标书导出模板与排版配置',

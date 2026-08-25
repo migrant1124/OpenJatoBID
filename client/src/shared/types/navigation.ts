@@ -3,6 +3,7 @@ export type SectionId =
   | 'technical-plan'
   | 'existing-plan-expansion'
   | 'business-bid'
+  | 'conversation'
   | 'knowledge-base'
   | 'document-knowledge-base'
   | 'image-knowledge-base'

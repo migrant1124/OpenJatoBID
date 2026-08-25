@@ -2041,6 +2041,65 @@ async function buildDocxBuffer(payload, options = {}) {
   return result.buffer;
 }
 
+function markdownStartsWithH1(markdown) {
+  const first = String(markdown || '').split(/\r?\n/).find((line) => line.trim());
+  return Boolean(first && /^#\s+\S/.test(first.trim()));
+}
+
+async function buildStandaloneMarkdownDocxResult(payload, options = {}) {
+  const markdown = String(payload.markdown || '');
+  if (!markdown.trim()) throw new Error('没有可导出的回答内容');
+  const context = {
+    baseDir: payload.base_dir || payload.baseDir,
+    onProgress: options.onProgress,
+    warnings: options.warnings || [],
+    stats: { leafCount: 1 },
+    convertedLeafCount: 0,
+    imageCount: 0,
+    imageSuccessCount: 0,
+    numberingReferences: [],
+    numberingIndex: 0,
+    usesHeadingNumbering: false,
+    unsupportedHtmlTags: new Set(),
+    exportFormat: null,
+    bodyRunFont: '宋体',
+    bodyRunSize: 24,
+    bodyLineSpacing: 360,
+    bodyAfterSpacing: 160,
+    bodyListStyle: 'disc',
+    bodyOrderedListStyle: 'decimal-dot',
+    bodyListIndentChars: 2,
+  };
+  const children = [];
+  if (!markdownStartsWithH1(markdown)) {
+    children.push(paragraph([textRun(payload.title || 'Jato Agent 回答', { bold: true, size: 32 })], {
+      heading: HeadingLevel.HEADING_1,
+      after: 240,
+    }));
+  }
+  reportProgress(context, 10, '准备导出回答。');
+  await addMarkdownContent(children, markdown, context);
+  reportProgress(context, 90, '正在生成 Word 文件。');
+  const numbering = createNumberingConfig(context);
+  const doc = new Document({
+    ...(numbering ? { numbering } : {}),
+    styles: {
+      default: {
+        document: { run: { font: '宋体', size: 24 }, paragraph: { spacing: { line: 360, after: 160 } } },
+      },
+      paragraphStyles: buildHeadingParagraphStyles(null),
+    },
+    sections: [{
+      properties: { page: {
+        margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+        size: { width: mmToTwips(210), height: mmToTwips(297), orientation: PageOrientation.PORTRAIT },
+      } },
+      children,
+    }],
+  });
+  return { buffer: await Packer.toBuffer(doc), warnings: context.warnings, stats: context.stats };
+}
+
 function summarizeBlockedResponses(validations) {
   return validations.slice(0, 5).map((item) => item.node_id).filter(Boolean).join('、');
 }
@@ -2159,12 +2218,31 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
         throw error;
       }
     },
+
+    async exportStandaloneMarkdownWord(payload = {}, onProgress) {
+      const markdown = String(payload.markdown || '');
+      if (!markdown.trim()) throw new Error('没有可导出的回答内容');
+      const defaultDir = app?.getPath ? app.getPath('downloads') : process.env.USERPROFILE || process.cwd();
+      const defaultFilename = payload.defaultFileName
+        ? `${sanitizeFilename(payload.defaultFileName.replace(/\.docx$/i, ''))}.docx`
+        : `${sanitizeFilename(payload.title || 'Jato Agent回答')}_${formatExportTimestamp()}.docx`;
+      const result = await dialog.showSaveDialog({
+        title: '导出 Jato Agent 回答',
+        defaultPath: path.join(defaultDir, defaultFilename),
+        filters: [{ name: 'Word 文档', extensions: ['docx'] }],
+      });
+      if (result.canceled || !result.filePath) return { success: false, canceled: true, message: '已取消导出' };
+      const buildResult = await buildStandaloneMarkdownDocxResult(payload, { onProgress });
+      fs.writeFileSync(result.filePath, buildResult.buffer);
+      return { success: true, path: result.filePath, message: 'Word 已导出。', warnings: buildResult.warnings };
+    },
   };
 }
 
 module.exports = {
   buildDocxBuffer,
   buildDocxResult,
+  buildStandaloneMarkdownDocxResult,
   createExportService,
   formatOutlineTitle,
   resolveTechnicalPlanExportPayload,

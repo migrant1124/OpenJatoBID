@@ -201,6 +201,16 @@ function createRuntimeDiagnostics(limit = 500) {
   };
 }
 
+function createConversationDiagnostics(sessionSnapshot, eventCount, status) {
+  return {
+    status,
+    event_count: Number(eventCount || 0),
+    requested_thinking_level: sessionSnapshot?.requested_thinking_level || '',
+    effective_thinking_level: sessionSnapshot?.effective_thinking_level || '',
+    active_tools: Array.isArray(sessionSnapshot?.active_tools) ? [...sessionSnapshot.active_tools] : [],
+  };
+}
+
 function normalizeMonitorValue(value) {
   if (value === undefined) return undefined;
   try {
@@ -336,7 +346,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
         diagnostics,
         onActivity: touchActivity,
-        getActivityContext: () => activeTask ? { task_token: activeTask.task_token, task_id: activeTask.task_id } : null,
+        getActivityContext: () => activeTask ? { task_token: activeTask.task_token, task_id: activeTask.task_id, privacy_mode: activeTask.mode === 'conversation' ? 'conversation' : '' } : null,
         verifyLoopback: true,
         loopbackHosts: ['127.0.0.1', '::1', 'localhost'],
       });
@@ -380,8 +390,10 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     await fs.promises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf-8');
   }
 
-  function subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts) {
+  function subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts, payload, taskId) {
     let streamedText = '';
+    const conversationMode = payload.mode === 'conversation';
+    const monitorAllowed = !conversationMode;
     return session.subscribe((event) => {
       if (event.type === 'message_start' && event.message?.role === 'assistant') {
         streamedText = '';
@@ -389,25 +401,27 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
         const delta = event.assistantMessageEvent.delta || '';
         streamedText += delta;
-        if (isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_delta', delta });
+        try { payload.onEvent?.({ type: 'assistant_delta', task_id: taskId, delta }); } catch {}
+        if (monitorAllowed && isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_delta', delta });
         return;
       }
       if (event.type === 'message_end' && event.message?.role === 'assistant') {
         const completedText = extractMessageText(event.message) || streamedText.trim();
         streamedText = '';
-        if (isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_end', text: completedText });
+        try { payload.onEvent?.({ type: 'assistant_end', task_id: taskId, text: completedText }); } catch {}
+        if (monitorAllowed && isMonitorActive?.()) emitMonitorEvent({ type: 'assistant_end', text: completedText });
         touchActivity({
           task_token: taskToken,
           stage: 'assistant_text',
-          message: compactText(completedText, 200),
+          message: conversationMode ? '' : compactText(completedText, 200),
           source: 'pi.message',
-          visible: Boolean(completedText),
+          visible: !conversationMode && Boolean(completedText),
           activity: true,
         });
         return;
       }
       if (event.type === 'tool_execution_start') {
-        if (isMonitorActive?.()) {
+        if (monitorAllowed && isMonitorActive?.()) {
           emitMonitorEvent({
             type: 'tool_start',
             tool_call_id: event.toolCallId || '',
@@ -427,7 +441,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         return;
       }
       if (event.type === 'tool_execution_update') {
-        if (isMonitorActive?.()) {
+        if (monitorAllowed && isMonitorActive?.()) {
           emitMonitorEvent({
             type: 'tool_update',
             tool_call_id: event.toolCallId || '',
@@ -441,7 +455,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       if (event.type === 'tool_execution_end') {
         const details = event.result?.details || {};
         if (details.diff || details.patch) diffEntries.push({ tool: event.toolName, diff: details.diff || '', patch: details.patch || '' });
-        if (isMonitorActive?.()) {
+        if (monitorAllowed && isMonitorActive?.()) {
           emitMonitorEvent({
             type: 'tool_end',
             tool_call_id: event.toolCallId || '',
@@ -462,7 +476,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         return;
       }
       if (event.type === 'auto_retry_start') {
-        const errorMessage = restorePiErrorMessage(event.errorMessage || '模型服务暂时不可用');
+        const errorMessage = conversationMode ? '模型服务暂时不可用' : restorePiErrorMessage(event.errorMessage || '模型服务暂时不可用');
         const delaySeconds = Math.max(0, Math.round(Number(event.delayMs || 0) / 1000));
         const retryMessage = `模型请求遇到临时错误，${delaySeconds} 秒后进行第 ${event.attempt}/${event.maxAttempts} 次重试：${compactText(errorMessage, 160)}`;
         nativeRetryAttempts.push({
@@ -472,7 +486,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
           error: errorMessage,
           at: nowIso(),
         });
-        if (isMonitorActive?.()) {
+        if (monitorAllowed && isMonitorActive?.()) {
           emitMonitorEvent({
             type: 'auto_retry_start',
             attempt: event.attempt,
@@ -493,11 +507,11 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         return;
       }
       if (event.type === 'auto_retry_end') {
-        const finalError = restorePiErrorMessage(event.finalError || '');
+        const finalError = conversationMode ? '' : restorePiErrorMessage(event.finalError || '');
         const retryMessage = event.success
           ? `模型请求已恢复，第 ${event.attempt} 次重试成功`
           : `模型请求重试 ${event.attempt} 次后仍失败${finalError ? `：${compactText(finalError, 160)}` : ''}`;
-        if (isMonitorActive?.()) {
+        if (monitorAllowed && isMonitorActive?.()) {
           emitMonitorEvent({
             type: 'auto_retry_end',
             attempt: event.attempt,
@@ -518,7 +532,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         return;
       }
       if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'compaction_start', 'compaction_end'].includes(event.type)) {
-        if (isMonitorActive?.()) emitMonitorEvent({ type: event.type });
+        if (monitorAllowed && isMonitorActive?.()) emitMonitorEvent({ type: event.type });
         touchActivity({ task_token: taskToken, stage: event.type, message: '', source: `pi.${event.type}`, visible: false, activity: true });
       }
     });
@@ -603,6 +617,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     if (activeTask) throw new Error(`${runtimeName} 正在执行其他任务`);
     const taskId = payload.task_id || crypto.randomUUID();
     const title = payload.title || '易标智能体任务';
+    const mode = payload.mode === 'conversation' ? 'conversation' : 'task';
+    const archiveWorkspaceEnabled = mode === 'task' && payload.archive_workspace !== false;
     const outputFile = payload.output_file || 'agent-result.md';
     const timeoutMs = normalizeTimeoutMs(payload.timeout_ms);
     const maxRetries = normalizeMaxRetries(payload.max_retries);
@@ -613,6 +629,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     activeTask = {
       task_id: taskId,
       title,
+      mode,
       stage: 'starting',
       progress_text: `正在启动 ${runtimeName}`,
       started_at: startedAt,
@@ -632,8 +649,10 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     const diffEntries = [];
     const cleanupAbort = bindAbort(payload.signal, activeController, () => session);
     const watchdog = startWatchdog(activeController, timeoutMs, taskToken);
-    let prompt = payload.prompt || createDefaultPrompt(payload.task || '请分析当前输入文件并输出结果。', outputFile);
-    if (isMonitorActive?.()) {
+    let prompt = payload.prompt || (mode === 'conversation'
+      ? '请直接回答当前问题。'
+      : createDefaultPrompt(payload.task || '请分析当前输入文件并输出结果。', outputFile));
+    if (mode === 'task' && isMonitorActive?.()) {
       emitMonitorEvent({
         type: 'task_start',
         task_id: taskId,
@@ -667,10 +686,13 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
         jsonValidationSchemas: payload.json_validation_schemas,
         requestUserQuestion: (request, signal) => waitForUserQuestion(request, signal, taskToken),
+        mode,
+        requestedThinkingLevel: mode === 'conversation' ? payload.requested_thinking_level || 'high' : 'off',
+        sessionInstructions: payload.session_instructions,
       });
       session = created.session;
       sessionSnapshot = created.snapshot;
-      unsubscribe = subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts);
+      unsubscribe = subscribeSession(session, taskToken, diffEntries, nativeRetryAttempts, payload, taskId);
       let assistantText = '';
       let validationResult = null;
       let retryCount = 0;
@@ -678,7 +700,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       for (let attemptIndex = 0; attemptIndex <= maxRetries; attemptIndex += 1) {
         try {
           if (activeController.signal.aborted) throw activeController.signal.reason;
-          await session.prompt(prompt, { expandPromptTemplates: false });
+          await session.prompt(prompt, { expandPromptTemplates: false, images: payload.images || [] });
           if (activeController.signal.aborted) throw activeController.signal.reason;
           const assistantError = getAssistantError(session.messages);
           if (assistantError) {
@@ -702,7 +724,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
             native_retry_count: nativeRetryAttempts.length,
             native_retry_attempts: [...nativeRetryAttempts],
           };
-          emitMonitorEvent({
+          if (mode === 'task') emitMonitorEvent({
             type: 'task_output',
             task_id: taskId,
             title,
@@ -747,7 +769,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
             activity: true,
           });
           prompt = buildRetryPrompt(outputFile, error, retryCount, maxRetries);
-          emitMonitorEvent({
+          if (mode === 'task') emitMonitorEvent({
             type: 'retry',
             task_id: taskId,
             title,
@@ -756,7 +778,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
             message: compactText(error?.message || error, 600),
             prompt,
           });
-          emitMonitorEvent({
+          if (mode === 'task') emitMonitorEvent({
             type: 'task_input',
             task_id: taskId,
             title,
@@ -770,33 +792,32 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       }
 
       const output = await readOutputAsync(layout.workspaceDir, outputFile);
-      const archive = await archiveWorkspace(taskId);
-      archivedWorkspace = archive.archivedWorkspace;
+      const archive = archiveWorkspaceEnabled ? await archiveWorkspace(taskId) : null;
+      archivedWorkspace = archive?.archivedWorkspace || '';
       const result = {
         success: true,
         runtime_id: runtimeId,
         task_id: taskId,
         title,
         workspace_dir: archivedWorkspace,
-        runtime_workspace_dir: layout.workspaceDir,
-        runtime_root: layout.runtimeRoot,
-        output_file: outputFile,
-        output_content: output.content,
+        runtime_workspace_dir: mode === 'conversation' ? '' : layout.workspaceDir,
+        runtime_root: mode === 'conversation' ? '' : layout.runtimeRoot,
+        output_file: mode === 'conversation' ? '' : outputFile,
+        output_content: mode === 'conversation' ? '' : output.content,
         assistant_text: assistantText,
-        diff: diffEntries,
+        diff: mode === 'conversation' ? [] : diffEntries,
         session_id: session.sessionId,
         retry_count: retryCount,
-        retry_attempts: retryAttempts,
+        retry_attempts: mode === 'conversation' ? [] : retryAttempts,
         native_retry_count: nativeRetryAttempts.length,
-        native_retry_attempts: nativeRetryAttempts,
-        validation_result: validationResult,
-        diagnostics: {
-          session: sessionSnapshot,
-          events: diagnostics.events.filter((event) => String(event.at || '') >= startedAt),
-        },
+        native_retry_attempts: mode === 'conversation' ? [] : nativeRetryAttempts,
+        validation_result: mode === 'conversation' ? null : validationResult,
+        diagnostics: mode === 'conversation'
+          ? createConversationDiagnostics(sessionSnapshot, diagnostics.events.filter((event) => String(event.at || '') >= startedAt).length, 'success')
+          : { session: sessionSnapshot, events: diagnostics.events.filter((event) => String(event.at || '') >= startedAt) },
       };
-      await writeJsonAsync(path.join(archive.taskDir, 'result.json'), result);
-      emitMonitorEvent({
+      if (archive) await writeJsonAsync(path.join(archive.taskDir, 'result.json'), result);
+      if (mode === 'task') emitMonitorEvent({
         type: 'task_end',
         task_id: taskId,
         title,
@@ -807,34 +828,46 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         retry_count: retryCount,
         native_retry_count: nativeRetryAttempts.length,
       });
-      trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'success', { retryCount });
+      try { payload.onEvent?.({ type: 'task_end', task_id: taskId, assistant_text: assistantText }); } catch {}
+      trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'success', { retryCount, includeModelEndpoint: mode !== 'conversation' });
       return result;
     } catch (error) {
       let output = { path: '', content: '' };
       try { output = await readOutputAsync(layout.workspaceDir, outputFile); } catch {}
-      try { archivedWorkspace = (await archiveWorkspace(taskId)).archivedWorkspace; } catch {}
+      if (archiveWorkspaceEnabled) {
+        try { archivedWorkspace = (await archiveWorkspace(taskId)).archivedWorkspace; } catch {}
+      }
       if (error && typeof error === 'object') {
         error.agentRuntimeId = runtimeId;
         error.agentTaskId = taskId;
         error.agentTitle = title;
-        error.agentWorkspaceDir = archivedWorkspace || layout.workspaceDir;
-        error.agentRuntimeRoot = layout.runtimeRoot;
-        error.agentOutputFile = outputFile;
-        error.agentOutputPath = archivedWorkspace ? path.join(archivedWorkspace, outputFile) : output.path;
-        error.agentPartialOutput = output.content;
+        if (mode === 'task') {
+          error.agentWorkspaceDir = archivedWorkspace || layout.workspaceDir;
+          error.agentRuntimeRoot = layout.runtimeRoot;
+          error.agentOutputFile = outputFile;
+          error.agentOutputPath = archivedWorkspace ? path.join(archivedWorkspace, outputFile) : output.path;
+        }
         error.agentPartialOutputChars = output.content.length;
-        error.agentRetryAttempts = retryAttempts;
-        error.agentNativeRetryAttempts = nativeRetryAttempts;
-        error.agentDiagnostics = {
-          session: sessionSnapshot,
-          session_messages: Array.isArray(session?.messages) ? [...session.messages] : [],
-          diff: [...diffEntries],
-          events: diagnostics.events.filter((event) => String(event.at || '') >= startedAt),
-          assistant_error: error.piAssistantError || null,
-          error: serializeDiagnosticError(error),
-        };
+        if (mode === 'task') {
+          error.agentPartialOutput = output.content;
+          error.agentRetryAttempts = retryAttempts;
+          error.agentNativeRetryAttempts = nativeRetryAttempts;
+        } else {
+          error.agentRetryCount = retryAttempts.length;
+          error.agentNativeRetryCount = nativeRetryAttempts.length;
+        }
+        error.agentDiagnostics = mode === 'conversation'
+          ? createConversationDiagnostics(sessionSnapshot, diagnostics.events.filter((event) => String(event.at || '') >= startedAt).length, 'failed')
+          : {
+            session: sessionSnapshot,
+            session_messages: Array.isArray(session?.messages) ? [...session.messages] : [],
+            diff: [...diffEntries],
+            events: diagnostics.events.filter((event) => String(event.at || '') >= startedAt),
+            assistant_error: error.piAssistantError || null,
+            error: serializeDiagnosticError(error),
+          };
       }
-      emitMonitorEvent({
+      if (mode === 'task') emitMonitorEvent({
         type: 'task_error',
         task_id: taskId,
         title,
@@ -843,7 +876,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         output_content: output.content,
         message: error?.message || String(error),
       });
-      trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'failed', { retryCount: retryAttempts.length });
+      try { payload.onEvent?.({ type: 'task_error', task_id: taskId, message: error?.message || String(error) }); } catch {}
+      trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'failed', { retryCount: retryAttempts.length, includeModelEndpoint: mode !== 'conversation' });
       throw error;
     } finally {
       unsubscribe?.();

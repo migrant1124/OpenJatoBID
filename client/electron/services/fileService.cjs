@@ -86,8 +86,14 @@ function summarizeParserForLog(parser, options = {}) {
     supported: parser.supported,
     fallback_to_local: parser.fallbackToLocal,
     preserve_images: options.preserveImages === true,
-    asset_scope: String(options.assetScope || 'documents'),
+    asset_scope: options.suppressFileIdentity ? '' : String(options.assetScope || 'documents'),
   };
+}
+
+function summarizeParseErrorForLog(error, options = {}) {
+  return options.suppressFileIdentity
+    ? { name: error?.name || 'Error', code: error?.code || '' }
+    : compactLogError(error);
 }
 
 async function parseLocalDocument(filePath, options = {}) {
@@ -515,11 +521,13 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
     app,
     config,
     moduleName: 'file-parser',
-    name: path.basename(filePath || 'document'),
+    name: options.suppressFileIdentity ? 'conversation-attachment' : path.basename(filePath || 'document'),
     meta: summarizeParserForLog(parser, options),
   });
+  const fileSummary = await summarizeFileForLog(filePath);
+  if (options.suppressFileIdentity) delete fileSummary.file_name;
   developerLogger.write('file.parse.started', {
-    file: await summarizeFileForLog(filePath),
+    file: fileSummary,
     parser: summarizeParserForLog(parser, options),
   });
   if (!parser.supported) {
@@ -527,7 +535,7 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
     developerLogger.write('file.parse.error', {
       duration_ms: Date.now() - startedAt,
       parser: summarizeParserForLog(parser, options),
-      error: compactLogError(error),
+      error: summarizeParseErrorForLog(error, options),
     });
     throw error;
   }
@@ -551,7 +559,7 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
       duration_ms: Date.now() - startedAt,
       parser: summarizeParserForLog(parser, options),
       asset_count: assets?.index || 0,
-      error: compactLogError(error),
+      error: summarizeParseErrorForLog(error, options),
     });
     throw normalizeDocumentParseError(error, filePath);
   }
@@ -560,7 +568,7 @@ async function parseDocumentWithConfig(app, filePath, config, options = {}) {
     duration_ms: Date.now() - startedAt,
     parser: summarizeParserForLog(parser, options),
     asset_count: assets?.index || 0,
-    markdown_metrics: textMetrics(result),
+    markdown_metrics: options.suppressFileIdentity ? { chars: result.length } : textMetrics(result),
   });
   return result;
 }

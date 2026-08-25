@@ -29,7 +29,7 @@ function trackAgentRuntime(app, configStore, analyticsService, runtimeId, status
         agent_runtime_status: runtimeStatus,
         agent_runtime_retry_count: retryCount,
         ai_model_provider: config.text_model_provider || '',
-        ai_model_base_url: normalizeEndpointHost(config.base_url || ''),
+        ...(meta.includeModelEndpoint === false ? {} : { ai_model_base_url: normalizeEndpointHost(config.base_url || '') }),
         ai_model_name: config.model_name || '',
       });
     })

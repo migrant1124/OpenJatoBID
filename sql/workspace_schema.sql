@@ -4,7 +4,7 @@
 -- 1. 本文件用于开源开发者阅读、评审和排查问题，展示 workspace/yibiao.sqlite 的目标完整表结构。
 -- 2. 用户运行客户端时不需要手动执行本文件。
 -- 3. 客户端运行时建表和升级以 Electron Main 侧 migration 代码为准。
--- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17、格式驱动目录与固定响应模板 v18 目标结构。
+-- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17、格式驱动目录与固定响应模板 v18、提示词仓库 v23、内置提示词初始化 v24。
 -- 5. 每次表结构调整后，需要同步更新本文件和 runtime migration 版本。
 -- 6. 本文件不保存历史版本，每次更新都写入最新目标完整结构。
 
@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 18;
+PRAGMA user_version = 24;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -801,3 +801,118 @@ CREATE TABLE IF NOT EXISTS export_templates (
 
 CREATE INDEX IF NOT EXISTS idx_export_templates_updated
 ON export_templates(updated_at DESC);
+
+-- ============================================================================
+-- Jato Agent 对话模式（v23）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS conversation_threads (
+  thread_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  title_locked INTEGER NOT NULL DEFAULT 0 CHECK (title_locked IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_threads_status_updated
+ON conversation_threads(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  message_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content_markdown TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK (status IN ('pending', 'queued', 'streaming', 'completed', 'canceled', 'error')),
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'quick-action', 'regenerate')),
+  parent_message_id TEXT,
+  task_id TEXT,
+  runtime_id TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  metadata_json TEXT,
+  sequence INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL,
+  UNIQUE(thread_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_messages_thread_sequence
+ON conversation_messages(thread_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_conversation_messages_task
+ON conversation_messages(task_id);
+
+CREATE TABLE IF NOT EXISTS conversation_attachments (
+  attachment_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  origin_message_id TEXT,
+  source TEXT NOT NULL DEFAULT 'selected-file' CHECK (source IN ('selected-file', 'composer-overflow-text')),
+  file_name TEXT NOT NULL,
+  extension TEXT NOT NULL,
+  mime_type TEXT,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  stored_file_path TEXT NOT NULL,
+  markdown_path TEXT,
+  markdown_chars INTEGER NOT NULL DEFAULT 0,
+  parser_provider TEXT,
+  parser_label TEXT,
+  status TEXT NOT NULL CHECK (status IN ('selected', 'copying', 'parsing', 'ready', 'error', 'removed')),
+  progress INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (thread_id) REFERENCES conversation_threads(thread_id) ON DELETE CASCADE,
+  FOREIGN KEY (origin_message_id) REFERENCES conversation_messages(message_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_attachments_thread_status
+ON conversation_attachments(thread_id, status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_attachments_thread_sha_ready
+ON conversation_attachments(thread_id, sha256) WHERE status != 'removed';
+
+-- ============================================================================
+-- 提示词仓库（v23）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS prompt_groups (
+  group_id TEXT PRIMARY KEY,
+  group_name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  icon_key TEXT NOT NULL DEFAULT 'blue',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompt_groups_sort
+ON prompt_groups(sort_order, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prompt_groups_name
+ON prompt_groups(group_name);
+
+CREATE TABLE IF NOT EXISTS prompt_items (
+  prompt_id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content_markdown TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'single-import', 'batch-import')),
+  source_file_name TEXT,
+  content_chars INTEGER NOT NULL DEFAULT 0,
+  is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+  last_used_at TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  FOREIGN KEY (group_id) REFERENCES prompt_groups(group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompt_items_group_sort
+ON prompt_items(group_id, sort_order, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prompt_items_title
+ON prompt_items(title);
