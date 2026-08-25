@@ -220,7 +220,8 @@
 .prompt-library-empty strong { color: #344054; }
 .prompt-library-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 12px 18px; border-top: 1px solid #e7ecf3; }
 .prompt-library-actions .prompt-import-menu { width: 94px; margin-right: auto; }
-.prompt-library-actions .prompt-import-menu > div { inset: auto 0 40px; }
+.prompt-library-actions .prompt-import-menu > div { inset: auto 0 40px; min-width: 112px; }
+.prompt-library-actions .prompt-import-menu button { padding: 8px 9px; white-space: nowrap; }
 .prompt-library-actions button,
 .prompt-subdialog button,
 .prompt-import-dialog button,

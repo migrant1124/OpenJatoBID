@@ -286,11 +286,12 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   };
 
   const importSingle = async () => {
-    if (!selectedGroupId || importing || !(await saveCurrent())) return;
+    if (importing || !(await saveCurrent())) return;
     setImporting(true);
     try {
       const favorite = selectedGroupId === FAVORITES_GROUP_ID;
-      const result = await api().importSingle({ groupId: favorite ? UNGROUPED_GROUP_ID : selectedGroupId });
+      const targetGroupId = favorite ? UNGROUPED_GROUP_ID : selectedGroupId || UNGROUPED_GROUP_ID;
+      const result = await api().importSingle({ groupId: targetGroupId });
       if (result.prompt) {
         if (favorite) await api().setFavorite({ promptId: result.prompt.promptId, isFavorite: true });
         await loadLibrary(result.prompt.promptId, selectedGroupId);
@@ -300,7 +301,9 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   };
 
   const prepareBatch = async () => {
-    if (!selectedGroupId || importing || !(await saveCurrent())) return;
+    if (importing) return;
+    if (!groups.length) { showToast('请先新建分组，再批量导入提示词。', 'info'); return; }
+    if (!(await saveCurrent())) return;
     setImporting(true);
     try {
       const result = await api().prepareBatchImport({ groupId: selectedGroupId === FAVORITES_GROUP_ID ? UNGROUPED_GROUP_ID : selectedGroupId });

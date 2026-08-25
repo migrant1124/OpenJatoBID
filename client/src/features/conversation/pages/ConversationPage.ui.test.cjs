@@ -42,8 +42,11 @@ test('系统提示词分组默认显示', () => {
   assert.match(cssSource, /\.prompt-group-row:hover \.prompt-row-menu,[\s\S]*opacity: 1;/);
   assert.match(cssSource, /\.prompt-library-primary-tools \{[^}]*repeat\(2,[^}]*\}/);
   assert.match(cssSource, /\.prompt-library-primary-tools > button \{[^}]*height: 24px;[^}]*font-size: 11px;/);
+  assert.match(cssSource, /\.prompt-library-actions \.prompt-import-menu button \{[^}]*white-space: nowrap;/);
   assert.match(promptLibrarySource, /prompt-library-actions"><details className="prompt-import-menu"/);
   assert.match(promptLibrarySource, /selectedGroupId \|\| UNGROUPED_GROUP_ID/);
+  assert.match(promptLibrarySource, /const importSingle = async \(\) => \{[\s\S]*?const targetGroupId = favorite \? UNGROUPED_GROUP_ID : selectedGroupId \|\| UNGROUPED_GROUP_ID;/);
+  assert.match(promptLibrarySource, /if \(!groups\.length\) \{ showToast\('请先新建分组，再批量导入提示词。', 'info'\); return; \}/);
   assert.match(promptLibrarySource, /prompt-ungrouped-list[\s\S]*renderPromptRow\(prompt, UNGROUPED_GROUP_ID\)/);
   assert.doesNotMatch(promptLibrarySource, /renderGroupSection\(UNGROUPED_GROUP_ID, '未分组'/);
   assert.doesNotMatch(promptLibrarySource, /disabled=\{!selectedGroupId\}[^>]*>新建提示词/);
