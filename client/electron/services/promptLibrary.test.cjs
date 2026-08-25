@@ -28,6 +28,16 @@ test('提示词分组和提示词 CRUD 持久化并执行软删除约束', () =>
   db.close();
 });
 
+test('默认通用分组可连同组内提示词删除', () => {
+  const { db, store } = createStore();
+  const general = store.listGroups()[0];
+  store.createPrompt({ groupId: general.groupId, title: '待删除提示词' });
+  assert.equal(store.deleteGroup(general.groupId).success, true);
+  assert.equal(store.listGroups().some((group) => group.groupId === general.groupId), false);
+  assert.equal(store.listPrompts({ groupId: general.groupId }).length, 0);
+  db.close();
+});
+
 test('批量导入复用文档解析并保持一个文档对应一条提示词', async () => {
   const { db, store } = createStore();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-library-'));

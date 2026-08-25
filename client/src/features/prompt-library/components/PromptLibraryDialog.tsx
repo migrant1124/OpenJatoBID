@@ -407,7 +407,6 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
               <div className="prompt-library-primary-tools">
                 <button type="button" onClick={() => setCreateGroupOpen(true)}>新建分组</button>
                 <button type="button" disabled={!selectedGroupId} onClick={() => void createPrompt()}>新建提示词</button>
-                <details className="prompt-import-menu"><summary>导入提示词</summary><div><button type="button" onClick={() => void importSingle()}>单个导入</button><button type="button" onClick={() => void prepareBatch()}>批量导入</button></div></details>
               </div>
               {batchDeleteMode && <div className="prompt-batch-delete-bar"><span>已选 {batchSelectionCount} 项</span><button type="button" onClick={resetBatchDelete}>取消</button><button type="button" disabled={!batchSelectionCount || deleting} onClick={() => setBatchDeleteConfirmOpen(true)}>删除所选</button></div>}
               <div className="prompt-group-list">
@@ -428,7 +427,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
               </> : <div className="prompt-library-empty"><strong>暂无提示词</strong><span>新建或导入提示词后即可在这里编辑。</span></div>}
             </section>
           </div>
-          <footer className="prompt-library-actions"><button type="button" className="secondary-action" disabled={inserting} onClick={() => void closeLibrary()}>关闭</button><button type="button" className="primary-action" disabled={insertDisabled} title={insertDisabled ? (!selectedPromptId ? '请先选择提示词' : !content.trim() ? '提示词内容为空，无法插入' : '正在处理提示词') : ''} onClick={() => void (async () => { const draft = { ...draftRef.current }; setInserting(true); try { if (await saveCurrent()) { onInsert(draft.content); onOpenChange(false); showToast('已插入输入框', 'success'); } } finally { setInserting(false); } })()}>插入到输入框</button></footer>
+          <footer className="prompt-library-actions"><details className="prompt-import-menu"><summary>导入提示词</summary><div><button type="button" onClick={() => void importSingle()}>单个导入</button><button type="button" onClick={() => void prepareBatch()}>批量导入</button></div></details><button type="button" className="secondary-action" disabled={inserting} onClick={() => void closeLibrary()}>关闭</button><button type="button" className="primary-action" disabled={insertDisabled} title={insertDisabled ? (!selectedPromptId ? '请先选择提示词' : !content.trim() ? '提示词内容为空，无法插入' : '正在处理提示词') : ''} onClick={() => void (async () => { const draft = { ...draftRef.current }; setInserting(true); try { if (await saveCurrent()) { onInsert(draft.content); onOpenChange(false); showToast('已插入输入框', 'success'); } } finally { setInserting(false); } })()}>插入到输入框</button></footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

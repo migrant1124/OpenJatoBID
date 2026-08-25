@@ -39,4 +39,7 @@ test('对话输入框仅通过上边沿调节高度', () => {
 test('系统提示词分组默认显示', () => {
   assert.doesNotMatch(cssSource, /\.prompt-group-list section > div:first-child > button:last-child/);
   assert.match(cssSource, /\.prompt-group-row:hover \.prompt-row-menu,[\s\S]*opacity: 1;/);
+  assert.match(cssSource, /\.prompt-library-primary-tools \{[^}]*repeat\(2,[^}]*\}/);
+  assert.match(cssSource, /\.prompt-library-primary-tools > button \{[^}]*height: 24px;[^}]*font-size: 11px;/);
+  assert.match(promptLibrarySource, /prompt-library-actions"><details className="prompt-import-menu"/);
 });
