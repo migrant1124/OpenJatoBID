@@ -125,7 +125,7 @@
 .conversation-attach-button,
 .conversation-send-button,
 .conversation-stop-button { border: 0; border-radius: 9px; padding: 8px 12px; cursor: pointer; }
-.conversation-attach-button { background: #f0f4f9; color: #536176; }
+.conversation-attach-button { display: inline-flex; align-items: center; gap: 2px; background: #f0f4f9; color: #536176; }
 .conversation-send-button { background: #2174fd; color: #fff; }
 .conversation-stop-button { background: #fff0f0; color: #c73636; }
 .conversation-send-button:disabled { background: #ebebec; color: #6262db; cursor: default; }

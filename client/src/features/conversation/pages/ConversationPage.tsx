@@ -250,7 +250,7 @@ function ConversationPage() {
                 if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (canSend) void workspace.send(); }
               }} />
             <div className="conversation-composer-bar">
-              <button className="conversation-attach-button" type="button" disabled={workspace.busy || workspace.converting} onClick={() => void workspace.selectAttachments()} aria-label="添加附件">⌕ <span>添加附件</span></button>
+              <button className="conversation-attach-button" type="button" disabled={workspace.busy || workspace.converting} onClick={() => void workspace.selectAttachments()} aria-label="添加附件"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg><span>添加附件</span></button>
               <span className={characterCount > 10000 ? 'is-overflow' : ''}>{workspace.converting ? '正在将超长文本转换为 TXT 附件' : `${characterCount} / 10000`}</span>
               {activeGeneration
                 ? <button className="conversation-stop-button" type="button" onClick={() => void workspace.stop()}>■ 停止</button>

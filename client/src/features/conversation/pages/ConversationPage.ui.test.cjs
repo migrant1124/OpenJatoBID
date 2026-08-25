@@ -12,6 +12,9 @@ test('会话列表按时间归类、悬停显示菜单并支持批量删除', ()
   assert.doesNotMatch(pageSource.match(/function ThreadItem[\s\S]*?\n}/)?.[0] || '', /lastMessagePreview|formatTime\(thread\.updatedAt\)/);
   assert.match(pageSource, /批量删除会话/);
   assert.match(pageSource, /workspace\.deleteThreads/);
+  assert.match(pageSource, /conversation-attach-button[\s\S]*?<svg[^>]*aria-hidden="true"[\s\S]*?<span>添加附件<\/span>/);
+  assert.doesNotMatch(pageSource, /conversation-attach-button[^\n]*>⌕/);
+  assert.match(cssSource, /\.conversation-attach-button \{[^}]*display: inline-flex;[^}]*align-items: center;[^}]*gap: 2px;/);
   assert.match(cssSource, /\.conversation-thread-item:hover \.conversation-more-menu[\s\S]*opacity: 1/);
   assert.match(cssSource, /\.conversation-dialog \.danger-action:hover:not\(:disabled\)[\s\S]*background: #d14343;[\s\S]*box-shadow:/);
 });
