@@ -577,17 +577,17 @@ jobs:
         working-directory: management
         run: npm ci
 
+      - name: Test management application
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        working-directory: management
+        run: npm test
+
       - name: Create temporary initial administrator credential
         if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         env:
           MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON: ${{ secrets.MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON }}
         run: node scripts/write-initial-admin-credential.cjs
-
-      - name: Test management application
-        if: ${{ steps.management-state.outputs.mode != 'resume' }}
-        working-directory: management
-        run: npm test
 
       - name: Sync independent management version
         if: ${{ steps.management-state.outputs.mode != 'resume' }}

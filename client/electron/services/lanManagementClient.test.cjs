@@ -1,6 +1,46 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 const { createLanManagementClient } = require('./lanManagementClient.cjs');
+
+test('allows an injected fetch implementation without loading undici', () => {
+  const modulePath = path.join(__dirname, 'lanManagementClient.cjs');
+  const script = `
+    const Module = require('node:module');
+    const originalLoad = Module._load;
+    Module._load = function(request, parent, isMain) {
+      if (request === 'undici') throw new Error('UNDICI_SHOULD_NOT_LOAD');
+      return originalLoad.call(this, request, parent, isMain);
+    };
+    const { createLanManagementClient } = require(${JSON.stringify(modulePath)});
+    createLanManagementClient({ serverAddress: '127.0.0.1', fetchImpl: async () => ({ ok: true }) });
+  `;
+  const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test('uses undici fetch when no fetch implementation is injected', () => {
+  const modulePath = path.join(__dirname, 'lanManagementClient.cjs');
+  const script = `
+    const Module = require('node:module');
+    const originalLoad = Module._load;
+    let called = false;
+    Module._load = function(request, parent, isMain) {
+      if (request === 'undici') return { fetch: async () => {
+        called = true;
+        return { ok: true, json: async () => ({ data: { healthy: true } }) };
+      } };
+      return originalLoad.call(this, request, parent, isMain);
+    };
+    const { createLanManagementClient } = require(${JSON.stringify(modulePath)});
+    createLanManagementClient({ serverAddress: '127.0.0.1' }).health()
+      .then(() => { if (!called) throw new Error('UNDICI_FETCH_NOT_CALLED'); })
+      .catch((error) => { console.error(error); process.exitCode = 1; });
+  `;
+  const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
 
 test('sends authorization requests only to the configured LAN management address', async () => {
   const requests = [];

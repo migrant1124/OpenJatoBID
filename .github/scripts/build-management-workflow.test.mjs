@@ -32,12 +32,14 @@ test('management release is manual, resumable, draft-only and never exposed as a
 
 test('temporary credentials are created by a dedicated script and removed before upload', async () => {
   const workflow = await readManagementJob();
+  const installIndex = workflow.indexOf('Install management dependencies');
+  const testIndex = workflow.indexOf('Test management application');
   const createIndex = workflow.indexOf('Create temporary initial administrator credential');
   const buildIndex = workflow.indexOf('Build and verify Windows management application');
   const removeIndex = workflow.indexOf('Remove temporary initial administrator credential');
   const draftIndex = workflow.indexOf('Create or repair management Draft Release');
   const r2Index = workflow.indexOf('Upload and verify immutable management R2 version directory');
-  assert.ok(createIndex < buildIndex && buildIndex < removeIndex && removeIndex < draftIndex && draftIndex < r2Index);
+  assert.ok(installIndex < testIndex && testIndex < createIndex && createIndex < buildIndex && buildIndex < removeIndex && removeIndex < draftIndex && draftIndex < r2Index);
   assert.match(workflow, /run: node scripts\/write-initial-admin-credential\.cjs/);
   assert.doesNotMatch(workflow, /node -e .*MANAGEMENT_INITIAL_ADMIN_CREDENTIAL_JSON/);
   assert.match(workflow, /if: \$\{\{ always\(\) \}\}/);

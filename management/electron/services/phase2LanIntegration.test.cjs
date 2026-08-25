@@ -12,6 +12,7 @@ const { createHttpServerService } = require('./httpServerService.cjs');
 const { createSigningService } = require('./signingService.cjs');
 const { createAnalyticsService } = require('../../../client/electron/services/analyticsService.cjs');
 const { createDeviceBootstrapStore } = require('../../../client/electron/services/deviceBootstrapStore.cjs');
+const { createLanManagementClient } = require('../../../client/electron/services/lanManagementClient.cjs');
 const { createLicenseService } = require('../../../client/electron/services/licenseService.cjs');
 
 test('completes application, approval, login, analytics and revocation across both applications', async () => {
@@ -33,6 +34,7 @@ test('completes application, approval, login, analytics and revocation across bo
       now,
     }),
   });
+  const lanClientFactory = (options) => createLanManagementClient({ ...options, fetchImpl: globalThis.fetch });
 
   try {
     const address = await httpServer.start({ host: '127.0.0.1', port: 0 });
@@ -64,6 +66,7 @@ test('completes application, approval, login, analytics and revocation across bo
         filePath: path.join(userData, 'device-bootstrap.json'),
         now,
       }),
+      lanClientFactory,
       debugLicenseDisabled: false,
     });
 
@@ -88,6 +91,7 @@ test('completes application, approval, login, analytics and revocation across bo
         list: () => [...queue],
         replace: (events) => { queue.splice(0, queue.length, ...events); },
       },
+      lanClientFactory,
       now,
       eventIdFactory: () => 'integration-event-1',
     });

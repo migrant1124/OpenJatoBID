@@ -1,7 +1,7 @@
-const { fetch } = require('undici');
 const { normalizeLanServerAddress } = require('./lanServerAddress.cjs');
 
-function createLanManagementClient({ serverAddress, fetchImpl = fetch, timeoutMs = 10000 }) {
+function createLanManagementClient({ serverAddress, fetchImpl, timeoutMs = 10000 }) {
+  fetchImpl ??= require('undici').fetch;
   const { baseUrl } = normalizeLanServerAddress(serverAddress);
 
   async function request(pathname, { method = 'GET', body } = {}) {
