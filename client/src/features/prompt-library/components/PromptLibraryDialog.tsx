@@ -62,7 +62,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   const selectPromptDraft = useCallback((prompt: PromptItem | undefined, viewGroupId = '') => {
     const next = prompt || { promptId: '', title: '', contentMarkdown: '' };
     setSelectedPromptId(next.promptId);
-    setSelectedGroupId((current) => viewGroupId || prompt?.groupId || current);
+    setSelectedGroupId(viewGroupId || prompt?.groupId || '');
     setTitle(next.title);
     setContent(next.contentMarkdown);
     setPast([]);
@@ -184,14 +184,15 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   };
 
   const createPrompt = async () => {
-    if (!selectedGroupId || !(await saveCurrent())) return;
+    if (!(await saveCurrent())) return;
     try {
       const favorite = selectedGroupId === FAVORITES_GROUP_ID;
-      const prompt = await api().createPrompt({ groupId: favorite ? UNGROUPED_GROUP_ID : selectedGroupId, isFavorite: favorite });
+      const targetGroupId = favorite ? UNGROUPED_GROUP_ID : selectedGroupId || UNGROUPED_GROUP_ID;
+      const prompt = await api().createPrompt({ groupId: targetGroupId, isFavorite: favorite });
       setPrompts((items) => [prompt, ...items]);
       setGroups((items) => items.map((group) => group.groupId === selectedGroupId ? { ...group, promptCount: group.promptCount + 1 } : group));
-      setExpandedGroupIds((items) => new Set(items).add(selectedGroupId));
-      selectPromptDraft(prompt, selectedGroupId);
+      setExpandedGroupIds((items) => new Set(items).add(selectedGroupId || targetGroupId));
+      selectPromptDraft(prompt, selectedGroupId || targetGroupId);
       window.setTimeout(() => editorRef.current?.focus(), 0);
     } catch (error) { showToast(errorMessage(error), 'error'); }
   };
@@ -344,7 +345,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
   const ungroupedPrompts = prompts.filter((prompt) => prompt.groupId === UNGROUPED_GROUP_ID);
   const batchSelectionCount = selectedGroupIds.size + selectedPromptIds.size + selectedFavoritePromptIds.size;
   const selectedGroupName = selectedGroupId === FAVORITES_GROUP_ID ? '常用提示词'
-    : selectedGroupId === UNGROUPED_GROUP_ID ? '未分组'
+    : selectedGroupId === UNGROUPED_GROUP_ID ? ''
       : groups.find((group) => group.groupId === selectedGroupId)?.groupName || '';
 
   const closeRowMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -368,22 +369,16 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
     </div>;
   };
 
-  const renderGroupSection = (groupId: string, groupName: string, groupPrompts: PromptItem[], group?: PromptGroup, favoriteOnly = false, ungrouped = false) => {
+  const renderGroupSection = (groupId: string, groupName: string, groupPrompts: PromptItem[], group?: PromptGroup, favoriteOnly = false) => {
     const expanded = expandedGroupIds.has(groupId) || Boolean(query.trim());
     const groupChecked = favoriteOnly
       ? groupPrompts.length > 0 && groupPrompts.every((prompt) => selectedFavoritePromptIds.has(prompt.promptId))
-      : ungrouped
-        ? groupPrompts.length > 0 && groupPrompts.every((prompt) => selectedPromptIds.has(prompt.promptId))
-        : selectedGroupIds.has(groupId);
-    return <section key={groupId} className={`${groupId === selectedGroupId ? 'is-active' : ''}${ungrouped ? ' is-ungrouped' : ''}`}>
+      : selectedGroupIds.has(groupId);
+    return <section key={groupId} className={groupId === selectedGroupId ? 'is-active' : ''}>
       <div className="prompt-group-row">
-        {batchDeleteMode && <input type="checkbox" aria-label={`选择分组 ${groupName}`} checked={groupChecked} onChange={(event) => {
-          if (ungrouped) {
-            setSelectedPromptIds((items) => { const next = new Set(items); groupPrompts.forEach((prompt) => event.target.checked ? next.add(prompt.promptId) : next.delete(prompt.promptId)); return next; });
-          } else toggleGroupSelection(groupId, event.target.checked);
-        }} />}
+        {batchDeleteMode && <input type="checkbox" aria-label={`选择分组 ${groupName}`} checked={groupChecked} onChange={(event) => toggleGroupSelection(groupId, event.target.checked)} />}
         <button type="button" className="prompt-group-title" onClick={() => void chooseGroup(groupId)}><span className="prompt-group-chevron" aria-hidden="true">{expanded ? '⌄' : '›'}</span><strong>{groupName}</strong></button>
-        {!batchDeleteMode && !ungrouped && <details className="prompt-row-menu"><summary aria-label={`分组操作 ${groupName}`}>•••</summary><div>
+        {!batchDeleteMode && <details className="prompt-row-menu"><summary aria-label={`分组操作 ${groupName}`}>•••</summary><div>
           <button type="button" onClick={(event) => { closeRowMenu(event); if (favoriteOnly) setDeleteGroupTarget({ groupId, groupName, favoriteOnly: true }); else if (group) void deleteGroup(group); }}>删除分组</button>
           <button type="button" onClick={(event) => { closeRowMenu(event); void startBatchDelete(); }}>批量删除</button>
         </div></details>}
@@ -406,19 +401,19 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
               <input ref={searchRef} value={query} onChange={(event) => { const value = event.target.value; queryRef.current = value; setQuery(value); void api().listPrompts({ query: value }).then((items) => { if (queryRef.current === value) setPrompts(items); }); }} placeholder="搜索提示词（Ctrl + /）" aria-label="搜索提示词" />
               <div className="prompt-library-primary-tools">
                 <button type="button" onClick={() => setCreateGroupOpen(true)}>新建分组</button>
-                <button type="button" disabled={!selectedGroupId} onClick={() => void createPrompt()}>新建提示词</button>
+                <button type="button" onClick={() => void createPrompt()}>新建提示词</button>
               </div>
               {batchDeleteMode && <div className="prompt-batch-delete-bar"><span>已选 {batchSelectionCount} 项</span><button type="button" onClick={resetBatchDelete}>取消</button><button type="button" disabled={!batchSelectionCount || deleting} onClick={() => setBatchDeleteConfirmOpen(true)}>删除所选</button></div>}
               <div className="prompt-group-list">
                 {favoritePrompts.length > 0 && renderGroupSection(FAVORITES_GROUP_ID, '常用提示词', favoritePrompts, undefined, true)}
                 {groups.map((group) => renderGroupSection(group.groupId, group.groupName, prompts.filter((prompt) => prompt.groupId === group.groupId), group))}
-                {ungroupedPrompts.length > 0 && renderGroupSection(UNGROUPED_GROUP_ID, '未分组', ungroupedPrompts, undefined, false, true)}
+                {ungroupedPrompts.length > 0 && <div className="prompt-item-list prompt-ungrouped-list">{ungroupedPrompts.map((prompt) => renderPromptRow(prompt, UNGROUPED_GROUP_ID))}</div>}
               </div>
             </aside>
             <section className="prompt-library-editor">
               {selectedPromptId ? <>
                 <div className="prompt-editor-title"><input value={title} maxLength={100} disabled={inserting} aria-label="提示词标题" onChange={(event) => setTitle(event.target.value)} />{selectedGroupId !== FAVORITES_GROUP_ID && <button type="button" title="删除提示词" disabled={inserting} onClick={() => setDeleteTarget({ promptId: selectedPromptId, title: title.trim() || '未命名提示词' })}>•••</button>}</div>
-                <div className="prompt-editor-toolbar"><span>{selectedGroupName}</span><button type="button" disabled={!past.length} onClick={undo}>↶ 撤销</button><button type="button" disabled={!future.length} onClick={redo}>↷ 重做</button></div>
+                <div className="prompt-editor-toolbar">{selectedGroupName && <span>{selectedGroupName}</span>}<button type="button" disabled={!past.length} onClick={undo}>↶ 撤销</button><button type="button" disabled={!future.length} onClick={redo}>↷ 重做</button></div>
                 <textarea ref={editorRef} value={content} disabled={inserting} aria-label="提示词内容" placeholder="输入提示词内容，支持 Markdown" onChange={(event) => updateContent(event.target.value)} onKeyDown={(event) => {
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
                   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); }
@@ -434,7 +429,7 @@ export function PromptLibraryDialog({ open, onOpenChange, onInsert }: {
 
     <Dialog.Root open={createGroupOpen} onOpenChange={setCreateGroupOpen}><Dialog.Portal><Dialog.Overlay className="prompt-subdialog-overlay" /><Dialog.Content className="prompt-subdialog"><Dialog.Title>新建分组</Dialog.Title><Dialog.Description className="sr-only">填写分组名称、描述并选择文件夹颜色。</Dialog.Description><label>分组名称 <em>*</em><input value={groupName} maxLength={30} onChange={(event) => setGroupName(event.target.value)} placeholder="请输入分组名称，最多 30 个字符" /><small>{Array.from(groupName).length}/30</small></label><label>分组描述<textarea value={groupDescription} maxLength={100} onChange={(event) => setGroupDescription(event.target.value)} placeholder="请输入分组描述（可选）" /><small>{Array.from(groupDescription).length}/100</small></label><fieldset><legend>分组图标</legend>{['blue', 'yellow', 'green', 'purple', 'red', 'cyan'].map((color) => <button type="button" aria-label={`${color} 文件夹`} className={groupIcon === color ? 'is-active' : ''} key={color} onClick={() => setGroupIcon(color)}><i className={`prompt-folder is-${color}`} /></button>)}</fieldset><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="primary-action" disabled={!groupName.trim()} onClick={() => void createGroup()}>创建</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
 
-    <Dialog.Root open={batchOpen} onOpenChange={(next) => { if (!importing) setBatchOpen(next); }}><Dialog.Portal><Dialog.Overlay className="prompt-subdialog-overlay" /><Dialog.Content className="prompt-import-dialog"><header><div><Dialog.Title>导入提示词</Dialog.Title><Dialog.Description>支持批量导入提示词，每个文档内容为一个独立提示词。</Dialog.Description></div><Dialog.Close aria-label="关闭">×</Dialog.Close></header><div className="prompt-import-summary">已选择 {batchItems.length} 个文件（.md、.txt、.docx）</div><div className="prompt-import-table"><div className="prompt-import-row is-head"><span>文件名 / 标题</span><span>预览内容（前 100 字符）</span><span>分组</span><span>状态</span><span>操作</span></div>{batchItems.map((item) => <div className="prompt-import-row" key={item.importId}><input value={item.title} disabled={item.status === 'error'} onChange={(event) => setBatchItems((items) => items.map((entry) => entry.importId === item.importId ? { ...entry, title: event.target.value } : entry))} title={item.fileName} /><span title={item.error || item.preview}>{item.error || item.preview}</span><select value={item.groupId} disabled={item.status === 'error'} onChange={(event) => setBatchItems((items) => items.map((entry) => entry.importId === item.importId ? { ...entry, groupId: event.target.value } : entry))}>{groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}<option value={UNGROUPED_GROUP_ID}>未分组</option></select><span className={item.status === 'error' ? 'is-error' : 'is-ready'}>{item.status === 'error' ? '解析失败' : '待导入'}</span><button type="button" onClick={() => setBatchItems((items) => items.filter((entry) => entry.importId !== item.importId))}>移除</button></div>)}</div><footer><Dialog.Close className="secondary-action" disabled={importing}>取消</Dialog.Close><button type="button" className="primary-action" disabled={importing || !batchItems.some((item) => item.status === 'ready')} onClick={() => void commitBatch()}>{importing ? '正在导入…' : '开始导入'}</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={batchOpen} onOpenChange={(next) => { if (!importing) setBatchOpen(next); }}><Dialog.Portal><Dialog.Overlay className="prompt-subdialog-overlay" /><Dialog.Content className="prompt-import-dialog"><header><div><Dialog.Title>导入提示词</Dialog.Title><Dialog.Description>支持批量导入提示词，每个文档内容为一个独立提示词。</Dialog.Description></div><Dialog.Close aria-label="关闭">×</Dialog.Close></header><div className="prompt-import-summary">已选择 {batchItems.length} 个文件（.md、.txt、.docx）</div><div className="prompt-import-table"><div className="prompt-import-row is-head"><span>文件名 / 标题</span><span>预览内容（前 100 字符）</span><span>分组</span><span>状态</span><span>操作</span></div>{batchItems.map((item) => <div className="prompt-import-row" key={item.importId}><input value={item.title} disabled={item.status === 'error'} onChange={(event) => setBatchItems((items) => items.map((entry) => entry.importId === item.importId ? { ...entry, title: event.target.value } : entry))} title={item.fileName} /><span title={item.error || item.preview}>{item.error || item.preview}</span><select value={item.groupId} disabled={item.status === 'error'} onChange={(event) => setBatchItems((items) => items.map((entry) => entry.importId === item.importId ? { ...entry, groupId: event.target.value } : entry))}>{groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}<option value={UNGROUPED_GROUP_ID}>不属于分组</option></select><span className={item.status === 'error' ? 'is-error' : 'is-ready'}>{item.status === 'error' ? '解析失败' : '待导入'}</span><button type="button" onClick={() => setBatchItems((items) => items.filter((entry) => entry.importId !== item.importId))}>移除</button></div>)}</div><footer><Dialog.Close className="secondary-action" disabled={importing}>取消</Dialog.Close><button type="button" className="primary-action" disabled={importing || !batchItems.some((item) => item.status === 'ready')} onClick={() => void commitBatch()}>{importing ? '正在导入…' : '开始导入'}</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
 
     <Dialog.Root open={Boolean(deleteTarget)} onOpenChange={(next) => !next && setDeleteTarget(null)}><Dialog.Portal><Dialog.Overlay className="prompt-subdialog-overlay" /><Dialog.Content className="prompt-delete-dialog"><Dialog.Title>删除提示词</Dialog.Title><Dialog.Description>删除“{deleteTarget?.title}”后将不再显示，是否继续？</Dialog.Description><footer><Dialog.Close className="secondary-action">取消</Dialog.Close><button type="button" className="danger-action" onClick={() => void removePrompt()}>删除</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
 

@@ -169,7 +169,6 @@
 .prompt-batch-delete-bar button:disabled { opacity: .45; cursor: default; }
 .prompt-group-list { flex: 1; min-height: 0; overflow: auto; }
 .prompt-group-list section { margin-bottom: 5px; }
-.prompt-group-list section.is-ungrouped { margin-top: 10px; padding-top: 8px; border-top: 1px solid #edf1f6; }
 .prompt-group-row,
 .prompt-item-row { position: relative; display: flex; align-items: center; min-width: 0; border-radius: 8px; }
 .prompt-group-row { min-height: 38px; border: 1px solid transparent; }
@@ -198,6 +197,7 @@
 .prompt-folder.is-red { background: #ee6380; }
 .prompt-folder.is-cyan { background: #35acc0; }
 .prompt-item-list { display: grid; gap: 2px; margin: 2px 0 7px 26px; }
+.prompt-ungrouped-list { margin-left: 0; }
 .prompt-item-row { min-height: 34px; }
 .prompt-item-row:hover { background: #f3f6fb; }
 .prompt-item-row.is-active { background: #e7f0ff; color: #1769ee; font-weight: 600; }
@@ -293,6 +293,8 @@
 .conversation-dialog .primary-action { background: #2174fd; color: #fff; }
 .conversation-dialog .secondary-action { background: #eef2f7; color: #344054; }
 .conversation-dialog .danger-action { background: #d14343; color: #fff; }
+.prompt-delete-dialog .danger-action:hover:not(:disabled),
+.prompt-delete-dialog .danger-action:focus-visible,
 .conversation-dialog .danger-action:hover:not(:disabled),
 .conversation-dialog .danger-action:focus-visible { background: #d14343; box-shadow: 0 0 0 3px rgb(209 67 67 / 18%), 0 4px 12px rgb(209 67 67 / 22%); }
 .conversation-dialog button:disabled { opacity: .45; cursor: default; }

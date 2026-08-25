@@ -18,6 +18,7 @@ test('会话列表按时间归类、悬停显示菜单并支持批量删除', ()
   assert.match(cssSource, /\.conversation-attach-button \{[^}]*display: inline-flex;[^}]*align-items: center;[^}]*gap: 2px;/);
   assert.match(cssSource, /\.conversation-thread-item:hover \.conversation-more-menu[\s\S]*opacity: 1/);
   assert.match(cssSource, /\.conversation-dialog \.danger-action:hover:not\(:disabled\)[\s\S]*background: #d14343;[\s\S]*box-shadow:/);
+  assert.match(cssSource, /\.prompt-delete-dialog \.danger-action:hover:not\(:disabled\)[\s\S]*background: #d14343;[\s\S]*box-shadow:/);
   assert.match(pageSource, /conversation-prompt-button[\s\S]*提示词库/);
   assert.match(promptLibrarySource, />插入到输入框<\/button>/);
   assert.match(promptLibrarySource, /window\.setTimeout\(\(\) => \{ void saveCurrent\(\); \}, 800\)/);
@@ -42,4 +43,8 @@ test('系统提示词分组默认显示', () => {
   assert.match(cssSource, /\.prompt-library-primary-tools \{[^}]*repeat\(2,[^}]*\}/);
   assert.match(cssSource, /\.prompt-library-primary-tools > button \{[^}]*height: 24px;[^}]*font-size: 11px;/);
   assert.match(promptLibrarySource, /prompt-library-actions"><details className="prompt-import-menu"/);
+  assert.match(promptLibrarySource, /selectedGroupId \|\| UNGROUPED_GROUP_ID/);
+  assert.match(promptLibrarySource, /prompt-ungrouped-list[\s\S]*renderPromptRow\(prompt, UNGROUPED_GROUP_ID\)/);
+  assert.doesNotMatch(promptLibrarySource, /renderGroupSection\(UNGROUPED_GROUP_ID, '未分组'/);
+  assert.doesNotMatch(promptLibrarySource, /disabled=\{!selectedGroupId\}[^>]*>新建提示词/);
 });
