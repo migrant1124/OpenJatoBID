@@ -212,7 +212,7 @@ function ConversationPage() {
               <span className={characterCount > 10000 ? 'is-overflow' : ''}>{workspace.converting ? '正在将超长文本转换为 TXT 附件' : `${characterCount} / 10000`}</span>
               {activeGeneration
                 ? <button className="conversation-stop-button" type="button" onClick={() => void workspace.stop()}>■ 停止</button>
-                : <button className="conversation-send-button" type="button" disabled={!canSend} onClick={() => void workspace.send()}>发送 ↑</button>}
+                : <button className="conversation-send-button" type="button" disabled={!canSend} onClick={() => void workspace.send()}>发送</button>}
             </div>
           </div>
         </section>
