@@ -6,6 +6,7 @@ import { isDeveloperDemoSection } from '../features/developer/developerDemoSecti
 
 const BidOpportunityPage = lazy(() => import('../features/bid-opportunity/pages/BidOpportunityPage'));
 const BusinessBidPage = lazy(() => import('../features/business-bid/pages/BusinessBidPage'));
+const ConversationPage = lazy(() => import('../features/conversation/pages/ConversationPage'));
 const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
 const DeveloperDemoPage = lazy(() => import('../features/developer/pages/DeveloperDemoPage'));
 const PiAgentMonitorPage = lazy(() => import('../features/developer/pages/PiAgentMonitorPage'));
@@ -54,6 +55,8 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
       return <Suspense fallback={null}><TechnicalPlanHome workflowKind="existing-plan-expansion" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
     case 'business-bid':
       return <Suspense fallback={null}><BusinessBidPage /></Suspense>;
+    case 'conversation':
+      return <Suspense fallback={null}><ConversationPage /></Suspense>;
     case 'document-knowledge-base':
       return <Suspense fallback={null}><KnowledgeBasePage /></Suspense>;
     case 'resources':

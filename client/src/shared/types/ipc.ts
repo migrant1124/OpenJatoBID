@@ -363,6 +363,8 @@ export interface AgentMonitorSnapshot {
 }
 
 export interface AgentRunPayload {
+  mode?: 'task' | 'conversation';
+  requested_thinking_level?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   task_id?: string;
   title?: string;
   task?: string;
@@ -560,6 +562,119 @@ export interface AgentSelfCheckReportExportResult {
   message: string;
 }
 
+export interface ConversationThread {
+  threadId: string;
+  title: string;
+  status: 'active' | 'deleted';
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  lastMessagePreview: string;
+  messageCount: number;
+  attachmentCount: number;
+}
+
+export type ConversationMessageStatus = 'pending' | 'queued' | 'streaming' | 'completed' | 'canceled' | 'error';
+export type ConversationMessageSource = 'manual' | 'quick-action' | 'regenerate';
+
+export interface ConversationMessage {
+  messageId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  contentMarkdown: string;
+  status: ConversationMessageStatus;
+  source: ConversationMessageSource;
+  parentMessageId?: string;
+  taskId?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  sequence: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ConversationAttachmentStatus = 'selected' | 'copying' | 'parsing' | 'ready' | 'error' | 'removed';
+
+export interface ConversationAttachment {
+  attachmentId: string;
+  threadId: string;
+  originMessageId?: string;
+  source: 'selected-file' | 'composer-overflow-text';
+  fileName: string;
+  extension: string;
+  mimeType?: string;
+  sizeBytes: number;
+  sha256: string;
+  parserProvider?: string;
+  parserLabel?: string;
+  markdownChars: number;
+  status: ConversationAttachmentStatus;
+  progress: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationThreadSnapshot {
+  thread: ConversationThread;
+  messages: ConversationMessage[];
+  attachments: ConversationAttachment[];
+}
+
+export interface ConversationSendMessageResult {
+  userMessage: ConversationMessage;
+  assistantMessage: ConversationMessage;
+}
+
+export interface ConversationAttachmentSelectionResult {
+  success: boolean;
+  canceled?: boolean;
+  attachments: ConversationAttachment[];
+  errors: Array<{ fileName: string; code?: string; message: string }>;
+}
+
+export type ConversationEvent =
+  | { type: 'thread-list-changed' }
+  | { type: 'message-queued' | 'message-start'; threadId: string; messageId: string }
+  | { type: 'message-delta'; threadId: string; messageId: string; delta: string }
+  | { type: 'message-complete' | 'message-canceled'; threadId: string; messageId: string; contentMarkdown: string }
+  | { type: 'message-error'; threadId: string; messageId: string; errorCode: string; message: string; partialContent?: string }
+  | { type: 'attachment-progress'; threadId: string; attachmentId: string; status: ConversationAttachmentStatus; progress: number; message: string };
+
+export interface PromptGroup {
+  groupId: string;
+  groupName: string;
+  description: string;
+  iconKey: string;
+  isSystem: boolean;
+  promptCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptItem {
+  promptId: string;
+  groupId: string;
+  title: string;
+  contentMarkdown: string;
+  contentChars: number;
+  source: 'manual' | 'single-import' | 'batch-import';
+  sourceFileName?: string;
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptImportItem {
+  importId: string;
+  fileName: string;
+  title: string;
+  preview: string;
+  groupId: string;
+  status: 'ready' | 'error';
+  error?: string;
+}
+
 export interface YibiaoBridge {
   appName: string;
   platform: string;
@@ -627,6 +742,37 @@ export interface YibiaoBridge {
     answerQuestion: (payload: AgentQuestionAnswer) => Promise<{ success: boolean }>;
     onStatus: (callback: (status: AgentRuntimeStatus) => void) => () => void;
     onQuestion: (callback: (question: AgentQuestion | null) => void) => () => void;
+  };
+  conversation: {
+    listThreads: (input?: { query?: string }) => Promise<ConversationThread[]>;
+    createThread: () => Promise<ConversationThread>;
+    getThread: (input: { threadId: string }) => Promise<ConversationThreadSnapshot>;
+    renameThread: (input: { threadId: string; title: string }) => Promise<ConversationThread>;
+    deleteThread: (input: { threadId: string }) => Promise<{ success: true }>;
+    selectAttachments: (input: { threadId: string; existingDraftAttachmentIds?: string[] }) => Promise<ConversationAttachmentSelectionResult>;
+    createTextAttachment: (input: { threadId: string; content: string; existingDraftAttachmentIds?: string[] }) => Promise<{ success: true; attachment: ConversationAttachment }>;
+    removeAttachment: (input: { threadId: string; attachmentId: string }) => Promise<{ success: true }>;
+    sendMessage: (input: { threadId: string; content: string; attachmentIds: string[] }) => Promise<ConversationSendMessageResult>;
+    cancelMessage: (input: { threadId: string; assistantMessageId: string }) => Promise<{ success: true }>;
+    regenerateMessage: (input: { threadId: string; assistantMessageId: string }) => Promise<ConversationSendMessageResult>;
+    quickAction: (input: { threadId: string; assistantMessageId: string; action: 'continue' | 'refine' | 'formal' }) => Promise<ConversationSendMessageResult>;
+    exportMessageWord: (input: { threadId: string; assistantMessageId: string }) => Promise<WordExportResult>;
+    onEvent: (callback: (event: ConversationEvent) => void) => () => void;
+  };
+  promptLibrary: {
+    listGroups: () => Promise<PromptGroup[]>;
+    createGroup: (input: { groupName: string; description?: string; iconKey?: string }) => Promise<PromptGroup>;
+    deleteGroup: (input: { groupId: string }) => Promise<{ success: true }>;
+    batchDelete: (input: { groupIds: string[]; promptIds: string[]; favoritePromptIds: string[] }) => Promise<{ success: true }>;
+    listPrompts: (input?: { groupId?: string; query?: string }) => Promise<PromptItem[]>;
+    getPrompt: (input: { promptId: string }) => Promise<PromptItem>;
+    createPrompt: (input: { groupId: string; title?: string; contentMarkdown?: string; isFavorite?: boolean }) => Promise<PromptItem>;
+    updatePrompt: (input: { promptId: string; groupId?: string; title?: string; contentMarkdown?: string }) => Promise<PromptItem>;
+    deletePrompt: (input: { promptId: string }) => Promise<{ success: true }>;
+    setFavorite: (input: { promptId: string; isFavorite: boolean }) => Promise<PromptItem>;
+    importSingle: (input: { groupId: string }) => Promise<{ success: boolean; canceled?: boolean; prompt?: PromptItem }>;
+    prepareBatchImport: (input: { groupId: string }) => Promise<{ canceled: boolean; items: PromptImportItem[] }>;
+    commitBatchImport: (input: { items: Array<Pick<PromptImportItem, 'importId' | 'title' | 'groupId'> & { isFavorite?: boolean }> }) => Promise<{ successCount: number; failedCount: number; results: Array<{ importId: string; promptId?: string; success: boolean; error?: string }> }>;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;

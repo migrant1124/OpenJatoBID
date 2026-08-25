@@ -1540,3 +1540,38 @@ T173 → T174 → T175 → T176
 - 自动化：JSON 路径边界/Schema、提问选项约束、目录确认等待/继续/取消、语义审查只读、来源骨架与评分映射保护。
 - 静态：受改 CJS `node --check`、`npm.cmd run build`、`git diff --check`。
 - 运行：完整重启 Electron，验证监视器多轮记录、提问 Dialog、目录确认和最终审查结果；不调用真实模型、不打包、不提交、不推送。
+
+## 22. v1.7.0 Jato Agent 对话模式
+
+> 权威需求：`D:\download\OpenJatoBID-v1.7.0-spec.md`。本阶段仅修改员工客户端及页面访问中文映射；不修改管理端、授权、发布、更新或打包流程，不新增依赖。
+
+### 22.1 T187 数据与附件
+
+- SQLite 升级到 v23，新增线程、消息、附件三表及 schema health 修复。
+- Main 侧 Store 管理事务、软删除、启动恢复和公开 DTO；附件服务复用现有解析链路，限制 5 个/200MB/500MB，并支持 10001 字符完整转换为 UTF-8 TXT。
+
+### 22.2 T188 Agent 对话链路
+
+- Pi 新增不影响 task 默认行为的 `conversation` 模式：仅 `read/find/ls`，请求最高可用非 `off` 思考档位，不要求输出文件且不归档临时工作区。
+- Conversation Service 负责全局队列、多轮上下文、附件 manifest、流式事件、停止、快捷操作和重新生成；Renderer 不直接调用 Agent。
+
+### 22.3 T189 IPC 与 Word
+
+- 新增 Conversation IPC/preload/TypeScript 契约，依赖工作区数据库就绪后注册。
+- 复用现有 Markdown 转 Word 基础能力新增单条回答导出，不进入技术方案 Store、outline 完整性检查或“内容由 AI 生成”链路。
+
+### 22.4 T190 工作台 UI
+
+- 在“标书生成”和“模板设置”之间新增“对话模式”，实现线程列表、消息流、附件托盘、输入与停止、图标快捷操作、删除确认和响应式双栏/抽屉。
+- 复用 `MarkdownRenderer`、Radix Dialog/Tooltip、Toast 和全局 CSS；不显示模式、模型、推理、内部路径或右侧栏。
+
+### 22.5 T191 验证门
+
+- 聚焦 Node 测试覆盖 Prompt、Store、附件、会话服务、IPC 与单条 Word；受改 CJS 执行 `node --check`，Renderer 执行 `npm.cmd run build`。
+- 完整重启 Electron 后验证入口、历史恢复、10000/10001 边界、附件、流式/停止、快捷操作和单条 Word；真实模型和文件解析依赖当前本机配置。
+- 不打包、不提交、不推送、不发布。
+
+### 22.6 T195 图片附件
+
+- 文件选择支持 PNG、JPG/JPEG、WebP、GIF、BMP；Main 复用 Pi 现有图片转换与压缩能力规范化，不增加依赖。
+- 当前文本模型即多模态模型，图片以独立多模态内容随当前问题发送；模型明确返回不支持图片时复用既有 AI 错误弹窗。

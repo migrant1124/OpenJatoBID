@@ -1,8 +1,58 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { createPiJsonValidationTool } = require('./piJsonValidationTool.cjs');
 const { createPiRetryErrorNormalizer } = require('./piRetryErrorNormalizer.cjs');
 const { createPiUserQuestionTool } = require('./piUserQuestionTool.cjs');
 
 let piModulesPromise = null;
+
+function ensureInsideWorkspace(workspaceDir, targetPath) {
+  const root = path.resolve(workspaceDir);
+  const target = path.resolve(targetPath);
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error('只允许读取当前对话工作区内的文件。');
+  return target;
+}
+
+function createConversationReadOnlyTools(codingAgent, workspaceDir) {
+  async function guardedPath(targetPath) {
+    const lexical = ensureInsideWorkspace(workspaceDir, targetPath);
+    const [realRoot, realTarget] = await Promise.all([fs.realpath(workspaceDir), fs.realpath(lexical)]);
+    return ensureInsideWorkspace(realRoot, realTarget);
+  }
+  const readOperations = {
+    access: async (targetPath) => fs.access(await guardedPath(targetPath)),
+    readFile: async (targetPath) => fs.readFile(await guardedPath(targetPath)),
+  };
+  const lsOperations = {
+    exists: async (targetPath) => guardedPath(targetPath).then(() => true, () => false),
+    stat: async (targetPath) => fs.stat(await guardedPath(targetPath)),
+    readdir: async (targetPath) => fs.readdir(await guardedPath(targetPath)),
+  };
+  const findOperations = {
+    exists: lsOperations.exists,
+    async glob(pattern, searchDir, options) {
+      const root = await guardedPath(searchDir);
+      const results = [];
+      async function visit(directory) {
+        for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+          if (entry.name === '.git' || entry.name === 'node_modules') continue;
+          const fullPath = ensureInsideWorkspace(root, path.join(directory, entry.name));
+          const relative = path.relative(root, fullPath).replace(/\\/g, '/');
+          if (entry.isDirectory()) await visit(fullPath);
+          else if (path.matchesGlob(relative, pattern) || path.matchesGlob(entry.name, pattern)) results.push(fullPath);
+          if (results.length >= options.limit) return;
+        }
+      }
+      await visit(root);
+      return results;
+    },
+  };
+  return [
+    codingAgent.createReadToolDefinition(workspaceDir, { autoResizeImages: false, operations: readOperations }),
+    codingAgent.createFindToolDefinition(workspaceDir, { operations: findOperations }),
+    codingAgent.createLsToolDefinition(workspaceDir, { operations: lsOperations }),
+  ];
+}
 
 // 延迟加载 ESM Pi SDK，供 CommonJS Electron Main 复用。
 function loadPiModules() {
@@ -27,7 +77,7 @@ function normalizeOutputLimit(contextLength) {
 }
 
 // 创建完全内存化的 Pi Session，不读取外部配置或上下文文件。
-async function createPiSession({ workspaceDir, environment, proxyInfo, config, timeoutMs, jsonValidationSchemas, requestUserQuestion }) {
+async function createPiSession({ workspaceDir, environment, proxyInfo, config, timeoutMs, jsonValidationSchemas, requestUserQuestion, mode = 'task', requestedThinkingLevel = 'off', sessionInstructions }) {
   const { codingAgent, piAi, typebox } = await loadPiModules();
   const credentials = new piAi.InMemoryCredentialStore();
   const modelsStore = new piAi.InMemoryModelsStore();
@@ -44,14 +94,14 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     models: [{
       id: 'default',
       name: 'Yibiao Current Text Model',
-      reasoning: false,
-      input: ['text'],
+      reasoning: mode === 'conversation',
+      input: mode === 'conversation' ? ['text', 'image'] : ['text'],
       contextWindow: normalizeContextLimit(config.context_length_limit),
       maxTokens: normalizeOutputLimit(config.context_length_limit),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       compat: {
         supportsDeveloperRole: false,
-        supportsReasoningEffort: false,
+        supportsReasoningEffort: mode === 'conversation',
         supportsUsageInStreaming: false,
         maxTokensField: 'max_tokens',
       },
@@ -64,11 +114,11 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
   const settingsManager = codingAgent.SettingsManager.inMemory({
     defaultProvider: 'yibiao',
     defaultModel: 'default',
-    defaultThinkingLevel: 'off',
+    defaultThinkingLevel: requestedThinkingLevel,
     defaultProjectTrust: 'never',
     retry: { enabled: true, provider: { maxRetries: 0, timeoutMs } },
     compaction: { enabled: true },
-    images: { autoResize: false, blockImages: true },
+    images: { autoResize: false, blockImages: mode !== 'conversation' },
     enableInstallTelemetry: false,
     enableAnalytics: false,
     shellPath: environment.shellPath,
@@ -85,7 +135,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     noPromptTemplates: true,
     noThemes: true,
     agentsFilesOverride: () => ({
-      agentsFiles: [{ path: '<yibiao-agent-workspace>', content: environment.instructions }],
+      agentsFiles: [{ path: '<yibiao-agent-workspace>', content: sessionInstructions || environment.instructions }],
     }),
     systemPromptOverride: () => undefined,
     appendSystemPromptOverride: () => [],
@@ -109,14 +159,16 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     Type: typebox.Type,
     requestUserQuestion,
   }));
+  const conversationMode = mode === 'conversation';
+  const conversationReadOnlyTools = conversationMode ? createConversationReadOnlyTools(codingAgent, workspaceDir) : [];
   const { session } = await codingAgent.createAgentSession({
     cwd: workspaceDir,
     agentDir: environment.layout.agentDir,
     model,
     modelRuntime,
-    thinkingLevel: 'off',
-    tools: ['read', 'bash', 'edit', 'write', 'find', 'ls', 'json-validation', 'ask-user'],
-    customTools: [bashTool, jsonValidationTool, userQuestionTool],
+    thinkingLevel: requestedThinkingLevel,
+    tools: conversationMode ? ['read', 'find', 'ls'] : ['read', 'bash', 'edit', 'write', 'find', 'ls', 'json-validation', 'ask-user'],
+    customTools: conversationMode ? conversationReadOnlyTools : [bashTool, jsonValidationTool, userQuestionTool],
     resourceLoader,
     settingsManager,
     sessionManager: codingAgent.SessionManager.inMemory(workspaceDir),
@@ -144,11 +196,16 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
       prompts: resourceLoader.getPrompts().prompts.map((item) => item.name),
       extensions: resourceLoader.getExtensions().extensions.map((item) => item.path),
       active_tools: session.getActiveToolNames(),
+      mode,
+      requested_thinking_level: requestedThinkingLevel,
+      effective_thinking_level: requestedThinkingLevel,
     },
   };
 }
 
 module.exports = {
+  createConversationReadOnlyTools,
   createPiSession,
+  ensureInsideWorkspace,
   loadPiModules,
 };
