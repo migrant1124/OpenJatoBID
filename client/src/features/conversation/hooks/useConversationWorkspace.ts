@@ -32,11 +32,13 @@ export function useConversationWorkspace() {
   const activeThreadRef = useRef(activeThreadId);
   const snapshotRef = useRef(snapshot);
   const failedConversionRef = useRef('');
+  const deletingThreadsRef = useRef(false);
   activeThreadRef.current = activeThreadId;
   snapshotRef.current = snapshot;
 
   const loadThreads = useCallback(async (search = '', preferredId = activeThreadRef.current) => {
     let list = await conversationApi().listThreads({ query: search });
+    if (deletingThreadsRef.current) return '';
     if (!list.length && !search) {
       const created = await conversationApi().createThread();
       list = [created];
@@ -73,6 +75,7 @@ export function useConversationWorkspace() {
 
   const applyEvent = useCallback((event: ConversationEvent) => {
     if (event.type === 'thread-list-changed') {
+      if (deletingThreadsRef.current) return;
       void loadThreads(query);
       return;
     }
@@ -168,10 +171,16 @@ export function useConversationWorkspace() {
   }, [activeThreadId, loadThreads, query]);
 
   const deleteThreads = useCallback(async (threadIds: string[]) => {
-    for (const threadId of new Set(threadIds)) await conversationApi().deleteThread({ threadId });
+    deletingThreadsRef.current = true;
     setSnapshot(null);
     setActiveThreadId('');
-    await loadThreads(query, '');
+    activeThreadRef.current = '';
+    try {
+      for (const threadId of new Set(threadIds)) await conversationApi().deleteThread({ threadId });
+    } finally {
+      deletingThreadsRef.current = false;
+      await loadThreads(query, '');
+    }
   }, [loadThreads, query]);
 
   const selectAttachments = useCallback(async () => {
