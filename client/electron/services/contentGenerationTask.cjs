@@ -36,6 +36,14 @@ const {
   auditContentQuality,
   rankContentExpansionCandidates,
 } = require('./contentQualityAudit.cjs');
+const {
+  CONTENT_WRITING_POLICY,
+  FACT_AND_METHOD_POLICY,
+  PLANNING_POLICY,
+  REVISION_POLICY,
+  WRITING_POLICY_VERSION,
+  formatSectionWritingContext,
+} = require('./contentWritingPolicy.cjs');
 
 const DEFAULT_CONTEXT_LENGTH_LIMIT = 400000;
 const AGENT_CONTEXT_THRESHOLD_RATIO = 0.7;
@@ -105,7 +113,7 @@ function appendGlobalFactsMessage(messages, globalFactsText) {
   if (!content) return;
   messages.push({
     role: 'user',
-    content: `全局事实变量（正文涉及时优先使用这些变量值，避免各章节随机变化）：\n${content}`,
+    content: `全局事实变量（用于约束准确性；正文涉及时优先使用变量值，不要求逐项写入）：\n${content}`,
   });
 }
 
@@ -114,7 +122,7 @@ function appendSelectedFactsMessage(messages, selectedFactsText) {
   if (!content) return;
   messages.push({
     role: 'user',
-    content: `本章节需要使用的全局事实变量（正文涉及时优先使用这些变量值，保证全文一致）：\n${content}`,
+    content: `本章节事实约束（正文涉及时优先使用变量值，保证全文一致；不作为必须逐项输出的清单）：\n${content}`,
   });
 }
 
@@ -336,6 +344,27 @@ function extractContentTableBlocks(content) {
 
 function containsContentTable(content) {
   return extractContentTableBlocks(content).length > 0;
+}
+
+function assertRestoredRichContentPreserved(originalContent, candidateContent) {
+  const original = normalizeNewlines(normalizeGeneratedMarkdown(originalContent));
+  const candidate = normalizeNewlines(normalizeGeneratedMarkdown(candidateContent));
+  const expectedTables = extractContentTableBlocks(original).map((table) => table.text);
+  const actualTableCounts = new Map();
+  for (const table of extractContentTableBlocks(candidate)) {
+    actualTableCounts.set(table.text, (actualTableCounts.get(table.text) || 0) + 1);
+  }
+  for (const table of expectedTables) {
+    const remaining = actualTableCounts.get(table) || 0;
+    if (!remaining) throw new Error('原方案优化结果缺少或改写了底稿中的表格或图片引用');
+    actualTableCounts.set(table, remaining - 1);
+  }
+
+  const imagePatterns = [/!\[[^\]]*\]\([^)]*\)/g, /<img\b[^>]*>/gi];
+  const collectImages = (content) => imagePatterns.flatMap((pattern) => content.match(pattern) || []).sort();
+  if (JSON.stringify(collectImages(original)) !== JSON.stringify(collectImages(candidate))) {
+    throw new Error('原方案优化结果缺少、增加或改写了底稿中的表格或图片引用');
+  }
 }
 
 function createTableCleanupBatches(tables) {
@@ -688,33 +717,38 @@ function validateContentPlan(plan) {
 }
 
 function formatContentPlanForPrompt(plan) {
+  const optional = (label, values) => (values || []).length ? `${label}：${values.join('；')}` : '';
+  const boundaries = plan.cross_section_boundaries || {};
   const lines = [
     `写作类型：${plan.writing_profile || 'standard'}`,
     `章节职责：${plan.section_role || plan.writing_focus || '围绕当前章节标题和描述展开'}`,
-    `评分点：${plan.scoring_point_ids?.join('、') || '无'}`,
-    `增值锚点：${plan.value_anchor_ids?.join('、') || '无'}`,
-    `必须回答：${plan.must_answer_questions?.join('；') || '无'}`,
-    `关键结论：${plan.key_claims?.join('；') || '无'}`,
-    `实施步骤：${plan.implementation_steps?.join('；') || '无'}`,
-    `量化细节：${plan.quantitative_details?.join('；') || '无'}`,
-    `交付与验收：${[...(plan.deliverables || []), ...(plan.acceptance_criteria || [])].join('；') || '无'}`,
-    `证据要求：${plan.evidence_requirements?.join('；') || '无'}`,
-    `章节边界：负责 ${plan.cross_section_boundaries?.owns?.join('、') || '当前章节'}；不重复 ${plan.forbidden_repetition?.join('、') || '其他章节已承担内容'}`,
+    optional('评分点', plan.scoring_point_ids),
+    optional('增值锚点', plan.value_anchor_ids),
+    optional('必须回答', plan.must_answer_questions),
+    optional('关键结论', plan.key_claims),
+    optional('方法素材与必要顺序', plan.implementation_steps),
+    optional('有依据的量化细节', plan.quantitative_details),
+    optional('交付与验收', [...(plan.deliverables || []), ...(plan.acceptance_criteria || [])]),
+    optional('证据要求', plan.evidence_requirements),
+    optional('本节负责', boundaries.owns),
+    optional('其他章节负责，本节避免完整展开', boundaries.excludes),
+    optional('相关章节ID', boundaries.related_node_ids),
+    optional('禁止无必要复述', plan.forbidden_repetition),
     `目标篇幅：${plan.target_words?.min || 0}/${plan.target_words?.preferred || 0}/${plan.target_words?.max || 0} 字`,
-    `事实变量：${plan.facts?.titles?.length ? plan.facts.titles.join('；') : '无'}`,
-    `表格任务：${plan.table_briefs?.map((item) => item.title).join('、') || (plan.table.needed ? plan.table.purpose : '无')}`,
-    `图片任务：${plan.illustration_briefs?.map((item) => item.title).join('、') || '无'}`,
-    `原方案还原：${plan.original_material?.restored ? `已还原 ${plan.original_material.restored_chars || 0} 字` : '未还原'}`,
-  ];
+    optional('事实约束变量', plan.facts?.titles),
+    optional('表格任务', plan.table_briefs?.length ? plan.table_briefs.map((item) => item.title) : (plan.table?.needed ? [plan.table.purpose] : [])),
+    optional('图片任务', plan.illustration_briefs?.map((item) => item.title)),
+    ...(plan.original_material?.restored ? [`原方案还原：已还原 ${plan.original_material.restored_chars || 0} 字`] : []),
+  ].filter(Boolean);
   return lines.join('\n');
 }
 
 function buildWritingProfileRequirement(plan) {
   if (plan?.writing_profile === 'creative-proposal') {
-    return '本节为创意策划：必须体现客户特点、目标受众、核心主题、创意策略、执行载体、传播节奏、现场或空间设计及效果评估；未确认的品牌、案例、人员和数量必须标记为待确认。';
+    return '本节为创意策划：结合本节需要体现客户特点、目标受众、核心主题、创意策略、执行载体、传播节奏、现场或空间设计及效果评估；没有资料依据的品牌、案例、人员和数量不得编造。';
   }
   if (plan?.writing_profile === 'deep') {
-    return '本节为深度写作：先实质响应招标要求，再展现增值设计；每项措施尽量说明适用场景、执行动作、责任协同、频次或时限、参数/阈值、正常与异常边界、输出记录以及验收关闭方式；流程必须体现输入、处理、判断、升级、输出和闭环。';
+    return '本节为深度写作：先实质响应招标要求，再展现增值设计；只对重要且适用的环节补充条件、异常处理、责任协同或交付检查，不机械罗列人员、频次、参数、记录和验收。';
   }
   return '本节按标准写作合同展开，不得重复其他章节已明确承担的内容。';
 }
@@ -739,13 +773,17 @@ function buildTableCleanupMessages({ chapter, tables }) {
       role: 'user',
       content: `你是投标技术方案正文编辑助手。请把指定小节中的表格转换为普通文字描述。
 
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
+
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown 代码围栏。
-2. 必须逐个处理输入中的 table_id；允许按表格内容改写为普通段落或普通列表。
+2. 应逐个处理输入中的 table_id；允许按表格内容改写为普通段落或普通列表。
 3. 不改变原文意思，不删除数字、参数、工期、标准、职责、流程、承诺、验收要求、频次和数量。
 4. replacement_text 只写用于替换该表格块的正文片段，不返回完整小节正文。
 5. replacement_text 严禁包含 Markdown 表格、HTML <table>、代码块、章节标题或伪目录标题。
-6. 如表格本身为空或无法理解，也要用一句普通文字概括其表达意图，不要返回空字符串。
+6. 如表格本身为空、信息不足或无法安全理解，省略对应 table_id；程序会保留原表格并记录跳过，禁止猜测或编造说明。
 
 返回格式：
 {
@@ -822,6 +860,9 @@ function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapt
       role: 'system',
       content: `你是投标技术方案正文编排助手。请根据章节上下文判断本小节最适合的表达方式。
 
+${PLANNING_POLICY}
+${FACT_AND_METHOD_POLICY}
+
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown。
 2. ${tablePlanningAllowed ? '由你自行判断是否适合使用表格，判断要克制、合情合理，不要为了形式而硬插。' : '本次不编排表格，table.needed 必须为 false。'}
@@ -829,10 +870,11 @@ function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapt
 4. ${tablePlanningAllowed ? '表格仅在能明显提升表达清晰度时使用，例如归纳职责、步骤、参数、风险、措施、成果等。' : '不要为了满足 JSON 格式而编造表格目的。'}
 5. knowledge.item_ids 只能从参考知识库轻量条目的 id 中选择；可以多选，可以为空数组；不要编造 id，不要输出 reason。
 6. facts.titles 只能从全局事实变量标题清单中选择；请选择编写本章节正文时会用到的变量组标题，可以多选，可以为空数组；不要编造标题，不要输出具体变量内容。
-7. 必须返回完整的 SectionWritingContract：章节职责、评分点、增值锚点、必须回答的问题、实施步骤、量化细节、交付物、验收、证据、边界、表图 Brief 与目标篇幅都不得缺失。
+7. 必须返回完整的 SectionWritingContract 结构；不适用的评分点、量化、交付物、验收、证据和表图 Brief 使用空数组，不得为了填满字段编造内容。
 8. writing_profile 固定为“${writingProfile || 'standard'}”；评分点和增值锚点只能从二级章节任务书提供的 id 中选择；不得把其他章节的职责复制到当前章节。
-9. 深度写作必须把触发条件、动作、责任、时限/频次、边界、产物和验收写入合同；创意策划还必须覆盖客户特点、受众、主题、策略、载体、节奏和效果评估。
-10. 编排判断必须结合招标文件关键信息和全局事实变量标题，不要规划会造成时间、地点、人员、设备、标准或服务承诺前后不一致的表达。`,
+9. 深度写作只规划当前章节需要且有资料依据的条件、动作、责任、边界、产物或验收，不机械补齐时限、频次和参数；创意策划按当前章节需要选择客户特点、受众、主题、策略、载体、节奏和效果评估。
+10. 编排判断必须结合招标文件关键信息和全局事实变量标题，不要规划会造成时间、地点、人员、设备、标准或服务承诺前后不一致的表达。
+11. 同级职责、排除主题和相关节点关系必须写入 cross_section_boundaries；项目背景和事实标题不是每节都要复述的正文任务。`,
     },
   ];
 
@@ -842,7 +884,7 @@ function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapt
 ${renderKnowledgeItemsForPrompt(knowledgeItems)}`,
   });
 
-  messages.push({ role: 'user', content: `招标文件关键信息（用于判断正文需要引用哪些事实）：\n${formatBidKeyInfoForPrompt(projectOverview, bidAnalysisFactsText)}` });
+  messages.push({ role: 'user', content: `项目背景与招标关键信息（用于理解和事实约束，不要求逐节复述）：\n${formatBidKeyInfoForPrompt(projectOverview, bidAnalysisFactsText)}` });
   if (String(globalFactTitlesText || '').trim()) {
     messages.push({ role: 'user', content: `Step04 全局事实变量标题清单（编排时只能选择标题，不要输出具体变量内容）：\n${globalFactTitlesText}` });
   }
@@ -889,11 +931,11 @@ JSON 格式：
   "value_anchor_ids": ["本小节采用的已接受增值锚点 id"],
   "must_answer_questions": ["评委必须看到的具体回答"],
   "key_claims": ["可由当前资料支持的核心结论"],
-  "implementation_steps": ["执行步骤、流程或机制"],
-  "quantitative_details": ["参数、频次、阈值或待确认量化项"],
+  "implementation_steps": ["本节适用的执行动作、处理方式或必要顺序"],
+  "quantitative_details": ["仅填写资料已有且本节适用的参数、频次或阈值；否则为空数组"],
   "deliverables": ["输出记录、文档或交付物"],
   "acceptance_criteria": ["检查、验收或关闭方式"],
-  "evidence_requirements": ["需要的证明材料或待确认信息"],
+  "evidence_requirements": ["资料明确要求且本节需要的证明材料；否则为空数组"],
   "cross_section_boundaries": { "owns": ["本节负责内容"], "excludes": ["其他章节负责内容"], "related_node_ids": ["相关目录 id"] },
   "knowledge": {
     "item_ids": ["从参考知识库轻量条目中选择的 id；没有合适条目时返回空数组"]
@@ -921,7 +963,7 @@ function formatKnowledgeContentsForPrompt(contents) {
     .join('\n\n');
 }
 
-function buildChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, preSectionInstruction }) {
+function buildChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, preSectionInstruction, sectionContextText, preserveExistingRichContent = false }) {
   const chapterId = chapter.id || 'unknown';
   const chapterTitle = chapter.title || '未命名章节';
   const chapterDescription = chapter.description || '';
@@ -931,53 +973,40 @@ function buildChapterContentMessages({ chapter, projectOverview, selectedFactsTe
       role: 'system',
       content: `你是一个专业的标书编写专家，负责为投标文件的技术标部分生成具体内容。
 
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+
 要求：
 1. 内容要专业、准确，与章节标题和描述保持一致。
 2. 这是技术方案，不是宣传报告，注意朴实无华，不要假大空。
-3. 语言要正式、规范，符合标书写作要求，但不要使用奇怪的连接词，不要让人觉得内容像是 AI 生成的。
+3. 语言正式、规范、自然；不用空泛形容词、重复表态或项目背景凑篇幅。
 4. 内容要详细具体，避免空泛的描述。
 5. 围绕当前章节标题、描述和正文编排重点展开，保持内容聚焦。
-6. ${tableAllowed ? '可以使用 Markdown 段落、列表和表格；表格必须服务于内容表达，不要为了形式硬插。' : '只能使用 Markdown 段落、普通列表和加粗引导语，严禁输出 Markdown 表格或 HTML 表格。'}
-7. ${tableAllowed ? '正文只生成文字、列表、表格等内容，配图由系统另行处理。' : '正文只生成文字和普通列表，配图由系统另行处理。'}
-8. 严禁输出图表代码块、外部图表链接或图片 Markdown；配图由系统另行处理。
+6. ${preserveExistingRichContent ? '底稿已有的 Markdown/HTML 表格必须原样保留；是否新增表格仍按正文编排决策执行。' : tableAllowed ? '可以使用 Markdown 段落、列表和表格；表格必须服务于内容表达，不要为了形式硬插。' : '只能使用 Markdown 段落、普通列表和加粗引导语，严禁输出 Markdown 表格或 HTML 表格。'}
+7. ${tableAllowed ? '正文可以使用文字、列表和计划要求的表格。' : '除底稿中必须原样保留的表格外，正文只使用文字和普通列表。'}
+8. ${preserveExistingRichContent ? '底稿已有的图片 Markdown 或 HTML img 标签必须原样保留，不新增图片、图表代码块或外部图表链接。' : '严禁输出图表代码块、外部图表链接或图片 Markdown；配图由系统另行处理。'}
 9. ${tableAllowed ? '表格单元格内如有多项内容，优先使用编号、顿号、分号或短句，不要使用 HTML <br> 标签。' : '如需表达多项参数、职责、流程或措施，请改用分段文字或普通列表，不要用表格模拟。'}
 10. 严禁使用 Markdown 标题语法（#、##、###、####、#####、######），也不要生成与当前章节同级或下级的伪目录标题。
 11. 如需在正文中分层表达，只能使用普通段落、无编号列表、表格或无编号加粗引导语，例如 **实施要点：**。
 12. 加粗引导语只允许写简短主题词，禁止使用任何形式的编号。
 13. 只有步骤、流程、时间顺序、操作顺序等连续性非常强的内容，才可以使用有序列表；其他分段一律使用自然段、无编号列表或无编号加粗引导语，禁止使用任何形式的编号。
 14. 直接返回章节内容，不生成标题，不要任何额外说明。
-15. 如果本章节需要使用的全局事实变量中包含相关内容，必须优先使用变量值，不得前后矛盾。
-16. 仅使用本章节提供的全局事实变量；未提供时不要主动编造具体人员、周期、质保、品牌、型号等会影响全文一致性的承诺。
-17. 【去AI味核心规则】强制禁用以下AI高频词和连接词：
-    - 禁止使用：首先、其次、最后、此外、值得一提的是、不仅...而且、一方面...另一方面、总的来说、总而言之。
-    - 禁止使用形容词组合：高度的、显著的、极大的、深入的、全面的（除非紧跟具体数值）。
-    - 禁止使用“本项目将”开头（被动将来时），一律改为“我们采用/我们配置/我们基于”（主动现在时）。
-    - 禁止使用“我们将”“我们会”“我们可以”“我们能够”“我们能够为”“我们能够提供”“我们能够实现”“我们能够满足”“我们能够保证”等被动将来时，必须改为“我们采用/我们配置/我们基于”（主动现在时）。
-18.【短句爆破】每句话不超过30个汉字。如果一句超过30字，必须用句号（。）拆分成两句。
-     禁止使用逗号连接超过3个分句的长难句。
-19.【取消铺垫，直击痛点】段落开头禁止使用“为了...”、“基于...”等目的状语开头。
-    必须直接用“事实/动作”开头。例如：不准写“为了保障系统稳定，我们...”，必须写“我们部署了双机热备，RTO≤30分钟”。
-20.【强制主动语态】全文主语必须是“我们”、“我方”或具体的“系统/设备名称”。
-     禁止使用“...被...”、“...得以...”、“...得到了...”等被动及弱动词结构。
-21.【风控视角替代服务视角】在描述优势时，不要只说“我们能做什么”，要说“我们如何帮业主规避了哪些风险/损失”。
-     例如：不说“我们有应急方案”，说“我们针对市电中断和光缆挖断两种情况，分别配置了柴油机和4G备份链路”。
-23. 【词汇替换映射表】遇到以下词强制替换：
-     确保 → 控制在...以内 / 满足...阈值
-     加强 → 配置了... / 启用了...
-     完善 → 覆盖了...场景 / 补充了...接口
-     丰富 → 提供了...种 / 扩展了...容量
-24. ${buildWritingProfileRequirement(contentPlan)}
-25. 表格和图片只承担合同中定义的独立信息功能，不得与正文简单重复；不得重复合同 forbidden_repetition 中的内容。`,
+15. 本章节事实变量只在正文涉及相应事项时使用；未提供时不得主动编造具体人员、周期、质保、品牌、型号等承诺。
+16. ${buildWritingProfileRequirement(contentPlan)}
+17. 表格和图片只承担合同中定义的独立信息功能，不得与正文简单重复；不得重复合同 forbidden_repetition 中的内容。`,
     },
   ];
 
   if (String(projectOverview || '').trim()) {
-    messages.push({ role: 'user', content: `项目概述信息：\n${projectOverview}` });
+    messages.push({ role: 'user', content: `项目背景（只用于理解项目；除当前章节确有需要外不要复述）：\n${projectOverview}` });
   }
   if (String(preSectionInstruction || '').trim()) {
     messages.push({ role: 'user', content: String(preSectionInstruction || '').trim() });
   }
   appendSelectedFactsMessage(messages, selectedFactsText);
+  if (String(sectionContextText || '').trim()) {
+    messages.push({ role: 'user', content: `章节分工与相关上下文：\n${String(sectionContextText).trim()}` });
+  }
 
   if (knowledgeContents?.length) {
     messages.push({
@@ -1013,14 +1042,14 @@ function buildChapterContentMessages({ chapter, projectOverview, selectedFactsTe
 章节标题: ${chapterTitle}
 章节描述: ${chapterDescription}
 
-请结合项目概述信息、本章节全局事实变量、参考正文素材和正文编排决策，围绕当前章节标题、描述和写作重点生成详细的专业内容。
+请结合项目背景、事实约束、章节分工、参考正文素材和正文编排决策，围绕当前章节职责和必须回答的问题生成专业内容。背景与事实用于理解和准确性约束，不要求逐项写入。
 直接返回编写的正文内容，不要输出标题、Markdown 标题、带任何形式编号的加粗引导语、伪目录标题、解释、总结等任何其他内容`,
   });
 
   return messages;
 }
 
-function buildRestoredChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent }) {
+function buildRestoredChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText }) {
   const messages = buildChapterContentMessages({
     chapter,
     projectOverview,
@@ -1028,6 +1057,8 @@ function buildRestoredChapterContentMessages({ chapter, projectOverview, selecte
     regenerateRequirement,
     contentPlan,
     knowledgeContents,
+    sectionContextText,
+    preserveExistingRichContent: true,
     preSectionInstruction: `当前章节已经从用户原方案中还原出正文底稿。该底稿是用户已经写好的真实技术方案内容，必须作为本章节的基础保留。
 
 处理要求：
@@ -1220,6 +1251,10 @@ ${formatOriginalSegmentsForPrompt(originalSegments)}`,
 function buildAgentRestoredChapterContentPrompt() {
   return `你是投标技术方案正文优化扩写 Agent。当前章节已经从用户原方案中还原出正文底稿，该底稿是用户已经写好的真实技术方案内容，必须作为本章节的基础保留。
 
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
+
 workspace 文件：
 - chapter-context.md：当前章节信息、项目概述、本章节全局事实变量、用户额外要求和正文编排决策。
 - restored-content.md：已还原正文底稿。
@@ -1232,7 +1267,7 @@ workspace 文件：
 4. 结合 chapter-context.md 中的项目概述、全局事实变量和正文编排决策；如存在冲突，以全局事实变量为准。
 5. 可以吸收 knowledge-contents.md 中适合当前章节的技术素材，但不要提到“知识库”“历史文档”“参考资料”或素材来源。
 6. 不要提到“原方案”“历史文档”“用户原文”或“底稿”。
-7. 严禁输出图表代码块、外部图表链接或图片 Markdown。
+7. restored-content.md 中已有的 Markdown/HTML 表格、图片 Markdown 和 HTML img 标签必须原样保留；不得新增图片、图表代码块或外部图表链接。
 8. restored-content.md 可能包含原方案 Markdown 标题行或编号标题，例如“# 第一章...”“## 第一节...”“### 二、...”“（一）...”，这些只作为章节定位线索，不属于最终正文。
 9. 不要输出章节标题、Markdown 标题、编号标题、解释、总结或过程说明；当前章节标题会由程序统一渲染。
 10. 不要修改业务数据库，程序会读取你的输出文件后自行写回。
@@ -1240,7 +1275,7 @@ workspace 文件：
 最终请把当前小节完整正文写入 optimized-section.md。该文件只能包含正文内容，不要包含标题或说明。`;
 }
 
-function buildAgentRestoredChapterContentFiles({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent }) {
+function buildAgentRestoredChapterContentFiles({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText }) {
   return [
     {
       path: 'chapter-context.md',
@@ -1253,6 +1288,9 @@ function buildAgentRestoredChapterContentFiles({ chapter, projectOverview, selec
 
 # 项目概述信息
 ${projectOverview || '未提供'}
+
+# 章节分工与相关上下文
+${String(sectionContextText || '').trim() || '无'}
 
 # 本章节需要使用的全局事实变量
 ${String(selectedFactsText || '').trim() || '未提供'}
@@ -1616,7 +1654,7 @@ ${formatOutlineExpansionContext(outlineItems || [], 1, [], restoredNodeIds)}`,
   ];
 }
 
-function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan }) {
+function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan, sectionContextText }) {
   const { item, parentChapters, siblingChapters } = context;
   const chapterPath = [...(parentChapters || []), item]
     .map((chapter) => `${chapter.id || 'unknown'} ${chapter.title || '未命名章节'}`)
@@ -1630,6 +1668,10 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
     {
       role: 'user',
       content: `你是投标技术方案正文扩写助手。请只针对指定章节进行扩写，避免与其他章节重复。
+
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
 
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown 代码围栏。
@@ -1660,12 +1702,13 @@ function buildContentExpansionMessages({ outlineData, context, projectOverview, 
   ]
 }`,
     },
-    { role: 'user', content: `项目概述：\n${projectOverview || '未提供'}` },
+    { role: 'user', content: `项目背景（只用于理解项目；除当前章节确有需要外不要复述）：\n${projectOverview || '未提供'}` },
     { role: 'user', content: `完整目录：\n${formatOutlineForPrompt(outlineData.outline || [])}` },
     ...(contentPlan ? [{ role: 'user', content: `章节写作合同（本次只补强其中缺口）：\n${formatContentPlanForPrompt(contentPlan)}` }] : []),
     ...(String(selectedFactsText || '').trim() ? [{ role: 'user', content: `本章节需要使用的全局事实变量（扩写涉及这些内容时必须参考）：\n${selectedFactsText}` }] : []),
     { role: 'user', content: `当前章节路径：${chapterPath}\n当前章节描述：${item.description || ''}` },
     { role: 'user', content: `同级章节（扩写时避免重复）：\n${siblingLines || '无'}` },
+    ...(String(sectionContextText || '').trim() ? [{ role: 'user', content: `章节分工与相关上下文：\n${String(sectionContextText).trim()}` }] : []),
     { role: 'user', content: `当前章节原正文：\n${currentContent}` },
   { role: 'user', content: `当前章节统计字数：${currentWords}\n期望本章节扩写后至少达到：${targetWords}\n请返回局部扩写 JSON。` },
   ];
@@ -1718,6 +1761,23 @@ function validateContentExpansionOperations(value) {
   }
 }
 
+function normalizeAgentOriginalCoverageOperations(value, allowedSectionIds) {
+  const source = value?.result && typeof value.result === 'object' ? value.result : value || {};
+  const rawOperations = Array.isArray(source.operations) ? source.operations : [];
+  const allowed = allowedSectionIds instanceof Set ? allowedSectionIds : new Set(allowedSectionIds || []);
+  return {
+    operations: rawOperations.map((item, index) => {
+      const sectionId = singleLine(item?.section_id || item?.sectionId);
+      if (!sectionId || !allowed.has(sectionId)) throw new Error(`operations[${index}].section_id 无效：${sectionId || '空'}`);
+      const patch = normalizeContentExpansionOperation(item);
+      validateContentExpansionPatch(patch);
+      if (patch.operation === 'insert' && !patch.anchor) throw new Error(`operations[${index}].anchor 缺失`);
+      if (containsContentTable(patch.content) || /<img\b/i.test(patch.content)) throw new Error(`operations[${index}].content 不能包含表格或图片`);
+      return { section_id: sectionId, ...patch };
+    }),
+  };
+}
+
 function buildContentExpansionRepairMessages({ invalidContent, issues }, currentContent = '') {
   const issueLines = (issues || []).map((item, index) => `${index + 1}. ${item}`).join('\n');
   const currentContentBlock = String(currentContent || '').trim()
@@ -1727,6 +1787,8 @@ function buildContentExpansionRepairMessages({ invalidContent, issues }, current
     {
       role: 'user',
       content: `你是严格的 JSON 修复器。请把模型输出修复为“正文局部扩写”JSON。
+
+${REVISION_POLICY}
 
 必须满足：
 1. 顶层只能包含 operations，operations 为局部扩写操作数组。
@@ -2165,6 +2227,9 @@ function buildConsistencyRepairMessages({ context, conflicts, globalFactsText, b
       role: 'user',
       content: `你是投标技术方案正文一致性修复助手。请只针对当前小节返回局部精确替换 patch。
 
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
+
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown 代码围栏。
 2. 不要返回完整正文，只返回需要局部替换的 patches。
@@ -2440,6 +2505,10 @@ function buildOriginalCoverageRepairMessages({ target, coverageItems, currentCon
     {
       role: 'user',
       content: `你是投标技术方案正文原方案覆盖修复助手。请只针对当前小节返回一次局部补写 patch，用于补回原方案中缺失的实质内容。
+
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
 
 要求：
 1. 只返回 JSON，不要输出解释、总结或 Markdown 代码围栏。
@@ -3131,6 +3200,7 @@ function normalizeContentGenerationRuntime(value) {
     expansion_cycle_start_words: Math.max(0, Math.round(Number(source.expansion_cycle_start_words ?? source.expansionCycleStartWords) || 0)),
     target_item_id: String(source.target_item_id || source.targetItemId || '').trim(),
     regenerate_requirement: String(source.regenerate_requirement || source.regenerateRequirement || '').trim(),
+    writing_policy_version: String(source.writing_policy_version || source.writingPolicyVersion || WRITING_POLICY_VERSION),
     updated_at: source.updated_at || source.updatedAt || now(),
   };
 }
@@ -3450,6 +3520,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   const originalPlanCoverageRepairMode = isExpansionWorkflow && !targetItemId ? requestedOriginalPlanCoverageRepairMode : 'normal';
   const contentStats = {
     phase: 'planning',
+    writing_policy_version: WRITING_POLICY_VERSION,
     planning_total: 0,
     planning_completed: 0,
     generation_total: 0,
@@ -3483,6 +3554,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     quality_audit_uncovered_scoring_total: 0,
     quality_audit_deep_gap_total: 0,
     quality_audit_duplicate_total: 0,
+    quality_audit_fragmented_total: 0,
     table_cleanup_total: 0,
     table_cleanup_completed: 0,
     table_cleanup_rewritten: 0,
@@ -3546,6 +3618,13 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   const chapterWritingTasks = new Map();
   const planningFailedItemIds = new Set();
   let sections = createInitialSections(leaves, fullRegenerate ? {} : storedPlan.contentGenerationSections);
+  let stableSectionContentSnapshot = new Map();
+  function refreshStableSectionContentSnapshot() {
+    stableSectionContentSnapshot = new Map(leaves
+      .filter(({ item }) => sections[item.id]?.status === 'success' && String(sections[item.id]?.content || item.content || '').trim())
+      .map(({ item }) => [item.id, String(sections[item.id]?.content || item.content || '').trim()]));
+  }
+  refreshStableSectionContentSnapshot();
   const touchedItemIds = new Set(contentRuntime.touched_item_ids);
   let tasksToRun = leaves.filter(({ item }) => {
     const section = sections[item.id];
@@ -3805,6 +3884,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   writeDeveloperLog('content.task.started', {
+    writing_policy_version: WRITING_POLICY_VERSION,
     sections: leaves.map(({ item }) => ({ id: item.id, title: item.title || '未命名章节' })),
     tasks_to_run: tasksToRun.map(({ item }) => item.id),
   });
@@ -4138,6 +4218,23 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     return sections[item.id];
   }
 
+  function refreshSectionIfExternallyChanged(item, expectedContent) {
+    const latest = workspaceStore.loadTechnicalPlan();
+    const latestSection = latest?.contentGenerationSections?.[item.id];
+    if (!latestSection || normalizeNewlines(latestSection.content).trim() === normalizeNewlines(expectedContent).trim()) return false;
+    const latestContent = String(latestSection.content || '');
+    sections = withSection(sections, item, { ...latestSection, status: latestSection.status === 'running' ? 'success' : latestSection.status, content: latestContent });
+    outlineData = { ...outlineData, outline: updateOutlineItemContent(outlineData.outline, item.id, latestContent) };
+    logs = [...logs, `检测到正文生成期间用户已修改 ${item.id} ${item.title || '未命名章节'}，本轮模型结果未覆盖用户内容。`];
+    writeDeveloperLog('content.section.concurrent_edit', {
+      section_id: item.id,
+      expected_content_hash: textHash(expectedContent),
+      actual_content_hash: textHash(latestContent),
+      writing_policy_version: WRITING_POLICY_VERSION,
+    });
+    return true;
+  }
+
   function getStoredContentPlan(itemId) {
     return normalizeStoredContentPlan(storedContentPlans[itemId]);
   }
@@ -4204,6 +4301,28 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     });
     contentPlans.set(itemId, plan);
     return plan;
+  }
+
+  function getSectionWritingContext(context, plan) {
+    const siblingChapters = context?.siblingChapters || [];
+    const currentIndex = siblingChapters.findIndex((item) => item.id === context?.item?.id);
+    const relatedIds = new Set(plan?.cross_section_boundaries?.related_node_ids || []);
+    if (currentIndex > 0) relatedIds.add(siblingChapters[currentIndex - 1].id);
+    if (currentIndex >= 0 && currentIndex < siblingChapters.length - 1) relatedIds.add(siblingChapters[currentIndex + 1].id);
+    relatedIds.delete(context?.item?.id);
+    const siblings = siblingChapters.map((item) => {
+      const siblingPlan = contentPlans.get(item.id) || getStoredContentPlan(item.id)?.plan;
+      return { id: item.id, title: item.title, role: siblingPlan?.section_role || item.description || item.title };
+    });
+    return formatSectionWritingContext({
+      chapter: { id: context?.item?.id, title: context?.item?.title, role: plan?.section_role || context?.item?.description },
+      siblings,
+      exclusions: [...(plan?.cross_section_boundaries?.excludes || []), ...(plan?.forbidden_repetition || [])],
+      relatedExcerpts: [...relatedIds].map((itemId) => {
+        const item = siblingChapters.find((candidate) => candidate.id === itemId) || contextByItemId.get(itemId)?.item;
+        return { id: itemId, title: item?.title, content: stableSectionContentSnapshot.get(itemId) };
+      }),
+    });
   }
 
   function saveContentPlanForItem(itemId, plan) {
@@ -4340,6 +4459,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     const { item, parentChapters, siblingChapters } = context;
     const chapterWritingTask = getChapterWritingTask(context);
     const writingProfile = resolveWritingProfile(item);
+    const previousOriginalMaterial = originalMaterialFromStoredPlan(storedContentPlans[item.id]);
     let contentPlan;
 
     try {
@@ -4384,6 +4504,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     }
 
     contentPlan = applyWordControlTarget(contentPlan);
+    contentPlan = {
+      ...contentPlan,
+      original_material: previousOriginalMaterial,
+    };
     if (tableRequirement === 'none') {
       contentPlan = clearContentPlanTable(contentPlan);
     }
@@ -4652,9 +4776,16 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       originalMaterial = originalState.originalMaterial;
       const knowledgeContents = resolveKnowledgeContents(contentPlan.knowledge?.item_ids, knowledgeContentMap);
       const selectedFactsText = resolveSelectedFactsText(contentPlan, globalFacts);
+      const sectionWritingContext = getSectionWritingContext(context, contentPlan);
+      writeDeveloperLog('content.section.context', {
+        section_id: item.id,
+        writing_policy_version: WRITING_POLICY_VERSION,
+        context_chars: sectionWritingContext.text.length,
+        excerpt_node_ids: sectionWritingContext.excerpt_node_ids,
+      });
       const contentMessages = needsRestoredOptimization
-        ? buildRestoredChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent: previousContent })
-        : buildChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents });
+        ? buildRestoredChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent: previousContent, sectionContextText: sectionWritingContext.text })
+        : buildChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, sectionContextText: sectionWritingContext.text });
 
       let generatedContent;
       if (needsRestoredOptimization && shouldUseAgentForMessages(aiService, contentMessages)) {
@@ -4683,6 +4814,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
             contentPlan,
             knowledgeContents,
             restoredContent: previousContent,
+            sectionContextText: sectionWritingContext.text,
           }),
           eventPrefix: 'restored_optimization.agent',
           activityLabel: 'Agent 正在优化扩写已还原正文',
@@ -4709,7 +4841,10 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
       rawContent = needsRestoredOptimization ? generatedContent || '' : rawContent + (generatedContent || '');
 
-      content = stripRepeatedChapterTitle(normalizeGeneratedMarkdown(rawContent), item);
+      const nextContent = stripRepeatedChapterTitle(normalizeGeneratedMarkdown(rawContent), item);
+      if (needsRestoredOptimization) assertRestoredRichContentPreserved(previousContent, nextContent);
+      content = nextContent;
+      if (refreshSectionIfExternallyChanged(item, previousContent)) return;
       logs = [...logs, needsRestoredOptimization
         ? `原方案优化扩写完成：${item.id} ${item.title || '未命名章节'}`
         : `生成完成：${item.id} ${item.title || '未命名章节'}`];
@@ -5278,6 +5413,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     const desiredWords = Math.max(words + MIN_SECTION_EXPANSION_INCREMENT, targetRange.min, targetRange.preferred);
     const targetWords = Math.max(words, Math.min(targetRange.max, desiredWords));
     const selectedFactsText = resolveSelectedFactsText(contentPlan, globalFacts);
+    const sectionWritingContext = getSectionWritingContext(context, contentPlan);
     logs = [...logs, `开始扩写：${item.id} ${item.title || '未命名章节'}（当前 ${words} 字，目标 ${targetWords} 字）。`];
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
 
@@ -5292,6 +5428,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           currentWords: words,
           targetWords,
           contentPlan,
+          sectionContextText: sectionWritingContext.text,
         }),
         temperature: 0.7,
         logTitle: `正文扩写-${item.id}-${item.title || '未命名章节'}`,
@@ -5301,6 +5438,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         validator: validateContentExpansionOperations,
         repairMessagesBuilder: (contextForRepair) => buildContentExpansionRepairMessages(contextForRepair, content),
       });
+      if (refreshSectionIfExternallyChanged(item, content)) return;
       const nextContent = applyContentExpansionOperations(content, patch);
       const nextWords = countContentWords(nextContent);
       logs = [...logs, `扩写完成：${item.id} ${item.title || '未命名章节'}（${words} -> ${nextWords} 字）。`];
@@ -5364,8 +5502,8 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     if (!currentContent.trim() || currentWords === targetWords) return false;
     const patch = await aiService.collectJsonResponse({
       messages: [
-        { role: 'system', content: '你是投标技术文件正文编辑。只返回 JSON，不得删除事实、承诺、参数、表格或 Markdown 结构。' },
-        { role: 'user', content: `请${targetWords > currentWords ? '扩写' : '精简'}以下 AI 编制小节，使正文接近 ${targetWords} 字。保留原有标题层级、事实变量、评分响应和表格；只调整叙述详略，不要添加编造信息。\n\n返回格式：{"content":"完整 Markdown 正文"}\n\n小节：${context.item.id} ${context.item.title || ''}\n当前字数：${currentWords}\n目标字数：${targetWords}\n\n当前正文：\n${currentContent}` },
+        { role: 'system', content: `你是投标技术文件正文编辑。只返回 JSON，不得删除事实、承诺、参数、表格、图片引用或 Markdown 结构。\n\n${CONTENT_WRITING_POLICY}\n${FACT_AND_METHOD_POLICY}\n${REVISION_POLICY}` },
+        { role: 'user', content: `请${targetWords > currentWords ? '扩写' : '精简'}以下 AI 编制小节，使正文接近 ${targetWords} 字。原样保留已有表格和图片引用，并保留原有标题层级、事实变量和评分响应；只调整叙述详略，不要添加编造信息。\n\n返回格式：{"content":"完整 Markdown 正文"}\n\n小节：${context.item.id} ${context.item.title || ''}\n当前字数：${currentWords}\n目标字数：${targetWords}\n\n当前正文：\n${currentContent}` },
       ],
       temperature: 0.35,
       logTitle: `${label}-${context.item.id}-${context.item.title || '未命名章节'}`,
@@ -5376,7 +5514,9 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         if (!value.content) throw new Error('调整后的正文不能为空');
       },
     });
+    if (refreshSectionIfExternallyChanged(context.item, currentContent)) return false;
     const nextContent = patch.content;
+    assertRestoredRichContentPreserved(currentContent, nextContent);
     const nextWords = countContentWords(nextContent);
     if (nextWords === currentWords) return false;
     rememberTouchedItem(context.item.id);
@@ -5476,24 +5616,46 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function buildAgentOriginalCoverageRepairPrompt() {
-    return `请在当前工作目录中完成原方案覆盖修复，让 technical-plan.md 成为程序可继续解析和回写的最终正文文件。
+    return `请在当前工作目录中检查原方案覆盖缺口，并把局部补写操作写入 coverage-patches.json。
+
+${CONTENT_WRITING_POLICY}
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
 
 workspace 文件说明：
 - original-coverage-sources.md：每个章节对应需要保留的来源段，是判断原方案核心内容是否已保留的依据。
 - technical-plan.md：当前技术方案正文，包含章节标题、section id 和 yibiao-section-start / yibiao-section-end 标记。
 
 任务目标：
-检查并修复 technical-plan.md，使各章节正文尽量保留 original-coverage-sources.md 中对应来源段的实质内容。
+检查 technical-plan.md，使各章节正文尽量保留 original-coverage-sources.md 中对应来源段的实质内容；不要直接改写 technical-plan.md。
 
-工作方式由你自行决定。可以搜索、分段读取、建立索引、创建草稿或中间文件，并多轮编辑 technical-plan.md；不需要按固定顺序读取文件，也不需要在单次模型输出中完成全部修复。
+工作方式由你自行决定。可以搜索、分段读取、建立索引或创建草稿；最终只能把需要补写的局部操作写入 coverage-patches.json。
 
-最终 technical-plan.md 需要满足：
-- 保留所有章节编号、章节标题、HTML 注释标记和 section id。
-- 保留原章节结构，不新增、删除或重排章节。
-- 正文修改范围限定在 yibiao-section-start 和 yibiao-section-end 标记之间。
-- 补回来源段中的实质信息、技术路线、服务承诺、设备参数、人员安排、周期、验收、售后、实施方法等内容；不追求逐字一致。
-- 如果来源段与当前正文存在明显冲突，可以保留当前正文，后续会由全文一致性审计或人工核对处理。
-- 用户可见正文中不出现“原方案”“来源段”“用户原文”或类似过程性表述。`;
+coverage-patches.json 格式：
+{"operations":[{"section_id":"1.1.1","operation":"insert","anchor":"逐字复制 technical-plan.md 中唯一完整原文块，或 start/end","target_text":"replace 时逐字复制完整待替换块，insert 时留空","content":"新增或替换后的局部正文"}]}
+
+要求：
+- operation 只能是 insert 或 replace；无法安全补写时返回 {"operations":[]}。
+- insert 的 anchor、replace 的 target_text 必须逐字复制当前正文中的唯一完整原文块；不得使用摘要、近似文本或行号。
+- 不得选择或修改图片、代码块、Markdown/HTML 表格；不得返回完整小节或整份正文。
+- 只补回来源段中的实质信息；来源与当前正文冲突时不修复，留待后续一致性审计或人工核对。
+- content 中不出现“原方案”“来源段”“用户原文”或类似过程性表述。`;
+  }
+
+  function prepareAgentOriginalCoverageOperations(value, sectionIndex) {
+    const normalized = normalizeAgentOriginalCoverageOperations(value, new Set(sectionIndex.keys()));
+    const grouped = new Map();
+    for (const operation of normalized.operations) {
+      const operations = grouped.get(operation.section_id) || [];
+      operations.push(operation);
+      grouped.set(operation.section_id, operations);
+    }
+    const candidates = new Map();
+    for (const [sectionId, operations] of grouped) {
+      const section = sectionIndex.get(sectionId);
+      candidates.set(sectionId, applyContentExpansionOperations(section.originalContent, { operations }));
+    }
+    return { normalized, candidates };
   }
 
   function updateAgentOriginalCoverageProgress(step, label, extra = {}) {
@@ -5566,7 +5728,8 @@ workspace 文件说明：
           patch,
         });
 
-        const nextContent = applyContentExpansionPatch(currentContent, patch);
+        if (refreshSectionIfExternallyChanged(item, currentContent)) return { appliedCount: appliedTotal, failed: false, paused: false, skipped: true };
+        const nextContent = applyContentExpansionOperations(currentContent, { operations: [patch] });
         if (normalizeNewlines(nextContent).trim() === normalizeNewlines(currentContent).trim()) {
           failures = ['补写 patch 应用后正文没有变化'];
           writeDeveloperLog('original_coverage.repair.no_change', {
@@ -5697,19 +5860,16 @@ workspace 文件说明：
       const agentResult = await runAgentTaskWithRecoveredOutput({
         title: '原方案覆盖 Agent 修复',
         prompt: buildAgentOriginalCoverageRepairPrompt(),
-        output_file: 'technical-plan.md',
+        output_file: 'coverage-patches.json',
         files,
         timeout_ms: 30 * 60 * 1000,
         max_retries: 1,
         signal: agentAbortController.signal,
         validateOutput: (resultForValidation) => {
-          const repairedMarkdownForValidation = String(resultForValidation?.output_content || '').trim();
-          if (!repairedMarkdownForValidation) {
-            throw new Error('Agent 未返回修复后的 technical-plan.md');
-          }
-          const parsedSectionsForValidation = parseAgentSectionMarkdown(repairedMarkdownForValidation);
-          validateAgentConsistencySections(parsedSectionsForValidation, sectionIndex);
-          return { section_count: parsedSectionsForValidation.size };
+          const outputForValidation = String(resultForValidation?.output_content || '').trim();
+          if (!outputForValidation) throw new Error('Agent 未返回 coverage-patches.json');
+          const prepared = prepareAgentOriginalCoverageOperations(parseAgentJsonContent(outputForValidation), sectionIndex);
+          return { operation_count: prepared.normalized.operations.length };
         },
         onActivity: createAgentActivityProgressHandler(updateAgentOriginalCoverageProgress, 2, 'Agent 正在检查并补回原方案内容'),
       }, 'original_coverage.agent');
@@ -5724,20 +5884,31 @@ workspace 文件说明：
       }
       pauseIfRequested('正文生成已在原方案覆盖 Agent 修复结果回写前暂停，本次 Agent 输出未回写；继续后将重新执行。');
 
-      updateAgentOriginalCoverageProgress(3, '读取 Agent 修复后的正文');
-      const repairedMarkdown = String(agentResult?.output_content || '').trim();
-      if (!repairedMarkdown) {
+      updateAgentOriginalCoverageProgress(3, '读取 Agent 局部补写操作');
+      const patchJson = String(agentResult?.output_content || '').trim();
+      if (!patchJson) {
         writeDeveloperLog('original_coverage.agent.empty_output', { agent_result: agentResult });
-        throw new Error('Agent 未返回修复后的 technical-plan.md');
+        throw new Error('Agent 未返回 coverage-patches.json');
       }
 
       updateAgentOriginalCoverageProgress(4, '解析并校验 Agent 修复结果');
-      const parsedSections = parseAgentSectionMarkdown(repairedMarkdown);
-      validateAgentConsistencySections(parsedSections, sectionIndex);
+      const prepared = prepareAgentOriginalCoverageOperations(parseAgentJsonContent(patchJson), sectionIndex);
       pauseIfRequested('正文生成已在原方案覆盖 Agent 修复结果回写前暂停，本次 Agent 输出未回写；继续后将重新执行。');
 
       updateAgentOriginalCoverageProgress(5, '回写 Agent 修改的小节');
-      const applyResult = applyAgentConsistencySections(parsedSections, sectionIndex, new Set(sectionIndex.keys()));
+      const changedIds = [];
+      let skippedCount = sectionIndex.size - prepared.candidates.size;
+      for (const [sectionId, nextContent] of prepared.candidates) {
+        const section = sectionIndex.get(sectionId);
+        if (refreshSectionIfExternallyChanged(section.item, section.originalContent)) {
+          skippedCount += 1;
+          continue;
+        }
+        changedIds.push(sectionId);
+        rememberTouchedItem(sectionId);
+        saveSection(section.item, { status: 'success', content: nextContent, error: undefined }, nextContent, { logs });
+      }
+      const applyResult = { changedCount: changedIds.length, skippedCount, changedIds };
       contentStats.audit_agent_changed_sections = applyResult.changedCount;
       logs = [...logs, applyResult.changedCount
         ? `原方案覆盖 Agent 修复完成：已回写 ${applyResult.changedCount} 个小节（${applyResult.changedIds.join('、')}）。`
@@ -6010,27 +6181,38 @@ workspace 文件说明：
       const plan = getContentPlanForItem(context.item.id);
       if (plan) plans[context.item.id] = { plan };
     }
-    const review = auditContentQuality({
-      contexts: targets,
-      sections,
-      plans,
-      requirementResponseMatrix: storedPlan.requirementResponseMatrix,
-      outlineData,
-    });
+    let review;
+    try {
+      review = auditContentQuality({
+        contexts: targets,
+        sections,
+        plans,
+        requirementResponseMatrix: storedPlan.requirementResponseMatrix,
+        outlineData,
+      });
+    } catch (error) {
+      logs = [...logs, `本地写作质量诊断失败，已保留合法正文：${error.message || '未知错误'}。`];
+      writeDeveloperLog('content.quality.audit.error', { error: error.message || '未知错误' });
+      updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
+      return null;
+    }
     contentStats.phase = 'quality-auditing';
     contentStats.quality_audit_label = review.label;
     contentStats.quality_audit_chapter_total = review.chapter_synthesis.length;
     contentStats.quality_audit_uncovered_scoring_total = review.scoring_coverage.uncovered_scoring_point_ids.length;
     contentStats.quality_audit_deep_gap_total = review.executability.deep_gap_node_ids.length;
     contentStats.quality_audit_duplicate_total = review.editorial.duplicates.length;
+    contentStats.quality_audit_fragmented_total = review.editorial.fragmented_expressions?.length || 0;
     const findings = review.reviewer_simulation.overall_findings;
-    logs = [...logs, `章节统稿与${review.label}完成：${review.chapter_synthesis.length} 个二级章节，未覆盖评分点 ${contentStats.quality_audit_uncovered_scoring_total} 个，深度要素缺口 ${contentStats.quality_audit_deep_gap_total} 个，重复正文 ${contentStats.quality_audit_duplicate_total} 处。`, ...(findings.length ? findings.map((item) => `质量审核提示：${item}`) : ['质量审核提示：评分点、合规与执行性未发现待补强项。'])];
+    logs = [...logs, `章节统稿与${review.label}完成：${review.chapter_synthesis.length} 个二级章节，未覆盖评分点 ${contentStats.quality_audit_uncovered_scoring_total} 个，深度要素缺口 ${contentStats.quality_audit_deep_gap_total} 个，重复正文候选 ${contentStats.quality_audit_duplicate_total} 处，碎片化表达候选 ${contentStats.quality_audit_fragmented_total} 处。`, ...(findings.length ? findings.map((item) => `质量审核提示：${item}`) : ['质量审核提示：评分点、合规与执行性未发现待补强项。'])];
     writeDeveloperLog('content.quality.audit.done', {
       label: review.label,
       chapter_total: contentStats.quality_audit_chapter_total,
       uncovered_scoring_point_ids: review.scoring_coverage.uncovered_scoring_point_ids,
       deep_gap_node_ids: review.executability.deep_gap_node_ids,
       duplicate_total: contentStats.quality_audit_duplicate_total,
+      fragmented_total: contentStats.quality_audit_fragmented_total,
+      writing_policy_version: WRITING_POLICY_VERSION,
       can_proceed: review.can_proceed,
     });
     updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
@@ -6126,6 +6308,9 @@ workspace 文件说明：
   function buildAgentConsistencyRepairPrompt() {
     return `请在当前工作目录中完成全文一致性修复，让 technical-plan.md 成为程序可继续解析和回写的最终正文文件。
 
+${FACT_AND_METHOD_POLICY}
+${REVISION_POLICY}
+
 workspace 文件说明：
 - global-facts.md：全局事实变量、Step02 关键解析结果和需要保持一致的项目信息。
 - technical-plan.md：当前技术方案正文全文，包含章节标题、section id 和 yibiao-section-start / yibiao-section-end 标记。
@@ -6170,6 +6355,7 @@ workspace 文件说明：
       if (String(section.originalContent || '').trim() && !nextContent) {
         throw new Error(`Agent 输出把非空小节改为空：${id}`);
       }
+      assertRestoredRichContentPreserved(section.originalContent, nextContent);
     }
   }
 
@@ -6185,6 +6371,10 @@ workspace 文件说明：
       const nextContent = String(parsedSections.get(id) || '').trim();
       const currentContent = String(section.originalContent || '').trim();
       if (normalizeNewlines(nextContent).trim() === normalizeNewlines(currentContent).trim()) {
+        skippedCount += 1;
+        continue;
+      }
+      if (refreshSectionIfExternallyChanged(section.item, section.originalContent)) {
         skippedCount += 1;
         continue;
       }
@@ -6423,6 +6613,7 @@ workspace 文件说明：
           patches: response.patches,
         });
 
+        if (refreshSectionIfExternallyChanged(item, currentContent)) return { appliedCount: appliedTotal, failed: false, paused: false, skipped: true };
         if (!response.patches.length) {
           failures = ['模型未返回可应用的 patches'];
           writeDeveloperLog('consistency.repair.no_patches', {
@@ -6779,14 +6970,22 @@ workspace 文件说明：
           edits.push({ start: table.start, end: table.end, newText: replacement.replacement_text });
         }
 
-        const missingCount = batch.filter((table) => !returnedIds.has(table.id)).length;
-        skippedCount += missingCount;
+        const missingTables = batch.filter((table) => !returnedIds.has(table.id));
+        skippedCount += missingTables.length;
+        for (const table of missingTables) {
+          writeDeveloperLog('table_cleanup.replacement.skipped', {
+            section_id: item.id,
+            table_id: table.id,
+            reason: 'no_safe_replacement',
+          });
+        }
         if (!edits.length) {
           contentStats.table_cleanup_completed += batch.length;
           updateTask({ status: 'running', progress: progressFor(leaves, sections), logs, stats: statsSnapshot() }, workspaceStore.loadTechnicalPlan());
           continue;
         }
 
+        if (refreshSectionIfExternallyChanged(item, currentContent)) return { rewrittenCount, skippedCount: skippedCount + batch.length };
         const editResult = applyRangeEdits(currentContent, edits);
         if (editResult.errors.length) {
           skippedCount += edits.length;
@@ -7208,6 +7407,7 @@ workspace 文件说明：
       }
     }
 
+    refreshStableSectionContentSnapshot();
     if (!runOnlyIllustrationStage && !targetItemId) {
       if (retryContentCorrection) {
         logs = [...logs, '本次为内容矫正重试，跳过正文生成和最低字数扩写，直接进入内容矫正阶段。'];
@@ -7342,12 +7542,14 @@ const __developerContentExpansionPatchRuntime = {
   buildContentExpansionMessages,
   normalizeContentExpansionPatch,
   normalizeContentExpansionOperations,
+  normalizeAgentOriginalCoverageOperations,
   validateContentExpansionPatch,
   validateContentExpansionOperations,
   buildContentExpansionRepairMessages,
   findContentExpansionTargetTextMatch,
   applyContentExpansionPatch,
   applyContentExpansionOperations,
+  assertRestoredRichContentPreserved,
   applyOutlineExpansionAdditions,
   collectFreeformLeafContexts,
   formatOutlineExpansionContext,
@@ -7355,12 +7557,18 @@ const __developerContentExpansionPatchRuntime = {
 };
 
 const __contentPlanContractRuntime = {
+  buildAgentRestoredChapterContentPrompt,
   buildChapterContentPlanMessages,
   buildChapterContentMessages,
+  buildConsistencyRepairMessages,
+  buildOriginalCoverageRepairMessages,
+  buildRestoredChapterContentMessages,
+  buildTableCleanupMessages,
   createStoredContentPlan,
   formatContentPlanForPrompt,
   normalizeContentPlan,
   normalizeStoredContentPlan,
+  originalMaterialFromStoredPlan,
   validateContentPlan,
 };
 
