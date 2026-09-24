@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { __contentPlanContractRuntime, __developerContentExpansionPatchRuntime } = require('./contentGenerationTask.cjs');
 const { CONTENT_PLAN_PROMPT_VERSION } = require('./sectionWritingContract.cjs');
+const { formatSectionWritingContext } = require('./contentWritingPolicy.cjs');
 
 function contract() {
   return {
@@ -56,6 +57,20 @@ test('深度写作合同进入正文提示词，编排提示词要求完整合�
   assert.match(planningPrompt, /"writing_profile": "deep"/);
   assert.match(planningPrompt, /不适用的数组保持为空/);
   assert.doesNotMatch(planningPrompt, /"quantitative_details": \["[^"\]]*待确认/);
+});
+
+test('三级叶子正文请求获得本节时限、交付形式与祖先共通边界', () => {
+  const context = formatSectionWritingContext({
+    chapter: { id: '1.1.1', title: '沟通响应时效', role: '30分钟内确认，说明反馈路径及流程图交付' },
+    ancestors: [{ id: '1', title: '技术方案', description: '按项目实际需求响应' }, { id: '1.1', title: '服务方案', description: '售后闭环为共通边界' }],
+    siblings: [{ id: '1.1.1', title: '沟通响应时效' }, { id: '1.1.2', title: '现场保护', role: '设施保护' }],
+  });
+  const prompt = __contentPlanContractRuntime.buildChapterContentMessages({
+    chapter: { id: '1.1.1', title: '沟通响应时效', description: '30分钟内确认，说明反馈路径及流程图交付' },
+    projectOverview: '', selectedFactsText: '', regenerateRequirement: '', contentPlan: contract(), knowledgeContents: [], sectionContextText: context.text,
+  }).map((item) => item.content).join('\n');
+  for (const text of ['30分钟内确认', '流程图交付', '售后闭环为共通边界', '设施保护']) assert.match(prompt, new RegExp(text));
+  assert.match(prompt, /不复述兄弟职责/u);
 });
 
 test('正文消息使用 1.7.3 共用政策并移除机械短句硬规则', () => {
@@ -181,7 +196,7 @@ test('原方案优化必须原样保留既有表格和图片引用', () => {
   );
 });
 
-test('最低字数补目录拒绝同一二级目录下六个模型新增的并列三级叶子', () => {
+test('最低字数补目录接受同一二级目录下六个独立三级叶子', () => {
   const runtime = __developerContentExpansionPatchRuntime;
   const outline = [{
     id: '1', title: '技术方案', description: '技术方案说明', children: [{
@@ -194,10 +209,69 @@ test('最低字数补目录拒绝同一二级目录下六个模型新增的并�
     })),
   };
 
-  assert.throws(
-    () => runtime.applyOutlineExpansionAdditions(outline, patch),
-    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
-  );
+  const result = runtime.applyOutlineExpansionAdditions(outline, patch);
+  assert.equal(result.outline[0].children[0].children.length, 6);
+});
+
+test('最低字数补目录接受三级叶子和单分支，人工祖先不可追加', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const outline = [{ id: '1', title: '技术方案', description: '技术方案说明', children: [
+    { id: '1.1', title: '服务方案', description: '服务方案说明', allow_ai_children: true },
+    { id: '1.2', title: '人工章节', description: '人工填写', manual_input_required: true, children: [
+      { id: '1.2.1', title: '未逐个标人工的子节', description: '保留', allow_ai_children: true },
+    ] },
+  ] }];
+  const result = runtime.applyOutlineExpansionAdditions(outline, { additions: [
+    { parent_id: '1.1', title: '直接回应', description: '独立事项' },
+    { parent_id: '1.1', title: '单分支主题', description: '具体情景', children: [{ title: '唯一子项', description: '具体情景内容' }] },
+  ] });
+  assert.equal(result.outline[0].children[0].children.length, 2);
+  assert.throws(() => runtime.applyOutlineExpansionAdditions(outline, { additions: [
+    { parent_id: '1.2.1', title: '越权子项', description: '不应应用' },
+  ] }), /父节点不允许 AI 新增子目录/u);
+});
+
+test('正文补目录与 JSON 修复使用自然拆分规则及原补丁形状', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const outlineItems = [{ id: '1', title: '技术方案', children: [{ id: '1.1', title: '服务方案', allow_ai_children: true }] }];
+  const messages = runtime.buildOutlineExpansionMessages({
+    projectOverview: '', globalFactsText: '', outlineData: { outline: outlineItems }, currentWords: 10, minimumWords: 1000,
+    medianLeafWords: 10, round: 1, nodeMap: new Map([['1.1', { item: outlineItems[0].children[0], level: 2, parent: outlineItems[0] }]]), restoredNodeIds: new Set(),
+  });
+  const repair = runtime.buildOutlineExpansionRepairMessages({ invalidContent: '{}', issues: ['缺少 additions'] }, outlineItems);
+  for (const prompt of [messages, repair].map((items) => items.map((item) => item.content).join('\n'))) {
+    assert.match(prompt, /子项数量由内容决定/u);
+    assert.match(prompt, /"additions"/u);
+    assert.doesNotMatch(prompt, /最多 5 个|至少包含两个四级分支/u);
+  }
+});
+
+test('正文补目录示例 parent_id 不指向人工祖先下的 locked 节点', () => {
+  const root = { id: '1', title: '技术方案' };
+  const manual = { id: '1.1', title: '人工章节', manual_input_required: true };
+  const child = { id: '1.1.1', title: '人工后代', allow_ai_children: true };
+  const writable = { id: '1.2', title: '可补章节', allow_ai_children: true };
+  root.children = [{ ...manual, children: [child] }, writable];
+  const nodeMap = new Map([
+    ['1.1.1', { item: child, level: 3, parent: root.children[0] }],
+    ['1.2', { item: writable, level: 2, parent: root }],
+    ['1.1', { item: root.children[0], level: 2, parent: root }],
+  ]);
+  const prompt = __developerContentExpansionPatchRuntime.buildOutlineExpansionMessages({
+    projectOverview: '', globalFactsText: '', outlineData: { outline: [root] }, currentWords: 10, minimumWords: 1000,
+    medianLeafWords: 10, round: 1, nodeMap, restoredNodeIds: new Set(),
+  }).map((item) => item.content).join('\n');
+  assert.match(prompt, /"parent_id": "1\.2"/u);
+  assert.match(prompt, /1\.1\.1 \| L3 \| locked/u);
+});
+
+test('正文补目录不把非法 children 静默降为三级叶子', () => {
+  const parent = { id: '1.1', title: '服务方案', description: '说明', allow_ai_children: true };
+  const outlineItems = [{ id: '1', title: '技术方案', children: [parent] }];
+  const context = { nodeMap: new Map([['1.1', { item: parent, level: 2, parent: outlineItems[0] }]]), outlineItems, restoredNodeIds: new Set() };
+  assert.throws(() => __developerContentExpansionPatchRuntime.normalizeOutlineExpansionResponse({ additions: [
+    { parent_id: '1.1', title: '应急处置', description: '三种情景', children: 'INVALID' },
+  ] }, context), /children 必须是数组/u);
 });
 
 test('最低字数补目录仅允许重点章节新增五级叶子，且不拆分已有正文节点', () => {

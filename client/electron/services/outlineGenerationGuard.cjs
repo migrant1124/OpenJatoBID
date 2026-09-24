@@ -79,7 +79,8 @@ function normalizeAndValidateOutline(outlineData, context = {}) {
         delete next.focus_priority;
       }
       delete next.content;
-      const children = Array.isArray(rawItem.children) ? rawItem.children : [];
+      if (rawItem.children !== undefined && !Array.isArray(rawItem.children)) throw new Error(`${path}[${index}].children 必须是数组`);
+      const children = rawItem.children || [];
       if (children.length) next.children = normalizeItems(children, id, `${path}[${index}].children`);
       else delete next.children;
       return next;

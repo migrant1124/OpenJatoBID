@@ -31,11 +31,13 @@ function compact(value) {
   return String(value || '').replace(/\s+/gu, ' ').trim();
 }
 
-function formatSectionWritingContext({ chapter, siblings, exclusions, relatedExcerpts, maxChars = 5000 } = {}) {
+function formatSectionWritingContext({ chapter, ancestors, siblings, exclusions, relatedExcerpts, maxChars = 5000 } = {}) {
   const lines = [
     `当前章节：${compact(chapter?.id)} ${compact(chapter?.title)}`.trim(),
     ...(compact(chapter?.role) ? [`当前职责：${compact(chapter.role)}`] : []),
   ];
+  const ancestorLines = (ancestors || []).map((item) => `- ${compact(item.id)} ${compact(item.title)}：${compact(item.description)}`).filter((line) => line.trim());
+  if (ancestorLines.length) lines.push('上级共通背景与边界（仅取本节相关部分，不复述兄弟职责）：', ...ancestorLines);
   const siblingLines = (siblings || [])
     .filter((item) => compact(item?.id) && compact(item?.id) !== compact(chapter?.id))
     .map((item) => `- ${compact(item.id)} ${compact(item.title)}：${compact(item.role) || '按标题承担对应职责'}`);

@@ -434,8 +434,9 @@ function mapOutlineContent(items, contentById) {
 
 function collectIllustrationWritableIds(items, target = new Set()) {
   for (const item of items || []) {
+    if (item?.manual_input_required === true) continue;
     const children = Array.isArray(item?.children) ? item.children : [];
-    if (!children.length && item?.manual_input_required !== true) {
+    if (!children.length) {
       target.add(String(item.id || ''));
     }
     collectIllustrationWritableIds(children, target);

@@ -89,6 +89,32 @@ test('目录生成不得改写招标文件规定的一级目录', () => {
   }), /一级目录必须保持目录来源骨架/u);
 });
 
+test('只读语义审查收到来源和要求，warning 不回写目录', async () => {
+  const outline = { outline: [{ id: '1', title: '技术方案', description: '原目录' }] };
+  let captured;
+  const agentService = { runTask: async (options) => {
+    captured = options;
+    return { output_content: JSON.stringify({ status: 'warning', summary: '需核对响应事项', issues: [{ severity: 'warning', node_id: '1', message: '时限要求未在说明中承接' }] }) };
+  } };
+  const result = await __outlineSemanticReview.reviewValidatedOutlineWithAgent(agentService, outline, {
+    project_overview: '项目概述', source_outline: outline, technical_requirements: '30分钟内响应', scoring_groups: [{ title: '服务时效' }],
+  });
+  assert.equal(result.status, 'warning');
+  assert.deepEqual(outline, { outline: [{ id: '1', title: '技术方案', description: '原目录' }] });
+  assert.match(captured.files.find((file) => file.path === 'outline-review-context.json').content, /30分钟内响应/u);
+  assert.match(captured.prompt, /父子是否同义空转/u);
+});
+
+test('三级叶子可省略或提供空 children，但非法 children 类型仍拒绝', () => {
+  const root = (leaf) => ({ outline: [{ title: '技术方案', children: [{ title: '服务方案', children: [leaf] }] }] });
+  const context = { sourceOutline: { outline: [{ title: '技术方案' }] } };
+  for (const leaf of [{ title: '沟通响应时效', description: '保留确认时限及反馈要求' }, { title: '沟通响应时效', description: '保留确认时限及反馈要求', children: [] }]) {
+    const result = normalizeAndValidateOutline(root(leaf), context);
+    assert.equal(result.outline[0].children[0].children[0].title, '沟通响应时效');
+  }
+  assert.throws(() => normalizeAndValidateOutline(root({ title: '错误节点', children: '无效' }), context), /children 必须是数组/u);
+});
+
 test('目录生成实际流程会清除模型返回的人工和旧责任字段', async () => {
   const tasks = getBidAnalysisTasks('key');
   const taskContent = (task) => {
@@ -183,7 +209,7 @@ test('目录生成实际流程会清除模型返回的人工和旧责任字段',
   assert.equal(generated.response_mode, undefined);
 });
 
-test('目录生成拒绝同一二级目录下六个模型新增的并列三级叶子', async () => {
+test('目录生成接受同一二级目录下六个独立三级叶子', async () => {
   const tasks = getBidAnalysisTasks('key');
   const taskContent = (task) => {
     if (task.id === 'responseFileRequirements') return '【技术文件目录状态】：明确\n\n# 技术方案\n## 服务方案';
@@ -232,9 +258,11 @@ test('目录生成拒绝同一二级目录下六个模型新增的并列三级�
       }],
     },
   };
+  const requests = [];
   const aiService = {
     getConfig: () => ({}),
     collectJsonResponse: async (options) => {
+      requests.push(options);
       const value = structuredClone(responses[options.progressLabel]);
       if (!value) throw new Error(`unexpected request: ${options.progressLabel}`);
       const normalized = options.normalizer ? options.normalizer(value) : value;
@@ -250,7 +278,7 @@ test('目录生成拒绝同一二级目录下六个模型新增的并列三级�
     },
   };
 
-  await assert.rejects(
+  await assert.doesNotReject(
     runOutlineGenerationTask({
       aiService,
       agentService: {},
@@ -259,8 +287,11 @@ test('目录生成拒绝同一二级目录下六个模型新增的并列三级�
       updateTask: () => undefined,
       payload: { reference_knowledge_document_ids: [] },
     }),
-    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
   );
+  assert.equal(state.outlineData.outline[0].children[0].children.length, 6);
+  const prompt = requests.find((item) => item.progressLabel === '目录下级补充').messages.map((item) => item.content).join('\n');
+  assert.match(prompt, /子项数量由内容决定/u);
+  assert.doesNotMatch(prompt, /第 6 个，必须|至少包含两个四级分支|最多 5 个/u);
 });
 
 test('重点章节允许以三级主题、四级分支和五级叶子补充目录', () => {
@@ -295,7 +326,46 @@ test('重点章节允许以三级主题、四级分支和五级叶子补充目�
   assert.doesNotThrow(() => validateSourceDrivenOutline(outline, sourceOutline, { enforceGrouping: true }));
 });
 
-test('知识库补目录保留人工和已有正文节点，并拒绝六个并列三级叶子', () => {
+test('自然混合目录保留三级、四级、五级叶子及 AI 单分支', () => {
+  const sourceOutline = { outline: [{ id: '1', title: '技术方案', description: '来源章', children: [{ id: '1.1', title: '服务方案', description: '来源节' }] }] };
+  const outline = structuredClone(sourceOutline);
+  const second = outline.outline[0].children[0];
+  second.service_plan_section = true;
+  second.children = [
+    { id: '1.1.1', title: '沟通响应时效', description: '保留确认时限及反馈要求' },
+    { id: '1.1.2', title: '现场保护与清理', description: '保护与清运', children: [
+      { id: '1.1.2.1', title: '既有设施保护', description: '保护措施' },
+      { id: '1.1.2.2', title: '清理清运与环境恢复', description: '清理与恢复' },
+    ] },
+    { id: '1.1.3', title: '应急处置', description: '不同情景', children: [
+      { id: '1.1.3.1', title: '需求变更处置', description: '变更响应' },
+      { id: '1.1.3.2', title: '现场突发处置', description: '突发事件', children: [
+        { id: '1.1.3.2.1', title: '作业暂停与现场隔离', description: '暂停和隔离' },
+        { id: '1.1.3.2.2', title: '情况确认与方案调整', description: '确认与调整' },
+        { id: '1.1.3.2.3', title: '恢复作业前复核', description: '复核' },
+      ] },
+    ] },
+    { id: '1.1.4', title: '单分支待审查', description: '不自动补第二项', children: [{ id: '1.1.4.1', title: '实质事项', description: '具体响应' }] },
+  ];
+  assert.doesNotThrow(() => validateSourceDrivenOutline(outline, sourceOutline, { enforceGrouping: true }));
+  assert.equal(second.children[0].children, undefined);
+  assert.equal(second.children[3].children.length, 1);
+});
+
+test('取消数量门禁不放过重复节点身份和非法 children', () => {
+  const source = { outline: [{ id: '1', title: '技术方案', description: '来源', children: [{ id: '1.1', title: '服务方案', description: '来源节' }] }] };
+  const duplicate = structuredClone(source);
+  duplicate.outline[0].children[0].children = [
+    { id: '1.1.1', title: '事项甲', description: '甲' },
+    { id: '1.1.1', title: '事项乙', description: '乙' },
+  ];
+  assert.throws(() => validateSourceDrivenOutline(duplicate, source, { enforceGrouping: true }), /ID 缺失或重复/u);
+  const invalid = structuredClone(source);
+  invalid.outline[0].children[0].children = '非法';
+  assert.throws(() => validateSourceDrivenOutline(invalid, source, { enforceGrouping: true }), /children 必须是数组/u);
+});
+
+test('知识库补目录保留人工和已有正文节点，并接受六个独立三级叶子', () => {
   const outline = {
     outline: [{
       id: '1', title: '技术方案', description: '技术方案说明', children: [{
@@ -310,10 +380,8 @@ test('知识库补目录保留人工和已有正文节点，并拒绝六个并�
     parent_id: '1.1', title: `知识库新增事项${index + 1}`, description: `知识库新增事项${index + 1}说明`,
   }));
 
-  assert.throws(
-    () => __knowledgePatchRuntime.applyKnowledgeAdditions(outline, { updates: [], additions: sixLeaves }),
-    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
-  );
+  const expanded = __knowledgePatchRuntime.applyKnowledgeAdditions(outline, { updates: [], additions: sixLeaves });
+  assert.equal(expanded.outline.outline[0].children[0].children.length, 8);
   const result = __knowledgePatchRuntime.applyKnowledgeAdditions(outline, {
     updates: [
       { id: '1.1.1', title: '不应修改人工章节' },
@@ -323,6 +391,32 @@ test('知识库补目录保留人工和已有正文节点，并拒绝六个并�
   });
   assert.equal(result.outline.outline[0].children[0].children[0].title, '人工章节');
   assert.equal(result.outline.outline[0].children[0].children[1].title, '已有正文');
+});
+
+test('知识库补丁不得修改人工祖先的未逐级标记后代', () => {
+  const outline = { outline: [{ id: '1', title: '技术方案', description: '来源', children: [
+    { id: '1.1', title: '人工章节', description: '人工保留', manual_input_required: true, children: [
+      { id: '1.1.1', title: '人工后代', description: '已有说明', content: '已有正文与图片 ![图](asset://one.png)' },
+    ] },
+  ] }] };
+  const result = __knowledgePatchRuntime.applyKnowledgeAdditions(outline, { updates: [{ id: '1.1.1', description: '越权修改' }], additions: [
+    { parent_id: '1.1.1', title: '越权子项', description: '不应应用' },
+  ] });
+  assert.equal(result.updateCount, 0);
+  assert.equal(result.additionCount, 0);
+  assert.deepEqual(result.outline.outline[0].children[0].children[0], outline.outline[0].children[0].children[0]);
+});
+
+test('知识库增补和修复的最终请求沿用自然拆分且只返回 patch', () => {
+  const outline = { outline: [{ id: '1', title: '技术方案', description: '来源', children: [{ id: '1.1', title: '服务方案', description: '说明' }] }] };
+  const shared = __knowledgePatchRuntime.buildKnowledgePatchSharedMessages({ overview: '', requirements: '', outline });
+  const repair = __knowledgePatchRuntime.generateKnowledgeAdditionRepairMessages({ invalidContent: '{}', issues: ['错误'] }, outline);
+  for (const messages of [shared, repair]) {
+    const prompt = messages.map((item) => item.content).join('\n');
+    assert.match(prompt, /子项数量由内容决定/u);
+    assert.match(prompt, /updates.*additions/u);
+    assert.doesNotMatch(prompt, /最多 5 个|至少包含两个四级分支/u);
+  }
 });
 
 test('非重点章节拒绝模型新增五级目录', () => {

@@ -22,6 +22,7 @@ const {
   protectWriteForResponseMode,
 } = require('./contentResponseModes.cjs');
 const { countReadableWords } = require('../utils/wordCount.cjs');
+const { NATURAL_OUTLINE_GROUPING_RULES } = require('./outlineNaturalGrouping.cjs');
 const {
   CONTENT_PLAN_VERSION,
   buildChapterWritingTask,
@@ -1425,6 +1426,13 @@ function isAiExpandableResponseParent(item, level, focusPriority = '') {
     && item?.allow_ai_children === true;
 }
 
+function hasManualOutlineAncestor(nodeInfo, nodeMap) {
+  for (let current = nodeInfo; current; current = current.parent ? nodeMap.get(String(current.parent.id || '').trim()) : null) {
+    if (current.item?.manual_input_required === true) return true;
+  }
+  return false;
+}
+
 function getOutlineExpansionFocusPriority(nodeInfo, nodeMap) {
   let current = nodeInfo;
   while (current && current.level > 2) {
@@ -1434,18 +1442,19 @@ function getOutlineExpansionFocusPriority(nodeInfo, nodeMap) {
   return current?.level === 2 ? String(current.item?.focus_priority || '').trim() : '';
 }
 
-function formatOutlineExpansionContext(items, level = 1, lines = [], restoredNodeIds = new Set(), focusPriority = '') {
+function formatOutlineExpansionContext(items, level = 1, lines = [], restoredNodeIds = new Set(), focusPriority = '', manualAncestor = false) {
   for (const item of items || []) {
     const id = String(item?.id || 'unknown').trim() || 'unknown';
     const title = singleLine(item?.title || '未命名章节');
     const indent = '  '.repeat(Math.max(0, level - 1));
     const currentFocusPriority = level === 2 ? String(item?.focus_priority || '').trim() : focusPriority;
+    const manualProtected = manualAncestor || item?.manual_input_required === true;
     const addState = restoredNodeIds.has(id)
       ? 'locked-restored'
-      : isAiExpandableResponseParent(item, level, currentFocusPriority) ? `add:L${level + 1}` : 'locked';
+      : !manualProtected && isAiExpandableResponseParent(item, level, currentFocusPriority) ? `add:L${level + 1}` : 'locked';
     lines.push(`${indent}- ${id} | L${level} | ${addState} | ${title}`);
     if (item?.children?.length) {
-      formatOutlineExpansionContext(item.children, level + 1, lines, restoredNodeIds, currentFocusPriority);
+      formatOutlineExpansionContext(item.children, level + 1, lines, restoredNodeIds, currentFocusPriority, manualProtected);
     }
   }
   return lines.join('\n');
@@ -1453,7 +1462,7 @@ function formatOutlineExpansionContext(items, level = 1, lines = [], restoredNod
 
 function buildOutlineExpansionMessages({ projectOverview, globalFactsText, outlineData, currentWords, minimumWords, medianLeafWords, round, nodeMap, restoredNodeIds }) {
   const sampleParentId = Array.from(nodeMap.entries())
-    .find(([id, info]) => isAiExpandableResponseParent(info.item, info.level, getOutlineExpansionFocusPriority(info, nodeMap)) && !restoredNodeIds?.has(id))?.[0]
+    .find(([id, info]) => !hasManualOutlineAncestor(info, nodeMap) && isAiExpandableResponseParent(info.item, info.level, getOutlineExpansionFocusPriority(info, nodeMap)) && !restoredNodeIds?.has(id))?.[0]
     || 'none';
   return [
     {
@@ -1467,7 +1476,7 @@ function buildOutlineExpansionMessages({ projectOverview, globalFactsText, outli
 4. 只输出新增目录，不要输出完整目录，不要输出正文内容。
 5. 允许补充通用但不违背项目的技术方案内容，例如组织管理、质量控制、安全管理、进度保障、验收交付、运维服务、培训计划、资料管理、风险控制、应急响应等。
 6. 不要重复已有目录，不要输出明显凑字数的空泛标题。
-7. 同主题或同评分点的具体内容应采用“三级主题 + 四级叶子”；新增三级主题至少包含两个四级分支；同一二级目录下新增的无子节点三级目录最多 5 个。只有服务方案、最高分档或次高分档等重点章节可新增五级：四级子主题至少包含两个五级叶子，五级不能包含 children。
+7. ${NATURAL_OUTLINE_GROUPING_RULES}
 8. 新增目录不得引入与全局事实变量冲突的项目范围、周期、地点、验收、质保、售后或技术边界方向。
 9. locked-restored 节点已经承载用户原方案正文，严禁新增子节点，不允许把已还原正文节点拆成下级目录。
 
@@ -1548,6 +1557,10 @@ function normalizeOutlineExpansionChild(value, level, path, issues, allowedKeys 
   }
   const description = String(value.description || value.summary || value.resume || title).trim() || title;
   const node = { title, description };
+  if (value.children !== undefined && !Array.isArray(value.children)) {
+    issues.push(`${path}.children 必须是数组`);
+    return null;
+  }
   if (level < 5 && Array.isArray(value.children) && value.children.length) {
     if (level === 4 && !options.allowFifthLevel) {
       issues.push(`${path}.children 只有重点章节的四级目录可以包含五级叶子`);
@@ -1593,7 +1606,7 @@ function normalizeOutlineExpansionResponse(payload, context) {
     const parentId = String(candidate.parent_id || candidate.parentId || '').trim();
     const parentInfo = context.nodeMap.get(parentId);
     const focusPriority = parentInfo ? getOutlineExpansionFocusPriority(parentInfo, context.nodeMap) : '';
-    if (!parentId || !parentInfo || !isAiExpandableResponseParent(parentInfo.item, parentInfo.level, focusPriority)) {
+    if (!parentId || !parentInfo || hasManualOutlineAncestor(parentInfo, context.nodeMap) || !isAiExpandableResponseParent(parentInfo.item, parentInfo.level, focusPriority)) {
       issues.push(`additions[${index}].parent_id 无效：${parentId || '空'}`);
       return;
     }
@@ -1641,7 +1654,7 @@ function buildOutlineExpansionRepairMessages({ invalidContent, issues }, outline
 1. 顶层只能有 additions 数组。
 2. 每条 additions 必须包含 parent_id、title、description，可以包含 children。
 3. parent_id 只能使用目录上下文中标记为 add:* 的节点 ID，必须逐字复制；只有允许 AI 补充下级目录的节点才会标记为 add:*，locked 和 locked-restored 节点不能作为 parent_id。
-4. 只能新增二级、三级、四级、五级目录。新增三级主题至少包含两个四级分支；同一二级目录下新增的无子节点三级目录最多 5 个；五级仅允许重点章节的四级子主题使用，且五级不能包含 children。
+4. 只能新增二级、三级、四级、五级目录。${NATURAL_OUTLINE_GROUPING_RULES}
 5. 禁止输出完整 outline、正文、图片、表格或解释文字。
 6. 如果没有可补充目录，返回 {"additions":[]}。
 7. locked-restored 节点已经承载用户原方案正文，严禁新增子节点。
@@ -2558,7 +2571,7 @@ function collectLeafContexts(items, parents = []) {
 
 function collectFreeformLeafContexts(items) {
   return collectLeafContexts(items)
-    .filter(({ item }) => item.manual_input_required !== true);
+    .filter(({ item, parentChapters }) => item.manual_input_required !== true && !parentChapters.some((parent) => parent.manual_input_required === true));
 }
 
 function normalizeReferenceDocumentIds(storedPlan) {
@@ -2679,6 +2692,7 @@ function updateOutlineItemResponse(items, targetId, response) {
 
 function clearOutlineContent(items) {
   return (items || []).map((item) => {
+    if (item.manual_input_required === true) return item;
     const decision = protectWriteForResponseMode(item, 'full-regenerate');
     if (!decision.allowed) {
       return { ...item, children: clearOutlineContent(normalizeChildren(item)) };
@@ -2767,28 +2781,14 @@ function collectOutlineExpansionGroupingIssues(beforeItems, afterItems) {
       if (modelAdded && level > 5) {
         issues.push(`模型新增目录不能超过五级：${item.id || item.title || '未命名目录'}`);
       }
-      if (modelAdded && level === 3 && children.length > 0 && children.length < 2) {
-        issues.push(`模型新增三级主题至少需要两个四级分支：${item.id || item.title || '未命名目录'}`);
-      }
       const hasModelAddedChildren = children.some((child) => !existingIds.has(String(child?.id || '').trim()));
       if (level === 4 && hasModelAddedChildren) {
         if (!currentSecondLevel?.focus_priority) {
           issues.push(`非重点章节不允许新增五级目录：${item.id || item.title || '未命名目录'}`);
         }
-        if (children.length < 2) {
-          issues.push(`模型新增四级主题至少需要两个五级叶子：${item.id || item.title || '未命名目录'}`);
-        }
       }
       if (modelAdded && level === 5 && children.length > 0) {
         issues.push(`五级目录不能包含子目录：${item.id || item.title || '未命名目录'}`);
-      }
-      if (level === 2) {
-        const addedThirdLevelLeaves = children.filter((child) => (
-          !existingIds.has(String(child?.id || '').trim()) && !normalizeChildren(child).length
-        ));
-        if (addedThirdLevelLeaves.length > 5) {
-          issues.push(`同一二级目录下模型新增的无子节点三级目录不能超过 5 个：${item.id || item.title || '未命名目录'}`);
-        }
       }
       if (children.length) visit(children, level + 1, currentSecondLevel);
     }
@@ -2900,7 +2900,7 @@ function applyOutlineExpansionAdditions(outlineItems, patch) {
 
   for (const addition of patch.additions || []) {
     const parent = nodeMap.get(addition.parent_id);
-    if (!parent || !isAiExpandableResponseParent(parent.item, parent.level, getOutlineExpansionFocusPriority(parent, nodeMap))) {
+    if (!parent || hasManualOutlineAncestor(parent, nodeMap) || !isAiExpandableResponseParent(parent.item, parent.level, getOutlineExpansionFocusPriority(parent, nodeMap))) {
       throw new Error(`补目录父节点不允许 AI 新增子目录：${addition.parent_id || '空'}`);
     }
     if (!parent.item.children?.length) {
@@ -3490,7 +3490,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
   let leaves = collectFreeformLeafContexts(outlineData.outline);
   if (targetItemId) {
-    const manualTarget = allLeafContexts.find(({ item }) => item.id === targetItemId && item.manual_input_required === true);
+    const manualTarget = allLeafContexts.find(({ item, parentChapters }) => item.id === targetItemId && (item.manual_input_required === true || parentChapters.some((parent) => parent.manual_input_required === true)));
     if (manualTarget) {
       throw new Error('该章节必须人工填写，不能重新生成、扩写或由 AI 改写');
     }
@@ -4316,6 +4316,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     });
     return formatSectionWritingContext({
       chapter: { id: context?.item?.id, title: context?.item?.title, role: plan?.section_role || context?.item?.description },
+      ancestors: context?.parentChapters,
       siblings,
       exclusions: [...(plan?.cross_section_boundaries?.excludes || []), ...(plan?.forbidden_repetition || [])],
       relatedExcerpts: [...relatedIds].map((itemId) => {
@@ -7551,6 +7552,8 @@ const __developerContentExpansionPatchRuntime = {
   applyContentExpansionOperations,
   assertRestoredRichContentPreserved,
   applyOutlineExpansionAdditions,
+  buildOutlineExpansionMessages,
+  buildOutlineExpansionRepairMessages,
   collectFreeformLeafContexts,
   formatOutlineExpansionContext,
   normalizeOutlineExpansionResponse,

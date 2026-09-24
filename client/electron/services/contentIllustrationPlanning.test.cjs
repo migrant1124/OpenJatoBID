@@ -186,3 +186,15 @@ test('四级和五级正文叶子都可进入图片编排，人工五级叶子�
 
   assert.deepEqual(context.eligibleSectionIds, ['1.1.1.1', '1.1.1.2.1']);
 });
+
+test('人工祖先下未逐个标记的叶子不进入自动配图', () => {
+  const context = buildIllustrationPlanningContext({
+    outlineData: { outline: [{ id: '1', title: '技术方案', children: [
+      { id: '1.1', title: '人工章节', manual_input_required: true, children: [{ id: '1.1.1', title: '人工后代', content: '人工正文。' }] },
+      { id: '1.2', title: 'AI 章节', children: [{ id: '1.2.1', title: '三级叶子', content: 'AI 正文。' }] },
+    ] }] },
+    sections: { '1.1.1': { status: 'success', content: '人工正文。' }, '1.2.1': { status: 'success', content: 'AI 正文。' } },
+    options: { useHtmlImages: true, htmlImageTypes: 'network' }, aiImagesAvailable: false,
+  });
+  assert.deepEqual(context.eligibleSectionIds, ['1.2.1']);
+});

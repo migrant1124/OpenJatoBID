@@ -235,8 +235,11 @@ function normalizeGenerationOptions(options: ContentGenerationOptions | DraftCon
   };
 }
 
-function collectLeafItems(items: OutlineItem[]): OutlineItem[] {
-  return items.flatMap((item) => item.children?.length ? collectLeafItems(item.children) : [item]);
+function collectLeafItems(items: OutlineItem[], manualAncestor = false): OutlineItem[] {
+  return items.flatMap((item) => {
+    const manualProtected = manualAncestor || item.manual_input_required === true;
+    return item.children?.length ? collectLeafItems(item.children, manualProtected) : [{ ...item, manual_input_required: manualProtected }];
+  });
 }
 
 function findItem(items: OutlineItem[], id: string): OutlineItem | null {
@@ -378,7 +381,7 @@ function ContentEditPage({
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [developerMode, setDeveloperMode] = useState(false);
   const firstLeafId = leaves[0]?.id || '';
-  const selectedItem = outlineData?.outline && selectedItemId ? findItem(outlineData.outline, selectedItemId) : null;
+  const selectedItem = outlineData?.outline && selectedItemId ? leaves.find((item) => item.id === selectedItemId) || findItem(outlineData.outline, selectedItemId) : null;
   const selectedIsLeaf = Boolean(selectedItem && !selectedItem.children?.length);
   const selectedContent = selectedItem && selectedIsLeaf ? getLeafContent(selectedItem, sections) : '';
   const selectedCanEditMarkdown = selectedIsLeaf;
@@ -1091,12 +1094,13 @@ function ContentEditPage({
     }
   };
 
-  const renderTree = (items: OutlineItem[], level = 0): ReactNode => items.map((item) => {
+  const renderTree = (items: OutlineItem[], level = 0, manualAncestor = false): ReactNode => items.map((item) => {
     const meta = outlineMeta.get(item.id);
     const status = meta?.status || 'idle';
     const isLeaf = !item.children?.length;
+    const manualProtected = manualAncestor || item.manual_input_required === true;
     const canRegenerate = isLeaf
-      && item.manual_input_required !== true;
+      && !manualProtected;
     const itemStatusLabel = isLeaf && item.response_status
       ? responseStatusLabels[item.response_status]
       : status === 'success' ? responseStatusLabels['responded-substantive'] : statusLabels[status];
@@ -1153,7 +1157,7 @@ function ContentEditPage({
             <em>{itemStatusLabel}</em>
           )}
         </button>
-        {item.children?.length ? renderTree(item.children, level + 1) : null}
+        {item.children?.length ? renderTree(item.children, level + 1, manualProtected) : null}
       </div>
     );
   });
