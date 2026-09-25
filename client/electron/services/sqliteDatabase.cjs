@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 24;
+const schemaVersion = 25;
 
 function createInitialSchema(db) {
   db.exec(`
@@ -52,6 +52,7 @@ function createInitialSchema(db) {
       content_illustration_plan_json TEXT,
       requirement_response_matrix_json TEXT,
       outline_quality_review_json TEXT,
+      project_understanding_json TEXT,
       selected_section_id TEXT,
       selected_section_title TEXT,
       selected_section_head_line TEXT,
@@ -314,6 +315,10 @@ function addTechnicalPlanQualityModel(db) {
   addColumnIfMissing(db, 'technical_plan_meta', 'requirement_response_matrix_json', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_meta', 'outline_quality_review_json', 'TEXT');
   addColumnIfMissing(db, 'technical_plan_outline_nodes', 'quality_metadata_json', 'TEXT');
+}
+
+function addProjectUnderstanding(db) {
+  addColumnIfMissing(db, 'technical_plan_meta', 'project_understanding_json', 'TEXT');
 }
 
 function removeLegacyTechnicalPlanIllustrationType(db) {
@@ -1401,6 +1406,13 @@ const schemaHealthColumnGroups = [
       outline_word_control_snapshot_json: 'TEXT',
     },
   },
+  {
+    version: 25,
+    table: 'technical_plan_meta',
+    columns: {
+      project_understanding_json: 'TEXT',
+    },
+  },
 ];
 
 function quoteIdentifier(value) {
@@ -1587,6 +1599,11 @@ const migrations = [
     version: 24,
     description: '初始化安装包内置提示词',
     up: seedBundledPromptLibrary,
+  },
+  {
+    version: 25,
+    description: '技术方案新增项目理解资料状态',
+    up: addProjectUnderstanding,
   },
 ];
 

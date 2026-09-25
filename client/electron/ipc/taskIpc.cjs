@@ -29,6 +29,14 @@ function registerTaskIpc({ taskService }) {
     taskService.subscribe(event.sender);
     return taskService.pauseContentGeneration();
   });
+  ipcMain.handle('tasks:start-project-understanding-research', (event, payload) => {
+    taskService.subscribe(event.sender);
+    return taskService.startProjectUnderstandingResearch(payload);
+  });
+  ipcMain.handle('tasks:cancel-project-understanding-research', (event) => {
+    taskService.subscribe(event.sender);
+    return taskService.cancelProjectUnderstandingResearch();
+  });
   ipcMain.handle('tasks:start-rejection-items-extraction', (event, payload) => {
     taskService.subscribe(event.sender);
     return taskService.startRejectionItemsExtraction(payload);

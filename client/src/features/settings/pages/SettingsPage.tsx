@@ -485,6 +485,14 @@ const initialState: SettingsPageState = {
     enabled: true,
     html_concurrency_limit: 5,
   },
+  projectResearch: {
+    provider: 'brave',
+    api_key: '',
+    max_results_per_topic: 5,
+    max_sources: 8,
+    timeout_ms: 20000,
+    overall_timeout_ms: 300000,
+  },
   agentRuntime: FIXED_AGENT_RUNTIME_ID,
   agentModeScenarios: { ...defaultAgentModeScenarios },
   general: {
@@ -579,6 +587,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           mineru_token: config.file_parser.mineru_token || '',
         },
         localRendering: config.local_rendering || initialState.localRendering,
+        projectResearch: config.project_research || initialState.projectResearch,
         agentRuntime: FIXED_AGENT_RUNTIME_ID,
         agentModeScenarios: normalizeAgentModeScenarios(config.agent_mode_scenarios),
         general: {
@@ -629,6 +638,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
         mineru_token: state.fileParser.mineru_token || '',
       },
       local_rendering: state.localRendering,
+      project_research: state.projectResearch,
       agent_runtime: FIXED_AGENT_RUNTIME_ID,
       agent_mode_scenarios: state.agentModeScenarios,
       gpu_hardware_acceleration_enabled: state.general.gpu_hardware_acceleration_enabled,
@@ -1203,9 +1213,10 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     }
 
     if (activeTab === 'components') {
-      return JSON.stringify({ fileParser: state.fileParser, localRendering: state.localRendering }) !== JSON.stringify({
+      return JSON.stringify({ fileParser: state.fileParser, localRendering: state.localRendering, projectResearch: state.projectResearch }) !== JSON.stringify({
         fileParser: savedConfig.file_parser,
         localRendering: savedConfig.local_rendering || initialState.localRendering,
+        projectResearch: savedConfig.project_research || initialState.projectResearch,
       });
     }
 
@@ -1852,6 +1863,24 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
                     localRendering: { ...prev.localRendering, [key]: Number(event.target.value) },
                   }))}
                 />
+              </label>
+            ))}
+          </div>
+          <h3 className="settings-subsection-title">公开资料检索</h3>
+          <div className="settings-list">
+            <label className="settings-row">
+              <div className="settings-row-copy"><strong>Brave Search API Key</strong><span>仅供 Main 侧项目理解资料检索使用，不解禁 Agent 联网</span></div>
+              <input type="password" value={state.projectResearch.api_key} placeholder="请输入 Brave Search API Key" onChange={(event) => setState((prev) => ({ ...prev, projectResearch: { ...prev.projectResearch, api_key: event.target.value } }))} />
+            </label>
+            {([
+              ['max_results_per_topic', '每主题候选数', '每个公开主题从 Brave 取回的候选链接数'],
+              ['max_sources', '最多来源数', '单次研究最多抓取并核验的正文数'],
+              ['timeout_ms', '单次超时（毫秒）', '搜索或来源正文请求的超时时间'],
+              ['overall_timeout_ms', '整体任务预算（毫秒）', '单次研究的总时间上限'],
+            ] as const).map(([key, title, description]) => (
+              <label className="settings-row" key={key}>
+                <div className="settings-row-copy"><strong>{title}</strong><span>{description}</span></div>
+                <input type="number" min={key === 'overall_timeout_ms' ? 60000 : key === 'timeout_ms' ? 5000 : 1} max={key === 'overall_timeout_ms' ? 900000 : key === 'timeout_ms' ? 60000 : 20} value={state.projectResearch[key]} onChange={(event) => setState((prev) => ({ ...prev, projectResearch: { ...prev.projectResearch, [key]: Number(event.target.value) } }))} />
               </label>
             ))}
           </div>

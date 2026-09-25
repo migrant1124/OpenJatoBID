@@ -7,7 +7,7 @@ import { MarkdownEditor, MarkdownFullscreenViewer, MarkdownRenderer, useToast } 
 import type { ClientConfig, ImageModelStatus, OutlineData, OutlineItem, OutlineWordControlOptions } from '../../../shared/types';
 import type { ComplianceRisk, ResponseStatus } from '../../../shared/types/outline';
 import { countReadableWords } from '../../../shared/utils/wordCount';
-import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, TechnicalPlanWorkflowKind } from '../types';
+import type { BackgroundTaskState, ConsistencyRepairMode, ContentGenerationOptions, ContentGenerationSectionStatus, ContentGenerationSections, ContentIllustrationKind, ContentIllustrationPlanState, ContentTableRequirement, OriginalPlanCoverageRepairMode, ProjectUnderstandingState, TechnicalPlanState, TechnicalPlanWorkflowKind } from '../types';
 import type { ExportFormatConfig } from '../../../shared/types/exportFormat';
 import { DEFAULT_EXPORT_FORMAT } from '../../../shared/types/exportFormat';
 import { buildExportFormatCssVars } from '../../../shared/utils/exportFormatCss';
@@ -23,6 +23,9 @@ interface ContentEditPageProps {
   outlineWordControlSnapshot?: OutlineWordControlOptions;
   contentIllustrationPlan?: ContentIllustrationPlanState;
   sections: ContentGenerationSections;
+  projectUnderstanding?: ProjectUnderstandingState;
+  projectUnderstandingTask?: BackgroundTaskState;
+  onProjectUnderstandingChanged: (state: TechnicalPlanState) => void;
   onContentGenerationOptionsChange: (options: ContentGenerationOptions) => Promise<void> | void;
   onContentSaved: (item: OutlineItem, content: string) => Promise<void> | void;
 }
@@ -353,14 +356,20 @@ function ContentEditPage({
   outlineWordControlSnapshot,
   contentIllustrationPlan,
   sections,
+  projectUnderstanding,
+  projectUnderstandingTask,
+  onProjectUnderstandingChanged,
   onContentGenerationOptionsChange,
   onContentSaved,
 }: ContentEditPageProps) {
   const { showToast } = useToast();
+  const [researchTopics, setResearchTopics] = useState('');
+  const [researchReferenceDate, setResearchReferenceDate] = useState(() => new Intl.DateTimeFormat('sv-SE').format(new Date()));
   const isExpansionWorkflow = workflowKind === 'existing-plan-expansion';
   const leaves = useMemo(() => outlineData?.outline ? collectLeafItems(outlineData.outline) : [], [outlineData]);
   const aiWritableLeaves = useMemo(() => leaves.filter((item) => item.manual_input_required !== true), [leaves]);
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [exportingSelectedProjectUnderstanding, setExportingSelectedProjectUnderstanding] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [draftContent, setDraftContent] = useState('');
@@ -384,6 +393,10 @@ function ContentEditPage({
   const selectedItem = outlineData?.outline && selectedItemId ? leaves.find((item) => item.id === selectedItemId) || findItem(outlineData.outline, selectedItemId) : null;
   const selectedIsLeaf = Boolean(selectedItem && !selectedItem.children?.length);
   const selectedContent = selectedItem && selectedIsLeaf ? getLeafContent(selectedItem, sections) : '';
+  const projectUnderstandingRoot = outlineData?.outline && projectUnderstanding?.placement?.node_id
+    ? findItem(outlineData.outline, projectUnderstanding.placement.node_id)
+    : null;
+  const selectedIsProjectUnderstanding = Boolean(selectedItem && projectUnderstandingRoot && findItem([projectUnderstandingRoot], selectedItem.id));
   const selectedCanEditMarkdown = selectedIsLeaf;
   const exportFormatPreviewStyle = useMemo<CSSProperties>(() => buildExportFormatCssVars(exportFormat), [exportFormat]);
   const running = task?.status === 'running';
@@ -393,9 +406,39 @@ function ContentEditPage({
   const taskInFlight = running || pausing;
   const phaseVisible = taskInFlight || paused || taskFailed;
   const taskBlocksGeneration = taskInFlight || paused;
+  const researchRunning = projectUnderstandingTask?.status === 'running' || projectUnderstandingTask?.status === 'pausing';
+  const researchError = projectUnderstandingTask?.status === 'error'
+    ? projectUnderstandingTask.error || projectUnderstandingTask.logs?.[projectUnderstandingTask.logs.length - 1] || '项目理解资料获取失败'
+    : '';
+  const activeResearchVersion = projectUnderstanding?.versions.find((version) => version.version_id === projectUnderstanding.active_version_id);
+  const pendingResearchVersion = projectUnderstanding?.versions.find((version) => version.version_id === projectUnderstanding.pending_version_id);
+  const pendingResearchDiff = useMemo(() => {
+    if (!activeResearchVersion || !pendingResearchVersion) return undefined;
+    const active = new Map(activeResearchVersion.sources.map((source) => [source.source_id, source]));
+    const pending = new Map(pendingResearchVersion.sources.map((source) => [source.source_id, source]));
+    const activeEvidence = new Set(activeResearchVersion.evidence.map((evidence) => evidence.evidence_id));
+    const pendingEvidence = new Set(pendingResearchVersion.evidence.map((evidence) => evidence.evidence_id));
+    return {
+      added: [...pending].filter(([id]) => !active.has(id)).map(([, source]) => source.title),
+      removed: [...active].filter(([id]) => !pending.has(id)).map(([, source]) => source.title),
+      changed: [...pending].filter(([id, source]) => active.has(id) && active.get(id)?.content_hash !== source.content_hash).map(([, source]) => source.title),
+      evidenceAdded: [...pendingEvidence].filter((id) => !activeEvidence.has(id)).length,
+      evidenceRemoved: [...activeEvidence].filter((id) => !pendingEvidence.has(id)).length,
+    };
+  }, [activeResearchVersion, pendingResearchVersion]);
+  const evidenceNumbers = useMemo(() => {
+    const sourceNumbers = new Map((activeResearchVersion?.sources || []).map((source, index) => [source.source_id, index + 1]));
+    return new Map((activeResearchVersion?.evidence || []).map((evidence) => [evidence.evidence_id, sourceNumbers.get(evidence.source_id)]));
+  }, [activeResearchVersion]);
+  const displaySelectedContent = useMemo(() => selectedContent.replace(/〔PU:([A-Za-z0-9_-]+)〕/g, (_marker, evidenceId: string) => `〔PU-${evidenceNumbers.get(evidenceId) || '待核验'}〕`), [selectedContent, evidenceNumbers]);
   const generationStrategyLocked = paused;
   const contentStats = task?.stats?.content;
   const progressDetail = task?.progress_detail;
+
+  useEffect(() => {
+    if (projectUnderstanding?.reference_date) setResearchReferenceDate(projectUnderstanding.reference_date);
+    if (activeResearchVersion?.topics?.length) setResearchTopics(activeResearchVersion.topics.join('\n'));
+  }, [activeResearchVersion, projectUnderstanding?.reference_date]);
   const illustrationStats = useMemo(() => {
     const stats: Record<ContentIllustrationKind, { planned: number; success: number }> = {
       chart: { planned: 0, success: 0 },
@@ -1094,6 +1137,53 @@ function ContentEditPage({
     }
   };
 
+  const startProjectResearch = async () => {
+    const topics = researchTopics.split(/[\n；;]/).map((item) => item.trim()).filter(Boolean);
+    if (!topics.length) {
+      showToast('请先填写经人工确认的公开研究主题', 'info');
+      return;
+    }
+    try {
+      await window.yibiao?.tasks.startProjectUnderstandingResearch({ topics, reference_date: researchReferenceDate, force_refresh: Boolean(activeResearchVersion) });
+      showToast('项目理解资料获取已在后台启动', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '启动资料获取失败', 'error');
+    }
+  };
+
+  const cancelProjectResearch = async () => {
+    try {
+      await window.yibiao?.tasks.cancelProjectUnderstandingResearch();
+      showToast('已请求取消项目理解资料获取', 'info');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '取消资料获取失败', 'error');
+    }
+  };
+
+  const updateProjectUnderstanding = async (action: 'apply-version' | 'mark-reviewed', versionId?: string) => {
+    try {
+      const next = await window.yibiao?.technicalPlan.updateProjectUnderstanding({ action, versionId });
+      if (next) onProjectUnderstandingChanged(next);
+      showToast(action === 'apply-version' ? '已应用新资料版本，原正文未改写' : '已标记人工复核', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '项目理解状态更新失败', 'error');
+    }
+  };
+
+  const exportSelectedProjectUnderstanding = async () => {
+    if (!selectedItem || !selectedIsProjectUnderstanding) return;
+    setExportingSelectedProjectUnderstanding(true);
+    try {
+      const result = await window.yibiao?.export.exportWord({ source: 'technical-plan', nodeId: selectedItem.id, export_format: exportFormat });
+      if (result?.success) showToast('当前项目理解小节已导出', 'success');
+      else if (result?.canceled) showToast('已取消导出', 'info');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '当前小节导出失败', 'error');
+    } finally {
+      setExportingSelectedProjectUnderstanding(false);
+    }
+  };
+
   const renderTree = (items: OutlineItem[], level = 0, manualAncestor = false): ReactNode => items.map((item) => {
     const meta = outlineMeta.get(item.id);
     const status = meta?.status || 'idle';
@@ -1174,7 +1264,7 @@ function ContentEditPage({
   }
 
   return (
-    <div className={`plan-step-body content-generation-page${showIllustrationStats ? ' has-dev-stats' : ''}`}>
+    <div className={`plan-step-body content-generation-page${showIllustrationStats ? ' has-dev-stats' : ''}${projectUnderstanding?.placement && projectUnderstanding.placement.status !== 'excluded' ? ' has-project-research' : ''}`}>
       <section className="content-generation-command-bar">
         <div>
           <span className="section-kicker">STEP 05</span>
@@ -1206,6 +1296,71 @@ function ContentEditPage({
           </button>
         </div>
       </section>
+
+      {projectUnderstanding?.placement && projectUnderstanding.placement.status !== 'excluded' && (
+        <section className="content-project-research-panel" aria-label="项目理解资料与出处">
+          <div className="content-project-research-head">
+            <div>
+              <strong>项目理解资料与出处</strong>
+              <span>{projectUnderstanding.placement.reason}</span>
+            </div>
+            <span>{researchRunning ? '获取中' : projectUnderstandingTask?.status === 'canceled' ? '已取消' : activeResearchVersion?.status === 'partial' ? '资料部分完成' : projectUnderstanding.human_review.status === 'reviewed' ? '人工已复核' : '待复核'}</span>
+          </div>
+          <div className="content-project-research-inputs">
+            <label>
+              <span>研究截止日期</span>
+              <input type="date" value={researchReferenceDate} onChange={(event) => setResearchReferenceDate(event.target.value)} disabled={researchRunning} />
+            </label>
+            <label>
+              <span>公开研究主题（每行一项，不要粘贴招标原文、密钥或个人信息）</span>
+              <textarea value={researchTopics} onChange={(event) => setResearchTopics(event.target.value)} placeholder="例如：所属行业最新国家战略\n上级单位公开部署\n采购人公开职责" disabled={researchRunning} />
+            </label>
+            <div className="content-project-research-actions">
+              {researchRunning
+                ? <button type="button" className="secondary-action" onClick={() => void cancelProjectResearch()}>取消获取</button>
+                : <button type="button" className="primary-action" onClick={() => void startProjectResearch()}>获取/更新资料</button>}
+              {pendingResearchVersion && <button type="button" className="secondary-action" onClick={() => void updateProjectUnderstanding('apply-version', pendingResearchVersion.version_id)}>应用新资料（不改正文）</button>}
+              {activeResearchVersion && <button type="button" className="secondary-action" onClick={() => void updateProjectUnderstanding('mark-reviewed')}>确认可人工确认项并标记已复核</button>}
+              {selectedIsProjectUnderstanding && selectedContent.trim() && <button type="button" className="secondary-action" disabled={exportingSelectedProjectUnderstanding} onClick={() => void exportSelectedProjectUnderstanding()}>{exportingSelectedProjectUnderstanding ? '导出中...' : '导出当前小节 Word'}</button>}
+            </div>
+          </div>
+          {researchError && <p className="content-project-research-error" role="alert">{researchError}</p>}
+          {pendingResearchVersion && activeResearchVersion && (
+            <p className="content-project-research-diff">待应用版本：{pendingResearchVersion.sources.length} 个来源，新增：{pendingResearchDiff?.added.join('、') || '无'}；更新：{pendingResearchDiff?.changed.join('、') || '无'}；移除：{pendingResearchDiff?.removed.join('、') || '无'}；证据 +{pendingResearchDiff?.evidenceAdded || 0}/-{pendingResearchDiff?.evidenceRemoved || 0}。更新不会静默改写正文。</p>
+          )}
+          {activeResearchVersion && (
+            <div className="content-project-research-sources">
+              <p>正文引用核验：{projectUnderstanding.content_review.status === 'passed' ? '通过' : projectUnderstanding.content_review.status === 'issues' ? '存在问题' : '待核验'}</p>
+              {projectUnderstanding.content_review.issues.map((issue) => <p key={issue} role="alert">{issue}</p>)}
+              {activeResearchVersion.sources.map((source, index) => (
+                <button type="button" key={source.source_id} onClick={() => source.url && void window.yibiao?.openExternal(source.url)} disabled={!source.url}>
+                  <strong>〔PU-{index + 1}〕 {source.title}</strong>
+                  <span>{source.publisher || '发布机构待核验'} · {source.published_at || '发布日期未知'} · {source.authority_status === 'official' ? '政府官方域名' : '权威性待人工复核'}{source.internal_location ? ` · ${source.internal_location}` : ''}</span>
+                </button>
+              ))}
+              <details>
+                <summary>查看已核验证据（{activeResearchVersion.evidence.length} 条）</summary>
+                {activeResearchVersion.evidence.map((evidence) => (
+                  <div className="content-project-research-evidence" key={evidence.evidence_id}>
+                    <strong>{evidence.claim || evidence.theme || '未命名证据'}</strong>
+                    <span>{evidence.layer} · {evidence.relationship} · {evidence.location || '定位待核验'} · {evidence.document_number || '文号未知'} · {evidence.effective_status || 'unknown'}</span>
+                    <p>{evidence.excerpt}</p>
+                  </div>
+                ))}
+              </details>
+              {activeResearchVersion.relations.length > 0 && (
+                <details>
+                  <summary>查看已校验关联候选（{activeResearchVersion.relations.length} 条）</summary>
+                  {activeResearchVersion.relations.map((relation) => (
+                    <p key={`${relation.from_evidence_id}-${relation.to_evidence_id}`}>{relation.from_evidence_id} → {relation.to_evidence_id} · {relation.relation_type} · {relation.relationship}{relation.explanation ? ` · ${relation.explanation}` : ''}</p>
+                  ))}
+                </details>
+              )}
+              {activeResearchVersion.gaps.length > 0 && <p>研究缺口：{activeResearchVersion.gaps.map((gap) => activeResearchVersion.accepted_gaps?.includes(gap) ? `${gap}（已人工确认）` : gap).join('；')}</p>}
+            </div>
+          )}
+        </section>
+      )}
 
       {showIllustrationStats && (
         <aside className="content-dev-stats-panel" aria-label="开发者配图统计">
@@ -1306,7 +1461,7 @@ function ContentEditPage({
             </MarkdownFullscreenViewer>
           ) : selectedItem && selectedIsLeaf && selectedContent.trim() ? (
             <MarkdownFullscreenViewer className="markdown-viewer content-generation-output export-format-preview" style={exportFormatPreviewStyle} title={`${selectedItem.id} ${selectedItem.title}全屏查看`}>
-              <MarkdownContent content={selectedContent} onPreviewImage={handlePreviewImage} />
+              <MarkdownContent content={displaySelectedContent} onPreviewImage={handlePreviewImage} />
             </MarkdownFullscreenViewer>
           ) : selectedItem && selectedIsLeaf ? (
             <div className="markdown-empty-state content-generation-empty">

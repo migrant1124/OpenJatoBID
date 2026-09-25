@@ -88,6 +88,7 @@ export interface OutlineItem {
   mapped_scoring_point_ids?: string[];
   focus_priority?: OutlineFocusPriority;
   focus_scoring_point_ids?: string[];
+  feature_role?: 'project-understanding';
   source_requirement_id?: string;
   source_requirement_title?: string;
   knowledge_item_ids?: string[];

@@ -3,6 +3,7 @@ const { getBidAnalysisTasks, getResponseFileFormatStatus, isBidAnalysisTaskResul
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
 const { createEmptyFocusWritingMatrix } = require('./focusWritingTask.cjs');
 const { applyOutlineQualityRules } = require('./outlineQualityRules.cjs');
+const { normalizeProjectUnderstanding, planProjectUnderstandingPlacement } = require('./projectUnderstanding.cjs');
 const { NATURAL_OUTLINE_GROUPING_RULES } = require('./outlineNaturalGrouping.cjs');
 function formatSuggestions(suggestions) {
   if (!suggestions?.length) return '';
@@ -3690,6 +3691,13 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     }
   }
   const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
+  const placementResult = planProjectUnderstandingPlacement(qualityResult.outline, storedPlan.projectUnderstanding);
+  qualityResult.outline = placementResult.outlineData;
+  const projectUnderstanding = normalizeProjectUnderstanding(storedPlan.projectUnderstanding);
+  projectUnderstanding.placement = placementResult.placement;
+  projectUnderstanding.human_review = { status: 'unreviewed' };
+  projectUnderstanding.content_review = { status: 'pending', issues: [] };
+  logs = [...logs, `项目理解位置：${placementResult.placement.reason}`];
   logs = [...logs, `目录规则 outline-natural-v1.7.4；${summarizeOutlineShape(qualityResult.outline.outline || [])}。`];
   log('一级目录来源与技术评分下级映射校验通过，正在进行只读语义审查。', 99);
   const semanticReview = await reviewValidatedOutlineWithAgent(agentService, qualityResult.outline, {
@@ -3704,6 +3712,7 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     : `Pi Agent 语义审查完成：${semanticReview.summary}`];
   technicalPlan = workspaceStore.updateTechnicalPlan({
     outlineData: { ...qualityResult.outline, project_overview: overview },
+    projectUnderstanding,
     outlineWordControlSnapshot: wordControlOptions,
     requirementResponseMatrix: qualityResult.matrix,
     outlineQualityReview: {

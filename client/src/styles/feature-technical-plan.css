@@ -1527,6 +1527,14 @@
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+.content-generation-page.has-project-research {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.content-generation-page.has-project-research.has-dev-stats {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
 .content-generation-command-bar,
 .content-generation-progress-card,
 .content-generation-workspace {
@@ -1558,6 +1566,86 @@
 .content-generation-command-bar p {
   margin: 0;
   color: var(--yb-text-soft);
+}
+
+.content-project-research-panel {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.content-project-research-head,
+.content-project-research-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.content-project-research-head div,
+.content-project-research-inputs,
+.content-project-research-inputs label,
+.content-project-research-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.content-project-research-head span,
+.content-project-research-inputs label > span,
+.content-project-research-sources span,
+.content-project-research-diff,
+.content-project-research-error,
+.content-project-research-sources p {
+  color: var(--yb-text-soft);
+  font-size: 12px;
+}
+
+.content-project-research-error {
+  color: var(--yb-danger-text, #b42318);
+}
+
+.content-project-research-inputs {
+  margin-top: 12px;
+}
+
+.content-project-research-inputs textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.content-project-research-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.content-project-research-sources {
+  margin-top: 10px;
+}
+
+.content-project-research-sources > button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--yb-border-soft);
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.content-project-research-evidence {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--yb-border-soft);
+}
+
+.content-project-research-evidence > * {
+  display: block;
+  margin: 0 0 4px;
 }
 
 .content-generation-stats {

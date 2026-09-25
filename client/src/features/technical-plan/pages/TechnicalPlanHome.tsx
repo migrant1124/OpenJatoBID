@@ -78,6 +78,8 @@ const resetState = {
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
   outlineGenerationTask: undefined,
+  projectUnderstandingTask: undefined,
+  projectUnderstanding: undefined,
   globalFactsTask: undefined,
   globalFacts: [] as GlobalFactGroupState[],
   contentGenerationTask: undefined,
@@ -136,7 +138,7 @@ function workflowLabel(kind: TechnicalPlanWorkflowKind) {
 }
 
 function hasRunningTechnicalPlanTask(state: TechnicalPlanState) {
-  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.outlineGenerationTask, state.globalFactsTask, state.contentGenerationTask]
+  return [state.bidSectionExtractionTask, state.bidAnalysisTask, state.outlineGenerationTask, state.globalFactsTask, state.contentGenerationTask, state.projectUnderstandingTask]
     .some((task) => task?.status === 'running' || task?.status === 'pausing');
 }
 
@@ -156,6 +158,7 @@ function hasWorkflowSpecificProgress(state: TechnicalPlanState) {
     || state.outlineGenerationTask
     || state.globalFactsTask
     || state.contentGenerationTask
+    || state.projectUnderstandingTask
     || ['outline-generation', 'global-facts', 'content-edit', 'expand'].includes(state.step),
   );
 }
@@ -552,6 +555,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
               : prev.referenceKnowledgeDocumentIds,
             outlineData: nextOutlineData,
             outlineQualityReview: hasOwnField(technicalPlan, 'outlineQualityReview') ? technicalPlan.outlineQualityReview : prev.outlineQualityReview,
+            projectUnderstanding: hasOwnField(technicalPlan, 'projectUnderstanding') ? technicalPlan.projectUnderstanding : prev.projectUnderstanding,
             globalFactsTask: hasOwnField(technicalPlan, 'globalFactsTask') ? trimTaskLogs(technicalPlan.globalFactsTask) : prev.globalFactsTask,
             globalFacts: hasOwnField(technicalPlan, 'globalFacts') ? (technicalPlan.globalFacts || []) : prev.globalFacts,
             contentGenerationTask: hasOwnField(technicalPlan, 'contentGenerationTask') ? trimTaskLogs(technicalPlan.contentGenerationTask) : (outlineDataChanged ? undefined : prev.contentGenerationTask),
@@ -602,7 +606,17 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             contentGenerationPlans: hasOwnField(technicalPlan, 'contentGenerationPlans') ? (technicalPlan.contentGenerationPlans || {}) : prev.contentGenerationPlans,
             contentIllustrationPlan: hasOwnField(technicalPlan, 'contentIllustrationPlan') ? technicalPlan.contentIllustrationPlan : prev.contentIllustrationPlan,
             contentGenerationRuntime: hasOwnField(technicalPlan, 'contentGenerationRuntime') ? technicalPlan.contentGenerationRuntime : prev.contentGenerationRuntime,
+            projectUnderstanding: hasOwnField(technicalPlan, 'projectUnderstanding') ? technicalPlan.projectUnderstanding : prev.projectUnderstanding,
             outlineData: nextOutlineData,
+          };
+        }
+
+        if (taskType === 'project-understanding-research') {
+          return {
+            ...prev,
+            projectUnderstandingTask: latestTask || trimTaskLogs(technicalPlan.projectUnderstandingTask),
+            projectUnderstanding: hasOwnField(technicalPlan, 'projectUnderstanding') ? technicalPlan.projectUnderstanding : prev.projectUnderstanding,
+            outlineData: hasOwnField(technicalPlan, 'outlineData') ? (technicalPlan.outlineData || null) : prev.outlineData,
           };
         }
 
@@ -1017,6 +1031,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           outlineWordControlSnapshot={state.outlineWordControlSnapshot}
           contentIllustrationPlan={state.contentIllustrationPlan}
           sections={state.contentGenerationSections}
+          projectUnderstanding={state.projectUnderstanding}
+          projectUnderstandingTask={state.projectUnderstandingTask}
+          onProjectUnderstandingChanged={(nextState) => setState(normalizeTechnicalPlanState(nextState))}
           onContentGenerationOptionsChange={saveContentGenerationOptions}
           onContentSaved={saveChapterContent}
         />

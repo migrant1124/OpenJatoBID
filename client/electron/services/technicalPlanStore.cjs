@@ -19,6 +19,13 @@ const {
   normalizeRequirementResponseMatrix,
 } = require('./technicalPlanQualityModel.cjs');
 const { applyOutlineQualityRules, validateConditionalOutlineDepth } = require('./outlineQualityRules.cjs');
+const {
+  isProjectUnderstandingNode,
+  isReviewableGap,
+  normalizeProjectUnderstanding,
+  projectUnderstandingSubtreeHash,
+  validateProjectUnderstandingOutlineContent,
+} = require('./projectUnderstanding.cjs');
 
 const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
 const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
@@ -74,6 +81,7 @@ const outlineResponseStateFields = [
 const outlineQualityMetadataFields = [
   'focus_priority',
   'focus_scoring_point_ids',
+  'feature_role',
 ];
 
 const defaultOutlineFormatConstraints = Object.freeze({
@@ -132,6 +140,8 @@ const initialState = {
   contentGenerationRuntime: undefined,
   requirementResponseMatrix: undefined,
   outlineQualityReview: undefined,
+  projectUnderstanding: undefined,
+  projectUnderstandingTask: undefined,
   outlineData: null,
 };
 
@@ -141,6 +151,7 @@ const taskFieldTypes = {
   outlineGenerationTask: 'outline-generation',
   globalFactsTask: 'global-facts-generation',
   contentGenerationTask: 'content-generation',
+  projectUnderstandingTask: 'project-understanding-research',
 };
 
 const taskTypeFields = Object.fromEntries(Object.entries(taskFieldTypes).map(([field, type]) => [type, field]));
@@ -327,6 +338,7 @@ function normalizeOutlineFocusMetadata(value) {
   }
   const scoringPointIds = normalizeStringArray(source.focus_scoring_point_ids, [], '目录重点评分项');
   if (scoringPointIds.length) normalized.focus_scoring_point_ids = scoringPointIds;
+  if (source.feature_role === 'project-understanding') normalized.feature_role = source.feature_role;
   return normalized;
 }
 
@@ -1066,7 +1078,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     return {
       task_id: row.task_id,
       type: row.type,
-      status: normalizeStatus(row.status, ['running', 'pausing', 'paused', 'success', 'error'], 'running'),
+      status: normalizeStatus(row.status, ['running', 'pausing', 'paused', 'success', 'error', 'canceled'], 'running'),
       progress: Number(row.progress || 0),
       logs: safeJsonParse(row.logs_json, []),
       started_at: row.started_at,
@@ -1701,6 +1713,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_illustration_plan_json: null,
       requirement_response_matrix_json: null,
       outline_quality_review_json: null,
+      project_understanding_json: null,
       outline_word_control_snapshot_json: null,
       pending_tender_markdown_path: null,
       pending_tender_file_name: null,
@@ -1734,6 +1747,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_illustration_plan_json: null,
       requirement_response_matrix_json: null,
       outline_quality_review_json: null,
+      project_understanding_json: null,
       outline_project_name: null,
       outline_project_overview: null,
       outline_word_control_snapshot_json: null,
@@ -1775,15 +1789,24 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
+    const projectUnderstandingJson = ensureMetaRow().project_understanding_json;
+    const projectUnderstanding = projectUnderstandingJson
+      ? normalizeProjectUnderstanding(safeJsonParse(projectUnderstandingJson, undefined))
+      : undefined;
+    if (projectUnderstanding) {
+      projectUnderstanding.content_review = { status: 'pending', issues: [] };
+      projectUnderstanding.human_review = { status: 'stale' };
+    }
     updateMeta({
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
       outline_quality_review_json: null,
+      project_understanding_json: jsonOrNull(projectUnderstanding),
     });
   }
 
   function clearDownstreamFromOriginalPlan() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation', 'project-understanding-research')").run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
     db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
@@ -1796,6 +1819,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
       outline_quality_review_json: null,
+      project_understanding_json: null,
     });
   }
 
@@ -1815,7 +1839,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function clearWorkflowSpecificState(workflowKind) {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
+    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation', 'project-understanding-research')").run();
     db.prepare('DELETE FROM technical_plan_content_sections').run();
     db.prepare('DELETE FROM technical_plan_content_plans').run();
     db.prepare('DELETE FROM technical_plan_outline_nodes').run();
@@ -1839,6 +1863,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       content_generation_runtime_json: null,
       content_illustration_plan_json: null,
       outline_quality_review_json: null,
+      project_understanding_json: null,
     });
   }
 
@@ -1986,6 +2011,11 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       );
     }
     if (hasOwn(partial, 'outlineQualityReview')) metaUpdates.outline_quality_review_json = jsonOrNull(partial.outlineQualityReview);
+    if (hasOwn(partial, 'projectUnderstanding')) {
+      metaUpdates.project_understanding_json = partial.projectUnderstanding == null
+        ? null
+        : jsonOrNull(normalizeProjectUnderstanding(partial.projectUnderstanding));
+    }
 
     if (Object.keys(metaUpdates).length) updateMeta(metaUpdates);
 
@@ -2108,6 +2138,9 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         ? normalizeRequirementResponseMatrix(requirementResponseMatrix)
         : undefined,
       outlineQualityReview: safeJsonParse(meta.outline_quality_review_json, undefined),
+      projectUnderstanding: meta.project_understanding_json
+        ? normalizeProjectUnderstanding(safeJsonParse(meta.project_understanding_json, undefined))
+        : undefined,
       contentGenerationSections: loadContentSections(outlineData),
       contentGenerationPlans: loadContentPlans(),
       outlineData,
@@ -2360,6 +2393,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const affectedIds = normalizeStringSet(request?.affectedNodeIds);
     const clearAll = reason === 'replace';
     const invalidatesContentTask = reason !== 'sort';
+    const previousProjectSubtreeHash = projectUnderstandingSubtreeHash(loadTechnicalPlan().outlineData);
 
     const transaction = db.transaction(() => {
       assertOutlineMutationAllowed();
@@ -2370,6 +2404,29 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       saveOutlineData(outlineToSave);
       const rows = flattenOutlineItems(outlineToSave?.outline || []);
       const nextIds = new Set(rows.map((row) => row.node_id));
+      const projectUnderstanding = normalizeProjectUnderstanding(
+        safeJsonParse(ensureMetaRow().project_understanding_json, undefined),
+      );
+      const removedProjectNode = request.reason === 'delete'
+        && projectUnderstanding.placement?.node_id
+        && !nextIds.has(projectUnderstanding.placement.node_id);
+      if (removedProjectNode) {
+        projectUnderstanding.placement = {
+          status: 'excluded',
+          node_id: projectUnderstanding.placement.node_id,
+          reason: '用户已从当前目录删除项目理解章节，后续生成不再自动补全',
+        };
+        projectUnderstanding.human_review = { status: 'stale' };
+        updateMeta({ project_understanding_json: jsonOrNull(projectUnderstanding) });
+      } else if (previousProjectSubtreeHash !== projectUnderstandingSubtreeHash(outlineToSave) && projectUnderstanding.placement) {
+        projectUnderstanding.content_review = {
+          ...validateProjectUnderstandingOutlineContent(outlineToSave, projectUnderstanding),
+          checked_at: now(),
+        };
+        projectUnderstanding.human_review = { status: 'stale' };
+        projectUnderstanding.audit_log.push({ action: 'outline-changed', at: now() });
+        updateMeta({ project_understanding_json: jsonOrNull(projectUnderstanding) });
+      }
       restoreMappedContentRows({ snapshot, idMap, affectedIds, nextIds, clearAll });
       if (invalidatesContentTask) {
         db.prepare("DELETE FROM technical_plan_tasks WHERE type = 'content-generation'").run();
@@ -2529,6 +2586,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function saveChapterContent({ nodeId, content }) {
+    const current = loadTechnicalPlan();
+    const isProjectUnderstanding = isProjectUnderstandingNode(current.outlineData, nodeId);
     const transaction = db.transaction(() => {
       assertContentEditingAllowed();
       const timestamp = now();
@@ -2568,10 +2627,51 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         VALUES (?, ?, NULL, ?)
         ON CONFLICT(node_id) DO UPDATE SET status = excluded.status, error = NULL, updated_at = excluded.updated_at
       `).run(nodeId, nextContent.trim() ? 'success' : 'idle', timestamp);
-      updateMeta({ content_illustration_plan_json: null });
+      const metaUpdate = { content_illustration_plan_json: null };
+      if (isProjectUnderstanding) {
+        const projectUnderstanding = normalizeProjectUnderstanding(current.projectUnderstanding);
+        projectUnderstanding.content_review = {
+          ...validateProjectUnderstandingOutlineContent(current.outlineData, projectUnderstanding, { nodeId, content: nextContent }),
+          checked_at: timestamp,
+        };
+        projectUnderstanding.human_review = { status: 'stale' };
+        projectUnderstanding.audit_log.push({ action: 'content-edited', node_id: nodeId, at: timestamp });
+        metaUpdate.project_understanding_json = jsonOrNull(projectUnderstanding);
+      }
+      updateMeta(metaUpdate);
     });
     transaction();
     return loadTechnicalPlan();
+  }
+
+  function updateProjectUnderstanding(action, versionId) {
+    const state = normalizeProjectUnderstanding(loadTechnicalPlan().projectUnderstanding);
+    const timestamp = now();
+    if (action === 'apply-version') {
+      const nextVersionId = String(versionId || state.pending_version_id || '').trim();
+      if (!state.versions.some((version) => version.version_id === nextVersionId)) throw new Error('未找到要应用的项目理解资料版本');
+      state.active_version_id = nextVersionId;
+      state.pending_version_id = undefined;
+      state.content_review = { status: 'pending', issues: [] };
+      state.human_review = { status: 'stale' };
+    } else if (action === 'mark-reviewed') {
+      const version = state.versions.find((item) => item.version_id === state.active_version_id);
+      if (!version) throw new Error('当前没有可复核的项目理解资料版本');
+      version.accepted_gaps = (version.gaps || []).filter(isReviewableGap);
+      if (version.evidence?.length && (version.gaps || []).every((gap) => version.accepted_gaps.includes(gap))) {
+        version.status = 'complete';
+      }
+      state.human_review = {
+        status: 'reviewed',
+        reviewed_at: timestamp,
+        version_id: version.version_id,
+        accepted_gaps: version.accepted_gaps,
+      };
+    } else {
+      throw new Error('不支持的项目理解操作');
+    }
+    state.audit_log.push({ action, version_id: state.active_version_id, at: timestamp });
+    return updateTechnicalPlan({ projectUnderstanding: state });
   }
 
   async function importTenderDocument() {
@@ -2801,6 +2901,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     saveContentGenerationOptions,
     saveContentIllustrationPlan,
     saveChapterContent,
+    updateProjectUnderstanding,
   };
 }
 

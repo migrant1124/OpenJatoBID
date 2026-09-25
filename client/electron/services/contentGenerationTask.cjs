@@ -24,6 +24,14 @@ const {
 const { countReadableWords } = require('../utils/wordCount.cjs');
 const { NATURAL_OUTLINE_GROUPING_RULES } = require('./outlineNaturalGrouping.cjs');
 const {
+  FEATURE_ROLE,
+  formatEvidencePackage,
+  getActiveResearchVersion,
+  normalizeProjectUnderstanding,
+  validateProjectUnderstandingContent,
+  validateProjectUnderstandingOutlineContent,
+} = require('./projectUnderstanding.cjs');
+const {
   CONTENT_PLAN_VERSION,
   buildChapterWritingTask,
   buildContentPlanFingerprint,
@@ -845,7 +853,7 @@ function renderKnowledgeItemsForPrompt(items) {
   })).filter((item) => item.id && item.title && item.resume), null, 2);
 }
 
-function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapters, projectOverview, bidAnalysisFactsText, globalFactTitlesText, regenerateRequirement, tableRequirement, maxTables, tableTotalSections, knowledgeItems, chapterWritingTask, writingProfile }) {
+function buildChapterContentPlanMessages({ chapter, parentChapters, siblingChapters, projectOverview, bidAnalysisFactsText, globalFactTitlesText, regenerateRequirement, tableRequirement, maxTables, tableTotalSections, knowledgeItems, chapterWritingTask, writingProfile, projectUnderstandingInstruction }) {
   const chapterId = chapter.id || 'unknown';
   const chapterTitle = chapter.title || '未命名章节';
   const chapterDescription = chapter.description || '';
@@ -915,6 +923,7 @@ ${renderKnowledgeItemsForPrompt(knowledgeItems)}`,
   if (chapterWritingTask) {
     messages.push({ role: 'user', content: `二级章节任务书（本章叶子小节共享，必须遵守职责边界）：\n${JSON.stringify(chapterWritingTask, null, 2)}` });
   }
+  if (projectUnderstandingInstruction) messages.push({ role: 'user', content: projectUnderstandingInstruction });
 
   messages.push({
     role: 'user',
@@ -964,7 +973,7 @@ function formatKnowledgeContentsForPrompt(contents) {
     .join('\n\n');
 }
 
-function buildChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, preSectionInstruction, sectionContextText, preserveExistingRichContent = false }) {
+function buildChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, preSectionInstruction, sectionContextText, preserveExistingRichContent = false, projectUnderstandingInstruction }) {
   const chapterId = chapter.id || 'unknown';
   const chapterTitle = chapter.title || '未命名章节';
   const chapterDescription = chapter.description || '';
@@ -1004,6 +1013,7 @@ ${FACT_AND_METHOD_POLICY}
   if (String(preSectionInstruction || '').trim()) {
     messages.push({ role: 'user', content: String(preSectionInstruction || '').trim() });
   }
+  if (projectUnderstandingInstruction) messages.push({ role: 'user', content: projectUnderstandingInstruction });
   appendSelectedFactsMessage(messages, selectedFactsText);
   if (String(sectionContextText || '').trim()) {
     messages.push({ role: 'user', content: `章节分工与相关上下文：\n${String(sectionContextText).trim()}` });
@@ -1050,7 +1060,7 @@ ${FACT_AND_METHOD_POLICY}
   return messages;
 }
 
-function buildRestoredChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText }) {
+function buildRestoredChapterContentMessages({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText, projectUnderstandingInstruction }) {
   const messages = buildChapterContentMessages({
     chapter,
     projectOverview,
@@ -1059,6 +1069,7 @@ function buildRestoredChapterContentMessages({ chapter, projectOverview, selecte
     contentPlan,
     knowledgeContents,
     sectionContextText,
+    projectUnderstandingInstruction,
     preserveExistingRichContent: true,
     preSectionInstruction: `当前章节已经从用户原方案中还原出正文底稿。该底稿是用户已经写好的真实技术方案内容，必须作为本章节的基础保留。
 
@@ -1276,7 +1287,7 @@ workspace 文件：
 最终请把当前小节完整正文写入 optimized-section.md。该文件只能包含正文内容，不要包含标题或说明。`;
 }
 
-function buildAgentRestoredChapterContentFiles({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText }) {
+function buildAgentRestoredChapterContentFiles({ chapter, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent, sectionContextText, projectUnderstandingInstruction }) {
   return [
     {
       path: 'chapter-context.md',
@@ -1300,7 +1311,10 @@ ${String(selectedFactsText || '').trim() || '未提供'}
 ${String(regenerateRequirement || '').trim() || '无'}
 
 # 正文编排决策
-${contentPlan ? formatContentPlanForPrompt(contentPlan) : '无'}`,
+${contentPlan ? formatContentPlanForPrompt(contentPlan) : '无'}
+
+# 项目理解专用证据规则
+${projectUnderstandingInstruction || '不适用'}`,
     },
     {
       path: 'restored-content.md',
@@ -1667,7 +1681,7 @@ ${formatOutlineExpansionContext(outlineItems || [], 1, [], restoredNodeIds)}`,
   ];
 }
 
-function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan, sectionContextText }) {
+function buildContentExpansionMessages({ outlineData, context, projectOverview, selectedFactsText, currentContent, currentWords, targetWords, contentPlan, sectionContextText, projectUnderstandingInstruction }) {
   const { item, parentChapters, siblingChapters } = context;
   const chapterPath = [...(parentChapters || []), item]
     .map((chapter) => `${chapter.id || 'unknown'} ${chapter.title || '未命名章节'}`)
@@ -1722,6 +1736,7 @@ ${REVISION_POLICY}
     { role: 'user', content: `当前章节路径：${chapterPath}\n当前章节描述：${item.description || ''}` },
     { role: 'user', content: `同级章节（扩写时避免重复）：\n${siblingLines || '无'}` },
     ...(String(sectionContextText || '').trim() ? [{ role: 'user', content: `章节分工与相关上下文：\n${String(sectionContextText).trim()}` }] : []),
+    ...(projectUnderstandingInstruction ? [{ role: 'user', content: projectUnderstandingInstruction }] : []),
     { role: 'user', content: `当前章节原正文：\n${currentContent}` },
   { role: 'user', content: `当前章节统计字数：${currentWords}\n期望本章节扩写后至少达到：${targetWords}\n请返回局部扩写 JSON。` },
   ];
@@ -2574,6 +2589,23 @@ function collectFreeformLeafContexts(items) {
     .filter(({ item, parentChapters }) => item.manual_input_required !== true && !parentChapters.some((parent) => parent.manual_input_required === true));
 }
 
+function isProjectUnderstandingContext(context) {
+  return context?.item?.feature_role === FEATURE_ROLE
+    || (context?.parentChapters || []).some((parent) => parent?.feature_role === FEATURE_ROLE);
+}
+
+function buildProjectUnderstandingInstruction(context, evidencePackage) {
+  if (!isProjectUnderstandingContext(context)) return '';
+  return `本小节属于“项目理解”专用写作范围。
+1. 按“宏观背景→行业与上级部署→采购人职责→本项目需求与响应落点”的实际证据链自然表达，不得写成制作安装说明或固定六节模板。
+2. 只能使用下方已核验原文片段支持政策、讲话、数据、部署和机构关系；区分 direct、background 和 inference，不得补造中间层。
+3. 每个可核查事实必须保留对应的稳定证据标记 〔PU:evidence_id〕，标记必须从证据包逐字复制；扩写、精简和重生成不得删除或换绑。
+4. 只有证据包同时给出讲话人、日期和场合时才可使用直接引语；属性不完整时只能审慎转述并明确其来源范围。
+
+已核验证据包：
+${evidencePackage}`;
+}
+
 function normalizeReferenceDocumentIds(storedPlan) {
   const raw = storedPlan?.referenceKnowledgeDocumentIds ?? [];
   return Array.isArray(raw)
@@ -2690,19 +2722,27 @@ function updateOutlineItemResponse(items, targetId, response) {
   });
 }
 
-function clearOutlineContent(items) {
+function clearOutlineContent(items, preserveProjectUnderstanding = false, insideProjectUnderstanding = false) {
   return (items || []).map((item) => {
+    const protectedProjectUnderstanding = insideProjectUnderstanding || item.feature_role === FEATURE_ROLE;
+    if (preserveProjectUnderstanding && protectedProjectUnderstanding) return item;
     if (item.manual_input_required === true) return item;
     const decision = protectWriteForResponseMode(item, 'full-regenerate');
     if (!decision.allowed) {
-      return { ...item, children: clearOutlineContent(normalizeChildren(item)) };
+      return { ...item, children: clearOutlineContent(normalizeChildren(item), preserveProjectUnderstanding, protectedProjectUnderstanding) };
     }
     const { content, children, ...rest } = item;
     const normalizedChildren = normalizeChildren(item);
     return normalizedChildren.length
-      ? { ...rest, children: clearOutlineContent(normalizedChildren) }
+      ? { ...rest, children: clearOutlineContent(normalizedChildren, preserveProjectUnderstanding, protectedProjectUnderstanding) }
       : rest;
   });
+}
+
+function assertProjectUnderstandingMarkersPreserved(previousContent, nextContent) {
+  const markers = (content) => new Set([...String(content || '').matchAll(/〔PU:([A-Za-z0-9_-]+)〕/g)].map((match) => match[1]));
+  const missing = [...markers(previousContent)].filter((id) => !markers(nextContent).has(id));
+  if (missing.length) throw new Error(`项目理解改写删除了已有引用标记：${missing.join('、')}`);
 }
 
 function cloneOutlineItems(items) {
@@ -3479,9 +3519,13 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   if (retryContentCorrection && targetItemId) {
     throw new Error('单小节重新生成不支持重试内容矫正');
   }
+  const projectUnderstanding = normalizeProjectUnderstanding(storedPlan.projectUnderstanding);
+  const projectUnderstandingVersion = getActiveResearchVersion(projectUnderstanding);
+  const projectUnderstandingEvidence = formatEvidencePackage(projectUnderstanding);
+  const missingProjectUnderstandingEvidence = !projectUnderstandingVersion?.evidence?.length || !projectUnderstandingEvidence;
   const fullRegenerate = regenerate && !targetItemId;
   if (fullRegenerate) {
-    outlineData = { ...outlineData, outline: clearOutlineContent(outlineData.outline) };
+    outlineData = { ...outlineData, outline: clearOutlineContent(outlineData.outline, missingProjectUnderstandingEvidence) };
   }
 
   let allLeafContexts = collectLeafContexts(outlineData.outline);
@@ -3494,6 +3538,17 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     if (manualTarget) {
       throw new Error('该章节必须人工填写，不能重新生成、扩写或由 AI 改写');
     }
+  }
+  const requestedProjectContexts = targetItemId
+    ? leaves.filter((context) => context.item.id === targetItemId && isProjectUnderstandingContext(context))
+    : leaves.filter(isProjectUnderstandingContext);
+  let skippedProjectUnderstandingCount = 0;
+  if (requestedProjectContexts.length && missingProjectUnderstandingEvidence && !runOnlyIllustrationStage) {
+    if (targetItemId) throw new Error('请先完成项目理解资料获取与证据核验，再生成该章节正文');
+    skippedProjectUnderstandingCount = requestedProjectContexts.length;
+    const skippedIds = new Set(requestedProjectContexts.map((context) => context.item.id));
+    leaves = leaves.filter((context) => !skippedIds.has(context.item.id));
+    if (!leaves.length) throw new Error('当前仅有项目理解待写小节，请先完成资料获取与证据核验');
   }
   const regenerateRequirement = resume ? contentRuntime.regenerate_requirement : String(payload.requirement || '').trim();
   const generationOptions = payload.generationOptions || payload.generation_options || storedPlan.contentGenerationOptions || {};
@@ -3641,6 +3696,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       throw new Error('未找到要重新生成的正文小节');
     }
   }
+  if (skippedProjectUnderstandingCount) logs = [...logs, `项目理解资料尚未齐备，已跳过 ${skippedProjectUnderstandingCount} 个相关小节并继续其他正文。`];
 
   if (retryContentCorrection) {
     const successfulIds = leaves
@@ -4171,7 +4227,17 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       : '正文已全部生成，将检查最低字数要求。'];
   }
 
+  function assertProjectUnderstandingWrite(item, partial, contentForOutline) {
+    const hasContent = contentForOutline !== undefined || Object.prototype.hasOwnProperty.call(partial || {}, 'content');
+    if (!hasContent) return;
+    const context = collectLeafContexts(outlineData.outline || []).find((candidate) => candidate.item.id === item.id);
+    if (!context || !isProjectUnderstandingContext(context)) return;
+    const previousContent = sections[item.id]?.content ?? context.item.content ?? '';
+    assertProjectUnderstandingMarkersPreserved(previousContent, contentForOutline ?? partial.content ?? '');
+  }
+
   function saveSection(item, partial, contentForOutline, taskPartial = {}) {
+    assertProjectUnderstandingWrite(item, partial, contentForOutline);
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
@@ -4203,6 +4269,15 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       section: sections[item.id],
       runtime,
     });
+    const projectContext = collectLeafContexts(nextOutlineData.outline || []).find((context) => context.item.id === item.id);
+    if (projectContext && isProjectUnderstandingContext(projectContext)) {
+      projectUnderstanding.content_review = {
+        ...validateProjectUnderstandingOutlineContent(nextOutlineData, projectUnderstanding),
+        checked_at: now(),
+      };
+      projectUnderstanding.human_review = { status: 'unreviewed' };
+      workspaceStore.updateTechnicalPlan({ projectUnderstanding });
+    }
     if (hasOutlineContent || hasPartialContent) {
       writeDeveloperLog('content.section.saved', {
         section_id: item.id,
@@ -4377,6 +4452,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   }
 
   function saveSectionAndContentPlan(item, partial, contentForOutline, plan, taskPartial = {}) {
+    assertProjectUnderstandingWrite(item, partial, contentForOutline);
     const hasPartialContent = Object.prototype.hasOwnProperty.call(partial || {}, 'content');
     const hasOutlineContent = contentForOutline !== undefined;
     const nextPartial = { ...(partial || {}) };
@@ -4460,6 +4536,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     const { item, parentChapters, siblingChapters } = context;
     const chapterWritingTask = getChapterWritingTask(context);
     const writingProfile = resolveWritingProfile(item);
+    const projectUnderstandingInstruction = buildProjectUnderstandingInstruction(context, projectUnderstandingEvidence);
     const previousOriginalMaterial = originalMaterialFromStoredPlan(storedContentPlans[item.id]);
     let contentPlan;
 
@@ -4479,6 +4556,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           knowledgeItems,
           chapterWritingTask,
           writingProfile,
+          projectUnderstandingInstruction,
         }),
         temperature: 0.2,
         logTitle: `正文编排-${item.id}-${item.title || '未命名章节'}`,
@@ -4756,6 +4834,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       ? previousSection.status
       : previousContent.trim() ? 'success' : 'idle';
     const isSingleSectionRegeneration = Boolean(targetItemId);
+    const preserveProjectUnderstandingDuringRun = isProjectUnderstandingContext(context);
     let contentPlan = getContentPlanForItem(item.id);
     let originalState = getOriginalMaterialRuntimeState(item);
     let originalMaterial = originalState.originalMaterial;
@@ -4767,9 +4846,9 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       : `开始生成：${item.id} ${item.title || '未命名章节'}`];
     saveSection(item, {
       status: 'running',
-      content: isSingleSectionRegeneration ? previousContent : content,
+      content: isSingleSectionRegeneration || preserveProjectUnderstandingDuringRun ? previousContent : content,
       error: undefined,
-    }, isSingleSectionRegeneration ? previousContent : content, { logs });
+    }, isSingleSectionRegeneration || preserveProjectUnderstandingDuringRun ? previousContent : content, { logs });
 
     try {
       contentPlan = getContentPlanForItem(item.id);
@@ -4778,6 +4857,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       const knowledgeContents = resolveKnowledgeContents(contentPlan.knowledge?.item_ids, knowledgeContentMap);
       const selectedFactsText = resolveSelectedFactsText(contentPlan, globalFacts);
       const sectionWritingContext = getSectionWritingContext(context, contentPlan);
+      const projectUnderstandingInstruction = buildProjectUnderstandingInstruction(context, projectUnderstandingEvidence);
       writeDeveloperLog('content.section.context', {
         section_id: item.id,
         writing_policy_version: WRITING_POLICY_VERSION,
@@ -4785,8 +4865,8 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
         excerpt_node_ids: sectionWritingContext.excerpt_node_ids,
       });
       const contentMessages = needsRestoredOptimization
-        ? buildRestoredChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent: previousContent, sectionContextText: sectionWritingContext.text })
-        : buildChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, sectionContextText: sectionWritingContext.text });
+        ? buildRestoredChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, restoredContent: previousContent, sectionContextText: sectionWritingContext.text, projectUnderstandingInstruction })
+        : buildChapterContentMessages({ chapter: item, projectOverview, selectedFactsText, regenerateRequirement, contentPlan, knowledgeContents, sectionContextText: sectionWritingContext.text, projectUnderstandingInstruction });
 
       let generatedContent;
       if (needsRestoredOptimization && shouldUseAgentForMessages(aiService, contentMessages)) {
@@ -4816,6 +4896,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
             knowledgeContents,
             restoredContent: previousContent,
             sectionContextText: sectionWritingContext.text,
+            projectUnderstandingInstruction,
           }),
           eventPrefix: 'restored_optimization.agent',
           activityLabel: 'Agent 正在优化扩写已还原正文',
@@ -4844,6 +4925,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
 
       const nextContent = stripRepeatedChapterTitle(normalizeGeneratedMarkdown(rawContent), item);
       if (needsRestoredOptimization) assertRestoredRichContentPreserved(previousContent, nextContent);
+      if (isProjectUnderstandingContext(context)) {
+        if (previousContent.trim()) assertProjectUnderstandingMarkersPreserved(previousContent, nextContent);
+        const review = validateProjectUnderstandingContent(nextContent, projectUnderstanding);
+        if (review.status !== 'passed') throw new Error(review.issues.join('；'));
+      }
       content = nextContent;
       if (refreshSectionIfExternallyChanged(item, previousContent)) return;
       logs = [...logs, needsRestoredOptimization
@@ -5430,6 +5516,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
           targetWords,
           contentPlan,
           sectionContextText: sectionWritingContext.text,
+          projectUnderstandingInstruction: buildProjectUnderstandingInstruction(context, projectUnderstandingEvidence),
         }),
         temperature: 0.7,
         logTitle: `正文扩写-${item.id}-${item.title || '未命名章节'}`,
@@ -5441,6 +5528,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       });
       if (refreshSectionIfExternallyChanged(item, content)) return;
       const nextContent = applyContentExpansionOperations(content, patch);
+      if (isProjectUnderstandingContext(context)) {
+        assertProjectUnderstandingMarkersPreserved(content, nextContent);
+        const review = validateProjectUnderstandingContent(nextContent, projectUnderstanding);
+        if (review.status !== 'passed') throw new Error(review.issues.join('；'));
+      }
       const nextWords = countContentWords(nextContent);
       logs = [...logs, `扩写完成：${item.id} ${item.title || '未命名章节'}（${words} -> ${nextWords} 字）。`];
       rememberTouchedItem(item.id);
@@ -5504,7 +5596,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     const patch = await aiService.collectJsonResponse({
       messages: [
         { role: 'system', content: `你是投标技术文件正文编辑。只返回 JSON，不得删除事实、承诺、参数、表格、图片引用或 Markdown 结构。\n\n${CONTENT_WRITING_POLICY}\n${FACT_AND_METHOD_POLICY}\n${REVISION_POLICY}` },
-        { role: 'user', content: `请${targetWords > currentWords ? '扩写' : '精简'}以下 AI 编制小节，使正文接近 ${targetWords} 字。原样保留已有表格和图片引用，并保留原有标题层级、事实变量和评分响应；只调整叙述详略，不要添加编造信息。\n\n返回格式：{"content":"完整 Markdown 正文"}\n\n小节：${context.item.id} ${context.item.title || ''}\n当前字数：${currentWords}\n目标字数：${targetWords}\n\n当前正文：\n${currentContent}` },
+        { role: 'user', content: `请${targetWords > currentWords ? '扩写' : '精简'}以下 AI 编制小节，使正文接近 ${targetWords} 字。原样保留已有表格、图片引用和〔PU:evidence_id〕引用标记，并保留原有标题层级、事实变量和评分响应；只调整叙述详略，不要添加编造信息。\n\n${buildProjectUnderstandingInstruction(context, projectUnderstandingEvidence)}\n\n返回格式：{"content":"完整 Markdown 正文"}\n\n小节：${context.item.id} ${context.item.title || ''}\n当前字数：${currentWords}\n目标字数：${targetWords}\n\n当前正文：\n${currentContent}` },
       ],
       temperature: 0.35,
       logTitle: `${label}-${context.item.id}-${context.item.title || '未命名章节'}`,
@@ -5518,6 +5610,11 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
     if (refreshSectionIfExternallyChanged(context.item, currentContent)) return false;
     const nextContent = patch.content;
     assertRestoredRichContentPreserved(currentContent, nextContent);
+    if (isProjectUnderstandingContext(context)) {
+      assertProjectUnderstandingMarkersPreserved(currentContent, nextContent);
+      const review = validateProjectUnderstandingContent(nextContent, projectUnderstanding);
+      if (review.status !== 'passed') throw new Error(review.issues.join('；'));
+    }
     const nextWords = countContentWords(nextContent);
     if (nextWords === currentWords) return false;
     rememberTouchedItem(context.item.id);
@@ -7551,6 +7648,7 @@ const __developerContentExpansionPatchRuntime = {
   applyContentExpansionPatch,
   applyContentExpansionOperations,
   assertRestoredRichContentPreserved,
+  assertProjectUnderstandingMarkersPreserved,
   applyOutlineExpansionAdditions,
   buildOutlineExpansionMessages,
   buildOutlineExpansionRepairMessages,

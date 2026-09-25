@@ -53,6 +53,7 @@ export interface WordExportResult {
 export interface WordExportPayload {
   requestId?: string;
   source?: 'technical-plan';
+  nodeId?: string;
   project_name?: string;
   outline?: OutlineData['outline'];
   base_dir?: string;
@@ -843,6 +844,7 @@ export interface YibiaoBridge {
     saveContentGenerationOptions: (options: ContentGenerationOptions) => Promise<TechnicalPlanState>;
     saveContentIllustrationPlan: (plan: ContentIllustrationPlanState) => Promise<TechnicalPlanState>;
     saveChapterContent: (payload: { nodeId: string; content: string }) => Promise<TechnicalPlanState>;
+    updateProjectUnderstanding: (payload: { action: 'apply-version' | 'mark-reviewed'; versionId?: string }) => Promise<TechnicalPlanState>;
     clear: () => Promise<{ success: boolean; message?: string; state: TechnicalPlanState }>;
   };
   duplicateCheck: {
@@ -876,6 +878,8 @@ export interface YibiaoBridge {
     startGlobalFactsGeneration: (payload: unknown) => Promise<unknown>;
     startContentGeneration: (payload: unknown) => Promise<unknown>;
     pauseContentGeneration: () => Promise<unknown>;
+    startProjectUnderstandingResearch: (payload: { topics: string[]; reference_date: string; force_refresh?: boolean }) => Promise<unknown>;
+    cancelProjectUnderstandingResearch: () => Promise<unknown>;
     startRejectionItemsExtraction: (payload: unknown) => Promise<unknown>;
     startRejectionCheck: (payload: unknown) => Promise<unknown>;
     startDuplicateAnalysis: (payload: unknown) => Promise<unknown>;

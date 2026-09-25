@@ -1,4 +1,4 @@
-import type { AgentModeScenariosConfig, ConfiguredTextModelProvider, FileParserConfig, ImageModelConfig, ImageModelProfiles, LocalRenderingConfig, TextModelConfig, TextModelProfiles } from '../../shared/types';
+import type { AgentModeScenariosConfig, ConfiguredTextModelProvider, FileParserConfig, ImageModelConfig, ImageModelProfiles, LocalRenderingConfig, ProjectResearchConfig, TextModelConfig, TextModelProfiles } from '../../shared/types';
 
 export interface SettingsPageState {
   textModel: Omit<TextModelConfig, 'context_length_limit' | 'concurrency_limit'> & {
@@ -13,6 +13,7 @@ export interface SettingsPageState {
   imageModelProfiles: ImageModelProfiles;
   fileParser: FileParserConfig;
   localRendering: LocalRenderingConfig;
+  projectResearch: ProjectResearchConfig;
   agentRuntime: string;
   agentModeScenarios: AgentModeScenariosConfig;
   general: {
