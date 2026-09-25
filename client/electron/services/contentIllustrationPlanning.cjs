@@ -253,7 +253,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
   let nextBlockNumber = 1;
   const getNextBlockId = () => `B${String(nextBlockNumber++).padStart(3, '0')}`;
 
-  function visit(items, parentId = ROOT_PARENT_ID, depth = 1) {
+  function visit(items, parentId = ROOT_PARENT_ID, depth = 1, manualAncestor = false) {
     return (Array.isArray(items) ? items : []).map((item, siblingIndex) => {
       const id = String(item?.id || '').trim();
       const title = singleLine(item?.title || '未命名章节');
@@ -261,8 +261,9 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
       const children = Array.isArray(item?.children) ? item.children : [];
       const isLeaf = children.length === 0;
       const content = isLeaf ? resolveSectionContent(item, sections) : '';
+      const manualProtected = manualAncestor || item?.manual_input_required === true;
       const eligible = Boolean(isLeaf
-        && item?.manual_input_required !== true
+        && !manualProtected
         && content
         && sections?.[id]?.status !== 'error');
       const order = eligibleSectionIds.length;
@@ -306,7 +307,7 @@ function buildIllustrationPlanningContext({ outlineData, sections, options, aiIm
         description,
         leaf: isLeaf,
         eligible,
-        ...(children.length ? { children: visit(children, id, depth + 1) } : {}),
+        ...(children.length ? { children: visit(children, id, depth + 1, manualProtected) } : {}),
       };
     });
   }

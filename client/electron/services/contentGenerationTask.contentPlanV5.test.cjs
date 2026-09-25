@@ -3,6 +3,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { __contentPlanContractRuntime, __developerContentExpansionPatchRuntime } = require('./contentGenerationTask.cjs');
+const { CONTENT_PLAN_PROMPT_VERSION } = require('./sectionWritingContract.cjs');
+const { formatSectionWritingContext } = require('./contentWritingPolicy.cjs');
 
 function contract() {
   return {
@@ -28,6 +30,17 @@ test('Content Plan v5 保留完整章节写作合同并拒绝 v4 复用', () => 
   assert.equal(stored.plan_version, 5);
   assert.equal(__contentPlanContractRuntime.normalizeStoredContentPlan(stored).plan.writing_profile, 'deep');
   assert.equal(__contentPlanContractRuntime.normalizeStoredContentPlan({ plan_version: 4, plan }), null);
+  assert.equal(CONTENT_PLAN_PROMPT_VERSION, 'content-plan-v5-writing-1.7.3');
+});
+
+test('旧策略计划保持结构可读并保留原方案来源映射', () => {
+  const stored = __contentPlanContractRuntime.createStoredContentPlan({
+    ...contract(),
+    original_material: { restored: true, optimized: false, source_ids: ['S1'], source_titles: ['原方案章节'], source_hashes: ['H1'], restored_chars: 320 },
+  }, 'moderate', { prompt_version: 'content-plan-v5' });
+  const normalized = __contentPlanContractRuntime.normalizeStoredContentPlan(stored);
+  assert.equal(normalized.plan.original_material.restored, true);
+  assert.deepEqual(__contentPlanContractRuntime.originalMaterialFromStoredPlan(stored).source_ids, ['S1']);
 });
 
 test('深度写作合同进入正文提示词，编排提示词要求完整合同', () => {
@@ -42,6 +55,68 @@ test('深度写作合同进入正文提示词，编排提示词要求完整合�
   }).map((message) => message.content).join('\n');
   assert.match(planningPrompt, /SectionWritingContract/);
   assert.match(planningPrompt, /"writing_profile": "deep"/);
+  assert.match(planningPrompt, /不适用的数组保持为空/);
+  assert.doesNotMatch(planningPrompt, /"quantitative_details": \["[^"\]]*待确认/);
+});
+
+test('三级叶子正文请求获得本节时限、交付形式与祖先共通边界', () => {
+  const context = formatSectionWritingContext({
+    chapter: { id: '1.1.1', title: '沟通响应时效', role: '30分钟内确认，说明反馈路径及流程图交付' },
+    ancestors: [{ id: '1', title: '技术方案', description: '按项目实际需求响应' }, { id: '1.1', title: '服务方案', description: '售后闭环为共通边界' }],
+    siblings: [{ id: '1.1.1', title: '沟通响应时效' }, { id: '1.1.2', title: '现场保护', role: '设施保护' }],
+  });
+  const prompt = __contentPlanContractRuntime.buildChapterContentMessages({
+    chapter: { id: '1.1.1', title: '沟通响应时效', description: '30分钟内确认，说明反馈路径及流程图交付' },
+    projectOverview: '', selectedFactsText: '', regenerateRequirement: '', contentPlan: contract(), knowledgeContents: [], sectionContextText: context.text,
+  }).map((item) => item.content).join('\n');
+  for (const text of ['30分钟内确认', '流程图交付', '售后闭环为共通边界', '设施保护']) assert.match(prompt, new RegExp(text));
+  assert.match(prompt, /不复述兄弟职责/u);
+});
+
+test('正文消息使用 1.7.3 共用政策并移除机械短句硬规则', () => {
+  const plan = __contentPlanContractRuntime.normalizeContentPlan(contract(), new Set(['K1']), new Set(['项目地点']), { writingProfile: 'deep' });
+  const prompt = __contentPlanContractRuntime.buildChapterContentMessages({
+    chapter: { id: '1.1.1', title: '实施步骤', description: '实施闭环' },
+    projectOverview: '项目由采购人组织实施。', selectedFactsText: '项目地点：广州', regenerateRequirement: '', contentPlan: plan, knowledgeContents: [],
+    sectionContextText: '同级章节职责：售后章节负责售后服务。',
+  }).map((message) => message.content).join('\n');
+  assert.match(prompt, /writing-v1\.7\.3/);
+  assert.match(prompt, /句长由语义决定/);
+  assert.match(prompt, /不要求逐项写入/);
+  assert.doesNotMatch(prompt, /每句话不超过30个汉字|全文主语必须|词汇替换映射表|强制禁用以下AI高频词/);
+});
+
+test('正文计划格式化保留排除边界并省略无意义空字段', () => {
+  const plan = __contentPlanContractRuntime.normalizeContentPlan({
+    ...contract(), scoring_point_ids: [], value_anchor_ids: [], quantitative_details: [], deliverables: [], acceptance_criteria: [], evidence_requirements: [],
+  }, new Set(['K1']), new Set(['项目地点']), { writingProfile: 'deep' });
+  const formatted = __contentPlanContractRuntime.formatContentPlanForPrompt(plan);
+  assert.match(formatted, /其他章节负责，本节避免完整展开：售后服务/);
+  assert.match(formatted, /相关章节ID：1\.1\.1/);
+  assert.doesNotMatch(formatted, /评分点：无|量化细节：无|证据要求：无/);
+});
+
+test('纯正文和 JSON 修订路径选择适用政策且保留协议', () => {
+  const restoredMessages = __contentPlanContractRuntime.buildRestoredChapterContentMessages({
+    chapter: { id: '1.1.1', title: '实施' }, projectOverview: '', selectedFactsText: '', regenerateRequirement: '',
+    contentPlan: { ...contract(), table: { needed: false, purpose: '' } }, knowledgeContents: [],
+    restoredContent: '正文\n\n| 参数 | 值 |\n| --- | --- |\n| 工期 | 30日 |\n\n![示意图](asset://example.png)',
+  }).map((message) => message.content).join('\n');
+  const restoredPrompt = __contentPlanContractRuntime.buildAgentRestoredChapterContentPrompt();
+  const tablePrompt = __contentPlanContractRuntime.buildTableCleanupMessages({ chapter: { id: '1.1.1', title: '实施' }, tables: [{ id: 'T001', text: '|A|B|' }] }).map((message) => message.content).join('\n');
+  const coveragePrompt = __contentPlanContractRuntime.buildOriginalCoverageRepairMessages({
+    target: { item: { id: '1.1.1', title: '实施' }, sources: [] }, coverageItems: [], currentContent: '现有正文', attempt: 1, failures: [],
+  }).map((message) => message.content).join('\n');
+  assert.match(restoredPrompt, /writing-v1\.7\.3/);
+  assert.match(restoredMessages, /表格必须原样保留/);
+  assert.match(restoredMessages, /图片 Markdown 或 HTML img 标签必须原样保留/);
+  assert.match(restoredPrompt, /已有的 Markdown\/HTML 表格、图片 Markdown 和 HTML img 标签必须原样保留/);
+  assert.match(tablePrompt, /"replacements"/);
+  assert.match(tablePrompt, /省略对应 table_id/);
+  assert.doesNotMatch(tablePrompt, /也要用一句普通文字概括/);
+  assert.match(coveragePrompt, /"operation": "insert"/);
+  assert.match(coveragePrompt, /局部正文修订规则/);
+  assert.doesNotMatch(tablePrompt, /直接返回章节内容/);
 });
 
 test('评分价值扩写提示词保留章节合同而非只按字数扩写', () => {
@@ -86,7 +161,42 @@ test('正文扩写拒绝模糊、重复或受保护 Markdown 范围', () => {
   assert.throws(() => runtime.applyContentExpansionOperations('正文。\n\n![示意图](asset://example.png)', protectedAnchor), /不能在图片、代码块或表格内部插入/);
 });
 
-test('最低字数补目录拒绝同一二级目录下六个模型新增的并列三级叶子', () => {
+test('原方案补写复用精确锚点和受保护范围运行时', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const agentPatch = runtime.normalizeAgentOriginalCoverageOperations({
+    operations: [{ section_id: '1.1.1', operation: 'insert', anchor: 'end', content: '补充内容。' }],
+  }, new Set(['1.1.1']));
+  assert.equal(runtime.applyContentExpansionOperations('第一段。', { operations: agentPatch.operations }), '第一段。\n\n补充内容。');
+  assert.throws(
+    () => runtime.normalizeAgentOriginalCoverageOperations({ operations: [{ section_id: '9.9.9', operation: 'insert', anchor: 'end', content: '补充内容。' }] }, new Set(['1.1.1'])),
+    /section_id 无效/,
+  );
+  assert.throws(
+    () => runtime.applyContentExpansionOperations('第一段。\n\n第二段。', { operations: [{ operation: 'insert', anchor: '第一 段。', content: '补充内容。' }] }),
+    /精确唯一命中/,
+  );
+  assert.throws(
+    () => runtime.applyContentExpansionOperations('| 参数 | 值 |\n| --- | --- |\n| 工期 | 30日 |', { operations: [{ operation: 'replace', target_text: '| 工期 | 30日 |', content: '工期为30日。' }] }),
+    /不能修改图片、代码块或表格/,
+  );
+});
+
+test('原方案优化必须原样保留既有表格和图片引用', () => {
+  const source = '正文。\n\n| 参数 | 值 |\n| --- | --- |\n| 工期 | 30日 |\n\n![示意图](asset://example.png)\n\n![示意图](asset://example.png)';
+  const runtime = __developerContentExpansionPatchRuntime;
+  assert.doesNotThrow(() => runtime.assertRestoredRichContentPreserved(source, `优化正文。\n\n${source.slice(source.indexOf('| 参数'))}`));
+  assert.throws(() => runtime.assertRestoredRichContentPreserved(source, '优化正文。'), /缺少或改写了底稿中的表格或图片引用/);
+  assert.throws(
+    () => runtime.assertRestoredRichContentPreserved(source, source.replace('| 工期 | 30日 |', '| 工期 | 30日 |\n| 质保 | 1年 |')),
+    /缺少或改写了底稿中的表格或图片引用/,
+  );
+  assert.throws(
+    () => runtime.assertRestoredRichContentPreserved(source, source.replace('\n\n![示意图](asset://example.png)', '')),
+    /缺少、增加或改写了底稿中的表格或图片引用/,
+  );
+});
+
+test('最低字数补目录接受同一二级目录下六个独立三级叶子', () => {
   const runtime = __developerContentExpansionPatchRuntime;
   const outline = [{
     id: '1', title: '技术方案', description: '技术方案说明', children: [{
@@ -99,10 +209,69 @@ test('最低字数补目录拒绝同一二级目录下六个模型新增的并�
     })),
   };
 
-  assert.throws(
-    () => runtime.applyOutlineExpansionAdditions(outline, patch),
-    /同一二级目录下模型新增的无子节点三级目录不能超过 5 个/u,
-  );
+  const result = runtime.applyOutlineExpansionAdditions(outline, patch);
+  assert.equal(result.outline[0].children[0].children.length, 6);
+});
+
+test('最低字数补目录接受三级叶子和单分支，人工祖先不可追加', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const outline = [{ id: '1', title: '技术方案', description: '技术方案说明', children: [
+    { id: '1.1', title: '服务方案', description: '服务方案说明', allow_ai_children: true },
+    { id: '1.2', title: '人工章节', description: '人工填写', manual_input_required: true, children: [
+      { id: '1.2.1', title: '未逐个标人工的子节', description: '保留', allow_ai_children: true },
+    ] },
+  ] }];
+  const result = runtime.applyOutlineExpansionAdditions(outline, { additions: [
+    { parent_id: '1.1', title: '直接回应', description: '独立事项' },
+    { parent_id: '1.1', title: '单分支主题', description: '具体情景', children: [{ title: '唯一子项', description: '具体情景内容' }] },
+  ] });
+  assert.equal(result.outline[0].children[0].children.length, 2);
+  assert.throws(() => runtime.applyOutlineExpansionAdditions(outline, { additions: [
+    { parent_id: '1.2.1', title: '越权子项', description: '不应应用' },
+  ] }), /父节点不允许 AI 新增子目录/u);
+});
+
+test('正文补目录与 JSON 修复使用自然拆分规则及原补丁形状', () => {
+  const runtime = __developerContentExpansionPatchRuntime;
+  const outlineItems = [{ id: '1', title: '技术方案', children: [{ id: '1.1', title: '服务方案', allow_ai_children: true }] }];
+  const messages = runtime.buildOutlineExpansionMessages({
+    projectOverview: '', globalFactsText: '', outlineData: { outline: outlineItems }, currentWords: 10, minimumWords: 1000,
+    medianLeafWords: 10, round: 1, nodeMap: new Map([['1.1', { item: outlineItems[0].children[0], level: 2, parent: outlineItems[0] }]]), restoredNodeIds: new Set(),
+  });
+  const repair = runtime.buildOutlineExpansionRepairMessages({ invalidContent: '{}', issues: ['缺少 additions'] }, outlineItems);
+  for (const prompt of [messages, repair].map((items) => items.map((item) => item.content).join('\n'))) {
+    assert.match(prompt, /子项数量由内容决定/u);
+    assert.match(prompt, /"additions"/u);
+    assert.doesNotMatch(prompt, /最多 5 个|至少包含两个四级分支/u);
+  }
+});
+
+test('正文补目录示例 parent_id 不指向人工祖先下的 locked 节点', () => {
+  const root = { id: '1', title: '技术方案' };
+  const manual = { id: '1.1', title: '人工章节', manual_input_required: true };
+  const child = { id: '1.1.1', title: '人工后代', allow_ai_children: true };
+  const writable = { id: '1.2', title: '可补章节', allow_ai_children: true };
+  root.children = [{ ...manual, children: [child] }, writable];
+  const nodeMap = new Map([
+    ['1.1.1', { item: child, level: 3, parent: root.children[0] }],
+    ['1.2', { item: writable, level: 2, parent: root }],
+    ['1.1', { item: root.children[0], level: 2, parent: root }],
+  ]);
+  const prompt = __developerContentExpansionPatchRuntime.buildOutlineExpansionMessages({
+    projectOverview: '', globalFactsText: '', outlineData: { outline: [root] }, currentWords: 10, minimumWords: 1000,
+    medianLeafWords: 10, round: 1, nodeMap, restoredNodeIds: new Set(),
+  }).map((item) => item.content).join('\n');
+  assert.match(prompt, /"parent_id": "1\.2"/u);
+  assert.match(prompt, /1\.1\.1 \| L3 \| locked/u);
+});
+
+test('正文补目录不把非法 children 静默降为三级叶子', () => {
+  const parent = { id: '1.1', title: '服务方案', description: '说明', allow_ai_children: true };
+  const outlineItems = [{ id: '1', title: '技术方案', children: [parent] }];
+  const context = { nodeMap: new Map([['1.1', { item: parent, level: 2, parent: outlineItems[0] }]]), outlineItems, restoredNodeIds: new Set() };
+  assert.throws(() => __developerContentExpansionPatchRuntime.normalizeOutlineExpansionResponse({ additions: [
+    { parent_id: '1.1', title: '应急处置', description: '三种情景', children: 'INVALID' },
+  ] }, context), /children 必须是数组/u);
 });
 
 test('最低字数补目录仅允许重点章节新增五级叶子，且不拆分已有正文节点', () => {

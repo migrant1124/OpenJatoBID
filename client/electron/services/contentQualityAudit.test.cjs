@@ -29,3 +29,38 @@ test('质量审核输出评分覆盖、执行性、合规和模拟评分', () =>
   assert.deepEqual(audit.scoring_coverage.uncovered_scoring_point_ids, ['R2.P1']);
   assert.equal(audit.reviewer_simulation.items.length, 2);
 });
+
+test('质量诊断定位非开头精确重复和轻微改写候选，不改变准入语义', () => {
+  const exact = '接收资料后逐项核对项目名称、单位名称、主题文案、数字及计量单位，发现不一致时集中汇总并完成复核。';
+  const nearLeft = '版面完成后，将校样与确认文稿逐项对照，检查文字遗漏、图文对应和标识一致性，再提交确认版本。';
+  const nearRight = '版面完成之后，将校样同确认文稿逐项对照，检查文字遗漏、图文对应和标识一致性，再提交确认版本。';
+  const audit = auditContentQuality({
+    contexts,
+    sections: {
+      '1.1.1': { content: `不同开头内容。\n\n${exact}\n\n${nearLeft}` },
+      '1.2.1': { content: `另一个不同开头。\n\n${exact}\n\n${nearRight}` },
+    },
+    plans: {},
+    requirementResponseMatrix: { scoring_points: [], rejection_risks: [], hidden_requirements: [] },
+  });
+  assert.ok(audit.editorial.duplicates.some((item) => item.type === 'exact-paragraph' && item.left_paragraph_index > 0));
+  assert.ok(audit.editorial.duplicates.some((item) => item.type === 'near-paragraph' && item.left_excerpt !== item.right_excerpt));
+  assert.equal(audit.can_proceed, true);
+});
+
+test('质量诊断保留数值和否定差异，忽略受保护表格，并识别碎片句', () => {
+  const positive = '现场检查每周执行2次，完成后形成记录并交由项目负责人复核，确认问题全部关闭后归档。';
+  const negative = '现场检查每周不得执行3次，完成后形成记录并交由项目负责人复核，确认问题全部关闭后归档。';
+  const table = '| 项目 | 要求 |\n| --- | --- |\n| 质保 | 按招标文件执行 |';
+  const audit = auditContentQuality({
+    contexts,
+    sections: {
+      '1.1.1': { content: `${positive}\n\n${table}\n\n我们核对文字。我们核对数字。我们统一格式。我们形成记录。` },
+      '1.2.1': { content: `${negative}\n\n${table}` },
+    },
+    plans: {},
+    requirementResponseMatrix: { scoring_points: [], rejection_risks: [], hidden_requirements: [] },
+  });
+  assert.equal(audit.editorial.duplicates.length, 0);
+  assert.equal(audit.editorial.fragmented_expressions[0].node_id, '1.1.1');
+});

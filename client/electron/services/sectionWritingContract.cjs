@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 
 const CONTENT_PLAN_VERSION = 5;
-const CONTENT_PLAN_PROMPT_VERSION = 'content-plan-v5';
+const CONTENT_PLAN_PROMPT_VERSION = 'content-plan-v5-writing-1.7.3';
 const WRITING_PROFILES = new Set(['standard', 'deep', 'creative-proposal']);
 
 function hash(value) {

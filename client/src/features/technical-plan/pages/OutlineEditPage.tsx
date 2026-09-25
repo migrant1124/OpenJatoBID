@@ -250,6 +250,15 @@ function findOutlineItem(items: OutlineItem[], itemId: string): OutlineItem | nu
   return null;
 }
 
+function isManualOutlineItem(items: OutlineItem[], itemId: string, manualAncestor = false): boolean {
+  for (const item of items) {
+    const manual = manualAncestor || item.manual_input_required === true;
+    if (item.id === itemId) return manual;
+    if (item.children?.length && isManualOutlineItem(item.children, itemId, manual)) return true;
+  }
+  return false;
+}
+
 function findOutlineItemLevel(items: OutlineItem[], itemId: string, level = 1): number {
   for (const item of items) {
     if (item.id === itemId) {
@@ -784,7 +793,7 @@ function OutlineEditPage({
       id: `${parentId}.${nextIndex}`,
       title: '新目录项',
       description: '请编辑描述',
-      manual_input_required: parent?.manual_input_required === true,
+      manual_input_required: isManualOutlineItem(outlineData.outline, parentId),
     };
 
     try {
@@ -995,7 +1004,8 @@ function OutlineEditPage({
     setDropTarget(null);
   };
 
-  const renderItem = (item: OutlineItem, level = 0) => {
+  const renderItem = (item: OutlineItem, level = 0, manualAncestor = false) => {
+    const manualProtected = manualAncestor || item.manual_input_required === true;
     const hasChildren = Boolean(item.children?.length);
     const isExpanded = expandedItems.has(item.id);
     const isActive = selectedItemId === item.id;
@@ -1004,7 +1014,7 @@ function OutlineEditPage({
     const heading = exportFormat.headings[Math.min(item.id.split('.').length - 1, 5)];
     const displayTitle = formatOutlineDisplayTitle(item, heading);
     const constraintLabels = getOutlineConstraintLabels(item);
-    const writingLabel = getOutlineWritingLabel(item);
+    const writingLabel = getOutlineWritingLabel({ ...item, manual_input_required: manualProtected });
     const focusLabel = getOutlineFocusLabel(item);
     const positionLocked = isOutlinePositionLocked(item);
     const dropClass = isDropTarget
@@ -1048,15 +1058,15 @@ function OutlineEditPage({
             <label className="outline-tree-manual-toggle" onClick={(event) => event.stopPropagation()}>
               <input
                 type="checkbox"
-                checked={item.manual_input_required === true}
-                disabled={outlineMutationLocked || sorting}
+                 checked={manualProtected}
+                 disabled={outlineMutationLocked || sorting || manualAncestor}
                 onChange={(event) => { void changeManualAuthoring(item, event.target.checked); }}
               />
               <span>人工撰写</span>
             </label>
           )}
         </div>
-        {hasChildren && isExpanded && item.children?.map((child) => renderItem(child, level + 1))}
+        {hasChildren && isExpanded && item.children?.map((child) => renderItem(child, level + 1, manualProtected))}
       </div>
     );
   };
@@ -1371,7 +1381,7 @@ function OutlineEditPage({
                     </div>
                    )}
                   <div className="outline-detail-actions" aria-label="正文填写方式">
-                    <span className="bid-analysis-section-chip">{getOutlineWritingLabel(selectedItem)}</span>
+                    <span className="bid-analysis-section-chip">{getOutlineWritingLabel({ ...selectedItem, manual_input_required: isManualOutlineItem(activeOutlineData?.outline || [], selectedItem.id) })}</span>
                     {getOutlineFocusLabel(selectedItem) && <span className="bid-analysis-section-chip">{getOutlineFocusLabel(selectedItem)}</span>}
                   </div>
                   <div className="outline-detail-actions">

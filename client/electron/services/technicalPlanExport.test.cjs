@@ -143,15 +143,16 @@ test('authoritative manually filled Markdown reaches DOCX without rewriting cont
   assert.match(xml, new RegExp(fixedNote));
 });
 
-test('Word 保留三级主题、四级子主题和五级正文标题及内容', async () => {
+test('Word 同时保留三级、四级、五级正文标题及内容且不输出节点说明', async () => {
   const outline = [{
     ...responseItem('1'), title: '技术方案', content: '', children: [{
-      ...responseItem('1.1'), title: '服务方案', content: '', children: [{
-        ...responseItem('1.1.1'), title: '实施组织', content: '', children: [
-          responseItem('1.1.1.1', { title: '四级正文', content: '四级正文内容。' }),
+      ...responseItem('1.1'), title: '服务方案', content: '', children: [
+        responseItem('1.1.1', { title: '沟通响应时效', description: '内部说明：需包含确认时限', content: '三级正文内容。' }), {
+        ...responseItem('1.1.2'), title: '实施组织', content: '', children: [
+          responseItem('1.1.2.1', { title: '四级正文', content: '四级正文内容。' }),
           {
-            ...responseItem('1.1.1.2'), title: '人员分工', content: '', children: [
-              responseItem('1.1.1.2.1', { title: '五级正文', content: '五级正文内容。' }),
+            ...responseItem('1.1.2.2'), title: '人员分工', content: '', children: [
+              responseItem('1.1.2.2.1', { title: '五级正文', content: '五级正文内容。' }),
             ],
           },
         ],
@@ -160,8 +161,26 @@ test('Word 保留三级主题、四级子主题和五级正文标题及内容', 
   }];
   const xml = new AdmZip(await buildDocxBuffer({ project_name: '五级目录导出', outline })).readAsText('word/document.xml');
 
-  for (const text of ['实施组织', '四级正文', '人员分工', '五级正文', '四级正文内容。', '五级正文内容。']) {
+  for (const text of ['沟通响应时效', '三级正文内容。', '实施组织', '四级正文', '人员分工', '五级正文', '四级正文内容。', '五级正文内容。']) {
     assert.match(xml, new RegExp(text));
+  }
+  for (const text of ['三级正文内容。', '四级正文内容。', '五级正文内容。']) {
+    assert.equal((xml.match(new RegExp(text, 'g')) || []).length, 1);
+  }
+  assert.doesNotMatch(xml, /内部说明：需包含确认时限/);
+});
+
+test('普通与章框 Word 均保留历史父节点正文且不导出内部说明', async () => {
+  const outline = [responseItem('1', { title: '技术方案', content: '', children: [responseItem('1.1', {
+    title: '历史父章节', description: '内部说明不入正文', content: '父级历史正文保留标记',
+    children: [responseItem('1.1.1', { title: '子节', content: '子级正文保留标记' })],
+  })] })];
+  for (const exportFormat of [undefined, { heading_border: { enabled: true, min_heading_left_enabled: true } }]) {
+    const xml = new AdmZip(await buildDocxBuffer({ project_name: '父级正文导出', outline, export_format: exportFormat })).readAsText('word/document.xml');
+    for (const text of ['父级历史正文保留标记', '子级正文保留标记']) {
+      assert.equal((xml.match(new RegExp(text, 'g')) || []).length, 1);
+    }
+    assert.doesNotMatch(xml, /内部说明不入正文/u);
   }
 });
 

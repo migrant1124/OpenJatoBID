@@ -64,24 +64,120 @@ function rankContentExpansionCandidates(contexts, { sections, plans, requirement
   }).sort((left, right) => right.priority - left.priority || String(left.context?.item?.id).localeCompare(String(right.context?.item?.id), 'zh-CN'));
 }
 
+function comparableParagraphs(contexts, sections) {
+  const paragraphs = [];
+  for (const context of contexts || []) {
+    const content = String(sections?.[context.item.id]?.content || context.item?.content || '');
+    const withoutCode = content.replace(/```[\s\S]*?```/gu, '\n');
+    for (const [index, raw] of withoutCode.split(/\n\s*\n/gu).entries()) {
+      const text = raw.trim();
+      if (!text || /^(?:#{1,6}\s|>\s|!\[|\|)/u.test(text)) continue;
+      const normalized = text
+        .replace(/[*_`~]/gu, '')
+        .replace(/[\s，。！？；：、,.!?;:'"“”‘’（）()\[\]{}<>|—-]+/gu, '')
+        .trim();
+      if (normalized.length < 40) continue;
+      paragraphs.push({ node_id: context.item.id, paragraph_index: index, text: compact(text), normalized });
+    }
+  }
+  return paragraphs;
+}
+
+function semanticMarkers(value) {
+  const text = String(value || '');
+  return {
+    numbers: (text.match(/\d+(?:\.\d+)?(?:%|年|月|日|天|小时|分钟|万元|元|台|人|次)?/gu) || []).join('|'),
+    negatives: (text.match(/不得|不能|禁止|不应|未|无/gu) || []).join('|'),
+  };
+}
+
+function bigrams(value) {
+  const result = new Set();
+  for (let index = 0; index < value.length - 1; index += 1) result.add(value.slice(index, index + 2));
+  return result;
+}
+
+function diceSimilarity(left, right) {
+  const leftPairs = bigrams(left);
+  const rightPairs = bigrams(right);
+  let shared = 0;
+  for (const pair of leftPairs) if (rightPairs.has(pair)) shared += 1;
+  return leftPairs.size + rightPairs.size ? (2 * shared) / (leftPairs.size + rightPairs.size) : 0;
+}
+
+function duplicateIssue(left, right, type, reason, confidence) {
+  return {
+    left_node_id: left.node_id,
+    right_node_id: right.node_id,
+    type,
+    reason,
+    confidence,
+    left_paragraph_index: left.paragraph_index,
+    right_paragraph_index: right.paragraph_index,
+    left_excerpt: left.text.slice(0, 180),
+    right_excerpt: right.text.slice(0, 180),
+  };
+}
+
 function detectDuplicates(contexts, sections) {
+  const paragraphs = comparableParagraphs(contexts, sections);
   const duplicates = [];
-  const source = contexts || [];
-  for (let index = 0; index < source.length; index += 1) {
-    const left = source[index];
-    const leftText = compact(sections?.[left.item.id]?.content || left.item?.content || '');
-    if (leftText.length < 100) continue;
-    for (let nextIndex = index + 1; nextIndex < source.length; nextIndex += 1) {
-      const right = source[nextIndex];
-      const rightText = compact(sections?.[right.item.id]?.content || right.item?.content || '');
-      if (rightText.length < 100) continue;
-      const sampleLength = Math.min(120, leftText.length, rightText.length);
-      if (sampleLength >= 80 && leftText.slice(0, sampleLength) === rightText.slice(0, sampleLength)) {
-        duplicates.push({ left_node_id: left.item.id, right_node_id: right.item.id, reason: '开头正文高度重复' });
+  const exact = new Map();
+  const compared = new Set();
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    const previous = exact.get(paragraph.normalized) || [];
+    for (const entry of previous) {
+      duplicates.push(duplicateIssue(entry.paragraph, paragraph, 'exact-paragraph', '正文段落重复候选', 1));
+      compared.add(`${entry.index}:${paragraphIndex}`);
+    }
+    previous.push({ paragraph, index: paragraphIndex });
+    exact.set(paragraph.normalized, previous);
+  });
+
+  const gramIndex = new Map();
+  paragraphs.forEach((paragraph, index) => {
+    for (const gram of bigrams(paragraph.normalized)) {
+      const ids = gramIndex.get(gram) || [];
+      ids.push(index);
+      gramIndex.set(gram, ids);
+    }
+  });
+  paragraphs.forEach((right, rightIndex) => {
+    const hits = new Map();
+    for (const gram of bigrams(right.normalized)) {
+      for (const leftIndex of gramIndex.get(gram) || []) {
+        if (leftIndex >= rightIndex) continue;
+        hits.set(leftIndex, (hits.get(leftIndex) || 0) + 1);
+      }
+    }
+    for (const [leftIndex, shared] of hits) {
+      const pairKey = `${leftIndex}:${rightIndex}`;
+      if (compared.has(pairKey) || shared < 12) continue;
+      const left = paragraphs[leftIndex];
+      if (Math.max(left.normalized.length, right.normalized.length) / Math.min(left.normalized.length, right.normalized.length) > 1.25) continue;
+      const leftMarkers = semanticMarkers(left.text);
+      const rightMarkers = semanticMarkers(right.text);
+      if (leftMarkers.numbers !== rightMarkers.numbers || leftMarkers.negatives !== rightMarkers.negatives) continue;
+      const similarity = diceSimilarity(left.normalized, right.normalized);
+      if (similarity >= 0.86) duplicates.push(duplicateIssue(left, right, 'near-paragraph', '正文段落轻微改写重复候选', Number(similarity.toFixed(3))));
+    }
+  });
+  return duplicates;
+}
+
+function detectFragmentedExpressions(contexts, sections) {
+  const issues = [];
+  for (const context of contexts || []) {
+    const content = String(sections?.[context.item.id]?.content || context.item?.content || '');
+    for (const paragraph of content.split(/\n\s*\n/gu)) {
+      const sentences = paragraph.split(/[。！？!?]/gu).map(compact).filter(Boolean);
+      const shortSubjectSentences = sentences.filter((sentence) => sentence.length <= 18 && /^(?:我们|我方)/u.test(sentence));
+      if (sentences.length >= 4 && shortSubjectSentences.length >= 4) {
+        issues.push({ node_id: context.item.id, reason: '连续同主语碎片句候选', excerpt: compact(paragraph).slice(0, 180), sentence_count: sentences.length });
       }
     }
   }
-  return duplicates;
+  return issues;
 }
 
 function auditContentQuality({ contexts, sections, plans, requirementResponseMatrix, outlineData }) {
@@ -123,6 +219,7 @@ function auditContentQuality({ contexts, sections, plans, requirementResponseMat
     return contract.writing_profile === 'deep' && !/(参数|阈值|验收|交付|边界|闭环|频次|时限)/u.test(content);
   }).map((context) => context.item.id);
   const duplicates = detectDuplicates(allContexts, sections);
+  const fragmentedExpressions = detectFragmentedExpressions(allContexts, sections);
   const chapters = [...new Set(allContexts.map(secondLevelId).filter(Boolean))].map((chapterId) => ({
     chapter_node_id: chapterId,
     section_ids: allContexts.filter((context) => secondLevelId(context) === chapterId).map((context) => context.item.id),
@@ -132,6 +229,7 @@ function auditContentQuality({ contexts, sections, plans, requirementResponseMat
     ...(manualMissing.length ? [`待人工填写章节：${manualMissing.join('、')}`] : []),
     ...(deepGaps.length ? [`深度写作要素不足：${deepGaps.join('、')}`] : []),
     ...(duplicates.length ? [`存在重复正文：${duplicates.map((item) => `${item.left_node_id}/${item.right_node_id}`).join('、')}`] : []),
+    ...(fragmentedExpressions.length ? [`存在碎片化表达候选：${fragmentedExpressions.map((item) => item.node_id).join('、')}`] : []),
   ];
   return {
     schema_version: 1,
@@ -142,7 +240,7 @@ function auditContentQuality({ contexts, sections, plans, requirementResponseMat
     scoring_coverage: { uncovered_scoring_point_ids: uncovered, items: scoreItems },
     executability: { deep_gap_node_ids: deepGaps },
     evidence: { needs_confirmation_count: (matrix.rejection_risks || []).filter((item) => item?.status === 'needs-confirmation').length },
-    editorial: { duplicates },
+    editorial: { duplicates, fragmented_expressions: fragmentedExpressions },
     reviewer_simulation: { items: scoreItems, overall_findings: overallFindings },
   };
 }

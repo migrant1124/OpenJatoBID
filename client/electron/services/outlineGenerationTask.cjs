@@ -3,6 +3,7 @@ const { getBidAnalysisTasks, getResponseFileFormatStatus, isBidAnalysisTaskResul
 const { splitUserTextByContextLimit } = require('../utils/userTextSplitter.cjs');
 const { createEmptyFocusWritingMatrix } = require('./focusWritingTask.cjs');
 const { applyOutlineQualityRules } = require('./outlineQualityRules.cjs');
+const { NATURAL_OUTLINE_GROUPING_RULES } = require('./outlineNaturalGrouping.cjs');
 function formatSuggestions(suggestions) {
   if (!suggestions?.length) return '';
   return `\n\n本轮修正建议：\n${suggestions.map((item, index) => `${index + 1}. ${item}`).join('\n')}`;
@@ -298,20 +299,20 @@ function buildKnowledgeSegments(knowledgeItems, aiService, sharedMessages) {
   return segments.map((segment, index) => ({ ...segment, index: index + 1, total: segments.length, segmentLimit }));
 }
 
-function formatKnowledgePatchOutlineContext(items, level = 1, lines = [], focusPriority = '') {
+function formatKnowledgePatchOutlineContext(items, level = 1, lines = [], focusPriority = '', manualAncestor = false) {
   for (const item of items || []) {
     const id = String(item?.id || '').trim();
     const title = String(item?.title || '').trim();
     const description = String(item?.description || '').trim();
     const currentFocusPriority = level === 2 ? String(item?.focus_priority || '').trim() : focusPriority;
-    const protectedNode = item?.manual_input_required === true || String(item?.content || '').trim();
+    const protectedNode = manualAncestor || item?.manual_input_required === true || Boolean(String(item?.content || '').trim());
     const updateState = level === 1 || protectedNode ? 'update:locked' : 'update:allowed';
     const addState = protectedNode
       ? 'add:locked'
       : (level >= 1 && level <= 3 ? `add:L${level + 1}` : (level === 4 && currentFocusPriority ? 'add:L5' : 'add:locked'));
     lines.push(`${id || 'unknown'} | L${level} | ${updateState} | ${addState} | ${title || '未命名目录'} | ${description}`);
     if (item?.children?.length) {
-      formatKnowledgePatchOutlineContext(item.children, level + 1, lines, currentFocusPriority);
+      formatKnowledgePatchOutlineContext(item.children, level + 1, lines, currentFocusPriority, manualAncestor || item?.manual_input_required === true);
     }
   }
   return lines.join('\n');
@@ -1402,7 +1403,7 @@ function buildKnowledgePatchSharedMessages({ overview, requirements, outline }) 
 4. updates 只能修改已有二级、三级、四级、五级目录的 title 或 description；id 必须逐字复制当前目录中的现有 ID。人工填写节点或已有正文节点不得修改。
 5. additions 只能新增二级、三级、四级、五级目录；parent_id 必须逐字复制现有一级、二级、三级或四级目录 ID。人工填写节点或已有正文节点不得作为 parent_id。
 6. additions 会追加到父级 children 末尾，不允许指定插入位置，不允许输出 id。
-7. 新增目录最多到五级。新增三级主题至少包含两个四级分支；四级只有位于服务方案、最高分档或次高分档等重点章节时才可包含至少两个五级叶子；五级不能包含 children。同一二级目录下，新增的无子节点三级目录最多 5 个。
+7. ${NATURAL_OUTLINE_GROUPING_RULES}
 8. 不允许输出 bindings、knowledge_item_ids、outline、完整目录、正文、图片、表格或编排计划。
 9. 不要把知识库条目绑定到目录；知识库只作为判断目录是否需要优化的参考材料。
 10. 只处理与项目概述、技术评分要求、现有目录主题强相关且当前目录确实缺失或表述明显不佳的内容。
@@ -1452,7 +1453,7 @@ function generateKnowledgeAdditionRepairMessages({ invalidContent, issues }, out
 1. 顶层只能有 updates 和 additions 数组。
 2. updates 只能修改已有二级、三级、四级、五级目录的 title 或 description，禁止修改一级目录、人工填写节点和已有正文节点。
 3. additions 只能新增二级、三级、四级、五级目录；parent_id 必须是现有一级、二级、三级或四级目录 ID，且不能是人工填写节点或已有正文节点。
-4. 新增三级主题至少包含两个四级分支；四级只有重点章节时才可包含至少两个五级叶子；五级不能包含 children；同一二级目录下新增的无子节点三级目录最多 5 个。
+4. ${NATURAL_OUTLINE_GROUPING_RULES}
 5. 禁止输出 bindings、knowledge_item_ids、outline、完整目录、正文、图片、表格或解释文字。
 6. 如果没有可修改或补充目录，返回 {"updates":[],"additions":[]}。
 
@@ -1552,7 +1553,7 @@ function normalizeOutlineItem(item, path = 'outline[]', allowedKnowledgeIds) {
   if (knowledgeItemIds.length) {
     normalized.knowledge_item_ids = knowledgeItemIds;
   }
-  if (raw.children !== undefined && raw.children !== null) {
+  if (raw.children !== undefined) {
     const children = requireArray(raw.children, `${path}.children`);
     if (children.length) {
       normalized.children = children.map((child, index) => normalizeOutlineItem(child, `${path}.children[${index}]`, allowedKnowledgeIds));
@@ -1702,6 +1703,13 @@ function createOutlineNodeMap(items) {
   }
   visit(items || []);
   return map;
+}
+
+function isProtectedKnowledgeNode(node, nodeMap) {
+  for (let current = node; current; current = current.parent ? nodeMap.get(String(current.parent.id || '').trim()) : null) {
+    if (current.item?.manual_input_required === true || String(current.item?.content || '').trim()) return true;
+  }
+  return false;
 }
 
 function normalizeTitleKey(value) {
@@ -1909,8 +1917,7 @@ function resolveKnowledgeAdditionParent(parentId, context, stats) {
   if (!parentInfo) return null;
   if (parentInfo.level >= 1
     && parentInfo.level <= 4
-    && parentInfo.item?.manual_input_required !== true
-    && !String(parentInfo.item?.content || '').trim()) return { parentId, parentInfo };
+    && !isProtectedKnowledgeNode(parentInfo, context.outlineNodeMap)) return { parentId, parentInfo };
   return null;
 }
 
@@ -1928,7 +1935,7 @@ function normalizeKnowledgeUpdate(update, path, context, stats, issues) {
     issues.push(`${path}.id=${id || '空'} 不是现有二级、三级、四级或五级目录 ID`);
     return null;
   }
-  if (nodeInfo.item?.manual_input_required === true || String(nodeInfo.item?.content || '').trim()) {
+  if (isProtectedKnowledgeNode(nodeInfo, context.outlineNodeMap)) {
     stats.dropped += 1;
     issues.push(`${path}.id=${id} 是人工填写节点或已有正文节点，不能修改`);
     return null;
@@ -1993,6 +2000,11 @@ function normalizeKnowledgeAdditionNode(value, targetLevel, path, stats, issues)
   }
   const description = String(value.description || value.summary || value.resume || title).trim() || title;
   const node = { title, description };
+  if (value.children !== undefined && !Array.isArray(value.children)) {
+    stats.dropped += 1;
+    issues.push(`${path}.children 必须是数组`);
+    return null;
+  }
   const rawChildren = Array.isArray(value.children) ? value.children : [];
   if (rawChildren.length) {
     if (targetLevel >= 5) {
@@ -2494,10 +2506,9 @@ function applyKnowledgeAdditions(outlinePayload, patch) {
   const nodeMap = createOutlineNodeMap(outline);
   let updateCount = 0;
   let additionCount = 0;
-
   (patch.updates || []).forEach((update) => {
     const target = nodeMap.get(update.id);
-    if (!target || target.level < 2 || target.level > 5 || target.item?.manual_input_required === true || String(target.item?.content || '').trim()) {
+    if (!target || target.level < 2 || target.level > 5 || isProtectedKnowledgeNode(target, nodeMap)) {
       return;
     }
     let changed = false;
@@ -2514,7 +2525,7 @@ function applyKnowledgeAdditions(outlinePayload, patch) {
 
   (patch.additions || []).forEach((addition) => {
     const parent = nodeMap.get(addition.parent_id);
-    if (!parent || parent.level < 1 || parent.level > 4 || parent.item?.manual_input_required === true || String(parent.item?.content || '').trim()) {
+    if (!parent || parent.level < 1 || parent.level > 4 || isProtectedKnowledgeNode(parent, nodeMap)) {
       return;
     }
     const key = normalizeTitleKey(addition.title);
@@ -2669,6 +2680,13 @@ function validateSourceChildrenPreserved(sourceNodes, finalNodes, path) {
     if (sourceNode.manual_input_required === true && finalNode.manual_input_required !== true) {
       throw new Error(`${path}: 人工填写节点“${sourceNode.title}”的标记不得移除`);
     }
+    if (sourceNode.manual_input_required === true && (
+      JSON.stringify(finalNode.children || []) !== JSON.stringify(sourceNode.children || [])
+      || String(finalNode.description || '') !== String(sourceNode.description || '')
+      || String(finalNode.content || '') !== String(sourceNode.content || '')
+    )) {
+      throw new Error(`${path}: 人工填写节点“${sourceNode.title}”及其后代不得修改`);
+    }
     if (sourceNode.manual_input_required === true) matchedManualNodeIndexes.add(foundIndex);
     validateSourceChildrenPreserved(
       Array.isArray(sourceNode.children) ? sourceNode.children : [],
@@ -2714,16 +2732,10 @@ function collectSourceDrivenGroupingIssues(payload, sourceOutline, requirementRe
       if (modelAdded && level > 5) {
         issues.push(`模型新增目录不能超过五级：${formatOutlineItemLabel(item)}`);
       }
-      if (modelAdded && level === 3 && children.length > 0 && children.length < 2) {
-        issues.push(`模型新增三级主题至少需要两个四级分支：${formatOutlineItemLabel(item)}`);
-      }
       const hasModelAddedChildren = children.some((child) => !preservedSourceNodes.has(child));
       if (level === 4 && hasModelAddedChildren) {
         if (!currentSecondLevel?.focus_priority) {
           issues.push(`非重点章节不允许新增五级目录：${formatOutlineItemLabel(item)}`);
-        }
-        if (children.length < 2) {
-          issues.push(`模型新增四级主题至少需要两个五级叶子：${formatOutlineItemLabel(item)}`);
         }
       }
       if (modelAdded && level === 5) {
@@ -2732,16 +2744,6 @@ function collectSourceDrivenGroupingIssues(payload, sourceOutline, requirementRe
         }
         if (children.length > 0) {
           issues.push(`五级目录不能包含子目录：${formatOutlineItemLabel(item)}`);
-        }
-      }
-
-      if (level === 2) {
-        const addedThirdLevelLeaves = children.filter((child) => (
-          !preservedSourceNodes.has(child)
-          && !(Array.isArray(child?.children) && child.children.length)
-        ));
-        if (addedThirdLevelLeaves.length > 5) {
-          issues.push(`同一二级目录下模型新增的无子节点三级目录不能超过 5 个：${formatOutlineItemLabel(item)}`);
         }
       }
 
@@ -2754,13 +2756,23 @@ function collectSourceDrivenGroupingIssues(payload, sourceOutline, requirementRe
 }
 
 function sourceDrivenGroupingRules() {
-  return `模型新增目录的层级规则：
-1. 来源骨架已有节点的层级、标题和顺序必须原样保留；以下规则只约束你自行新增的节点。
-2. 同主题或同评分点的具体内容，应先建立三级主题，再在其下使用四级目录表达具体内容。
-3. 同一二级目录下，新增的无子节点三级目录最多 5 个；如需第 6 个，必须重新归类为一个或多个三级主题。
-4. 每个新增三级主题至少包含两个四级分支，不得使用“其他事项”“补充内容”等空泛标题。
-5. 四级可以直接作为正文叶子。只有服务方案、最高分档或次高分档等重点章节中，四级才可作为子主题继续展开；此时至少包含两个五级叶子。
-6. 五级必须是可独立编写的具体叶子，不能再包含 children。模型新增目录最大深度为五级。`;
+  return NATURAL_OUTLINE_GROUPING_RULES;
+}
+
+function summarizeOutlineShape(items) {
+  const leaves = [0, 0, 0, 0, 0];
+  const branches = [];
+  function visit(nodes, level) {
+    for (const item of nodes || []) {
+      const children = Array.isArray(item.children) ? item.children : [];
+      if (children.length) {
+        branches.push(children.length);
+        visit(children, level + 1);
+      } else if (level <= 5) leaves[level - 1] += 1;
+    }
+  }
+  visit(items, 1);
+  return `叶子 L1-L5=${leaves.join('/')}，分支子项=${branches.join('/') || '无'}`;
 }
 
 function buildSourceDrivenGroupingRepairMessages({ invalidContent, issues }, context) {
@@ -2785,6 +2797,17 @@ function validateSourceDrivenOutline(payload, sourceOutline, options = {}) {
   if (!Array.isArray(payload?.outline) || !payload.outline.length) {
     throw new Error('最终目录不能为空');
   }
+  const seenIds = new Set();
+  function validateIds(items) {
+    for (const item of items || []) {
+      const id = String(item?.id || '').trim();
+      if (!id || seenIds.has(id)) throw new Error(`目录节点 ID 缺失或重复：${id || '空'}`);
+      seenIds.add(id);
+      if (item.children !== undefined && !Array.isArray(item.children)) throw new Error(`目录 children 必须是数组：${id}`);
+      validateIds(item.children || []);
+    }
+  }
+  validateIds(payload.outline);
   const sourceRoots = sourceOutline.outline || [];
   if (payload.outline.length !== sourceRoots.length) {
     throw new Error('一级目录数量必须与目录来源完全一致');
@@ -2870,7 +2893,7 @@ async function adjustSourceDrivenOutlineWordCount(aiService, context, log) {
 硬性规则：
 1. 一级目录及冻结目录来源中的全部节点必须保留原顺序和标题。
 2. 所有 manual_input_required=true 的节点必须原样保留，不得改写、删除或新增人工标记。
-3. 只能增减 AI 编制的二级及以下节点；保持目录至少三级。
+3. 只能增减 AI 编制的二级及以下节点；来源已有浅层叶子保持不变，不为达到三级而强行下沉。
 4. ${wordControlLeafCountMessage(context.wordControl)}
 5. 当前叶子小节数：${countOutlineLeaves(context.outline.outline || [])}。
 6. ${sourceDrivenGroupingRules()}
@@ -3496,9 +3519,11 @@ async function reviewValidatedOutlineWithAgent(agentService, outline, context) {
 要求：
 1. 必须先读取 validated-outline.json 和 outline-review-context.json。
 2. 不得编辑或重排目录，也不得访问当前工作区外的文件。
-3. 只检查目录标题是否明显偏离项目、评分要点是否可能缺少承接、相邻章节是否明显重复。
-4. 将审查结果写入 ${OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE}，格式为 {"status":"passed 或 warning","summary":"简短中文结论","issues":[{"severity":"info 或 warning","node_id":"可选目录编号","message":"具体说明"}]}。
-5. 使用 json-validation 校验该文件；程序已预置 Schema，只传 file_path。`,
+3. 检查标题是否偏题、拆分是否必要、父子是否同义空转、兄弟职责是否重叠，并结合可见技术要求和评分说明指出可能遗漏的具体响应事项及节点。
+4. 单分支、两个分支或六个以上三级叶子本身都不是错误；只在有具体内容依据时提醒，不得修改目录。
+5. 如果技术要求或评分说明缺失、只有概要或被截断，明确审查范围与无法核实之处，不得声称全部覆盖。
+6. 将审查结果写入 ${OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE}，格式为 {"status":"passed 或 warning","summary":"简短中文结论","issues":[{"severity":"info 或 warning","node_id":"可选目录编号","message":"具体说明"}]}。
+7. 使用 json-validation 校验该文件；程序已预置 Schema，只传 file_path。`,
       json_validation_schemas: { [OUTLINE_SEMANTIC_REVIEW_OUTPUT_FILE]: OUTLINE_SEMANTIC_REVIEW_SCHEMA },
       timeout_ms: FINAL_AGENT_TIMEOUT_MS,
       max_retries: 1,
@@ -3665,11 +3690,14 @@ async function runOutlineGenerationTask({ aiService, agentService, workspaceStor
     }
   }
   const qualityResult = applyOutlineQualityRules(outline, requirementResponseMatrix);
+  logs = [...logs, `目录规则 outline-natural-v1.7.4；${summarizeOutlineShape(qualityResult.outline.outline || [])}。`];
   log('一级目录来源与技术评分下级映射校验通过，正在进行只读语义审查。', 99);
   const semanticReview = await reviewValidatedOutlineWithAgent(agentService, qualityResult.outline, {
     project_overview: overview,
     source_kind: sourceKind,
-    source_root_titles: (sourceOutline.outline || []).map((item) => item.title),
+    source_outline: sourceOutline,
+    technical_requirements: requirements,
+    scoring_groups: groups,
   });
   logs = [...logs, semanticReview.status === 'unavailable'
     ? 'Pi Agent 语义审查未完成，已保留确定性校验通过的目录。'
@@ -3696,8 +3724,11 @@ module.exports = {
   validateSourceDrivenOutline,
   __knowledgePatchRuntime: {
     applyKnowledgeAdditions,
+    buildKnowledgePatchSharedMessages,
+    generateKnowledgeAdditionRepairMessages,
   },
   __outlineSemanticReview: {
     normalizeOutlineSemanticReview,
+    reviewValidatedOutlineWithAgent,
   },
 };

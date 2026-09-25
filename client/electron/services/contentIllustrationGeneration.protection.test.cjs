@@ -44,6 +44,18 @@ test('illustration apply rejects protected targets', () => {
   }, outlineData, sections), /不可写入的受控响应节点/);
 });
 
+test('人工祖先保护未逐个标记的后代图片和附件引用', () => {
+  const body = '人工正文\n\n![附件图](asset://manual.png)\n\n<!-- yibiao-illustration:start id="old" -->\n旧图\n<!-- yibiao-illustration:end -->';
+  const localOutline = { outline: [{ id: '1', title: '人工章节', manual_input_required: true, children: [{ id: '1.1', title: '未逐级标记', content: body }] }] };
+  const localSections = { '1.1': { status: 'success', content: body } };
+  const stripped = stripGeneratedIllustrationsFromDocument(localOutline, localSections);
+  assert.equal(stripped.sections['1.1'].content, body);
+  assert.throws(() => applyGeneratedIllustrationsToDocument({ items: [{
+    item_id: 'new', kind: 'ai', title: '越权图片', section_ids: ['1.1'], placement: 'after',
+    generation: { status: 'success', asset_url: 'yibiao-asset://generated-images/new.png' },
+  }] }, localOutline, localSections), /不可写入的受控响应节点/u);
+});
+
 test('多张图片按不同正文块锚点插入同一小节且保留顺序', () => {
   const localOutline = { outline: [{ id: 'free', title: '方案', response_mode: 'freeform-markdown', content: '第一段\n\n第二段' }] };
   const localSections = { free: { id: 'free', status: 'success', content: '第一段\n\n第二段' } };

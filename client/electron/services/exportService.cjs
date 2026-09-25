@@ -1740,6 +1740,13 @@ async function addChapterFrameRows(rows, items, context, level = 1) {
       continue;
     }
 
+    const parentContent = String(item.content || '').trim();
+    if (parentContent) {
+      const bodyChildren = [];
+      await addMarkdownContent(bodyChildren, parentContent, context);
+      rows.push(buildChapterContentRow(context.exportFormat, bodyChildren));
+    }
+
     await addChapterFrameRows(rows, item.children, context, level + 1);
   }
 }
@@ -1767,6 +1774,10 @@ async function addOutlineItems(children, items, context, level = 1) {
       context.convertedLeafCount = (context.convertedLeafCount || 0) + 1;
       reportConversionProgress(context, `已处理 ${context.convertedLeafCount}/${context.stats?.leafCount || context.convertedLeafCount} 个正文小节。`);
       continue;
+    }
+
+    if (String(item.content || '').trim()) {
+      await addMarkdownContent(children, item.content, context);
     }
 
     await addOutlineItems(children, item.children, context, level + 1);
