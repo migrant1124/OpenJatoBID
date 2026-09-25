@@ -288,7 +288,7 @@ test('目录生成接受同一二级目录下六个独立三级叶子', async ()
       payload: { reference_knowledge_document_ids: [] },
     }),
   );
-  assert.equal(state.outlineData.outline[0].children[0].children.length, 6);
+  assert.equal(state.outlineData.outline[0].children.find((item) => item.id === '1.1').children.length, 6);
   const prompt = requests.find((item) => item.progressLabel === '目录下级补充').messages.map((item) => item.content).join('\n');
   assert.match(prompt, /子项数量由内容决定/u);
   assert.doesNotMatch(prompt, /第 6 个，必须|至少包含两个四级分支|最多 5 个/u);

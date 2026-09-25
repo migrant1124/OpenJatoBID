@@ -25,7 +25,8 @@ const PLANNING_POLICY = `章节编排规则（${WRITING_POLICY_VERSION}）：
 const REVISION_POLICY = `局部正文修订规则：
 - 只补当前缺口并与相邻原文自然衔接，保留既有实质信息，不靠复述项目背景凑篇幅。
 - 写作要求只作用于新增或替换的正文值，不修改原文锚点、ID、JSON 结构和其他协议字段。
-- 保留数字、单位、条件、表格、图片引用、承诺和受保护内容，不把局部修复扩大为全文润色。`;
+- 保留数字、单位、条件、表格、图片引用、承诺和受保护内容，不把局部修复扩大为全文润色。
+- 原文含有〔PU:evidence_id〕稳定引用标记时原样保留，不删除、换绑或自行新增证据标识。`;
 
 function compact(value) {
   return String(value || '').replace(/\s+/gu, ' ').trim();

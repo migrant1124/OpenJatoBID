@@ -72,6 +72,15 @@ export interface LocalRenderingConfig {
   html_concurrency_limit: number;
 }
 
+export interface ProjectResearchConfig {
+  provider: 'brave';
+  api_key: string;
+  max_results_per_topic: number;
+  max_sources: number;
+  timeout_ms: number;
+  overall_timeout_ms: number;
+}
+
 export interface AgentModeScenariosConfig {
   existing_plan_expansion_original_outline_extraction: boolean;
 }
@@ -82,6 +91,7 @@ export interface ClientConfig extends AiConfig {
   image_model_profiles: ImageModelProfiles;
   file_parser: FileParserConfig;
   local_rendering?: LocalRenderingConfig;
+  project_research?: ProjectResearchConfig;
   agent_runtime: AgentRuntimeId;
   agent_mode_scenarios: AgentModeScenariosConfig;
   update_channel?: UpdateChannel;

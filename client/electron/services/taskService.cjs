@@ -4,6 +4,7 @@ const { runBidAnalysisTask } = require('./bidAnalysisTask.cjs');
 const { runContentGenerationTask } = require('./contentGenerationTask.cjs');
 const { runGlobalFactsTask } = require('./globalFactsTask.cjs');
 const { runOutlineGenerationTask } = require('./outlineGenerationTask.cjs');
+const { runProjectUnderstandingResearchTask } = require('./projectUnderstandingResearch.cjs');
 const { runRejectionCheckTask, runRejectionItemsExtractionTask } = require('./rejectionCheckTask.cjs');
 
 const taskDefinitions = {
@@ -51,6 +52,15 @@ const taskDefinitions = {
     lockPolicy: 'group-exclusive',
     stateKey: 'technicalPlan',
     field: 'contentGenerationTask',
+  },
+  'project-understanding-research': {
+    label: '项目理解资料获取',
+    group: 'technical-plan',
+    groupLabel: '技术方案',
+    step: 5,
+    lockPolicy: 'group-exclusive',
+    stateKey: 'technicalPlan',
+    field: 'projectUnderstandingTask',
   },
   'rejection-items-extraction': {
     label: '无效与废标项解析',
@@ -227,7 +237,7 @@ function createTask(type, payload) {
   };
 }
 
-function createTaskService({ aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService, localImageRenderService }) {
+function createTaskService({ app, configStore, aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService, localImageRenderService }) {
   const subscribers = new Set();
   const activeTasks = new Map();
   const activeTaskControls = new Map();
@@ -329,7 +339,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     }
 
     if (task.type === 'content-generation') {
-      copyPatchFields(patch, state, ['contentIllustrationPlan', 'contentGenerationRuntime']);
+      copyPatchFields(patch, state, ['contentIllustrationPlan', 'contentGenerationRuntime', 'projectUnderstanding']);
       if (!isActiveTaskStatus(task.status)) {
         copyPatchFields(patch, state, [
           'outlineData',
@@ -339,6 +349,10 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
           'contentGenerationRuntime',
         ]);
       }
+    }
+
+    if (task.type === 'project-understanding-research') {
+      copyPatchFields(patch, state, ['projectUnderstanding', 'outlineData']);
     }
 
     if (hasOwn(eventPatch, 'outlineData')) {
@@ -514,6 +528,12 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         emit(pausingTask, buildSnapshot(definition, state, pausingTask));
         return pausingTask;
       },
+      pauseAiQueue() {
+        return queueScopeId && aiService?.pauseQueueScope ? aiService.pauseQueueScope(queueScopeId) : 0;
+      },
+      resumeAiQueue() {
+        if (queueScopeId && aiService?.resumeQueueScope) aiService.resumeQueueScope(queueScopeId);
+      },
       waitForOutlineConfirmation(confirmation) {
         if (type !== 'outline-generation') throw new Error('当前任务不支持目录确认');
         if (outlineConfirmationWaiter) throw new Error('当前已有目录确认正在等待处理');
@@ -600,12 +620,37 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
         ? rejectionCheckStore
         : duplicateCheckStore;
     const runnerAiService = aiService?.withQueueScope ? aiService.withQueueScope(queueScopeId) : aiService;
-    runner({ aiService: runnerAiService, agentService, workspaceStore: runnerWorkspaceStore, knowledgeBaseService, localImageRenderService, updateTask, payload, taskControl, previousState }).catch((error) => {
-      const failedTask = updateTask({ status: 'error', error: error.message || '任务执行失败' });
+    runner({ app, configStore, aiService: runnerAiService, agentService, workspaceStore: runnerWorkspaceStore, knowledgeBaseService, localImageRenderService, updateTask, payload, taskControl, previousState }).catch((error) => {
+      const canceled = error?.code === 'TASK_CANCELED';
+      if (type === 'project-understanding-research') {
+        const plan = technicalPlanStore.loadTechnicalPlan() || {};
+        if (plan.projectUnderstanding) {
+          const config = configStore.load() || {};
+          technicalPlanStore.updateTechnicalPlan({
+            projectUnderstanding: {
+              ...plan.projectUnderstanding,
+              audit_log: [
+                ...(plan.projectUnderstanding.audit_log || []),
+                {
+                  action: canceled ? 'research-canceled' : 'research-failed',
+                  run_id: currentTask.task_id,
+                  provider: config.text_model_provider,
+                  model_name: config.model_name,
+                  started_at: currentTask.started_at,
+                  at: now(),
+                  status: canceled ? 'canceled' : 'failed',
+                  error_summary: canceled ? '用户取消' : String(error?.message || '任务执行失败').slice(0, 240),
+                },
+              ],
+            },
+          });
+        }
+      }
+      const failedTask = updateTask({ status: canceled ? 'canceled' : 'error', error: canceled ? undefined : error.message || '任务执行失败', logs: canceled ? [...(currentTask.logs || []), '项目理解资料获取已取消。'] : currentTask.logs });
       const nextState = updateWorkspaceState(definition, { [taskField]: failedTask });
       emit(failedTask, buildSnapshot(definition, nextState, failedTask));
     }).finally(() => {
-      if (aiService?.resumeQueueScope) {
+      if (!taskControl.deferQueueResume && aiService?.resumeQueueScope) {
         aiService.resumeQueueScope(queueScopeId);
       }
       activeTasks.delete(type);
@@ -785,6 +830,25 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     emit(recoveredTask, buildSnapshot(getTaskDefinition('global-facts-generation'), state, recoveredTask));
   }
 
+  function recoverInterruptedProjectUnderstandingTask() {
+    if (activeTasks.has('project-understanding-research')) return;
+    const technicalPlan = technicalPlanStore.loadTechnicalPlan() || {};
+    const task = technicalPlan.projectUnderstandingTask;
+    if (!isActiveTaskStatus(task?.status)) return;
+    const message = '上次项目理解资料获取因应用关闭而中断，请重新获取';
+    const recovered = {
+      ...task,
+      status: 'error',
+      progress: 100,
+      pause_requested: false,
+      error: message,
+      logs: [...(Array.isArray(task.logs) ? task.logs : []), message],
+      updated_at: now(),
+    };
+    const state = technicalPlanStore.updateTechnicalPlan({ projectUnderstandingTask: recovered });
+    emit(recovered, buildSnapshot(getTaskDefinition('project-understanding-research'), state, recovered));
+  }
+
   function recoverInterruptedRejectionCheckTasks() {
     const staleExtractionMessage = '上次解析未完成，请重新解析';
     const staleCheckMessage = '上次检查未完成，请重新检查';
@@ -914,6 +978,16 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
     startContentGeneration(payload) {
       return startManagedTask('content-generation', payload, runContentGenerationTask);
     },
+    startProjectUnderstandingResearch(payload) {
+      return startManagedTask('project-understanding-research', payload, runProjectUnderstandingResearchTask);
+    },
+    cancelProjectUnderstandingResearch() {
+      const task = activeTasks.get('project-understanding-research');
+      const control = activeTaskControls.get('project-understanding-research');
+      if (!task || !isActiveTaskStatus(task.status) || !control) throw new Error('当前没有正在获取的项目理解资料。');
+      control.cancel?.();
+      return control.requestPause();
+    },
     pauseContentGeneration() {
       const task = activeTasks.get('content-generation');
       const control = activeTaskControls.get('content-generation');
@@ -950,6 +1024,7 @@ function createTaskService({ aiService, agentService, technicalPlanStore, reject
       recoverInterruptedOutlineGenerationTask();
       recoverInterruptedContentGenerationTask();
       recoverInterruptedGlobalFactsTask();
+      recoverInterruptedProjectUnderstandingTask();
       recoverInterruptedRejectionCheckTasks();
       recoverInterruptedDuplicateCheckTask();
       return Array.from(activeTasks.values());

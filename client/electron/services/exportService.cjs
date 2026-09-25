@@ -9,6 +9,7 @@ const { getGeneratedImagesDir, getImportedImagesDir } = require('../utils/paths.
 const { REMOTE_IMAGE_RETRY_ATTEMPTS, REMOTE_IMAGE_RETRY_DELAY_MS } = require('../utils/remoteImageRetry.cjs');
 const { renderMarkdownHtml } = require('../utils/renderMarkdownHtml.cjs');
 const { deriveResponseCompletion } = require('./contentResponseModes.cjs');
+const { prepareProjectUnderstandingExport } = require('./projectUnderstanding.cjs');
 const {
   AlignmentType,
   BorderStyle,
@@ -2115,6 +2116,15 @@ function summarizeBlockedResponses(validations) {
   return validations.slice(0, 5).map((item) => item.node_id).filter(Boolean).join('、');
 }
 
+function findOutlineItemContext(items, nodeId, ancestors = []) {
+  for (const item of items || []) {
+    if (String(item.id || '') === String(nodeId || '')) return { item, ancestors };
+    const found = findOutlineItemContext(item.children, nodeId, [...ancestors, item]);
+    if (found) return found;
+  }
+  return null;
+}
+
 function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
   if (!technicalPlanStore?.loadTechnicalPlan) {
     throw new Error('技术方案工作区尚未就绪，请稍后重试');
@@ -2126,7 +2136,21 @@ function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
     throw new Error('没有可导出的目录内容');
   }
 
-  const completion = deriveResponseCompletion(outline, { taskStatus: 'success' });
+  let exportOutline = outline;
+  let exportProjectName = state.outlineData.project_name || payload.project_name;
+  if (payload.nodeId) {
+    const context = findOutlineItemContext(outline, payload.nodeId);
+    if (!context) throw new Error('未找到要导出的项目理解小节');
+    if (context.item.feature_role !== 'project-understanding' && !context.ancestors.some((item) => item.feature_role === 'project-understanding')) {
+      throw new Error('局部 Word 导出仅支持项目理解节点');
+    }
+    const selected = JSON.parse(JSON.stringify(context.item));
+    selected.feature_role = 'project-understanding';
+    exportOutline = [selected];
+    exportProjectName = `${exportProjectName || '技术方案'}-${selected.title || selected.id}`;
+  }
+
+  const completion = deriveResponseCompletion(exportOutline, { taskStatus: 'success' });
   const hardBlocks = completion.validations.filter((item) => (
     !item.response_complete
     || (item.response_status !== 'missing-required-evidence' && !item.compliant)
@@ -2142,10 +2166,13 @@ function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
     throw new Error(`强制证明材料缺失，确认风险后方可导出${nodeIds ? `（节点：${nodeIds}）` : ''}`);
   }
 
+  const prepared = prepareProjectUnderstandingExport({ ...state.outlineData, outline: exportOutline }, state.projectUnderstanding);
   return {
     ...payload,
-    project_name: state.outlineData.project_name || payload.project_name,
-    outline,
+    project_name: exportProjectName,
+    outline: prepared.outlineData?.outline || exportOutline,
+    project_understanding_draft: prepared.draft,
+    project_understanding_warnings: prepared.warnings,
   };
 }
 
@@ -2157,9 +2184,27 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
     },
 
     async exportWord(payload = {}, onProgress) {
+      const planStore = getTechnicalPlanStore?.() || technicalPlanStore;
       const effectivePayload = payload.source === 'technical-plan'
-        ? resolveTechnicalPlanExportPayload(payload, getTechnicalPlanStore?.() || technicalPlanStore)
+        ? resolveTechnicalPlanExportPayload(payload, planStore)
         : payload;
+      const recordProjectUnderstandingExport = (status, error) => {
+        if (payload.source !== 'technical-plan' || !planStore?.loadTechnicalPlan || !planStore?.updateTechnicalPlan) return;
+        const current = planStore.loadTechnicalPlan()?.projectUnderstanding;
+        if (!current) return;
+        planStore.updateTechnicalPlan({
+          projectUnderstanding: {
+            ...current,
+            audit_log: [...(current.audit_log || []), {
+              action: 'word-export',
+              version_id: current.active_version_id,
+              at: new Date().toISOString(),
+              status,
+              ...(error ? { error_summary: String(error.message || error).slice(0, 240) } : {}),
+            }],
+          },
+        });
+      };
       const stats = countOutlineStats(Array.isArray(effectivePayload.outline) ? effectivePayload.outline : []);
       const developerLogger = createDeveloperLogger({
         app,
@@ -2184,7 +2229,7 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
 
       const progressContext = { onProgress, warnings: [], stats };
       reportProgress(progressContext, 2, '正在准备 Word 导出。');
-      const defaultFilename = `${sanitizeFilename(effectivePayload.project_name || '标书文档')}_${formatExportTimestamp()}.docx`;
+      const defaultFilename = `${sanitizeFilename(effectivePayload.project_name || '标书文档')}${effectivePayload.project_understanding_draft ? '_待复核' : ''}_${formatExportTimestamp()}.docx`;
       const defaultDir = app?.getPath ? app.getPath('downloads') : process.env.USERPROFILE || process.cwd();
       const result = await dialog.showSaveDialog({
         title: '导出 Word 文档',
@@ -2195,11 +2240,12 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
       if (result.canceled || !result.filePath) {
         reportProgress(progressContext, 0, '已取消导出。', { phase: 'canceled' });
         developerLogger.write('export.word.canceled', { stats });
+        recordProjectUnderstandingExport('canceled');
         return { success: false, canceled: true, message: '已取消导出' };
       }
 
       try {
-        const warnings = [];
+        const warnings = [...(effectivePayload.project_understanding_warnings || [])];
         const buildResult = await buildDocxResult(effectivePayload, { onProgress, warnings, developerLogger });
         reportProgress({ onProgress, warnings: buildResult.warnings, stats: buildResult.stats }, 96, '正在写入 Word 文件。');
         developerLogger.write('export.word.write.started', {
@@ -2219,6 +2265,7 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
           warning_count: buildResult.warnings.length,
           stats: buildResult.stats,
         });
+        recordProjectUnderstandingExport(effectivePayload.project_understanding_draft ? 'draft' : 'formal');
         return { success: true, path: result.filePath, message, warnings: buildResult.warnings };
       } catch (error) {
         developerLogger.write('export.word.error', {
@@ -2226,6 +2273,7 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
           output_extension: path.extname(result.filePath).toLowerCase(),
           error: compactLogError(error),
         });
+        recordProjectUnderstandingExport('failed', error);
         throw error;
       }
     },

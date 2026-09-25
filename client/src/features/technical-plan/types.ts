@@ -11,8 +11,8 @@ export type BidAnalysisMode = 'key' | 'full' | 'custom';
 export type BidAnalysisTaskStatus = 'idle' | 'running' | 'success' | 'error';
 export type BidSectionMode = 'single' | 'multiple';
 export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error';
-export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation';
-export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error';
+export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation' | 'project-understanding-research';
+export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error' | 'canceled';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
 export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-confirmation' | 'illustration-generating' | 'done';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
@@ -474,6 +474,73 @@ export interface DetectedBidSection {
   evidence?: string[];
 }
 
+export interface ProjectUnderstandingSource {
+  source_id: string;
+  title: string;
+  publisher: string;
+  source_type: 'public-web' | 'internal';
+  url?: string;
+  published_at?: string;
+  retrieved_at: string;
+  content_hash: string;
+  authority_status?: 'official' | 'review-required';
+  version_type?: 'actual-read-page' | 'authorized-internal';
+  published_precision?: 'exact' | 'unknown';
+  internal_location?: string;
+}
+
+export interface ProjectUnderstandingEvidence {
+  evidence_id: string;
+  source_id: string;
+  excerpt: string;
+  location?: string;
+  claim: string;
+  theme?: string;
+  layer: 'macro' | 'industry' | 'superior' | 'procurer' | 'project' | 'response';
+  relationship: 'direct' | 'background' | 'inference';
+  event_date?: string;
+  speaker?: string;
+  occasion?: string;
+  document_number?: string;
+  applicability?: { object?: string; region?: string; period?: string };
+  effective_status?: 'current' | 'superseded' | 'future' | 'unknown' | 'not-applicable';
+  status_evidence?: string;
+}
+
+export interface ProjectUnderstandingVersion {
+  version_id: string;
+  status: 'complete' | 'partial' | 'failed' | 'canceled';
+  reference_date: string;
+  topics: string[];
+  completed_at?: string;
+  sources: ProjectUnderstandingSource[];
+  evidence: ProjectUnderstandingEvidence[];
+  relations: Array<{
+    from_evidence_id: string;
+    to_evidence_id: string;
+    relation_type: 'regulatory' | 'administrative-subordination' | 'group-control' | 'business-guidance' | 'policy-to-project' | 'background-context' | 'analytical-inference';
+    relationship: 'direct' | 'background' | 'inference';
+    support_evidence_ids: string[];
+    support_source_id: string;
+    support_excerpt: string;
+    explanation?: string;
+  }>;
+  gaps: string[];
+  accepted_gaps?: string[];
+}
+
+export interface ProjectUnderstandingState {
+  schema_version: 1;
+  placement?: { status: 'reused' | 'added' | 'review-required' | 'excluded'; node_id?: string; parent_node_id?: string; title?: string; reason: string };
+  reference_date: string;
+  active_version_id?: string;
+  pending_version_id?: string;
+  versions: ProjectUnderstandingVersion[];
+  content_review: { status: 'pending' | 'passed' | 'issues'; issues: string[]; checked_at?: string };
+  human_review: { status: 'unreviewed' | 'reviewed' | 'stale'; reviewed_at?: string; version_id?: string; accepted_gaps?: string[] };
+  audit_log: Array<Record<string, unknown>>;
+}
+
 export interface TechnicalPlanState {
   workflowKind: TechnicalPlanWorkflowKind;
   step: TechnicalPlanStep;
@@ -499,6 +566,8 @@ export interface TechnicalPlanState {
   bidSectionExtractionTask?: BackgroundTaskState;
   bidAnalysisTask?: BackgroundTaskState;
   outlineGenerationTask?: BackgroundTaskState;
+  projectUnderstandingTask?: BackgroundTaskState;
+  projectUnderstanding?: ProjectUnderstandingState;
   globalFactsTask?: BackgroundTaskState;
   globalFacts: GlobalFactGroupState[];
   contentGenerationTask?: BackgroundTaskState;

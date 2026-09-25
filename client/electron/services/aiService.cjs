@@ -679,7 +679,7 @@ function normalizeJsonPayload(request, parsed) {
   return normalized;
 }
 
-async function repairJsonResponse(app, config, invalidContent, issues, temperature, responseFormat, progressCallback, progressLabel, repairMessagesBuilder, logTitle, analyticsService) {
+async function repairJsonResponse(app, config, invalidContent, issues, temperature, responseFormat, progressCallback, progressLabel, repairMessagesBuilder, logTitle, analyticsService, signal) {
   await emitProgress(progressCallback, `${progressLabel}格式校验失败，正在基于当前结果进行修复。`);
   return chatWithConfig(app, config, {
     messages: repairMessagesBuilder
@@ -688,6 +688,7 @@ async function repairJsonResponse(app, config, invalidContent, issues, temperatu
     temperature,
     response_format: responseFormat,
     logTitle: logTitle ? `${logTitle}修复` : `${progressLabel}修复`,
+    signal,
   }, analyticsService);
 }
 
@@ -715,9 +716,11 @@ async function parseOrRepairJsonResponseWithConfig(app, config, request, content
         request.repairMessagesBuilder,
         logTitle,
         analyticsService,
+        request.signal,
       );
       return normalizeJsonPayload(request, parseJsonContent(repairedContent));
     } catch (repairError) {
+      if (request.signal?.aborted) throw repairError;
       if (request.includeValidationErrorDetail) {
         const detail = formatJsonIssues(repairError)[0];
         throw new Error(detail ? `${failureMessage}：${detail}` : failureMessage);
@@ -745,6 +748,7 @@ async function collectJsonResponseWithConfig(app, config, request, analyticsServ
       timeout_ms: request.timeout_ms,
       timeout_message: request.timeout_message,
       logTitle,
+      signal: request.signal,
     }, analyticsService);
 
     try {
@@ -775,10 +779,12 @@ async function collectJsonResponseWithConfig(app, config, request, analyticsServ
           request.repairMessagesBuilder,
           logTitle,
           analyticsService,
+          request.signal,
         );
         const repairedParsed = parseJsonContent(repairedContent);
         return normalizeJsonPayload(request, repairedParsed);
       } catch (repairError) {
+        if (request.signal?.aborted) throw repairError;
         lastError = repairError;
 
         if (attempt === maxRetries) {
@@ -1257,6 +1263,7 @@ function getGoogleText(responseData) {
 }
 
 async function chatWithConfig(app, config, request, analyticsService) {
+  if (request.signal?.aborted) throw request.signal.reason instanceof Error ? request.signal.reason : new Error('AI 请求已取消');
   if (!config.api_key) {
     throw new Error('请先在设置中配置文本模型 API Key');
   }
@@ -1288,7 +1295,8 @@ async function chatWithConfig(app, config, request, analyticsService) {
       created_at: new Date().toISOString(),
     });
     let result = null;
-    result = await runWithAiRetry(() => runWithOperationTimeout(async (signal) => {
+    result = await runWithAiRetry(() => runWithOperationTimeout(async (timeoutSignal) => {
+      const signal = request.signal ? AbortSignal.any([timeoutSignal, request.signal]) : timeoutSignal;
       try {
         return await requestTextAi(app, config, requestBody, { signal, requestMode });
       } catch (error) {
@@ -1299,7 +1307,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
         requestBody = createChatRequestBody(config, request, { omitResponseFormat: true, stream: requestMode === 'stream' });
         return requestTextAi(app, config, requestBody, { signal, requestMode });
       }
-    }, timeoutMs));
+    }, timeoutMs), { signal: request.signal });
 
     responseData = result.responseData;
     recordTextTokenStats(config, result.usage);
@@ -1319,7 +1327,9 @@ async function chatWithConfig(app, config, request, analyticsService) {
     });
     return content;
   } catch (error) {
-    errorMessage = error.name === 'AbortError'
+    errorMessage = request.signal?.aborted
+      ? 'AI 请求已取消'
+      : error.name === 'AbortError'
       ? request.timeout_message || `AI 请求超时（${timeoutMs / 1000} 秒）`
       : error.message;
     if (!analyticsTracked) {
@@ -1957,4 +1967,5 @@ function createAiService({ app, configStore, analyticsService }) {
 
 module.exports = {
   createAiService,
+  __aiServiceRuntime: { chatWithConfig },
 };

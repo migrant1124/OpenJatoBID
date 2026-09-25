@@ -242,6 +242,14 @@ const defaultConfig = {
     enabled: true,
     html_concurrency_limit: 5,
   },
+  project_research: {
+    provider: 'brave',
+    api_key: '',
+    max_results_per_topic: 5,
+    max_sources: 8,
+    timeout_ms: 20000,
+    overall_timeout_ms: 300000,
+  },
   update_channel: 'cloudflare-r2',
   gpu_hardware_acceleration_enabled: true,
   gpu_hardware_acceleration_configured: true,
@@ -647,6 +655,9 @@ function normalizeConfig(config) {
   const lanManagement = source.lan_management && typeof source.lan_management === 'object'
     ? source.lan_management
     : {};
+  const projectResearch = source.project_research && typeof source.project_research === 'object'
+    ? source.project_research
+    : {};
 
   return {
     ...source,
@@ -674,6 +685,14 @@ function normalizeConfig(config) {
           ?? localRendering.legacy_html_concurrency_limit
           ?? legacyComponents.html_concurrency_limit,
       ),
+    },
+    project_research: {
+      provider: 'brave',
+      api_key: String(projectResearch.api_key || ''),
+      max_results_per_topic: Math.max(1, Math.min(20, Number(projectResearch.max_results_per_topic || 5))),
+      max_sources: Math.max(1, Math.min(20, Number(projectResearch.max_sources || 8))),
+      timeout_ms: Math.max(5000, Math.min(60000, Number(projectResearch.timeout_ms || 20000))),
+      overall_timeout_ms: Math.max(60000, Math.min(900000, Number(projectResearch.overall_timeout_ms || 300000))),
     },
     update_channel: normalizeUpdateChannel(source.update_channel),
     gpu_hardware_acceleration_enabled: gpuHardwareAccelerationEnabled,
@@ -782,6 +801,10 @@ function createConfigStore(app) {
           local_rendering: {
             ...currentConfig.local_rendering,
             ...(config && config.local_rendering ? config.local_rendering : {}),
+          },
+          project_research: {
+            ...currentConfig.project_research,
+            ...(config && config.project_research ? config.project_research : {}),
           },
           analytics_client_id: config?.analytics_client_id || currentConfig.analytics_client_id,
           analytics_created_at: config?.analytics_created_at || currentConfig.analytics_created_at,

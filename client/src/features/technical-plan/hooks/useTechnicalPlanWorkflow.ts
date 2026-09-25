@@ -28,6 +28,8 @@ const initialState: TechnicalPlanState = {
   bidSectionExtractionTask: undefined,
   bidAnalysisTask: undefined,
   outlineGenerationTask: undefined,
+  projectUnderstandingTask: undefined,
+  projectUnderstanding: undefined,
   globalFactsTask: undefined,
   globalFacts: [],
   contentGenerationTask: undefined,

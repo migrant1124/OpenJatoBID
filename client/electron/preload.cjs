@@ -208,6 +208,7 @@ const bridge = {
     saveContentGenerationOptions: (options) => ipcRenderer.invoke('technical-plan:save-content-generation-options', options),
     saveContentIllustrationPlan: (plan) => ipcRenderer.invoke('technical-plan:save-content-illustration-plan', plan),
     saveChapterContent: (payload) => ipcRenderer.invoke('technical-plan:save-chapter-content', payload),
+    updateProjectUnderstanding: (payload) => ipcRenderer.invoke('technical-plan:update-project-understanding', payload),
     clear: () => ipcRenderer.invoke('technical-plan:clear'),
   },
   duplicateCheck: {
@@ -241,6 +242,8 @@ const bridge = {
     startGlobalFactsGeneration: (payload) => ipcRenderer.invoke('tasks:start-global-facts-generation', payload),
     startContentGeneration: (payload) => ipcRenderer.invoke('tasks:start-content-generation', payload),
     pauseContentGeneration: () => ipcRenderer.invoke('tasks:pause-content-generation'),
+    startProjectUnderstandingResearch: (payload) => ipcRenderer.invoke('tasks:start-project-understanding-research', payload),
+    cancelProjectUnderstandingResearch: () => ipcRenderer.invoke('tasks:cancel-project-understanding-research'),
     startRejectionItemsExtraction: (payload) => ipcRenderer.invoke('tasks:start-rejection-items-extraction', payload),
     startRejectionCheck: (payload) => ipcRenderer.invoke('tasks:start-rejection-check', payload),
     startDuplicateAnalysis: (payload) => ipcRenderer.invoke('tasks:start-duplicate-analysis', payload),

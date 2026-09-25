@@ -45,6 +45,7 @@ export type {
   LegacyTextModelProvider,
   LocalRenderingConfig,
   ModelListResult,
+  ProjectResearchConfig,
   TextModelConfig,
   TextModelProvider,
   TextModelProfiles,

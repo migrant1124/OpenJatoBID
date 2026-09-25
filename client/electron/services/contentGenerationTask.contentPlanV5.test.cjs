@@ -304,3 +304,9 @@ test('最低字数补目录仅允许重点章节新增五级叶子，且不拆�
     /父节点不允许 AI 新增子目录/u,
   );
 });
+
+test('项目理解扩写和重生成必须保留既有证据标记', () => {
+  const check = __developerContentExpansionPatchRuntime.assertProjectUnderstandingMarkersPreserved;
+  assert.doesNotThrow(() => check('原文〔PU:pu-e-1〕和〔PU:pu-e-2〕', '改写后仍有〔PU:pu-e-2〕与〔PU:pu-e-1〕'));
+  assert.throws(() => check('原文〔PU:pu-e-1〕', '改写后丢失标记'), /删除了已有引用标记/u);
+});
