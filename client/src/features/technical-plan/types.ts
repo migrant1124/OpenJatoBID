@@ -18,7 +18,7 @@ export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | '
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
 export type ConsistencyRepairMode = 'agent' | 'normal';
 export type OriginalPlanCoverageRepairMode = 'agent' | 'normal';
-export type SaveOutlineReason = 'sort' | 'edit' | 'delete' | 'add-root' | 'add-child' | 'replace';
+export type SaveOutlineReason = 'sort' | 'restructure' | 'edit' | 'delete' | 'add-root' | 'add-child' | 'replace';
 
 export interface SaveOutlineRequest {
   outlineData: OutlineData;
@@ -442,6 +442,8 @@ export interface TechnicalPlanTenderSourceFile {
   markdownPath: string;
   markdownChars: number;
   contentHash: string;
+  sourceHash?: string;
+  sourcePath?: string;
   parserLabel?: string;
   importedAt?: string;
   updatedAt: string;
@@ -546,6 +548,10 @@ export interface TechnicalPlanState {
   step: TechnicalPlanStep;
   tenderFile: TechnicalPlanTenderFile | null;
   tenderFiles: TechnicalPlanTenderSourceFile[];
+  analysisStale?: boolean;
+  downstreamReviewRequired?: boolean;
+  analysisSourceHash?: string;
+  analysisSourceFiles?: TechnicalPlanTenderSourceFile[];
   originalPlanFile: TechnicalPlanOriginalPlanFile | null;
   projectOverview: string;
   techRequirements: string;

@@ -3,7 +3,32 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 25;
+const schemaVersion = 32;
+
+function createTechnicalPlanProjectsSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
+    project_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    buyer TEXT,
+    project_number TEXT,
+    lot TEXT,
+    storage_kind TEXT NOT NULL CHECK (storage_kind IN ('legacy', 'isolated')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`);
+}
+
+function createTechnicalPlanProjectExportsSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_project_exports (
+    export_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_revision TEXT,
+    output_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES technical_plan_projects(project_id) ON DELETE CASCADE
+  )`);
+}
 
 function createInitialSchema(db) {
   db.exec(`
@@ -18,6 +43,10 @@ function createInitialSchema(db) {
       tender_parser_label TEXT,
       tender_imported_at TEXT,
       tender_files_json TEXT,
+      analysis_source_hash TEXT,
+      analysis_source_files_json TEXT,
+      analysis_source_section_title TEXT,
+      downstream_review_required INTEGER NOT NULL DEFAULT 0,
       tender_original_markdown_path TEXT,
       tender_original_markdown_hash TEXT,
       tender_original_markdown_chars INTEGER NOT NULL DEFAULT 0,
@@ -1116,6 +1145,16 @@ function seedBundledPromptLibrary(db, library = require('../resources/bundled-pr
 
 const schemaHealthTableGroups = [
   {
+    version: 28,
+    tables: ['technical_plan_project_exports'],
+    repair: createTechnicalPlanProjectExportsSchema,
+  },
+  {
+    version: 26,
+    tables: ['technical_plan_projects'],
+    repair: createTechnicalPlanProjectsSchema,
+  },
+  {
     version: 1,
     tables: [
       'technical_plan_meta',
@@ -1413,6 +1452,31 @@ const schemaHealthColumnGroups = [
       project_understanding_json: 'TEXT',
     },
   },
+  {
+    version: 27,
+    table: 'technical_plan_meta',
+    columns: { analysis_source_hash: 'TEXT' },
+  },
+  {
+    version: 29,
+    table: 'technical_plan_meta',
+    columns: { analysis_source_files_json: 'TEXT' },
+  },
+  {
+    version: 30,
+    table: 'technical_plan_meta',
+    columns: { analysis_source_section_title: 'TEXT' },
+  },
+  {
+    version: 31,
+    table: 'technical_plan_project_exports',
+    columns: { source_revision: 'TEXT' },
+  },
+  {
+    version: 32,
+    table: 'technical_plan_meta',
+    columns: { downstream_review_required: 'INTEGER NOT NULL DEFAULT 0' },
+  },
 ];
 
 function quoteIdentifier(value) {
@@ -1605,6 +1669,56 @@ const migrations = [
     description: '技术方案新增项目理解资料状态',
     up: addProjectUnderstanding,
   },
+  {
+    version: 26,
+    description: '技术方案增加本地项目索引',
+    up: createTechnicalPlanProjectsSchema,
+  },
+  {
+    version: 27,
+    description: '保留招标来源变化后的解析快照',
+    up(db) {
+      addColumnIfMissing(db, 'technical_plan_meta', 'analysis_source_hash', 'TEXT');
+      db.exec(`UPDATE technical_plan_meta SET analysis_source_hash = tender_markdown_hash
+        WHERE analysis_source_hash IS NULL AND EXISTS (SELECT 1 FROM technical_plan_bid_items WHERE status = 'success')`);
+    },
+  },
+  {
+    version: 28,
+    description: '项目导出记录与项目生命周期关联',
+    up: createTechnicalPlanProjectExportsSchema,
+  },
+  {
+    version: 29,
+    description: '保留招标解析时的来源文件清单',
+    up(db) {
+      addColumnIfMissing(db, 'technical_plan_meta', 'analysis_source_files_json', 'TEXT');
+      db.exec(`UPDATE technical_plan_meta SET analysis_source_files_json = tender_files_json
+        WHERE analysis_source_files_json IS NULL AND tender_files_json IS NOT NULL
+        AND analysis_source_hash = tender_markdown_hash
+        AND EXISTS (SELECT 1 FROM technical_plan_bid_items WHERE status = 'success')`);
+    },
+  },
+  {
+    version: 30,
+    description: '保留解析时选择的投标范围',
+    up(db) {
+      addColumnIfMissing(db, 'technical_plan_meta', 'analysis_source_section_title', 'TEXT');
+      db.exec(`UPDATE technical_plan_meta SET analysis_source_section_title = selected_section_title
+        WHERE analysis_source_section_title IS NULL AND analysis_source_hash = tender_markdown_hash
+        AND EXISTS (SELECT 1 FROM technical_plan_bid_items WHERE status = 'success')`);
+    },
+  },
+  {
+    version: 31,
+    description: '项目导出记录关联内容修订',
+    up(db) { addColumnIfMissing(db, 'technical_plan_project_exports', 'source_revision', 'TEXT'); },
+  },
+  {
+    version: 32,
+    description: '资料重分析后保留旧下游成果的复核标记',
+    up(db) { addColumnIfMissing(db, 'technical_plan_meta', 'downstream_review_required', 'INTEGER NOT NULL DEFAULT 0'); },
+  },
 ];
 
 function timestampForFileName() {
@@ -1699,10 +1813,21 @@ function createSqliteDatabase(app, options = {}) {
   };
 }
 
+function createTechnicalPlanProjectDatabase(databasePath) {
+  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+  const db = new Database(databasePath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  createInitialSchema(db);
+  return db;
+}
+
 module.exports = {
   createConversationSchema,
   createPromptLibrarySchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,
+  createTechnicalPlanProjectDatabase,
   schemaVersion,
 };

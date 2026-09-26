@@ -8,6 +8,43 @@
   overflow: hidden;
 }
 
+.technical-project-list { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+.technical-project-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.technical-project-list-head h2 { margin: 4px 0; }
+.technical-project-list-head p { margin: 0; color: var(--yb-text-soft); }
+.technical-project-list-card { min-height: 0; display: flex; flex: 1; flex-direction: column; gap: 16px; padding: 24px; border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius-lg); background: var(--yb-surface); }
+.technical-project-list-card > input { width: min(420px, 100%); }
+.technical-project-list-scroll { min-height: 0; flex: 1; overflow: auto; }
+.technical-project-list-scroll table { width: 100%; min-width: 720px; border-collapse: collapse; text-align: left; }
+.technical-project-list-scroll th, .technical-project-list-scroll td { padding: 14px 12px; border-bottom: 1px solid var(--yb-border-soft); }
+.technical-project-list-scroll th { white-space: nowrap; }
+.technical-project-name { border: 0; background: none; padding: 0; color: var(--yb-primary); text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.technical-project-delete { border: 0; background: none; color: var(--yb-error); cursor: pointer; }
+.technical-project-name:disabled, .technical-project-delete:disabled { opacity: .5; cursor: not-allowed; }
+.technical-project-empty { padding: 40px 12px; text-align: center; color: var(--yb-text-soft); }
+.technical-project-hint { margin: 0; color: var(--yb-text-soft); }
+.technical-project-dialog { max-width: min(480px, calc(100vw - 32px)); }
+.technical-project-dialog label { display: flex; flex-direction: column; gap: 6px; }
+.technical-current-project { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 0 auto; color: var(--yb-text-soft); }
+.technical-current-project span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.technical-workbench > .technical-tender-page { display: flex; flex-direction: column; min-height: 0; }
+.technical-tender-card { display: flex; flex-direction: column; gap: 16px; min-height: 0; flex: 1; padding: 24px; background: var(--yb-surface); border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius-lg); }
+.technical-tender-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.technical-tender-head h2 { margin: 4px 0; }
+.technical-tender-head p { margin: 0; color: var(--yb-text-soft); }
+.technical-tender-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--yb-text-soft); }
+.technical-tender-table-scroll { min-height: 0; flex: 1; overflow: auto; }
+.technical-tender-table-scroll table { width: 100%; min-width: 600px; border-collapse: collapse; text-align: left; }
+.technical-tender-table-scroll th, .technical-tender-table-scroll td { padding: 14px 12px; border-bottom: 1px solid var(--yb-border-soft); }
+.technical-tender-table-scroll td:first-child { max-width: 360px; overflow-wrap: anywhere; }
+.technical-tender-table-scroll td:last-child { white-space: nowrap; }
+.technical-tender-table-scroll td:last-child button { border: 0; background: none; color: var(--yb-primary); cursor: pointer; }
+.technical-tender-table-scroll details { display: inline-block; margin-left: 12px; position: relative; }
+.technical-tender-table-scroll summary { cursor: pointer; color: var(--yb-text-soft); }
+.technical-tender-table-scroll details button { position: absolute; z-index: 2; right: 0; padding: 8px 16px; background: var(--yb-surface) !important; box-shadow: 0 2px 8px #0002; }
+.technical-tender-original { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; background: var(--yb-surface); border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius-lg); }
+.technical-tender-original p { margin: 4px 0 0; color: var(--yb-text-soft); }
+
 .plan-step-body {
   display: grid;
   gap: 16px;
@@ -4052,14 +4089,21 @@
 
 .outline-tree-head > div:first-child {
   display: grid;
+  min-width: 0;
   gap: 4px;
+  white-space: nowrap;
+}
+
+.outline-tree-head {
+  display: grid;
+  justify-content: stretch;
 }
 
 .outline-tree-tools {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 

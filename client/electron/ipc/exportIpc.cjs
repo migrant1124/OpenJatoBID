@@ -1,6 +1,6 @@
 const { ipcMain, shell } = require('electron');
 
-function registerExportIpc({ exportService }) {
+function registerExportIpc({ exportService, getTechnicalPlanProjects }) {
   ipcMain.handle('export:word', async (event, payload = {}) => {
     const requestId = payload.requestId || payload.request_id;
     const sendProgress = (progress) => {
@@ -8,7 +8,18 @@ function registerExportIpc({ exportService }) {
     };
 
     try {
-      return await exportService.exportWord(payload, sendProgress);
+      const run = () => exportService.exportWord(payload, sendProgress);
+      return payload.source === 'technical-plan' || payload.source === 'technical-plan-analysis' || payload.source === 'technical-plan-outline'
+        ? await getTechnicalPlanProjects().runOperation(async () => {
+          const snapshotPayload = payload.source === 'technical-plan' ? payload : { ...payload, project_name: getTechnicalPlanProjects().projectName() };
+          const result = await exportService.exportWord(snapshotPayload, sendProgress);
+          if (result?.success && result.path) {
+            try { getTechnicalPlanProjects().recordExport(payload.source, result.path); }
+            catch (error) { result.warnings = [...(result.warnings || []), `导出成功，但本地记录失败：${error.message}`]; }
+          }
+          return result;
+        })
+        : await run();
     } catch (error) {
       sendProgress({
         phase: 'error',

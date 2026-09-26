@@ -1,6 +1,38 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateHtmlIllustration } = require('./contentIllustrationGeneration.cjs');
+const { generateHtmlIllustration, getHtmlCanvas } = require('./contentIllustrationGeneration.cjs');
+
+test('HTML 图种选择固定横版画布，未知类型保守采用 4:3', () => {
+  assert.deepEqual(getHtmlCanvas({ image_type: 'process' }), { ratio: '16:9', width: 1280, height: 720 });
+  assert.deepEqual(getHtmlCanvas({ image_type: '时间轴' }), { ratio: '16:9', width: 1280, height: 720 });
+  assert.deepEqual(getHtmlCanvas({ image_type: 'organization' }), { ratio: '4:3', width: 1280, height: 960 });
+  assert.deepEqual(getHtmlCanvas({ image_type: 'unknown' }), { ratio: '4:3', width: 1280, height: 960 });
+  assert.deepEqual(getHtmlCanvas({ image_type: 'process', generation: { aspect_ratio: '4:3' } }), { ratio: '4:3', width: 1280, height: 960 });
+  assert.deepEqual(getHtmlCanvas({ image_type: 'process', generation: { aspect_ratio: '2:1' } }), { ratio: '16:9', width: 1280, height: 720 });
+  assert.deepEqual(getHtmlCanvas({ image_type: 'organization', aspect_ratio: '16:9' }), { ratio: '16:9', width: 1280, height: 720 });
+  assert.deepEqual(getHtmlCanvas({ image_type: '步骤图' }), { ratio: '16:9', width: 1280, height: 720 });
+});
+
+test('HTML 探测和截图共用同一固定画布', async () => {
+  const calls = [];
+  const png = Buffer.from('89504e470d0a1a0a', 'hex');
+  const result = await generateHtmlIllustration({
+    aiService: { chat: async () => '<html><head></head><body>流程</body></html>' },
+    execution: { ...createExecution(), planItem: { ...createExecution().planItem, image_type: 'process' } },
+    plan: { revision: 'revision' },
+    workspaceStore: createWorkspaceStore(),
+    localImageRenderService: {
+      probeHtmlLayoutOnly: async (_html, options) => { calls.push(options); return { width: 1280, height: 720, layout_issues: [] }; },
+      renderHtmlToPng: async (_html, options) => { calls.push(options); return { buffer: png, width: 1280, height: 720 }; },
+    },
+  });
+  assert.deepEqual(calls.map(({ width, fixedHeight }) => ({ width, fixedHeight })), [
+    { width: 1280, fixedHeight: 720 }, { width: 1280, fixedHeight: 720 },
+  ]);
+  assert.equal(result.aspect_ratio, '16:9');
+  assert.equal(result.visual_qa.pixel_width, 2560);
+  assert.equal(result.visual_qa.pixel_height, 1440);
+});
 
 function createExecution(reference = '实施方案正文') {
   return {
@@ -71,7 +103,7 @@ test('normal HTML illustration follows the upstream prompt, persists source, ren
   assert.match(prompt, /完整 HTML/);
   assert.match(prompt, /文字不得旋转、倒置、镜像或缩放变形/);
   assert.match(renderedHtml, /<section>架构图<\/section>/);
-  assert.deepEqual(sourceEvents, [{ mode: 'normal', source_path: 'illustrations/revision/html/html-1.html' }]);
+  assert.deepEqual(sourceEvents, [{ mode: 'normal', source_path: 'illustrations/revision/html/html-1.html', aspect_ratio: '4:3' }]);
   assert.deepEqual(sequence, ['source-saved', 'probe', 'render']);
   assert.equal(result.asset_url, 'yibiao-asset://generated-images/html-1.png?pixel-density=2');
   assert.equal(result.source_path, 'illustrations/revision/html/html-1.html');
@@ -172,6 +204,7 @@ test('HTML render failure keeps the persisted source path for the next run', asy
     assert.deepEqual(error.illustrationGeneration, {
       mode: 'normal',
       source_path: 'illustrations/revision/html/html-1.html',
+      aspect_ratio: '4:3',
     });
     return true;
   });
@@ -207,6 +240,8 @@ test('HTML 横向溢出会反馈诊断并在限定轮次内修复', async () => 
   assert.equal(renderCount, 1);
   assert.equal(prompts.length, 2);
   assert.match(prompts[1], /横向溢出/);
+  assert.match(prompts[1], /16:9横版画布/);
+  assert.equal(result.aspect_ratio, '16:9');
   assert.equal(result.visual_qa.layout_repair_attempts, 1);
 });
 

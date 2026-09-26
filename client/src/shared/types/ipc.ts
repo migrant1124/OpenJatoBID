@@ -52,7 +52,8 @@ export interface WordExportResult {
 
 export interface WordExportPayload {
   requestId?: string;
-  source?: 'technical-plan';
+  source?: 'technical-plan' | 'technical-plan-analysis' | 'technical-plan-outline';
+  includeDescriptions?: boolean;
   nodeId?: string;
   project_name?: string;
   outline?: OutlineData['outline'];
@@ -814,15 +815,29 @@ export interface YibiaoBridge {
     onEvent: (callback: (event: KnowledgeBaseEvent) => void) => () => void;
   };
   technicalPlan: {
+    listProjects: () => Promise<Array<{ id: string; name: string; buyer: string; projectNumber: string; lot: string; step: TechnicalPlanStep; updatedAt: string; createdAt: string; unavailableReason?: string }>>;
+    createProject: (data: { name: string; buyer?: string; projectNumber?: string; lot?: string }) => Promise<{ project: { id: string; name: string }; state: TechnicalPlanState }>;
+    openProject: (id: string) => Promise<{ project: { id: string; name: string }; state: TechnicalPlanState }>;
+    leaveProject: () => Promise<{ success: boolean }>;
+    deleteProject: (id: string) => Promise<{ success: boolean; warning?: string }>;
+    activeProject: () => Promise<string | null>;
     loadState: () => Promise<TechnicalPlanState>;
     importTenderDocument: () => Promise<{
       success: boolean;
+      requiresChoice?: boolean;
+      token?: string;
+      conflicts?: string[];
+      errors?: string[];
+      skipped?: string[];
       message?: string;
       state?: TechnicalPlanState;
       markdown?: string;
       fileName?: string;
       parserLabel?: string | null;
     }>;
+    resolveTenderImport: (token: string, action: 'keep' | 'replace' | 'cancel') => Promise<{ success: boolean; canceled?: boolean; message?: string; errors?: string[]; skipped?: string[]; state?: TechnicalPlanState; markdown?: string }>;
+    replaceTenderSource: (sourceId: string) => Promise<{ success: boolean; message?: string; errors?: string[]; state?: TechnicalPlanState; markdown?: string }>;
+    removeTenderSource: (sourceId: string) => Promise<{ success: boolean; message?: string; state: TechnicalPlanState; markdown: string }>;
     importOriginalPlanDocument: () => Promise<{
       success: boolean;
       message?: string;

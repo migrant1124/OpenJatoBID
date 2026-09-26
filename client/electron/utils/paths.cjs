@@ -42,7 +42,7 @@ function getWorkspaceDatabasePath(app) {
 }
 
 function getTechnicalPlanDir(app) {
-  return path.join(getWorkspaceDir(app), 'technical-plan');
+  return path.join(getWorkspaceDir(app), 'technical-plan', ...(app.technicalPlanProjectId ? ['projects', app.technicalPlanProjectId] : []));
 }
 
 function getTechnicalPlanTenderMarkdownPath(app) {
@@ -58,7 +58,7 @@ function getTechnicalPlanIllustrationsDir(app) {
 }
 
 function getTechnicalPlanGeneratedIllustrationsDir(app) {
-  return path.join(getGeneratedImagesDir(app), 'technical-plan', 'illustrations');
+  return path.join(getGeneratedImagesDir(app), 'technical-plan', ...(app.technicalPlanProjectId ? ['projects', app.technicalPlanProjectId] : []), 'illustrations');
 }
 
 function getDuplicateCheckDir(app) {

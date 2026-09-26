@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { fileURLToPath } = require('node:url');
 const { app, dialog, nativeImage } = require('electron');
 const cheerio = require('cheerio');
@@ -10,6 +11,7 @@ const { REMOTE_IMAGE_RETRY_ATTEMPTS, REMOTE_IMAGE_RETRY_DELAY_MS } = require('..
 const { renderMarkdownHtml } = require('../utils/renderMarkdownHtml.cjs');
 const { deriveResponseCompletion } = require('./contentResponseModes.cjs');
 const { prepareProjectUnderstandingExport } = require('./projectUnderstanding.cjs');
+const { buildBidAnalysisReportMarkdown } = require('./bidAnalysisReport.cjs');
 const {
   AlignmentType,
   BorderStyle,
@@ -2176,6 +2178,25 @@ function resolveTechnicalPlanExportPayload(payload, technicalPlanStore) {
   };
 }
 
+async function buildOutlineSnapshotDocx(state, projectName, includeDescriptions = false) {
+  const outline = state?.outlineData?.outline || [];
+  if (!outline.length) throw new Error('没有已保存的目录大纲');
+  const headings = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5];
+  const children = [new Paragraph({ children: [new TextRun({ text: `${projectName || '技术方案'}目录大纲`, bold: true, size: 32 })], alignment: AlignmentType.CENTER, spacing: { after: 320 } })];
+  const visit = (items, parents = []) => {
+    items.forEach((item, index) => {
+      const numbers = [...parents, index + 1];
+      const title = formatOutlineTitle({ ...item, id: numbers.join('.') }, { numbering_format: 'outline-decimal' });
+      children.push(new Paragraph({ text: title, heading: headings[Math.min(numbers.length - 1, 4)], spacing: { before: 160, after: 100 } }));
+      if (includeDescriptions && item.description?.trim()) children.push(new Paragraph({ text: item.description.trim(), spacing: { after: 120 } }));
+      visit(item.children || [], numbers);
+    });
+  };
+  visit(outline);
+  const document = new Document({ sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }] });
+  return Packer.toBuffer(document);
+}
+
 function createExportService({ configStore, technicalPlanStore: initialTechnicalPlanStore, getTechnicalPlanStore } = {}) {
   let technicalPlanStore = initialTechnicalPlanStore || null;
   return {
@@ -2185,6 +2206,33 @@ function createExportService({ configStore, technicalPlanStore: initialTechnical
 
     async exportWord(payload = {}, onProgress) {
       const planStore = getTechnicalPlanStore?.() || technicalPlanStore;
+      if (payload.source === 'technical-plan-analysis' || payload.source === 'technical-plan-outline') {
+        const state = planStore?.loadTechnicalPlan?.();
+        if (!state) throw new Error('请先选择项目');
+        const projectName = String(payload.project_name || state.outlineData?.project_name || '技术方案');
+        const isAnalysis = payload.source === 'technical-plan-analysis';
+        const markdown = isAnalysis ? buildBidAnalysisReportMarkdown(state, projectName) : '';
+        if (!isAnalysis && !state.outlineData?.outline?.length) throw new Error('没有已保存的目录大纲');
+        const filename = `${sanitizeFilename(projectName)}_${isAnalysis ? '招标解析报告' : '目录大纲'}_${formatExportTimestamp()}.docx`;
+        const selected = await dialog.showSaveDialog({
+          title: isAnalysis ? '导出招标解析报告' : '导出目录大纲',
+          defaultPath: path.join(app?.getPath?.('downloads') || process.cwd(), filename),
+          filters: [{ name: 'Word 文档', extensions: ['docx'] }],
+        });
+        if (selected.canceled || !selected.filePath) return { success: false, canceled: true, message: '已取消导出' };
+        const buffer = isAnalysis
+          ? (await buildStandaloneMarkdownDocxResult({ title: '招标文件解析报告', markdown }, { onProgress })).buffer
+          : await buildOutlineSnapshotDocx(state, projectName, payload.includeDescriptions === true);
+        const tempPath = `${selected.filePath}.${crypto.randomUUID()}.tmp`;
+        try {
+          fs.writeFileSync(tempPath, buffer);
+          fs.renameSync(tempPath, selected.filePath);
+        } catch (error) {
+          if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+          throw error;
+        }
+        return { success: true, path: selected.filePath, message: 'Word 已导出，请打开文档核对。', warnings: [] };
+      }
       const effectivePayload = payload.source === 'technical-plan'
         ? resolveTechnicalPlanExportPayload(payload, planStore)
         : payload;
@@ -2302,6 +2350,7 @@ module.exports = {
   buildDocxBuffer,
   buildDocxResult,
   buildStandaloneMarkdownDocxResult,
+  buildOutlineSnapshotDocx,
   createExportService,
   formatOutlineTitle,
   resolveTechnicalPlanExportPayload,

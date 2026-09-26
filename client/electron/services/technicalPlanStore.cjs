@@ -11,6 +11,7 @@ const {
   getTechnicalPlanIllustrationsDir,
   getTechnicalPlanOriginalPlanMarkdownPath,
   getTechnicalPlanTenderMarkdownPath,
+  getWorkspaceDir,
 } = require('../utils/paths.cjs');
 const { deleteImportedImageBatches } = require('../utils/importedImages.cjs');
 const { detectBidSections } = require('../utils/bidSectionDetector.cjs');
@@ -27,10 +28,6 @@ const {
   validateProjectUnderstandingOutlineContent,
 } = require('./projectUnderstanding.cjs');
 
-const tenderMarkdownRelativePath = path.join('technical-plan', 'tender.md').replace(/\\/g, '/');
-const tenderOriginalMarkdownRelativePath = path.join('technical-plan', 'tender-original.md').replace(/\\/g, '/');
-const tenderSourceFilesDirRelativePath = path.join('technical-plan', 'tender-files').replace(/\\/g, '/');
-const originalPlanMarkdownRelativePath = path.join('technical-plan', 'original-plan.md').replace(/\\/g, '/');
 const originalOutlineRuntimeFileName = 'original-outline-runtime.json';
 
 const outlineNumberingPolicies = new Set(['auto', 'preserve-source', 'none']);
@@ -663,7 +660,7 @@ function clearOutlineDataContent(outlineData) {
   return { ...outlineData, outline: clearOutlineItemContent(outlineData.outline) };
 }
 
-const outlineSaveReasons = new Set(['sort', 'edit', 'delete', 'add-root', 'add-child', 'replace']);
+const outlineSaveReasons = new Set(['sort', 'restructure', 'edit', 'delete', 'add-root', 'add-child', 'replace']);
 
 function normalizeOutlineSaveReason(value) {
   return outlineSaveReasons.has(value) ? value : 'replace';
@@ -705,6 +702,12 @@ function mapOutlineItems(items, mapper) {
 }
 
 function createTechnicalPlanStore({ app, db, fileService }) {
+  let pendingTenderImport = null;
+  const projectPrefix = app.technicalPlanProjectId ? path.join('technical-plan', 'projects', app.technicalPlanProjectId) : 'technical-plan';
+  const tenderMarkdownRelativePath = path.join(projectPrefix, 'tender.md').replace(/\\/g, '/');
+  const tenderOriginalMarkdownRelativePath = path.join(projectPrefix, 'tender-original.md').replace(/\\/g, '/');
+  const tenderSourceFilesDirRelativePath = path.join(projectPrefix, 'tender-files').replace(/\\/g, '/');
+  const originalPlanMarkdownRelativePath = path.join(projectPrefix, 'original-plan.md').replace(/\\/g, '/');
   const tenderMarkdownPath = getTechnicalPlanTenderMarkdownPath(app);
   const tenderOriginalMarkdownPath = path.join(path.dirname(tenderMarkdownPath), 'tender-original.md');
   const tenderSourceFilesDir = path.join(path.dirname(tenderMarkdownPath), 'tender-files');
@@ -789,7 +792,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     writeIllustrationFile(filePath, buffer);
     return {
       filePath,
-      assetUrl: `yibiao-asset://generated-images/technical-plan/illustrations/${encodeURIComponent(safeRevision)}/${encodeURIComponent(`${safeItemId}.png`)}`,
+      assetUrl: `yibiao-asset://generated-images/technical-plan/${app.technicalPlanProjectId ? `projects/${app.technicalPlanProjectId}/` : ''}illustrations/${encodeURIComponent(safeRevision)}/${encodeURIComponent(`${safeItemId}.png`)}`,
     };
   }
 
@@ -909,7 +912,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   function resolveMarkdownPath(relativeOrAbsolutePath) {
     const value = String(relativeOrAbsolutePath || '').trim();
     if (!value) return tenderMarkdownPath;
-    return path.isAbsolute(value) ? value : path.join(path.dirname(path.dirname(tenderMarkdownPath)), value);
+    return path.isAbsolute(value) ? value : path.join(getWorkspaceDir(app), value);
   }
 
   function readTenderMarkdown() {
@@ -930,6 +933,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         markdownPath: String(file.markdownPath || ''),
         markdownChars: Number(file.markdownChars || 0),
         contentHash: String(file.contentHash || ''),
+        sourceHash: file.sourceHash ? String(file.sourceHash) : undefined,
+        sourcePath: file.sourcePath ? String(file.sourcePath) : undefined,
         parserLabel: file.parserLabel ? String(file.parserLabel) : undefined,
         importedAt: file.importedAt ? String(file.importedAt) : undefined,
         updatedAt: file.updatedAt ? String(file.updatedAt) : meta.updated_at,
@@ -1006,12 +1011,37 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const relativePath = path.join(tenderSourceFilesDirRelativePath, `${id}-${safeFileNamePart(fileName)}.md`).replace(/\\/g, '/');
     const targetPath = resolveMarkdownPath(relativePath);
     writeMarkdownFile(targetPath, markdown, id);
+    const sourcePath = source.file_path
+      ? path.join(tenderSourceFilesDirRelativePath, `${id}-source${path.extname(fileName).toLowerCase()}`).replace(/\\/g, '/')
+      : undefined;
+    try {
+      if (sourcePath) {
+        const managedPath = resolveMarkdownPath(sourcePath);
+        fs.copyFileSync(source.file_path, managedPath);
+        if (/^[0-9a-f]{64}$/i.test(source.source_hash || '')) {
+          const hash = crypto.createHash('sha256');
+          const handle = fs.openSync(managedPath, 'r');
+          try {
+            const chunk = Buffer.allocUnsafe(1024 * 1024);
+            let bytes;
+            while ((bytes = fs.readSync(handle, chunk, 0, chunk.length, null)) > 0) hash.update(chunk.subarray(0, bytes));
+          } finally { fs.closeSync(handle); }
+          if (hash.digest('hex') !== source.source_hash.toLowerCase()) throw new Error('文件在导入期间发生变化，请重新选择');
+        }
+      }
+    } catch (error) {
+      fs.rmSync(targetPath, { force: true });
+      if (sourcePath) fs.rmSync(resolveMarkdownPath(sourcePath), { force: true });
+      throw error;
+    }
     return {
       id,
       fileName,
       markdownPath: relativePath,
       markdownChars: markdown.length,
       contentHash: stableHash(markdown),
+      sourceHash: source.source_hash || undefined,
+      sourcePath,
       parserLabel: source?.parser_label || undefined,
       importedAt: now(),
       updatedAt: now(),
@@ -1732,28 +1762,8 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     });
   }
 
-  function clearDownstreamFromBidSectionChange() {
-    db.prepare('DELETE FROM technical_plan_tasks').run();
-    db.prepare('DELETE FROM technical_plan_bid_items').run();
-    db.prepare('DELETE FROM technical_plan_response_templates').run();
-    db.prepare('DELETE FROM technical_plan_reference_docs').run();
-    db.prepare('DELETE FROM technical_plan_outline_nodes').run();
-    db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
-    clearOriginalOutlineRuntime();
-    updateMeta({
-      step: 'bid-analysis',
-      content_generation_options_json: null,
-      content_generation_runtime_json: null,
-      content_illustration_plan_json: null,
-      requirement_response_matrix_json: null,
-      outline_quality_review_json: null,
-      project_understanding_json: null,
-      outline_project_name: null,
-      outline_project_overview: null,
-      outline_word_control_snapshot_json: null,
-      selected_format_profile_id: null,
-      selected_format_profile_hash: null,
-    });
+  function hasSavedDownstream() {
+    return Boolean(db.prepare('SELECT 1 FROM technical_plan_outline_nodes LIMIT 1').get());
   }
 
   function clearContentGenerationState() {
@@ -1824,7 +1834,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   function assertNoTechnicalPlanTaskRunning() {
-    const row = db.prepare("SELECT type FROM technical_plan_tasks WHERE status IN ('running', 'pausing') LIMIT 1").get();
+    const row = db.prepare("SELECT type FROM technical_plan_tasks WHERE status IN ('running', 'pausing', 'paused') LIMIT 1").get();
     if (row) {
       throw new Error('当前有技术方案任务正在运行，请等待任务结束后再切换模式');
     }
@@ -2026,10 +2036,17 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       if (incomingFormatTask?.status === 'success') {
         const existingFormatTask = db.prepare('SELECT content FROM technical_plan_bid_items WHERE item_id = ?').get('responseFileRequirements');
         if (String(existingFormatTask?.content || '') !== String(incomingFormatTask.content || '')) {
-          clearDownstreamFromFormatAnalysisChange();
+          updateMeta({ downstream_review_required: hasSavedDownstream() ? 1 : 0, selected_format_profile_id: null, selected_format_profile_hash: null });
         }
       }
       saveBidItems(partial.bidAnalysisTasks, nextBidMode);
+    }
+    if (['running', 'success'].includes(partial.bidAnalysisTask?.status)) {
+      updateMeta({
+        analysis_source_hash: ensureMetaRow().tender_markdown_hash || null,
+        analysis_source_files_json: JSON.stringify(loadTenderSourceFiles()),
+        analysis_source_section_title: ensureMetaRow().selected_section_title || null,
+      });
     }
     if (hasOwn(partial, 'projectOverview')) upsertDerivedBidItem('projectOverview', partial.projectOverview, nextBidMode);
     if (hasOwn(partial, 'techRequirements')) upsertDerivedBidItem('techRequirements', partial.techRequirements, nextBidMode);
@@ -2048,6 +2065,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         updateMeta({ outline_project_name: null, outline_project_overview: null, outline_quality_review_json: null, outline_word_control_snapshot_json: null });
       } else {
         saveOutlineData(partial.outlineData);
+        updateMeta({ downstream_review_required: 0 });
       }
     }
     if (hasOwn(partial, 'outlineQualityReview')) {
@@ -2108,6 +2126,11 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       step: requiresBidAnalysisRecovery ? 'bid-analysis' : storedStep,
       tenderFile,
       tenderFiles,
+      analysisStale: Boolean(meta.analysis_source_hash && meta.analysis_source_hash !== meta.tender_markdown_hash),
+      analysisSourceHash: meta.analysis_source_hash || undefined,
+      analysisSourceFiles: safeJsonParse(meta.analysis_source_files_json, undefined),
+      analysisSourceSectionTitle: meta.analysis_source_section_title || undefined,
+      downstreamReviewRequired: Boolean(meta.downstream_review_required),
       originalPlanFile,
       projectOverview: bidAnalysisTasks.projectOverview?.status === 'success' ? bidAnalysisTasks.projectOverview.content : '',
       techRequirements: bidAnalysisTasks.techRequirements?.status === 'success' ? bidAnalysisTasks.techRequirements.content : '',
@@ -2265,25 +2288,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     }
   }
 
-  function clearDownstreamFromFormatAnalysisChange() {
-    db.prepare("DELETE FROM technical_plan_tasks WHERE type IN ('outline-generation', 'global-facts-generation', 'content-generation')").run();
-    db.prepare('DELETE FROM technical_plan_outline_nodes').run();
-    db.prepare('DELETE FROM technical_plan_global_fact_groups').run();
-    db.prepare('DELETE FROM technical_plan_content_sections').run();
-    db.prepare('DELETE FROM technical_plan_content_plans').run();
-    clearOriginalOutlineRuntime();
-    updateMeta({
-      step: 'bid-analysis',
-      selected_format_profile_id: null,
-      selected_format_profile_hash: null,
-      outline_project_name: null,
-      outline_project_overview: null,
-      content_generation_options_json: null,
-      content_generation_runtime_json: null,
-      content_illustration_plan_json: null,
-    });
-  }
-
   function updateStep(step) {
     return updateTechnicalPlan({ step });
   }
@@ -2351,7 +2355,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       if (nextSectionMode === 'single' || nextSectionMode === 'multiple') {
         resetTenderWorkingCopyToOriginal();
       }
-      clearDownstreamFromBidSectionChange();
       updateMeta({
         bid_analysis_mode: config.mode,
         bid_analysis_selected_task_ids_json: jsonOrNull(config.selectedTaskIds),
@@ -2361,6 +2364,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         bid_section_extraction_error: null,
         selected_section_id: null,
         selected_section_title: null,
+        downstream_review_required: hasSavedDownstream() ? 1 : 0,
       });
     });
     transaction();
@@ -2370,7 +2374,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   function prepareBidSectionExtraction() {
     const transaction = db.transaction(() => {
       resetTenderWorkingCopyToOriginal();
-      clearDownstreamFromBidSectionChange();
       updateMeta({
         bid_section_mode: 'multiple',
         bid_sections_json: null,
@@ -2378,6 +2381,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
         bid_section_extraction_error: null,
         selected_section_id: null,
         selected_section_title: null,
+        downstream_review_required: hasSavedDownstream() ? 1 : 0,
       });
     });
     transaction();
@@ -2392,21 +2396,32 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     const reverseMap = reverseIdMap(idMap);
     const affectedIds = normalizeStringSet(request?.affectedNodeIds);
     const clearAll = reason === 'replace';
-    const invalidatesContentTask = reason !== 'sort';
+    const invalidatesContentTask = reason !== 'sort' && reason !== 'restructure';
     const previousProjectSubtreeHash = projectUnderstandingSubtreeHash(loadTechnicalPlan().outlineData);
 
     const transaction = db.transaction(() => {
       assertOutlineMutationAllowed();
+      if (reason === 'restructure' && (
+        db.prepare("SELECT 1 FROM technical_plan_tasks WHERE type = 'content-generation' LIMIT 1").get()
+        || db.prepare("SELECT 1 FROM technical_plan_outline_nodes WHERE TRIM(content) <> '' LIMIT 1").get()
+        || db.prepare('SELECT 1 FROM technical_plan_content_sections LIMIT 1').get()
+        || db.prepare('SELECT 1 FROM technical_plan_content_plans LIMIT 1').get()
+      )) throw new Error('正文已启动或已有内容，不能升降目录层级');
       assertFormatConstrainedOutlineMutation(outlineData);
       const snapshot = loadOutlinePersistenceSnapshot();
       const outlineToSave = buildOutlineWithPersistedContent(outlineData, { snapshot, reverseMap, affectedIds, clearAll });
       validateConditionalOutlineDepth(outlineToSave);
       saveOutlineData(outlineToSave);
+      if (reason === 'replace') updateMeta({ downstream_review_required: 0 });
       const rows = flattenOutlineItems(outlineToSave?.outline || []);
       const nextIds = new Set(rows.map((row) => row.node_id));
       const projectUnderstanding = normalizeProjectUnderstanding(
         safeJsonParse(ensureMetaRow().project_understanding_json, undefined),
       );
+      if ((reason === 'sort' || reason === 'restructure') && projectUnderstanding.placement?.node_id) {
+        projectUnderstanding.placement.node_id = idMap.get(projectUnderstanding.placement.node_id) || projectUnderstanding.placement.node_id;
+        updateMeta({ project_understanding_json: jsonOrNull(projectUnderstanding) });
+      }
       const removedProjectNode = request.reason === 'delete'
         && projectUnderstanding.placement?.node_id
         && !nextIds.has(projectUnderstanding.placement.node_id);
@@ -2675,6 +2690,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
   }
 
   async function importTenderDocument() {
+    assertNoTechnicalPlanTaskRunning();
     if (!fileService?.importDocument) {
       throw new Error('文件导入服务尚未初始化');
     }
@@ -2689,20 +2705,146 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       };
     }
 
-    const importedDocuments = Array.isArray(result.documents) && result.documents.length ? result.documents : [result];
-    const markdown = combineTenderMarkdown(importedDocuments.map((item) => item.file_content));
-    const fileName = importedDocuments.length > 1 ? `${importedDocuments.length} 份招标文件` : result.file_name || '未命名文件';
-    const parserLabel = importedDocuments.length > 1 ? null : result.parser_label || null;
-    cleanupPendingTenderSelection();
+    const documents = Array.isArray(result.documents) && result.documents.length ? result.documents : [result];
+    assertNoTechnicalPlanTaskRunning();
+    return appendTenderDocuments(documents, result.errors || [], result.message);
+  }
 
-    return saveTenderMarkdownAndState(markdown, {
-      fileName,
-      parserLabel,
-      message: result.message || '招标文件已导入',
-      fallbackToLocal: result.fallbackToLocal === true,
-      resetOriginal: true,
-      sourceFiles: importedDocuments,
-    });
+  async function replaceTenderSource(sourceId) {
+    assertNoTechnicalPlanTaskRunning();
+    if (!loadTenderSourceFiles().some((file) => file.id === sourceId)) throw new Error('待替换的招标资料不存在');
+    const result = await fileService.importDocument({ multiple: false });
+    if (!result?.success || !result.file_content) return { success: false, message: result?.message || '未选择替换文件', state: loadTechnicalPlan() };
+    assertNoTechnicalPlanTaskRunning();
+    return appendTenderDocuments(result.documents?.length ? result.documents : [result], result.errors || [], result.message, 'replace', sourceId);
+  }
+
+  function appendTenderDocuments(documents, errors = [], message = '', sameNameAction, replaceSourceId) {
+    const existing = loadTenderSourceFiles();
+    const seenHashes = new Set(existing.map((file) => file.sourceHash || file.contentHash));
+    const incoming = [];
+    const skipped = [];
+    for (const document of documents) {
+      const hash = document.source_hash || stableHash(document.file_content);
+      if (seenHashes.has(hash)) { skipped.push(document.file_name); continue; }
+      seenHashes.add(hash);
+      incoming.push(document);
+    }
+    if (!incoming.length) return { success: true, message: '所选文件均已存在，未修改资料', errors, skipped, state: loadTechnicalPlan(), markdown: readTenderMarkdown() };
+
+    const conflicts = incoming.map((document) => document.file_name).filter((name) => existing.some((file) => file.fileName.toLowerCase() === String(name).toLowerCase()));
+    if (conflicts.length && !sameNameAction) {
+      const token = crypto.randomUUID();
+      pendingTenderImport = { token, documents: incoming, errors, message };
+      return { success: false, requiresChoice: true, token, conflicts, message: '同名文件内容不同，请选择保留两份或替换旧文件', state: loadTechnicalPlan() };
+    }
+    if (sameNameAction === 'replace' && !replaceSourceId && conflicts.some((name) => existing.filter((file) => file.fileName.toLowerCase() === String(name).toLowerCase()).length !== 1)) {
+      throw new Error('同名旧文件不止一份，请取消并在目标文件行选择“替换”');
+    }
+
+    const replaced = sameNameAction === 'replace'
+      ? existing.filter((file) => file.id === replaceSourceId || (!replaceSourceId && conflicts.some((name) => file.fileName.toLowerCase() === String(name).toLowerCase())))
+      : [];
+    const nextFiles = existing.filter((file) => !replaced.some((old) => old.id === file.id));
+    const created = [];
+    let committed = false;
+    try {
+      for (const [index, document] of incoming.entries()) {
+        const file = writeTenderSourceMarkdown(document, existing.length + index);
+        created.push(file);
+        nextFiles.push(file);
+      }
+      const markdown = nextFiles.map((file) => {
+        const content = fs.readFileSync(resolveMarkdownPath(file.markdownPath), 'utf-8').trim();
+        return `<!-- 招标资料来源 ${file.id}：${file.fileName.replace(/-->/g, '—>')} -->\n\n${content}`;
+      }).join('\n\n');
+      const revision = stableHash(markdown).slice(0, 16);
+      const workingRelativePath = path.join(projectPrefix, `tender-${revision}.md`).replace(/\\/g, '/');
+      const originalRelativePath = path.join(projectPrefix, `tender-original-${revision}.md`).replace(/\\/g, '/');
+      if (!fs.existsSync(resolveMarkdownPath(workingRelativePath))) writeMarkdownFile(resolveMarkdownPath(workingRelativePath), markdown, 'tender');
+      if (!fs.existsSync(resolveMarkdownPath(originalRelativePath))) writeMarkdownFile(resolveMarkdownPath(originalRelativePath), markdown, 'tender-original');
+      const timestamp = now();
+      db.transaction(() => updateMeta({
+        tender_file_name: nextFiles.length > 1 ? `${nextFiles.length} 份招标文件` : nextFiles[0].fileName,
+        tender_markdown_path: workingRelativePath,
+        tender_markdown_hash: stableHash(markdown),
+        tender_markdown_chars: markdown.length,
+        tender_original_markdown_path: originalRelativePath,
+        tender_original_markdown_hash: stableHash(markdown),
+        tender_original_markdown_chars: markdown.length,
+        tender_parser_label: nextFiles.length === 1 ? nextFiles[0].parserLabel || null : null,
+        tender_imported_at: timestamp,
+        tender_files_json: JSON.stringify(nextFiles),
+        bid_sections_json: null,
+        bid_section_extraction_status: 'idle',
+        bid_section_extraction_error: null,
+        selected_section_id: null,
+        selected_section_title: null,
+        downstream_review_required: hasSavedDownstream() ? 1 : 0,
+      }))();
+      committed = true;
+      const cleanupErrors = [];
+      for (const old of replaced) {
+        try { removeManagedTenderSource(old); } catch (error) { cleanupErrors.push(error.message); }
+      }
+      return { success: true, message: message || `已添加 ${created.length} 份招标文件`, errors: [...errors, ...cleanupErrors], skipped, state: loadTechnicalPlan(), markdown };
+    } catch (error) {
+      if (!committed) for (const file of created) { try { removeManagedTenderSource(file); } catch {} }
+      throw error;
+    }
+  }
+
+  function removeManagedTenderSource(file) {
+    const root = `${path.resolve(tenderSourceFilesDir)}${path.sep}`;
+    for (const relativePath of [file.markdownPath, file.sourcePath]) {
+      if (!relativePath) continue;
+      const target = path.resolve(resolveMarkdownPath(relativePath));
+      if (!target.startsWith(root)) throw new Error('资料路径越界，已拒绝删除');
+      if (fs.existsSync(target)) fs.rmSync(target, { force: true });
+    }
+  }
+
+  function resolveTenderImport(token, action) {
+    if (!pendingTenderImport || pendingTenderImport.token !== token) throw new Error('待确认的文件导入已失效');
+    if (action === 'cancel') { pendingTenderImport = null; return { success: false, canceled: true, state: loadTechnicalPlan() }; }
+    if (!['keep', 'replace'].includes(action)) throw new Error('请选择保留两份或替换旧文件');
+    const pending = pendingTenderImport;
+    const result = appendTenderDocuments(pending.documents, pending.errors, pending.message, action);
+    pendingTenderImport = null;
+    return result;
+  }
+
+  function removeTenderSource(sourceId) {
+    assertNoTechnicalPlanTaskRunning();
+    const existing = loadTenderSourceFiles();
+    const target = existing.find((file) => file.id === sourceId);
+    if (!target) throw new Error('招标资料不存在');
+    const next = existing.filter((file) => file.id !== sourceId);
+    const markdown = next.map((file) => `<!-- 招标资料来源 ${file.id}：${file.fileName.replace(/-->/g, '—>')} -->\n\n${fs.readFileSync(resolveMarkdownPath(file.markdownPath), 'utf-8').trim()}`).join('\n\n');
+    const revision = stableHash(markdown).slice(0, 16);
+    const workingRelativePath = next.length ? path.join(projectPrefix, `tender-${revision}.md`).replace(/\\/g, '/') : null;
+    const originalRelativePath = next.length ? path.join(projectPrefix, `tender-original-${revision}.md`).replace(/\\/g, '/') : null;
+    if (workingRelativePath && !fs.existsSync(resolveMarkdownPath(workingRelativePath))) writeMarkdownFile(resolveMarkdownPath(workingRelativePath), markdown, 'tender');
+    if (originalRelativePath && !fs.existsSync(resolveMarkdownPath(originalRelativePath))) writeMarkdownFile(resolveMarkdownPath(originalRelativePath), markdown, 'tender-original');
+    db.transaction(() => updateMeta({
+      tender_file_name: next.length > 1 ? `${next.length} 份招标文件` : next[0]?.fileName || null,
+      tender_markdown_path: workingRelativePath,
+      tender_markdown_hash: next.length ? stableHash(markdown) : null,
+      tender_markdown_chars: markdown.length,
+      tender_original_markdown_path: originalRelativePath,
+      tender_original_markdown_hash: next.length ? stableHash(markdown) : null,
+      tender_original_markdown_chars: markdown.length,
+      tender_files_json: JSON.stringify(next),
+      bid_sections_json: null,
+      bid_section_extraction_status: 'idle',
+      bid_section_extraction_error: null,
+      selected_section_id: null,
+      selected_section_title: null,
+      downstream_review_required: hasSavedDownstream() ? 1 : 0,
+    }))();
+    let cleanupError = '';
+    try { removeManagedTenderSource(target); } catch (error) { cleanupError = error.message; }
+    return { success: true, message: cleanupError ? `资料已从项目移除；旧文件清理待处理：${cleanupError}` : '已移除招标资料', state: loadTechnicalPlan(), markdown };
   }
 
   async function importOriginalPlanDocument() {
@@ -2813,7 +2955,6 @@ function createTechnicalPlanStore({ app, db, fileService }) {
       const workingMarkdown = buildSelectedSectionMarkdown(originalMarkdown, aiSections, matched.id);
       writeMarkdownFile(tenderMarkdownPath, workingMarkdown, 'tender');
       const transaction = db.transaction(() => {
-        clearDownstreamFromBidSectionChange();
         updateMeta({
           tender_markdown_path: tenderMarkdownRelativePath,
           tender_markdown_hash: stableHash(workingMarkdown),
@@ -2821,6 +2962,7 @@ function createTechnicalPlanStore({ app, db, fileService }) {
           bid_section_mode: 'multiple',
           selected_section_id: matched.id || null,
           selected_section_title: matched.title || null,
+          downstream_review_required: hasSavedDownstream() ? 1 : 0,
         });
       });
       transaction();
@@ -2874,6 +3016,10 @@ function createTechnicalPlanStore({ app, db, fileService }) {
     clearIllustrationFiles,
     clearTechnicalPlan,
     importTenderDocument,
+    replaceTenderSource,
+    resolveTenderImport,
+    hasPendingTenderImport: () => Boolean(pendingTenderImport),
+    removeTenderSource,
     importOriginalPlanDocument,
     checkBidSections,
     prepareBidSectionExtraction,

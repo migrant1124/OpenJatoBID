@@ -8,6 +8,9 @@ import BidSectionSelectorDialog from '../components/BidSectionSelectorDialog';
 import type { BackgroundTaskState, BidAnalysisMode, BidAnalysisTaskDefinition, BidAnalysisTasks, BidAnalysisTaskState, BidSectionExtractionStatus, BidSectionMode, DetectedBidSection, TechnicalPlanState } from '../types';
 
 interface BidAnalysisPageProps {
+  openSettingsOnMount?: boolean;
+  onSettingsOpened?: () => void;
+  analysisStale?: boolean;
   hasTenderFile: boolean;
   mode: BidAnalysisMode;
   selectedTaskIds: string[];
@@ -359,6 +362,9 @@ function getActiveTechnicalPlanTask(tasks: unknown[]) {
 }
 
 function BidAnalysisPage({
+  openSettingsOnMount = false,
+  onSettingsOpened,
+  analysisStale,
   hasTenderFile,
   mode,
   selectedTaskIds,
@@ -376,12 +382,13 @@ function BidAnalysisPage({
   onConfigSaved,
 }: BidAnalysisPageProps) {
   const [running, setRunning] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [launchingTask, setLaunchingTask] = useState<'section' | null>(null);
   const launchingTaskRef = useRef<'section' | null>(null);
   const [fullRerunLocked, setFullRerunLocked] = useState(false);
   const [fullRerunSeenRunning, setFullRerunSeenRunning] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState('projectOverview');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(openSettingsOnMount);
   const [draftSelectedTaskIds, setDraftSelectedTaskIds] = useState<string[]>(() => getSelectedTaskIdsForMode(taskDefinitions, mode, selectedTaskIds));
   const [draftBidSectionMode, setDraftBidSectionMode] = useState<BidSectionMode>(bidSectionMode);
   const [sectionSelectorOpen, setSectionSelectorOpen] = useState(false);
@@ -394,7 +401,20 @@ function BidAnalysisPage({
   } | null>(null);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
   const { showToast } = useToast();
+  useEffect(() => { if (openSettingsOnMount) onSettingsOpened?.(); }, []);
   const bidAnalysisTasks = taskDefinitions;
+  const exportReport = async () => {
+    setExportingReport(true);
+    try {
+      const result = await window.yibiao?.export.exportWord({ source: 'technical-plan-analysis' });
+      if (result?.canceled) return;
+      if (result?.path) {
+        showToast('招标解析报告已导出', 'success');
+        await window.yibiao?.export.openFile(result.path);
+      }
+    } catch (error) { showToast(error instanceof Error ? error.message : '导出招标解析报告失败', 'error'); }
+    finally { setExportingReport(false); }
+  };
   const allBidAnalysisTaskIds = useMemo(() => taskDefinitions.map((definition) => definition.id), [taskDefinitions]);
   const requiredBidAnalysisTaskIds = useMemo(
     () => taskDefinitions.filter((definition) => definition.required).map((definition) => definition.id),
@@ -807,6 +827,7 @@ function BidAnalysisPage({
           <small>{selectedTasks.length} 项</small>
         </div>
         <div className="bid-analysis-command-actions">
+          <button type="button" className="secondary-action" onClick={() => { void exportReport(); }} disabled={taskRunning || exportingReport || !selectedTasks.some((definition) => tasks[definition.id]?.status === 'success')}>{exportingReport ? '导出中…' : '导出 Word'}</button>
           <button
             type="button"
             className="outline-config-action"
@@ -825,6 +846,8 @@ function BidAnalysisPage({
           </button>
         </div>
       </section>
+
+      {analysisStale ? <p className="analysis-section-hint">招标资料已变化，当前解析结果使用旧来源修订，请重新核对。</p> : null}
 
       <section className="bid-analysis-workspace">
         <aside className="bid-analysis-task-pane" aria-label="解析任务列表">

@@ -584,6 +584,10 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
   const requestedTaskIds = Array.isArray(payload.task_ids)
     ? new Set(payload.task_ids.filter((taskId) => typeof taskId === 'string'))
     : null;
+  const sourceChanged = storedPlanForHint.analysisStale === true;
+  if (sourceChanged && requestedTaskIds) {
+    throw new Error('招标资料已变化，请重新解析全部已选项目，不能只更新单项');
+  }
   const scopedTasks = requestedTaskIds
     ? selectedTasks.filter((task) => requestedTaskIds.has(task.id))
     : selectedTasks;
@@ -606,7 +610,7 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
       : '开始解析招标文件。';
   const initialLogs = [initialMessage];
   let initialPartial = { bidAnalysisMode: mode, bidAnalysisSelectedTaskIds: config.taskIds, bidAnalysisTask: updateTask({ status: 'running', progress: 0, logs: initialLogs }) };
-  if (forceRerun && !requestedTaskIds) {
+  if ((forceRerun && !requestedTaskIds) || sourceChanged) {
     const prev = workspaceStore.loadTechnicalPlan() || {};
     const resetTasks = { ...(prev.bidAnalysisTasks || {}) };
     for (const task of selectedTasks) {
@@ -623,7 +627,7 @@ async function runBidAnalysisTask({ aiService, workspaceStore, updateTask, paylo
   let technicalPlan = workspaceStore.updateTechnicalPlan(initialPartial);
   const analysisRunId = String(payload.run_id || payload.runId || technicalPlan.bidAnalysisTask?.task_id || 'bid-analysis-direct').trim();
   const currentTasks = technicalPlan.bidAnalysisTasks || {};
-  const tasksToRun = requestedTaskIds || forceRerun
+  const tasksToRun = requestedTaskIds || forceRerun || sourceChanged
     ? scopedTasks
     : scopedTasks.filter((task) => !isBidAnalysisTaskResultValid(task, currentTasks[task.id]));
 
