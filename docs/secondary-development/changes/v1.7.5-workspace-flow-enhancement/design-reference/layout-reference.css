@@ -1,0 +1,69 @@
+/* 设计交接参考，不是生产补丁。只作用于本轮新增内容区，不改 AppShell。
+ * 所有颜色、字体和间距复用仓库 --yb-* 令牌，无外部字体或图标。
+ * 删除/解析/导出处理由真实业务接口接入，本文件不包含这些逻辑。
+ */
+.jato-flow-page {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--yb-space-4);
+}
+.jato-flow-page__card {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--yb-space-4);
+  padding: var(--yb-space-6);
+  background: var(--yb-surface);
+  border: 1px solid var(--yb-border-soft);
+  border-radius: var(--yb-radius-lg);
+}
+.jato-flow-page__header {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--yb-space-4);
+}
+.jato-flow-page__heading { flex: 1 1 240px; min-width: 0; }
+.jato-flow-page__primary { margin-inline-start: auto; flex: 0 0 auto; }
+.jato-flow-page__actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--yb-space-2); }
+.jato-flow-page__table-scroll { flex: 1; min-height: 0; overflow: auto; }
+.jato-flow-page__table { width: 100%; border-collapse: collapse; text-align: left; }
+.jato-flow-page__table th,
+.jato-flow-page__table td { padding: var(--yb-space-3) var(--yb-space-4); border-bottom: 1px solid var(--yb-border-soft); }
+.jato-flow-page__table th { background: var(--yb-fill-quaternary); font-weight: 600; }
+.jato-flow-page__name {
+  color: var(--yb-primary);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.jato-flow-page__delete {
+  color: var(--yb-error);
+  border: 0;
+  background: transparent;
+  min-width: var(--yb-control-height);
+  min-height: var(--yb-control-height);
+}
+.jato-flow-page__delete:disabled { color: var(--yb-text-disabled); cursor: not-allowed; }
+.jato-flow-page__file-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jato-flow-page__hint { color: var(--yb-text-soft); font-size: var(--yb-font-size); }
+.jato-flow-page__outline-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: var(--yb-space-4);
+  min-height: 0;
+  min-width: 0;
+  container-type: inline-size;
+}
+/* 仅调整本模块内容区；实际断点需结合现有侧栏宽度进行实机验证。 */
+@media (max-width: 1180px) {
+  .jato-flow-page__outline-columns { grid-template-columns: minmax(0, 1fr); }
+}
+/* 禁止为开始解析操作增加 position:fixed/bottom 的新底部浮层。 */

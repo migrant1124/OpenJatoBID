@@ -99,10 +99,11 @@ html,body{margin:0;padding:0;background:#fff;width:${width}px;min-width:${width}
 }
 
 // 为模型生成的完整 HTML 注入统一截图容器和设计宽度，避免把第二个 html 文档嵌进 body。
-function buildGeneratedHtmlDocument(value, width = 1240) {
+function buildGeneratedHtmlDocument(value, width = 1240, height = 0) {
   const source = String(value || '').trim();
+  const minHeight = height > 0 ? `min-height:${height}px;` : '';
   const styles = `<style id="jato-capture-style">
-html,body{margin:0!important;padding:0!important;background:#fff!important;width:${width}px!important;min-width:${width}px!important;overflow-x:visible!important}*{box-sizing:border-box}#jato-capture-root{display:block;width:${width}px;min-width:${width}px;min-height:1px;margin:0;padding:0;background:#fff;overflow:visible}img,svg,canvas,video{max-width:100%;height:auto}
+html,body{margin:0!important;padding:0!important;background:#fff!important;width:${width}px!important;min-width:${width}px!important;${minHeight}overflow-x:visible!important}*{box-sizing:border-box}#jato-capture-root{display:block;width:${width}px;min-width:${width}px;${minHeight}margin:0;padding:0;background:#fff;overflow:visible}img,svg,canvas,video{max-width:100%;height:auto}
 </style>`;
   const wrapScript = `<script>
 (() => {
@@ -422,19 +423,23 @@ function createLocalImageRenderService(options = {}) {
       await setDeviceMetrics(win.webContents, initialWidth, initialHeight);
       const metrics = await waitForLayoutReady(win.webContents, options.timeoutMs || 120000, options);
       const captureWidth = Math.max(Number(options.minWidth) || 1, metrics.width);
+      const fixedHeight = Number(options.fixedHeight) || 0;
       const captureScale = options.capture === false ? 1 : Math.max(1, Math.round(Number(options.captureScale) || 1));
       const task = activeTasks.get(taskId);
-      if (task) task.estimatedRgbaBytes = estimateRgbaBytes(captureWidth * captureScale, metrics.height * captureScale);
+      if (task) task.estimatedRgbaBytes = estimateRgbaBytes(captureWidth * captureScale, (fixedHeight || metrics.height) * captureScale);
       const layoutIssues = options.kind === 'html' || options.kind === 'legacy-html'
         ? await probeHtmlLayoutIssues(win.webContents)
         : [];
+      if (fixedHeight && metrics.height > fixedHeight) layoutIssues.push(`内容高度 ${metrics.height}px 超出目标画布 ${fixedHeight}px`);
       const buffer = options.capture === false
         ? undefined
-        : await captureFullPage(win.webContents, captureWidth, metrics.height, options);
+        : layoutIssues.length && fixedHeight
+          ? undefined
+          : await captureFullPage(win.webContents, captureWidth, fixedHeight || metrics.height, options);
       return {
         width: captureWidth,
-        height: metrics.height,
-        estimated_rgba_bytes: estimateRgbaBytes(captureWidth * captureScale, metrics.height * captureScale),
+        height: fixedHeight || metrics.height,
+        estimated_rgba_bytes: estimateRgbaBytes(captureWidth * captureScale, (fixedHeight || metrics.height) * captureScale),
         layout_issues: layoutIssues,
         ...(buffer ? { buffer } : {}),
       };
@@ -449,23 +454,23 @@ function createLocalImageRenderService(options = {}) {
   return {
     probeHtmlLayoutOnly(html, renderOptions = {}) {
       const width = renderOptions.width || HTML_DESIGN_WIDTH;
-      return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width), {
+      return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width, renderOptions.fixedHeight), {
         ...renderOptions,
         kind: 'html',
         capture: false,
         initialWidth: width,
-        initialHeight: HTML_INITIAL_HEIGHT,
+        initialHeight: renderOptions.fixedHeight || HTML_INITIAL_HEIGHT,
         minWidth: width,
       }));
     },
     renderHtmlToPng(html, renderOptions = {}) {
       const width = renderOptions.width || HTML_DESIGN_WIDTH;
-      return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width), {
+      return htmlPool.run(() => renderDocument(buildGeneratedHtmlDocument(html, width, renderOptions.fixedHeight), {
         ...renderOptions,
         kind: 'html',
         captureScale: HTML_CAPTURE_SCALE,
         initialWidth: width,
-        initialHeight: HTML_INITIAL_HEIGHT,
+        initialHeight: renderOptions.fixedHeight || HTML_INITIAL_HEIGHT,
         minWidth: width,
       }));
     },

@@ -44,6 +44,21 @@ function buildProcurementResult() {
   };
 }
 
+test('资料修订后拒绝单项重跑，避免新来源快照混入旧成功项', async () => {
+  let writes = 0;
+  await assert.rejects(runBidAnalysisTask({
+    aiService: {},
+    workspaceStore: {
+      readTenderMarkdown: () => '新招标资料',
+      loadTechnicalPlan: () => ({ bidSectionMode: 'single', analysisStale: true }),
+      updateTechnicalPlan: () => { writes += 1; },
+    },
+    updateTask: (state) => state,
+    payload: { mode: 'key', task_ids: ['projectOverview'] },
+  }), /重新解析全部已选项目/);
+  assert.equal(writes, 0);
+});
+
 test('采购与报价使用摘要结构化 JSON 固定 schema', () => {
   const task = getBidAnalysisTaskDefinitions().find((item) => item.id === 'procurementList');
   assert.equal(task.output, 'json');

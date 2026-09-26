@@ -9,6 +9,8 @@ config.json
 # 上传文件目录
 uploads/
 *.docx
+!docs/secondary-development/changes/v1.7.5-workspace-flow-enhancement/artifacts/ui-analysis-report.docx
+!docs/secondary-development/changes/v1.7.5-workspace-flow-enhancement/artifacts/ui-outline.docx
 *.pdf
 
 # 构建和打包相关

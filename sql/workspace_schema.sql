@@ -4,7 +4,7 @@
 -- 1. 本文件用于开源开发者阅读、评审和排查问题，展示 workspace/yibiao.sqlite 的目标完整表结构。
 -- 2. 用户运行客户端时不需要手动执行本文件。
 -- 3. 客户端运行时建表和升级以 Electron Main 侧 migration 代码为准。
--- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17、格式驱动目录与固定响应模板 v18、提示词仓库 v23、内置提示词初始化 v24、项目理解资料状态 v25。
+-- 4. 当前运行代码已落地 technical_plan_* v1、duplicate_check_* / rejection_check_* v2、knowledge_* v3、technical_plan_global_fact_groups v4、标段兼容 v5/v6、标段选择 v7、旧待选择标段兼容字段 v8、工作流类型和原方案文件状态 v9、招标解析项选择配置 v10、知识库排序 v11、废标项检查多投标文件 v12、已有方案目录配置 v13、多标段优化状态 v14、导出模板库 v15、多招标文件 v16、全文图片编排 v17、格式驱动目录与固定响应模板 v18、提示词仓库 v23、内置提示词初始化 v24、项目理解资料状态 v25、项目索引 v26、分析来源 v27、导出记录 v28、分析文件快照 v29、分析标段快照 v30、导出修订 v31、下游复核标记 v32。
 -- 5. 每次表结构调整后，需要同步更新本文件和 runtime migration 版本。
 -- 6. 本文件不保存历史版本，每次更新都写入最新目标完整结构。
 
@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 25;
+PRAGMA user_version = 32;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS technical_plan_meta (
   tender_imported_at TEXT,
   -- v16 多份招标文件单份元数据 JSON；tender_markdown_* 继续代表纯拼接后的权威合并正文。
   tender_files_json TEXT,
+  -- v27/v29/v30 已保存解析所用工作副本、文件和投标范围快照。
+  analysis_source_hash TEXT,
+  analysis_source_files_json TEXT,
+  analysis_source_section_title TEXT,
+  downstream_review_required INTEGER NOT NULL DEFAULT 0,
   -- v14 多标段优化：原始招标文件 Markdown 状态，tender_markdown_* 继续代表当前工作副本。
   tender_original_markdown_path TEXT,
   tender_original_markdown_hash TEXT,
@@ -90,6 +95,29 @@ CREATE TABLE IF NOT EXISTS technical_plan_meta (
   selected_section_head_line TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+-- v26 本地技术方案项目索引；legacy 行指向本库原有数据，isolated 行指向项目专用 plan.sqlite。
+CREATE TABLE IF NOT EXISTS technical_plan_projects (
+  project_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  buyer TEXT,
+  project_number TEXT,
+  lot TEXT,
+  storage_kind TEXT NOT NULL CHECK (storage_kind IN ('legacy', 'isolated')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- v28 外部 Word 文件只记录路径，不把文件当作项目受管内容删除。
+CREATE TABLE IF NOT EXISTS technical_plan_project_exports (
+  export_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_revision TEXT,
+  output_path TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES technical_plan_projects(project_id) ON DELETE CASCADE
 );
 
 -- 技术方案后台任务状态。

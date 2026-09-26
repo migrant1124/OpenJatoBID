@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const { createReadStream } = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { dialog } = require('electron');
@@ -28,6 +29,12 @@ const htmlImageSrcPattern = /(<img\b[^>]*?\bsrc=["'])(?<src>[^"']+)(["'][^>]*>)/
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function hashFile(filePath) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest('hex');
 }
 
 function getSupportedExtensions(provider) {
@@ -604,9 +611,13 @@ function createFileService({ app, configStore } = {}) {
       }
 
       let fileContent = '';
+      let sourceHash = '';
       try {
         const assetHash = crypto.createHash('sha1').update(filePath).digest('hex').slice(0, 12);
+        const beforeHash = await hashFile(filePath);
         fileContent = (await parseDocumentWithConfig(app, filePath, config, { assetScope: `technical-plan-${assetHash}`, preserveImages: false })).trim();
+        sourceHash = await hashFile(filePath);
+        if (beforeHash !== sourceHash) throw new Error('文件在解析期间发生变化，请重新选择');
       } catch (error) {
         errors.push(`${path.basename(filePath)}：${formatImportError(error, filePath)}`);
         continue;
@@ -620,6 +631,8 @@ function createFileService({ app, configStore } = {}) {
       parsedDocuments.push({
         file_content: fileContent,
         file_name: path.basename(filePath),
+        file_path: filePath,
+        source_hash: sourceHash,
         parser_provider: parser.provider,
         parser_label: parserLabels[parser.provider] || '本地解析',
         fallback_to_local: Boolean(parser.fallbackToLocal),

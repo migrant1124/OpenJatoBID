@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DocumentAnalysisPage from './DocumentAnalysisPage';
+import ProjectListPage, { type TechnicalPlanProject } from './ProjectListPage';
 import BidAnalysisPage from './BidAnalysisPage';
 import OutlineEditPage from './OutlineEditPage';
 import GlobalFactsPage from './GlobalFactsPage';
@@ -43,6 +44,10 @@ const steps: TechnicalPlanStep[] = [
   'content-edit',
   'expand',
 ];
+
+function outlineHasContent(items: OutlineItem[]): boolean {
+  return items.some((item) => Boolean(item.content?.trim()) || outlineHasContent(item.children || []));
+}
 
 const stepLabels: Record<TechnicalPlanStep, string> = {
   'document-analysis': '选择标书',
@@ -186,6 +191,12 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   const { hydrated, state, setState } = useTechnicalPlanWorkflow();
   const { showToast } = useToast();
   const [tenderMarkdown, setTenderMarkdown] = useState('');
+  const [projects, setProjects] = useState<TechnicalPlanProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState('');
+  const [activeProject, setActiveProject] = useState<TechnicalPlanProject | null>(null);
+  const [openAnalysisSettings, setOpenAnalysisSettings] = useState(false);
+  const activeProjectIdRef = useRef<string | null>(null);
   const [originalPlanMarkdown, setOriginalPlanMarkdown] = useState('');
   const [exportProgress, setExportProgress] = useState<ExportProgressState>(initialExportProgress);
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
@@ -261,6 +272,66 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
     sortLeaveResolverRef.current?.(allowed);
     sortLeaveResolverRef.current = null;
     setSortLeaveDialogOpen(false);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    if (!window.yibiao) {
+      setProjectsError('项目服务尚未初始化');
+      setProjectsLoading(false);
+      return;
+    }
+    Promise.all([window.yibiao.technicalPlan.listProjects(), window.yibiao.technicalPlan.activeProject()]).then(([items, activeId]) => {
+      if (!mounted) return;
+      setProjects(items);
+      const selected = items.find((item) => item.id === activeId) || null;
+      activeProjectIdRef.current = selected?.id || null;
+      setActiveProject(selected);
+      setProjectsError('');
+    }).catch((error) => {
+      if (mounted) setProjectsError(error instanceof Error ? error.message : '读取项目列表失败');
+    }).finally(() => { if (mounted) setProjectsLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const refreshProjects = async () => setProjects(await window.yibiao!.technicalPlan.listProjects());
+
+  const openProject = async (id: string) => {
+    try {
+      const opened = await window.yibiao!.technicalPlan.openProject(id);
+      activeProjectIdRef.current = id;
+      setActiveProject(projects.find((item) => item.id === id) || { ...opened.project, buyer: '', projectNumber: '', lot: '', step: opened.state.step, updatedAt: '', createdAt: '' });
+      setState(normalizeTechnicalPlanState(opened.state));
+      setTenderMarkdown('');
+      setOriginalPlanMarkdown('');
+    } catch (error) { showToast(error instanceof Error ? error.message : '打开项目失败', 'error'); }
+  };
+
+  const createProject = async (data: { name: string; buyer?: string; projectNumber?: string; lot?: string }) => {
+    const created = await window.yibiao!.technicalPlan.createProject(data);
+    await refreshProjects();
+    activeProjectIdRef.current = created.project.id;
+    setActiveProject({ ...created.project, buyer: data.buyer || '', projectNumber: data.projectNumber || '', lot: data.lot || '', step: created.state.step, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString() });
+    setState(normalizeTechnicalPlanState(created.state));
+    setTenderMarkdown('');
+    setOriginalPlanMarkdown('');
+  };
+
+  const deleteProject = async (id: string) => {
+    const result = await window.yibiao!.technicalPlan.deleteProject(id);
+    await refreshProjects();
+    showToast(result.warning || '项目已删除', result.warning ? 'info' : 'success');
+  };
+
+  const returnToProjects = async () => {
+    if (!await confirmSortLeaveOnly()) return;
+    try {
+      await window.yibiao!.technicalPlan.leaveProject();
+      activeProjectIdRef.current = null;
+      setActiveProject(null);
+      setState(normalizeTechnicalPlanState(resetState as TechnicalPlanState));
+      await refreshProjects();
+    } catch (error) { showToast(error instanceof Error ? error.message : '返回项目列表失败', 'error'); }
   };
 
   const executeWorkflowSwitch = useCallback(async (targetWorkflowKind: TechnicalPlanWorkflowKind) => {
@@ -391,7 +462,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
   }, [hydrated, state.step, workflowKind]);
 
   useEffect(() => {
-    if (!hydrated || state.workflowKind === workflowKind) return;
+    if (!hydrated || !activeProject || state.workflowKind === workflowKind) return;
     if (skippedWorkflowSwitchPromptRef.current === workflowKind) return;
     if (lastExecutedWorkflowSwitchRef.current === state.workflowKind) return;
     if (workflowSwitchRequest || switchingWorkflow) return;
@@ -415,7 +486,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
     };
 
     void run();
-  }, [executeWorkflowSwitch, hydrated, onSectionChange, openWorkflowSwitchDialog, showToast, state, switchingWorkflow, workflowKind, workflowSwitchRequest]);
+  }, [activeProject, executeWorkflowSwitch, hydrated, onSectionChange, openWorkflowSwitchDialog, showToast, state, switchingWorkflow, workflowKind, workflowSwitchRequest]);
 
   useEffect(() => {
     if (state.workflowKind === workflowKind) {
@@ -449,10 +520,12 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
       return;
     }
 
-    setState((prev) => ({ ...prev, step }));
-    window.yibiao?.technicalPlan.updateStep(step).catch((error) => {
+    try {
+      const saved = await window.yibiao?.technicalPlan.updateStep(step);
+      if (saved) setState(normalizeTechnicalPlanState(saved));
+    } catch (error) {
       showToast(error instanceof Error ? error.message : '保存技术方案步骤失败', 'error');
-    });
+    }
   };
 
   const goToOffset = async (offset: number) => {
@@ -468,6 +541,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
     }
 
     const unsubscribe = window.yibiao.tasks.onTaskEvent<typeof state>((event) => {
+      const eventProjectId = (event.task as { project_id?: string } | undefined)?.project_id;
+      if (eventProjectId && eventProjectId !== activeProjectIdRef.current) return;
       const taskType = (event.task as { type?: string } | undefined)?.type;
       const latestTask = trimTaskLogs(event.task as BackgroundTaskState | undefined);
       const technicalPlan = event.technicalPlanPatch || event.technicalPlan;
@@ -948,8 +1023,12 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
     },
   ];
 
+  if (!activeProject) return <ProjectListPage projects={projects} loading={projectsLoading} error={projectsError} onCreate={createProject} onOpen={openProject} onDelete={deleteProject} />;
+
   return (
     <div className="page-stack technical-workbench">
+      <div className="technical-current-project"><button type="button" className="secondary-action" onClick={() => { void returnToProjects(); }}>返回项目列表</button><span title={activeProject.name}>{activeProject.name}</span></div>
+      {state.downstreamReviewRequired && !['document-analysis', 'bid-analysis'].includes(state.step) ? <p className="analysis-section-hint">招标资料或解析结果已变化，当前目录、全局事实及正文沿用旧依据，请人工复核或明确重新生成；系统未自动清空。</p> : null}
       {state.step === 'document-analysis' && (
         <DocumentAnalysisPage
           workflowKind={workflowKind}
@@ -962,6 +1041,8 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             setState(normalizeTechnicalPlanState(nextState));
             setTenderMarkdown(markdown);
           }}
+          analysisStale={state.analysisStale}
+          onStartAnalysis={async () => { setOpenAnalysisSettings(true); await switchStep('bid-analysis'); }}
           onOriginalPlanImported={(nextState, markdown) => {
             setState(normalizeTechnicalPlanState(nextState));
             setOriginalPlanMarkdown(markdown);
@@ -971,6 +1052,9 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
 
       {state.step === 'bid-analysis' && (
         <BidAnalysisPage
+          openSettingsOnMount={openAnalysisSettings}
+          onSettingsOpened={() => setOpenAnalysisSettings(false)}
+          analysisStale={state.analysisStale}
           hasTenderFile={Boolean(state.tenderFile)}
           mode={state.bidAnalysisMode}
           selectedTaskIds={state.bidAnalysisSelectedTaskIds}
@@ -1002,6 +1086,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
           outlineQualityReview={state.outlineQualityReview}
           task={state.outlineGenerationTask}
           contentTaskStatus={state.contentGenerationTask?.status}
+          hasGeneratedContent={Boolean(state.contentGenerationTask) || outlineHasContent(state.outlineData?.outline || [])}
           onOutlineConfigChange={async ({ referenceKnowledgeDocumentIds, outlineExpansionMode, wordControlOptions }) => {
             const saved = await window.yibiao?.technicalPlan.saveOutlineConfig({ referenceKnowledgeDocumentIds, outlineExpansionMode, wordControlOptions });
             if (saved) {

@@ -43,6 +43,7 @@ const { createSqliteDatabase } = require('../services/sqliteDatabase.cjs');
 const { createSystemFontService } = require('../services/systemFontService.cjs');
 const { createTaskService } = require('../services/taskService.cjs');
 const { createTechnicalPlanStore } = require('../services/technicalPlanStore.cjs');
+const { createTechnicalPlanProjects } = require('../services/technicalPlanProjects.cjs');
 const { createTemplateStore } = require('../services/templateStore.cjs');
 
 function normalizeExternalUrl(value) {
@@ -221,7 +222,9 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const sqliteDatabase = createSqliteDatabase(app, { onStatus: updateStatus });
   const knowledgeBaseStore = createKnowledgeBaseStore({ app, db: sqliteDatabase.db });
   const knowledgeBaseService = createKnowledgeBaseService({ app, aiService, configStore, knowledgeBaseStore });
-  const technicalPlanStore = createTechnicalPlanStore({ app, db: sqliteDatabase.db, fileService });
+  const legacyTechnicalPlanStore = createTechnicalPlanStore({ app, db: sqliteDatabase.db, fileService });
+  const technicalPlanProjects = createTechnicalPlanProjects({ app, db: sqliteDatabase.db, fileService, legacyStore: legacyTechnicalPlanStore });
+  const technicalPlanStore = technicalPlanProjects.store;
   const duplicateCheckStore = createDuplicateCheckStore({ app, db: sqliteDatabase.db });
   const rejectionCheckStore = createRejectionCheckStore({ app, db: sqliteDatabase.db, fileService, technicalPlanStore });
   const templateStore = createTemplateStore({ db: sqliteDatabase.db });
@@ -245,10 +248,15 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   });
   const duplicateCheckService = createDuplicateCheckService({ app, configStore, workspaceStore: duplicateCheckStore });
   const taskService = createTaskService({ app, configStore, aiService, agentService, technicalPlanStore, rejectionCheckStore, duplicateCheckStore, knowledgeBaseService, duplicateCheckService, localImageRenderService });
+  technicalPlanProjects.setBusyCheck(() => taskService.getActiveTasks().some((task) => task.group === 'technical-plan')
+    || Boolean(technicalPlanProjects.active() && technicalPlanStore.loadTechnicalPlan()?.contentGenerationTask?.status === 'paused')
+    || Boolean(technicalPlanProjects.active() && technicalPlanStore.hasPendingTenderImport())
+    || Boolean(agentService.getStatus()?.active_task || agentService.getStatus()?.queued_count)
+    || Boolean(localImageRenderService.getDiagnostics()?.active_window_count));
 
   clearWorkspaceDatabaseIpc();
   registerKnowledgeBaseIpc({ knowledgeBaseService });
-  registerTechnicalPlanIpc({ technicalPlanStore });
+  registerTechnicalPlanIpc({ technicalPlanStore, technicalPlanProjects });
   registerDuplicateCheckIpc({ duplicateCheckStore });
   registerRejectionCheckIpc({ rejectionCheckStore });
   registerTemplateIpc({ templateStore });
@@ -257,7 +265,7 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   registerPromptLibraryIpc({ promptLibraryService });
   exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
-  return { sqliteDatabase, conversationService, unregisterConversationIpc };
+  return { sqliteDatabase, technicalPlanProjects, conversationService, unregisterConversationIpc };
 }
 
 function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
@@ -280,6 +288,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   const unregisterDiagnosticsIpc = registerDiagnosticsIpc({ diagnosticsService });
   let unregisterLicenseIpc = null;
   let conversationService = null;
+  let technicalPlanProjects = null;
   let unregisterConversationIpc = null;
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
@@ -290,6 +299,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     unregisterDiagnosticsIpc?.();
     unregisterLicenseIpc?.();
     unregisterConversationIpc?.();
+    technicalPlanProjects?.close?.();
     await conversationService?.close?.();
     localImageRenderService.dispose?.();
     await agentService.close?.();
@@ -365,7 +375,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   registerAiIpc({ aiService });
   registerAgentIpc({ agentService, mainWindow });
   registerFileIpc({ fileService });
-  registerExportIpc({ exportService });
+  registerExportIpc({ exportService, getTechnicalPlanProjects: () => technicalPlanProjects });
   registerSystemFontIpc({ systemFontService });
   registerPendingWorkspaceDatabaseIpc(databaseStatus.getStatus);
 
@@ -389,6 +399,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
       try {
         const workspaceServices = registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus: databaseStatus.updateStatus });
         conversationService = workspaceServices.conversationService;
+        technicalPlanProjects = workspaceServices.technicalPlanProjects;
         unregisterConversationIpc = workspaceServices.unregisterConversationIpc;
       } catch (error) {
         databaseStatus.updateStatus({

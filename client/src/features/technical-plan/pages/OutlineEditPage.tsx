@@ -27,6 +27,7 @@ interface OutlineEditPageProps {
   outlineQualityReview?: Record<string, unknown>;
   task?: BackgroundTaskState;
   contentTaskStatus?: BackgroundTaskState['status'];
+  hasGeneratedContent?: boolean;
   onOutlineConfigChange: (config: { referenceKnowledgeDocumentIds: string[]; outlineExpansionMode: OutlineExpansionMode; wordControlOptions: OutlineWordControlOptions }) => Promise<void>;
   onOutlineSaved: (request: SaveOutlineRequest) => Promise<void>;
   onSortGuardChange?: (guard: OutlineSortGuard | null) => void;
@@ -211,6 +212,72 @@ function reorderOutlineSiblings(items: OutlineItem[], parentId: string | null, d
   });
 }
 
+function getOutlineSiblings(items: OutlineItem[], parentId: string | null): OutlineItem[] | null {
+  return parentId === null ? items : findOutlineItem(items, parentId)?.children || null;
+}
+
+function subtreeDepth(item: OutlineItem): number {
+  return 1 + Math.max(0, ...(item.children || []).map(subtreeDepth));
+}
+
+function hasLockedSubtree(item: OutlineItem): boolean {
+  return Boolean(item.level_locked || item.order_locked || item.format_node_id || item.children?.some(hasLockedSubtree));
+}
+
+function getLevelMoveBlockReason(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): string | null {
+  const location = findOutlineLocation(items, itemId);
+  if (!location) return '未找到目录项';
+  const siblings = getOutlineSiblings(items, location.parentId);
+  const item = siblings?.[location.index];
+  if (!siblings || !item) return '目录结构无效';
+  if (direction === 'up' && !location.parentId) return '当前已是一级目录';
+  if (direction === 'down' && location.index === 0) return '没有可作为父级的前一个同级目录';
+  if (hasLockedSubtree(item)) return '该目录层级或顺序由招标文件锁定';
+  if (direction === 'up') {
+    const parentLocation = findOutlineLocation(items, location.parentId!);
+    const parentSiblings = parentLocation && getOutlineSiblings(items, parentLocation.parentId);
+    const parent = parentSiblings?.[parentLocation?.index ?? -1];
+    if (!parentLocation || !parentSiblings || !parent || parent.level_locked || parent.format_node_id) return '该父子层级由招标文件锁定';
+  } else {
+    const parent = siblings[location.index - 1];
+    if (parent.level_locked || parent.order_locked || parent.allow_ai_children === false || parent.format_node_id) return '前一个目录不允许添加下级';
+    if (location.level + subtreeDepth(item) >= 5) return '移动后会超过五级目录';
+  }
+  return null;
+}
+
+function getSiblingMoveBlockReason(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): string | null {
+  const location = findOutlineLocation(items, itemId);
+  if (!location) return '未找到目录项';
+  const siblings = getOutlineSiblings(items, location.parentId);
+  if (!siblings) return '目录结构无效';
+  const nextIndex = location.index + (direction === 'up' ? -1 : 1);
+  if (nextIndex < 0) return '当前已是同级首项';
+  if (nextIndex >= siblings.length) return '当前已是同级末项';
+  if (isOutlinePositionLocked(siblings[location.index]) || isOutlinePositionLocked(siblings[nextIndex])) return '该目录或相邻目录的顺序由招标文件锁定';
+  return null;
+}
+
+function moveOutlineLevel(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): OutlineItem[] {
+  const blockReason = getLevelMoveBlockReason(items, itemId, direction);
+  if (blockReason) throw new Error(blockReason);
+  const next = structuredClone(items);
+  const location = findOutlineLocation(next, itemId)!;
+  const siblings = getOutlineSiblings(next, location.parentId)!;
+  const item = siblings[location.index];
+  if (direction === 'up') {
+    const parentLocation = findOutlineLocation(next, location.parentId!)!;
+    const parentSiblings = getOutlineSiblings(next, parentLocation.parentId)!;
+    siblings.splice(location.index, 1);
+    parentSiblings.splice(parentLocation.index + 1, 0, item);
+  } else {
+    const parent = siblings[location.index - 1];
+    siblings.splice(location.index, 1);
+    parent.children = [...(parent.children || []), item];
+  }
+  return next;
+}
+
 function updateOutlineItem(items: OutlineItem[], itemId: string, updater: (item: OutlineItem) => OutlineItem): OutlineItem[] {
   return items.map((item) => {
     if (item.id === itemId) {
@@ -348,6 +415,7 @@ function OutlineEditPage({
   outlineQualityReview,
   task,
   contentTaskStatus,
+  hasGeneratedContent = false,
   onOutlineConfigChange,
   onOutlineSaved,
   onSortGuardChange,
@@ -380,6 +448,10 @@ function OutlineEditPage({
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT);
   const [sortDirty, setSortDirty] = useState(false);
   const [savingSort, setSavingSort] = useState(false);
+  const [levelChanged, setLevelChanged] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [includeDescriptions, setIncludeDescriptions] = useState(false);
+  const [exportingOutline, setExportingOutline] = useState(false);
   const [confirmingOutline, setConfirmingOutline] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
@@ -404,6 +476,11 @@ function OutlineEditPage({
   const knowledgePickingDisabled = generating;
   const contentMutationLocked = contentTaskStatus === 'running' || contentTaskStatus === 'pausing' || contentTaskStatus === 'paused';
   const outlineMutationLocked = generating || contentMutationLocked || savingSort;
+  const levelMoveContextReason = isExpansionWorkflow ? '当前为扩写模式，不能升降目录层级' : hasGeneratedContent ? '正文已启动或已有内容，不能升降目录层级' : contentMutationLocked ? '正文生成任务尚未停止' : null;
+  const levelUpBlockReason = levelMoveContextReason || (activeOutlineData && selectedItemId ? getLevelMoveBlockReason(activeOutlineData.outline, selectedItemId, 'up') : '请先选择目录项');
+  const levelDownBlockReason = levelMoveContextReason || (activeOutlineData && selectedItemId ? getLevelMoveBlockReason(activeOutlineData.outline, selectedItemId, 'down') : '请先选择目录项');
+  const siblingUpBlockReason = contentMutationLocked ? '正文生成任务尚未停止' : activeOutlineData && selectedItemId ? getSiblingMoveBlockReason(activeOutlineData.outline, selectedItemId, 'up') : '请先选择目录项';
+  const siblingDownBlockReason = contentMutationLocked ? '正文生成任务尚未停止' : activeOutlineData && selectedItemId ? getSiblingMoveBlockReason(activeOutlineData.outline, selectedItemId, 'down') : '请先选择目录项';
   const progressLogs = task?.logs || [];
   const latestLog = progressLogs[progressLogs.length - 1];
   const progress = generating
@@ -872,16 +949,18 @@ function OutlineEditPage({
     sortIdMapRef.current = createIdentityIdMap(outlineData.outline);
     setSorting(true);
     setSortDirty(false);
+    setLevelChanged(false);
     setEditingItemId(null);
     setDraggingItemId(null);
     setDropTarget(null);
-    showToast('仅支持同级目录排序；顺序或层级锁定的目录不可拖动，点击保存排序后才会写入数据库。', 'info');
+    showToast('可调整同级顺序；正文开始前还可升降整棵子树。保存后才会写入数据库。', 'info');
   };
 
   const discardSorting = () => {
     setSorting(false);
     setDraftOutlineData(null);
     setSortDirty(false);
+    setLevelChanged(false);
     setSavingSort(false);
     setDraggingItemId(null);
     setDropTarget(null);
@@ -906,14 +985,63 @@ function OutlineEditPage({
     try {
       await onOutlineSaved({
         outlineData: draftOutlineData,
-        reason: 'sort',
+        reason: levelChanged ? 'restructure' : 'sort',
         idMap: sortIdMapRef.current,
       });
       discardSorting();
-      showToast('目录排序已保存', 'success');
+      showToast('目录调整已保存', 'success');
     } finally {
       setSavingSort(false);
     }
+  };
+
+  const applySortDraft = (outline: OutlineItem[]) => {
+    if (!draftOutlineData) return;
+    const renumbered = renumberOutlineItemsWithIdMap(outline);
+    sortIdMapRef.current = composeIdMap(sortIdMapRef.current, renumbered.idMap);
+    setDraftOutlineData({ ...draftOutlineData, outline: renumbered.outline });
+    setExpandedItems((prev) => new Set([...prev].map((id) => renumbered.idMap[id] || id)));
+    setSelectedItemId((prev) => (prev ? renumbered.idMap[prev] || prev : prev));
+    setSortDirty(true);
+  };
+
+  const changeLevel = (direction: 'up' | 'down') => {
+    if (!draftOutlineData || !selectedItemId) return;
+    if (levelMoveContextReason) {
+      showToast(levelMoveContextReason, 'info');
+      return;
+    }
+    try {
+      const moved = moveOutlineLevel(draftOutlineData.outline, selectedItemId, direction);
+      applySortDraft(moved);
+      setLevelChanged(true);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '调整层级失败', 'info');
+    }
+  };
+
+  const moveSibling = (direction: 'up' | 'down') => {
+    if (!draftOutlineData || !selectedItemId) return;
+    const blockReason = getSiblingMoveBlockReason(draftOutlineData.outline, selectedItemId, direction);
+    if (blockReason) { showToast(blockReason, 'info'); return; }
+    const location = findOutlineLocation(draftOutlineData.outline, selectedItemId)!;
+    const siblings = getOutlineSiblings(draftOutlineData.outline, location.parentId)!;
+    const target = siblings[location.index + (direction === 'up' ? -1 : 1)];
+    applySortDraft(reorderOutlineSiblings(draftOutlineData.outline, location.parentId, selectedItemId, target.id, direction === 'up' ? 'before' : 'after'));
+  };
+
+  const exportOutline = async () => {
+    if (sorting && sortDirty) { showToast('请先保存或取消未保存的目录调整', 'info'); return; }
+    setExportingOutline(true);
+    try {
+      const result = await window.yibiao?.export.exportWord({ source: 'technical-plan-outline', includeDescriptions });
+      if (result?.path) {
+        setExportDialogOpen(false);
+        showToast('目录大纲已导出', 'success');
+        await window.yibiao?.export.openFile(result.path);
+      }
+    } catch (error) { showToast(error instanceof Error ? error.message : '导出目录大纲失败', 'error'); }
+    finally { setExportingOutline(false); }
   };
 
   useEffect(() => {
@@ -924,7 +1052,7 @@ function OutlineEditPage({
       discardSort: discardSorting,
     });
     return () => onSortGuardChange(null);
-  }, [onSortGuardChange, sorting, sortDirty, draftOutlineData]);
+  }, [onSortGuardChange, sorting, sortDirty, draftOutlineData, levelChanged]);
 
   const getDropPosition = (event: DragEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -989,12 +1117,7 @@ function OutlineEditPage({
 
     const position = dropTarget?.itemId === item.id ? dropTarget.position : getDropPosition(event);
     const reordered = reorderOutlineSiblings(draftOutlineData.outline, sourceLocation.parentId, draggingItemId, item.id, position);
-    const renumbered = renumberOutlineItemsWithIdMap(reordered);
-    sortIdMapRef.current = composeIdMap(sortIdMapRef.current, renumbered.idMap);
-    setDraftOutlineData({ ...draftOutlineData, outline: renumbered.outline });
-    setExpandedItems((prev) => new Set([...prev].map((id) => renumbered.idMap[id] || id)));
-    setSelectedItemId((prev) => (prev ? renumbered.idMap[prev] || prev : prev));
-    setSortDirty(true);
+    applySortDraft(reordered);
     setDraggingItemId(null);
     setDropTarget(null);
   };
@@ -1292,9 +1415,14 @@ function OutlineEditPage({
             <div className="outline-tree-tools">
               {sorting ? (
                 <>
+                  <button type="button" onClick={() => changeLevel('up')} disabled={savingSort || Boolean(levelUpBlockReason)} title={levelUpBlockReason || '整棵子树升一级'} aria-description={levelUpBlockReason || undefined}>升一级</button>
+                  <button type="button" onClick={() => changeLevel('down')} disabled={savingSort || Boolean(levelDownBlockReason)} title={levelDownBlockReason || '成为前一个同级目录的最后一个子目录'} aria-description={levelDownBlockReason || undefined}>降一级</button>
+                  <button type="button" onClick={() => moveSibling('up')} disabled={savingSort || Boolean(siblingUpBlockReason)} title={siblingUpBlockReason || '整棵子树在同级上移一位'} aria-description={siblingUpBlockReason || undefined}>上移</button>
+                  <button type="button" onClick={() => moveSibling('down')} disabled={savingSort || Boolean(siblingDownBlockReason)} title={siblingDownBlockReason || '整棵子树在同级下移一位'} aria-description={siblingDownBlockReason || undefined}>下移</button>
                   <button type="button" className="outline-save-sort-action" onClick={() => { void saveSorting().catch((error) => showToast(error instanceof Error ? error.message : '保存排序失败', 'error')); }} disabled={savingSort}>
-                    {savingSort ? '正在保存...' : '保存排序'}
+                    {savingSort ? '正在保存...' : '保存调整'}
                   </button>
+                  <button type="button" onClick={discardSorting} disabled={savingSort}>取消调整</button>
                   <button type="button" onClick={expandAllItems} disabled={!activeOutlineData?.outline?.length}>全部展开</button>
                   <button type="button" onClick={collapseAllItems} disabled={!activeOutlineData?.outline?.length}>全部折叠</button>
                 </>
@@ -1308,6 +1436,7 @@ function OutlineEditPage({
                 {outlineData && (
                   <button type="button" onClick={startSorting} disabled={outlineMutationLocked || !outlineData?.outline?.length}>目录排序</button>
                 )}
+                <button type="button" onClick={() => { setIncludeDescriptions(false); setExportDialogOpen(true); }} disabled={!outlineData?.outline?.length}>导出 Word 大纲</button>
                 <button type="button" onClick={expandAllItems} disabled={!activeOutlineData?.outline?.length}>全部展开</button>
                 <button type="button" onClick={collapseAllItems} disabled={!activeOutlineData?.outline?.length}>全部折叠</button>
                 </>
@@ -1504,6 +1633,20 @@ function OutlineEditPage({
               >
                 开始生成
               </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="content-regenerate-modal" />
+          <Dialog.Content className="content-regenerate-card" aria-describedby={undefined}>
+            <Dialog.Title>导出目录大纲</Dialog.Title>
+            <label><input type="checkbox" checked={includeDescriptions} onChange={(event) => setIncludeDescriptions(event.target.checked)} /> 包含编写说明</label>
+            <div className="content-regenerate-actions">
+              <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>
+              <button type="button" className="primary-action" onClick={() => { void exportOutline(); }} disabled={exportingOutline}>{exportingOutline ? '正在导出...' : '导出 Word'}</button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

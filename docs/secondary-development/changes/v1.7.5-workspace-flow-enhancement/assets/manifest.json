@@ -1,0 +1,82 @@
+{
+  "version": "1.1",
+  "date": "2026-09-25",
+  "repo_audit_commit": "3b90d7899337fcc5eed3e23b1654dccdf0b6611f",
+  "note": "v1.7.5版本交接；图片与CSS参考原样复用。仅四张最终高保真图与一张真实原截图；HTML控制台和合并工作台不纳入。文字裁决见主规格与HANDOFF.md。",
+  "assets": [
+    {
+      "id": "REF-00",
+      "file": "00-current-app-reference.png",
+      "source_filename": "eda34da2-4444-4a3e-a018-e6fb330a7301.png",
+      "conversation_source_file_id": "file_00000000612081fdad04cfff85122fa9",
+      "pixel_size": [
+        1425,
+        912
+      ],
+      "bytes": 136671,
+      "sha256": "52325017c28122828cf18f9e2200f9150d804dd566d87b96d01287e79b62c5b6",
+      "role": "用户提供的当前软件截图；外壳、Logo与一级导航依据",
+      "unchanged_copy": true
+    },
+    {
+      "id": "UI-01",
+      "file": "01-project-list-delete.png",
+      "source_filename": "jato_ai_bid_项目删除确认界面.png",
+      "conversation_source_file_id": "file_00000000d7c081fd8bca2fc5aa8b3192",
+      "pixel_size": [
+        1672,
+        941
+      ],
+      "bytes": 1354216,
+      "sha256": "bd050be35e8572dc1307eecbd3e48e00e306ecfd1cd527085a0742b5245a3ca1",
+      "role": "项目列表与删除确认状态；正常列表不默认弹窗",
+      "unchanged_copy": true
+    },
+    {
+      "id": "UI-02",
+      "file": "02-tender-files-final.png",
+      "source_filename": "jato_ai_bid_招标资料管理界面.png",
+      "conversation_source_file_id": "file_000000005794820e8322b83c22cec007",
+      "pixel_size": [
+        1566,
+        1005
+      ],
+      "bytes": 1109069,
+      "sha256": "0f3d81353e5429aa0b342df9a976a14765eedbe89749dda77a8b9962bf516a3e",
+      "role": "最后确认的资料页；无转换状态，开始解析在右上角",
+      "unchanged_copy": true
+    },
+    {
+      "id": "UI-03",
+      "file": "03-analysis-export.png",
+      "source_filename": "标书解析结果界面.png",
+      "conversation_source_file_id": "file_00000000eca881fd84362e953354ac5f",
+      "pixel_size": [
+        1672,
+        941
+      ],
+      "bytes": 1220499,
+      "sha256": "c5f8d75e70181368905b57251d929d6a9335bfdfd985f3d485ab1c27fd9cb2aa",
+      "role": "只作为结果页Word导出位置参考；不重做现有结果主界面",
+      "unchanged_copy": true
+    },
+    {
+      "id": "UI-04",
+      "file": "04-outline-editor.png",
+      "source_filename": "jato_ai_bid目录编辑界面.png",
+      "conversation_source_file_id": "file_000000004d1481f8a793e81ff394bf13",
+      "pixel_size": [
+        1672,
+        941
+      ],
+      "bytes": 1248591,
+      "sha256": "c12da8d09ea5d44318bff20881e5ebcd5378b725ba2e53adbe28f0b099d56572",
+      "role": "目录编辑、层级工具与大纲导出参考；正文前使用",
+      "unchanged_copy": true
+    }
+  ],
+  "target_software_version": "v1.7.5",
+  "client_version_value": "1.7.5",
+  "repo_audit_status": "沿用上一版审查记录；本次未重新读取远端仓库",
+  "spec_path_from_assets": "../../../../v1.7.5-spec.md"
+}

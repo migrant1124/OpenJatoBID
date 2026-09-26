@@ -13,6 +13,7 @@ const {
   buildIllustrationExecutionContexts,
   generateAiIllustration,
   generateHtmlIllustration,
+  generateChartIllustration,
   stripGeneratedIllustrationsFromDocument,
 } = require('./contentIllustrationGeneration.cjs');
 const { applyRangeEdits, findTextMatches } = require('../utils/textEdit.cjs');
@@ -7362,7 +7363,8 @@ workspace 文件说明：
           result = await generateAiIllustration(aiService, execution);
           logs = [...logs, `AI 配图完成：${planItem.section_ids[0]} ${planItem.title}`];
         } else {
-          result = await generateHtmlIllustration({
+          const structuredTypes = new Set(['process', 'organization', 'timeline', 'architecture']);
+          result = await (structuredTypes.has(planItem.image_type) ? generateChartIllustration : generateHtmlIllustration)({
             aiService,
             execution,
             plan: illustrationPlan,

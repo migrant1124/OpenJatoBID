@@ -27,3 +27,11 @@ test('目录生成弹窗扩大工作面并压缩 Agent 调试卡片', () => {
   assert.match(stylesSource, /\.outline-agent-debug-option\s*\{[^}]*padding:\s*10px\s+12px;/);
   assert.match(stylesSource, /\.outline-generation-config-card \.content-regenerate-actions > button\s*\{[^}]*min-width:\s*104px;[^}]*min-height:\s*40px;/);
 });
+
+test('目录排序提供同级上移下移，并在非法层级目标上禁用操作', () => {
+  assert.ok(/onClick=\{\(\) => moveSibling\('up'\)\}[^>]*>上移<\/button>/.test(pageSource), '应提供同级上移按钮');
+  assert.ok(/onClick=\{\(\) => moveSibling\('down'\)\}[^>]*>下移<\/button>/.test(pageSource), '应提供同级下移按钮');
+  for (const reason of ['levelUpBlockReason', 'levelDownBlockReason', 'siblingUpBlockReason', 'siblingDownBlockReason']) {
+    assert.ok(pageSource.includes(`disabled={savingSort || Boolean(${reason})}`), `${reason} 应禁用无效操作`);
+  }
+});

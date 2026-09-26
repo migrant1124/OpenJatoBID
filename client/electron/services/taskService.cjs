@@ -492,6 +492,10 @@ function createTaskService({ app, configStore, aiService, agentService, technica
   }
 
   function startManagedTask(type, payload, runner, initialPartial = {}) {
+    const projectId = getTaskDefinition(type).stateKey === 'technicalPlan' ? technicalPlanStore.projectId : null;
+    if (getTaskDefinition(type).stateKey === 'technicalPlan' && technicalPlanStore.forCurrentProject && !projectId) {
+      throw new Error('请先在项目列表中选择项目');
+    }
     const existingTask = activeTasks.get(type);
     if (existingTask && isActiveTaskStatus(existingTask.status)) {
       const nextPayloadSignature = getPayloadSignature(type, payload);
@@ -507,6 +511,7 @@ function createTaskService({ app, configStore, aiService, agentService, technica
 
     const definition = getTaskDefinition(type);
     const task = createTask(type, payload);
+    if (projectId) task.project_id = projectId;
     const queueScopeId = `${type}:${task.task_id}`;
     activeTasks.set(type, task);
     const taskField = getTaskField(type);
@@ -615,7 +620,7 @@ function createTaskService({ app, configStore, aiService, agentService, technica
     emit(currentTask, buildSnapshot(definition, state, currentTask));
 
     const runnerWorkspaceStore = definition.stateKey === 'technicalPlan'
-      ? technicalPlanStore
+      ? (technicalPlanStore.forCurrentProject?.() || technicalPlanStore)
       : definition.stateKey === 'rejectionCheck'
         ? rejectionCheckStore
         : duplicateCheckStore;

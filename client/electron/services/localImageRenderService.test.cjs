@@ -22,6 +22,11 @@ test('完整 HTML 生图文档注入截图样式时不嵌套第二个 html 文�
   assert.match(document, /id="diagram"/);
 });
 
+test('固定横版截图容器只在新 HTML 路径设置目标高度', () => {
+  assert.match(__test__.buildGeneratedHtmlDocument('<html><body>图</body></html>', 1280, 720), /min-height:720px/);
+  assert.doesNotMatch(__test__.buildGeneratedHtmlDocument('<html><body>旧图</body></html>', 1240), /min-height:720px/);
+});
+
 test('缺少显式 body 的完整 HTML 仍会在运行时把已有正文纳入截图根节点', () => {
   const source = '<!doctype html><html><head><title>图</title></head><section id="diagram">内容</section></html>';
   const document = __test__.buildGeneratedHtmlDocument(source, 1240);
