@@ -1,0 +1,130 @@
+{
+  "documentRevision": "R3",
+  "productVersion": "1.8.0",
+  "createdOn": "2026-09-26",
+  "purpose": "11 张已认可有效设计图；不是运行验收证据；不包含任何字体文件",
+  "excluded": "旧 H02、所有多页概念海报、虚构模型与未经确认新增功能",
+  "assets": [
+    {
+      "id": "H01",
+      "file": "H01-approved-reference.png",
+      "title": "AI 生图：初始状态",
+      "width": 1672,
+      "height": 941,
+      "sha256": "87ad879170f0ca0020db5dcf8457994bf71e33f959bc30691fb112aa6e34ad3b",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H02-R2",
+      "file": "H02-R2-model-workspace.png",
+      "title": "AI 生图：参考图与生成结果",
+      "width": 3360,
+      "height": 1890,
+      "sha256": "b81b5e2dc210cd0891c3b10ba49bb50f4e0c85f26932e1980770c81d6b67ae11",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H03",
+      "file": "H03-approved-reference.png",
+      "title": "局部修改",
+      "width": 1672,
+      "height": 941,
+      "sha256": "48df0c4e6921485d3a16868f83fae2e1a9b775e2813907412e7d3e0635b00f3d",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H04",
+      "file": "H04-approved-reference.png",
+      "title": "图片反推提示词",
+      "width": 1672,
+      "height": 941,
+      "sha256": "3a47657ca4a279e6221e493f571ea5aea01cf4e171dfbd33b5e91e4c4152f9c0",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H05",
+      "file": "H05-approved-reference.png",
+      "title": "提示词优化与对比",
+      "width": 1672,
+      "height": 941,
+      "sha256": "ed452822af6c1836005310ee8de99b01181548ccd245d6f7f619c2295a4d43e4",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H06-R2",
+      "file": "H06-R2-reference-library.png",
+      "title": "参考提示词中心",
+      "width": 3360,
+      "height": 1890,
+      "sha256": "f393209da401dbd2c81a1db6dd4b75a1ea2c3d283ab20d28affdb62826d84e49",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H07",
+      "file": "H07-approved-reference.png",
+      "title": "我的提示词与常用风格",
+      "width": 1672,
+      "height": 941,
+      "sha256": "54611e5574702b930500dda91220598347c22efe551567e2e455425258d58905",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H08",
+      "file": "H08-approved-reference.png",
+      "title": "我的作品与版本详情",
+      "width": 1672,
+      "height": 941,
+      "sha256": "87eb1575ef4ae8da450989464502cd9e1789ccaea1fb589640631dd7ed53566b",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H09",
+      "file": "H09-approved-reference.png",
+      "title": "图层检查与 PSD 导出",
+      "width": 1672,
+      "height": 941,
+      "sha256": "94deab379b7544b258206d039c6cc91bb6bcb255ed20cf39233f3e904b80b1df",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H10",
+      "file": "H10-source-manager.png",
+      "title": "管理提示词来源",
+      "width": 3360,
+      "height": 1890,
+      "sha256": "b0343495e3b987bc61256f192b36c9aebeed559c86871cf9c9ad5cc011fe6b50",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    },
+    {
+      "id": "H11",
+      "file": "H11-source-editor.png",
+      "title": "新增／编辑提示词来源",
+      "width": 3360,
+      "height": 1890,
+      "sha256": "89e955b0a09ecf869b78f830f646af72cdb025220896702600df5b67e6b15c9d",
+      "status": "approved-design-reference",
+      "runtimeEvidence": false,
+      "corrections": "以 R3 Spec 与 Handoff 勘误表为准"
+    }
+  ]
+}

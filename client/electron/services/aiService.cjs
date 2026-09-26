@@ -349,6 +349,12 @@ function safeImageResponse(data) {
   };
 }
 
+function safeVisionRequest(body) {
+  return JSON.parse(JSON.stringify(body, (key, value) =>
+    key === 'url' && typeof value === 'string' && value.startsWith('data:image/')
+      ? '[image data omitted]' : value));
+}
+
 function copyRawAiErrorResponse(source, target) {
   for (const key of ['raw_response_body', 'raw_response_payload', 'raw_response_data', 'raw_sse_data']) {
     if (Object.prototype.hasOwnProperty.call(source || {}, key)) {
@@ -403,6 +409,7 @@ async function ensureOk(response, fallbackMessage, options = {}) {
 async function fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, fallbackMessage, options = {}) {
   const sendRequest = async (body) => {
     try {
+      options.onSent?.();
       return await fetch(`${baseUrl}/images/generations`, {
         method: 'POST',
         headers: createHeaders(apiKey),
@@ -423,7 +430,7 @@ async function fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, 
     responseFormatUnsupportedChecker: isResponseFormatUnsupported,
   });
 
-  if (requestBody.response_format && error.responseFormatUnsupported) {
+  if (requestBody.response_format && error.responseFormatUnsupported && !options.noRetry) {
     const retryBody = { ...requestBody };
     delete retryBody.response_format;
     const retryResponse = await sendRequest(retryBody);
@@ -1130,7 +1137,9 @@ async function readOpenAICompatibleImageStream(response) {
 
 async function requestOpenAICompatibleImageData(baseUrl, apiKey, requestBody, fallbackMessage, options = {}) {
   const response = await fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, fallbackMessage, options);
-  if (requestBody.stream) {
+  const contentType = response.headers.get('content-type') || '';
+  options.onResponseHeaders?.({ contentType, status: response.status });
+  if (requestBody.stream && contentType.includes('text/event-stream')) {
     return readOpenAICompatibleImageStream(response);
   }
   try {
@@ -1279,6 +1288,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
   const logTitle = resolveAiLogTitle(request, '文本请求');
   const requestMode = normalizeTextRequestMode(config);
   let requestBody = createChatRequestBody(config, request, { stream: requestMode === 'stream' });
+  const logRequestBody = () => request.sensitiveImage ? safeVisionRequest(requestBody) : requestBody;
   let responseData = null;
   let errorMessage = '';
   let analyticsTracked = false;
@@ -1291,17 +1301,17 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat-pending',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       status: 'pending',
       created_at: new Date().toISOString(),
     });
     let result = null;
-    result = await runWithAiRetry(() => runWithOperationTimeout(async (timeoutSignal) => {
+    result = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(async (timeoutSignal) => {
       const signal = request.signal ? AbortSignal.any([timeoutSignal, request.signal]) : timeoutSignal;
       try {
         return await requestTextAi(app, config, requestBody, { signal, requestMode });
       } catch (error) {
-        if (!request.response_format || !error.responseFormatUnsupported) {
+        if (!request.response_format || !error.responseFormatUnsupported || request.noRetry) {
           throw error;
         }
 
@@ -1321,7 +1331,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       response: responseData,
       content,
       created_at: new Date().toISOString(),
@@ -1344,7 +1354,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat-error',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       response: getAiErrorLogResponse(error, responseData),
       error: getAiErrorLogError(error, errorMessage),
       created_at: new Date().toISOString(),
@@ -1602,13 +1612,14 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
       status: 'pending',
       created_at: new Date().toISOString(),
     });
-    responseData = await runWithAiRetry(() => runWithOperationTimeout(
+    responseData = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(
       (signal) => requestOpenAICompatibleImageData(
         baseUrl,
         imageConfig.api_key,
         requestBody,
         `${meta.label}生图失败`,
-        { signal, source: `${meta.logProvider}-image-model` },
+        { signal, source: `${meta.logProvider}-image-model`, noRetry: request.noRetry,
+          onSent: request.onSent, onResponseHeaders: request.onResponseHeaders },
       ),
       AI_REQUEST_TIMEOUT_MS,
     ));
@@ -1785,11 +1796,11 @@ function createAiService({ app, configStore, analyticsService }) {
   }
 
   function enqueueTextRequest(request, runner) {
-    return textRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request) });
+    return textRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request), maxAttempts: request?.noRetry ? 1 : undefined });
   }
 
   function enqueueImageRequest(request, runner) {
-    return imageRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request) });
+    return imageRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request), maxAttempts: request?.noRetry ? 1 : undefined });
   }
 
   const service = {
@@ -1798,8 +1809,9 @@ function createAiService({ app, configStore, analyticsService }) {
     },
 
     async chat(request) {
+      const frozenConfig = request.configSnapshot || (request.freezeConfig ? configStore.load() : null);
       return enqueueTextRequest(request, () => {
-        const config = configStore.load();
+        const config = frozenConfig || configStore.load();
         return chatWithConfig(app, config, request, analyticsService);
       });
     },
@@ -1913,8 +1925,9 @@ function createAiService({ app, configStore, analyticsService }) {
     },
 
     async generateImage(request) {
+      const frozenConfig = request.configSnapshot || (request.freezeConfig ? configStore.load() : null);
       return enqueueImageRequest(request, () => {
-        const config = configStore.load();
+        const config = frozenConfig || configStore.load();
         return generateImageWithConfig(app, config, request, analyticsService);
       });
     },

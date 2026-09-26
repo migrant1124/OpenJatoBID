@@ -1,6 +1,6 @@
 {
   "name": "jatoaibid",
-  "version": "1.7.5",
+  "version": "1.8.0",
   "private": true,
   "description": "佳图智能投标助手独立桌面客户端",
   "author": "Jato Digital Technology Co., Ltd.",
@@ -153,6 +153,7 @@
     "electron-updater": "^6.8.3",
     "iconv-lite": "^0.7.2",
     "image-size": "^2.0.2",
+    "lucide-react": "^1.48.0",
     "mammoth": "^1.12.0",
     "markdown-it": "^14.2.0",
     "markdown-it-cjk-friendly": "^2.0.2",

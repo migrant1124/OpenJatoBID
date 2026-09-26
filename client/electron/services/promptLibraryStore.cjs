@@ -108,6 +108,18 @@ function createPromptLibraryStore({ db }) {
     return toGroup({ ...requireGroup(groupId), prompt_count: 0 });
   }
 
+  function updateGroup(input = {}) {
+    const current = requireGroup(input.groupId);
+    if (current.is_system) throw new Error('系统分组不能重命名。');
+    const groupName = String(input.groupName || '').trim();
+    if (!groupName || visibleLength(groupName) > 30) throw new Error('分组名称应为 1–30 个字符。');
+    if (['全部提示词', '回收站', '常用提示词', '未分组'].includes(groupName)) throw new Error('该分组名称为系统保留名称。');
+    if (db.prepare('SELECT 1 FROM prompt_groups WHERE group_name = ? AND group_id != ? AND deleted_at IS NULL').get(groupName, input.groupId)) throw new Error('分组名称已存在。');
+    db.prepare('UPDATE prompt_groups SET group_name = ?, updated_at = ? WHERE group_id = ?')
+      .run(groupName, nowIso(), input.groupId);
+    return listGroups().find((group) => group.groupId === input.groupId);
+  }
+
   function deleteGroup(groupId) {
     if (groupId === UNGROUPED_GROUP_ID) throw new Error('未分组列表不能删除。');
     requireGroup(groupId);
@@ -210,7 +222,7 @@ function createPromptLibraryStore({ db }) {
 
   ensureDefaultGroup();
   ensureUngroupedGroup();
-  return { listGroups, createGroup, deleteGroup, batchDelete, listPrompts, getPrompt, createPrompt, updatePrompt, deletePrompt, setFavorite };
+  return { listGroups, createGroup, updateGroup, deleteGroup, batchDelete, listPrompts, getPrompt, createPrompt, updatePrompt, deletePrompt, setFavorite };
 }
 
 module.exports = { createPromptLibraryStore, DEFAULT_GROUP_ID, UNGROUPED_GROUP_ID };

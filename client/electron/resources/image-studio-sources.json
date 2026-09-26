@@ -1,0 +1,13 @@
+{
+  "revision": "v1.8.0-r3",
+  "registryCommit": "bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef",
+  "sources": [
+    { "id": "banana-prompt-quicker", "name": "Banana Prompt Quicker", "homepage": "https://glidea.github.io/banana-prompt-quicker/" },
+    { "id": "davidwu-gpt-image2-prompts", "name": "DavidWu GPT Image 2", "homepage": "https://github.com/davidwuw0811-boop/awesome-gpt-image2-prompts" },
+    { "id": "freestylefly-gpt-image-2", "name": "Freestylefly GPT Image 2", "homepage": "https://github.com/freestylefly/awesome-gpt-image-2" },
+    { "id": "awesome-gpt-image", "name": "Awesome GPT Image", "homepage": "https://github.com/ZeroLu/awesome-gpt-image" },
+    { "id": "awesome-gpt4o-image-prompts", "name": "Awesome GPT-4o", "homepage": "https://github.com/ImgEdify/Awesome-GPT4o-Image-Prompts" },
+    { "id": "youmind-gpt-image-2", "name": "YouMind GPT Image 2", "homepage": "https://github.com/YouMind-OpenLab/awesome-gpt-image-2" },
+    { "id": "youmind-nano-banana-pro", "name": "YouMind Nano Banana Pro", "homepage": "https://github.com/YouMind-OpenLab/awesome-nano-banana-pro-prompts" }
+  ]
+}

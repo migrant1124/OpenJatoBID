@@ -239,7 +239,7 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const conversationStore = createConversationStore({ db: sqliteDatabase.db });
   const promptLibraryStore = createPromptLibraryStore({ db: sqliteDatabase.db });
   const promptLibraryService = createPromptLibraryService({ app, configStore, store: promptLibraryStore });
-  const imageStudioService = createImageStudioService({ db: sqliteDatabase.db, aiService, configStore });
+  const imageStudioService = createImageStudioService({ app, db: sqliteDatabase.db, aiService, configStore, promptLibraryStore });
   let conversationService = null;
   const conversationAttachmentService = createConversationAttachmentService({
     app,

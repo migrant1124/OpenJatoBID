@@ -951,7 +951,8 @@ CREATE TABLE IF NOT EXISTS image_studio_draft (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   prompt TEXT NOT NULL DEFAULT '',
   revision INTEGER NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  state_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS image_studio_tasks (
@@ -963,7 +964,15 @@ CREATE TABLE IF NOT EXISTS image_studio_tasks (
   requested_size TEXT NOT NULL,
   error TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'generate',
+  requested_count INTEGER NOT NULL DEFAULT 1,
+  completed_count INTEGER NOT NULL DEFAULT 0,
+  request_json TEXT NOT NULL DEFAULT '{}',
+  reference_assets_json TEXT NOT NULL DEFAULT '[]',
+  parent_work_id TEXT,
+  config_fingerprint TEXT,
+  sent_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_image_studio_tasks_created
 ON image_studio_tasks(created_at DESC);
@@ -981,7 +990,59 @@ CREATE TABLE IF NOT EXISTS image_studio_works (
   is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
   deleted_at TEXT,
   created_at TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'generate',
+  source_asset_id TEXT,
+  generation_json TEXT NOT NULL DEFAULT '{}',
   FOREIGN KEY (task_id) REFERENCES image_studio_tasks(task_id)
 );
 CREATE INDEX IF NOT EXISTS idx_image_studio_works_created
 ON image_studio_works(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS image_studio_assets (
+  asset_id TEXT PRIMARY KEY, file_path TEXT NOT NULL, asset_url TEXT NOT NULL,
+  mime_type TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+  sha256 TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS image_studio_prompt_meta (
+  prompt_id TEXT PRIMARY KEY, purpose TEXT NOT NULL DEFAULT 'image',
+  tags_json TEXT NOT NULL DEFAULT '[]', notes TEXT NOT NULL DEFAULT '',
+  ratio TEXT NOT NULL DEFAULT '', origin_kind TEXT NOT NULL DEFAULT 'manual',
+  origin_source_id TEXT, origin_item_id TEXT, origin_version TEXT,
+  updated_at TEXT NOT NULL, FOREIGN KEY (prompt_id) REFERENCES prompt_items(prompt_id)
+);
+CREATE TABLE IF NOT EXISTS image_studio_styles (
+  style_id TEXT PRIMARY KEY, name TEXT NOT NULL, body TEXT NOT NULL,
+  ratio TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS image_studio_sources (
+  source_id TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL,
+  homepage TEXT NOT NULL DEFAULT '', fallback_url TEXT NOT NULL DEFAULT '',
+  built_in INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT, overrides_json TEXT NOT NULL DEFAULT '{}',
+  config_revision INTEGER NOT NULL DEFAULT 0,
+  content_hash TEXT, content_version TEXT, item_count INTEGER NOT NULL DEFAULT 0,
+  last_success_at TEXT, last_error TEXT, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS image_studio_reference_items (
+  item_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, title_zh TEXT NOT NULL,
+  title_original TEXT NOT NULL, prompt_zh TEXT NOT NULL,
+  prompt_original TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  tags_json TEXT NOT NULL DEFAULT '[]', author TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '', cover_url TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL, updated_at TEXT NOT NULL,
+  FOREIGN KEY (source_id) REFERENCES image_studio_sources(source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_image_studio_reference_source
+ON image_studio_reference_items(source_id, item_id);
+CREATE TABLE IF NOT EXISTS image_studio_layer_sets (
+  set_id TEXT PRIMARY KEY, work_id TEXT NOT NULL, width INTEGER NOT NULL,
+  height INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+  FOREIGN KEY (work_id) REFERENCES image_studio_works(work_id)
+);
+CREATE TABLE IF NOT EXISTS image_studio_layers (
+  layer_id TEXT PRIMARY KEY, set_id TEXT NOT NULL, name TEXT NOT NULL,
+  file_path TEXT NOT NULL, asset_url TEXT NOT NULL, sort_order INTEGER NOT NULL,
+  visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
+  FOREIGN KEY (set_id) REFERENCES image_studio_layer_sets(set_id)
+);

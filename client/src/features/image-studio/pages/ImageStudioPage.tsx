@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SectionId } from '../../../shared/types/navigation';
-import type { ImageStudioState, ImageStudioWork, PromptGroup, PromptItem } from '../../../shared/types/ipc';
+import type { ImageStudioState, ImageStudioWork } from '../../../shared/types/ipc';
 import { useToast } from '../../../shared/ui';
+import { ImageStudioCreate, type StudioReference } from './ImageStudioCreate';
+import { ImageStudioPrompts } from './ImageStudioPrompts';
+import { ImageStudioWorks } from './ImageStudioWorks';
 
 const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'image-studio-create', label: 'AI 生图' },
@@ -13,169 +16,137 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   const { showToast } = useToast();
   const [state, setState] = useState<ImageStudioState | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [groups, setGroups] = useState<PromptGroup[]>([]);
-  const [prompts, setPrompts] = useState<PromptItem[]>([]);
-  const [promptTitle, setPromptTitle] = useState('');
+  const [preset, setPreset] = useState('商品图');
+  const [count, setCount] = useState(1);
+  const [references, setReferences] = useState<StudioReference[]>([]);
+  const [parentWorkId, setParentWorkId] = useState<string | null>(null);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
-  const [format, setFormat] = useState<'png' | 'jpg' | 'webp'>('png');
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [newResult, setNewResult] = useState(false);
+  const [appliedPrompt, setAppliedPrompt] = useState<{ before: string; after: string } | null>(null);
+  const [conflictDraft, setConflictDraft] = useState<ImageStudioState['draft'] | null>(null);
   const revisionRef = useRef(0);
   const lastSavedRef = useRef('');
   const saveQueueRef = useRef(Promise.resolve());
+  const readyRef = useRef(false);
+  const manuallySelectedRef = useRef(false);
+  const conflictRef = useRef(false);
   const view = section === 'image-studio-prompts' ? 'prompts' : section === 'image-studio-works' ? 'works' : 'create';
+
+  async function refresh() { setState(await window.yibiao!.imageStudio.getState()); }
 
   useEffect(() => {
     let live = true;
-    void window.yibiao?.imageStudio.getState().then((loaded) => {
+    void window.yibiao!.imageStudio.getState().then((loaded) => {
       if (!live) return;
       setState(loaded);
       setPrompt(loaded.draft.prompt);
+      const saved = loaded.draft.state || {};
+      setPreset(typeof saved.preset === 'string' ? saved.preset : '商品图');
+      setCount([1, 2, 4].includes(Number(saved.count)) ? Number(saved.count) : 1);
+      setReferences(Array.isArray(saved.references) ? saved.references as StudioReference[] : []);
+      setParentWorkId(typeof saved.parentWorkId === 'string' ? saved.parentWorkId : null);
       revisionRef.current = loaded.draft.revision;
-      lastSavedRef.current = loaded.draft.prompt;
-    }).catch((error) => showToast(error instanceof Error ? error.message : '读取生图数据失败', 'error'));
-    const unsubscribe = window.yibiao?.imageStudio.onEvent((event) => {
-      setState((current) => current ? { ...current, tasks: event.tasks, works: event.works } : current);
+      lastSavedRef.current = JSON.stringify({ prompt: loaded.draft.prompt, preset: saved.preset || '商品图',
+        count: saved.count || 1, references: saved.references || [], parentWorkId: saved.parentWorkId || null });
+      readyRef.current = true;
+    }).catch((error) => showToast(String(error), 'error'));
+    const unsubscribe = window.yibiao!.imageStudio.onEvent((event) => {
+      setState((current) => {
+        if (!current) return current;
+        if (manuallySelectedRef.current && event.works[0]?.workId !== current.works[0]?.workId) setNewResult(true);
+        return { ...current, tasks: event.tasks, works: event.works };
+      });
     });
-    return () => { live = false; unsubscribe?.(); };
+    return () => { live = false; unsubscribe(); };
   }, [showToast]);
 
   useEffect(() => {
-    if (!state || prompt === lastSavedRef.current) return;
-    const timer = window.setTimeout(() => {
-      saveQueueRef.current = saveQueueRef.current.then(async () => {
-        if (prompt === lastSavedRef.current) return;
-        const result = await window.yibiao!.imageStudio.saveDraft({ prompt, revision: revisionRef.current });
-        if (result.conflict) {
-          showToast('草稿已在其他位置更新，请检查后重新编辑。', 'info');
-          return;
-        }
-        revisionRef.current = result.draft.revision;
-        lastSavedRef.current = result.draft.prompt;
-      }).catch((error) => { showToast(error instanceof Error ? error.message : '保存草稿失败', 'error'); });
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [prompt, Boolean(state), showToast]);
+    if (!readyRef.current || conflictRef.current) return;
+    const value = JSON.stringify({ prompt, preset, count, references, parentWorkId });
+    if (value === lastSavedRef.current) return;
+    saveQueueRef.current = saveQueueRef.current.then(async () => {
+      if (conflictRef.current || value === lastSavedRef.current) return;
+      const data = JSON.parse(value) as { prompt: string; preset: string; count: number; references: StudioReference[]; parentWorkId: string | null };
+      const result = await window.yibiao!.imageStudio.saveDraft({ prompt: data.prompt, revision: revisionRef.current,
+        state: { preset: data.preset, count: data.count, references: data.references, parentWorkId: data.parentWorkId } });
+      if (result.conflict) {
+        conflictRef.current = true;
+        setConflictDraft(result.draft);
+        return;
+      }
+      revisionRef.current = result.draft.revision;
+      lastSavedRef.current = value;
+    }).catch((error) => { showToast(`保存草稿失败：${String(error)}`, 'error'); });
+  }, [prompt, preset, count, references, parentWorkId, showToast]);
 
-  useEffect(() => {
-    if (view !== 'prompts') return;
-    void Promise.all([window.yibiao!.promptLibrary.listGroups(), window.yibiao!.promptLibrary.listPrompts()])
-      .then(([nextGroups, nextPrompts]) => {
-        setGroups(nextGroups);
-        const imageGroup = nextGroups.find((group) => group.groupName === '生图提示词');
-        setPrompts(imageGroup ? nextPrompts.filter((item) => item.groupId === imageGroup.groupId) : []);
-      })
-      .catch((error) => showToast(error instanceof Error ? error.message : '读取提示词失败', 'error'));
-  }, [view, showToast]);
+  const selectedWork = state?.works.find((work) => work.workId === selectedWorkId) || state?.works[0] || null;
 
-  const running = Boolean(state?.tasks.some((task) => task.status === 'queued' || task.status === 'running'));
-  const currentWork = state?.works.find((work) => work.workId === selectedWorkId) || state?.works[0];
-  const latestTask = state?.tasks[0];
-
-  const start = async () => {
+  async function start() {
     try {
-      await window.yibiao!.imageStudio.start({ prompt });
+      await window.yibiao!.imageStudio.start({ prompt, count, references, parentWorkId: parentWorkId || undefined });
       showToast('已提交生图任务', 'success');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '提交生图任务失败', 'error');
-    }
-  };
+    } catch (error) { showToast(String(error), 'error'); }
+  }
 
-  const savePrompt = async (text: string) => {
+  async function savePrompt(text: string, originKind = 'manual') {
     if (!text.trim()) return;
     try {
-      const existingGroups = groups.length ? groups : await window.yibiao!.promptLibrary.listGroups();
-      let group = existingGroups.find((item) => item.groupName === '生图提示词');
-      if (!group) {
-        group = await window.yibiao!.promptLibrary.createGroup({ groupName: '生图提示词' });
-        setGroups((items) => [...items, group!]);
-      }
-      const created = await window.yibiao!.promptLibrary.createPrompt({
-        groupId: group.groupId, title: promptTitle.trim() || text.trim().slice(0, 24), contentMarkdown: text,
-      });
-      setPrompts((items) => [created, ...items]);
-      setPromptTitle('');
+      await window.yibiao!.imageStudio.saveMyPrompt({ title: text.trim().slice(0, 24), contentMarkdown: text, originKind });
       showToast('已保存到我的提示词', 'success');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '保存提示词失败', 'error');
+    } catch (error) { showToast(String(error), 'error'); }
+  }
+
+  function applyPrompt(text: string) {
+    setAppliedPrompt({ before: prompt, after: text });
+    setPrompt(text);
+    onSectionChange('image-studio-create');
+    showToast('已应用到创作输入', 'success');
+  }
+  function undoAppliedPrompt() {
+    if (!appliedPrompt || prompt !== appliedPrompt.after) return;
+    setPrompt(appliedPrompt.before);
+    setAppliedPrompt(null);
+  }
+  async function resolveDraftConflict(useCurrent: boolean) {
+    if (!conflictDraft) return;
+    if (useCurrent) {
+      try {
+        const value = JSON.stringify({ prompt, preset, count, references, parentWorkId });
+        const result = await window.yibiao!.imageStudio.saveDraft({ prompt, revision: conflictDraft.revision,
+          state: { preset, count, references, parentWorkId } });
+        if (result.conflict) { setConflictDraft(result.draft); return; }
+        revisionRef.current = result.draft.revision;
+        lastSavedRef.current = value;
+      } catch (error) { showToast(String(error), 'error'); return; }
+    } else {
+      const saved = conflictDraft.state || {};
+      setPrompt(conflictDraft.prompt);
+      setPreset(typeof saved.preset === 'string' ? saved.preset : '商品图');
+      setCount([1, 2, 4].includes(Number(saved.count)) ? Number(saved.count) : 1);
+      setReferences(Array.isArray(saved.references) ? saved.references as StudioReference[] : []);
+      setParentWorkId(typeof saved.parentWorkId === 'string' ? saved.parentWorkId : null);
+      revisionRef.current = conflictDraft.revision;
+      lastSavedRef.current = JSON.stringify({ prompt: conflictDraft.prompt, preset: saved.preset || '商品图',
+        count: saved.count || 1, references: saved.references || [], parentWorkId: saved.parentWorkId || null });
     }
-  };
+    conflictRef.current = false;
+    setConflictDraft(null);
+  }
+  function openWork(work: ImageStudioWork) { setSelectedWorkId(work.workId); manuallySelectedRef.current = true; onSectionChange('image-studio-create'); }
+  function continueWork(work: ImageStudioWork) {
+    setPrompt(work.prompt); setParentWorkId(work.workId);
+    setReferences([{ workId: work.workId, assetUrl: work.assetUrl, role: '主体' }]);
+    openWork(work);
+  }
 
-  const updateWorks = async (work: ImageStudioWork, action: 'favorite' | 'delete') => {
-    try {
-      const works = action === 'favorite'
-        ? await window.yibiao!.imageStudio.setFavorite({ workId: work.workId, isFavorite: !work.isFavorite })
-        : await window.yibiao!.imageStudio.deleteWork({ workId: work.workId });
-      setState((current) => current ? { ...current, works } : current);
-      setConfirmDeleteId(null);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '操作失败', 'error');
-    }
-  };
-
-  const exportWork = async (work: ImageStudioWork) => {
-    try {
-      const result = await window.yibiao!.imageStudio.exportImage({ workId: work.workId, format });
-      if (!result.canceled) showToast('图片已导出', 'success');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '导出图片失败', 'error');
-    }
-  };
-
-  return (
-    <div className="image-studio-page">
-      <header className="image-studio-head">
-        <div><h1>生图模式</h1><p>图片创作</p></div>
-        <nav aria-label="生图模式页面" className="image-studio-tabs">
-          {sections.map((item) => <button key={item.id} type="button" aria-current={(section === item.id || (section === 'image-studio' && item.id === 'image-studio-create')) ? 'page' : undefined} onClick={() => onSectionChange(item.id)}>{item.label}</button>)}
-        </nav>
-      </header>
-
-      {view === 'create' && <div className="image-studio-workspace">
-        <section className="image-studio-compose" aria-label="创作输入">
-          <label htmlFor="image-studio-prompt">图片需求</label>
-          <textarea id="image-studio-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="用中文描述你想要的画面" />
-          <p className="image-studio-meta">当前模型尺寸：{state?.imageModel.size || '未配置'}</p>
-          <div className="image-studio-compose-actions">
-            <button type="button" className="image-studio-primary" disabled={!state?.imageModel.available || !prompt.trim() || running} onClick={() => void start()}>{running ? '生成中' : '生成图片'}</button>
-            <button type="button" disabled={!prompt.trim()} onClick={() => void savePrompt(prompt)}>保存提示词</button>
-          </div>
-          {!state?.imageModel.available && <p role="status" className="image-studio-warning">请先在设置中配置可用的生图模型。</p>}
-          {latestTask?.status === 'unknown' && <p role="status" className="image-studio-warning">上次任务结果待确认，请检查作品后再决定是否重新生成。{latestTask.error ? ` ${latestTask.error}` : ''}</p>}
-        </section>
-        <section className="image-studio-result" aria-label="生成结果">
-          {currentWork ? <>
-            <img src={currentWork.assetUrl} alt="当前生成作品" />
-            <div className="image-studio-result-bar">
-              <span>{currentWork.width} × {currentWork.height}</span>
-              <button type="button" onClick={() => { setPrompt(currentWork.prompt); onSectionChange('image-studio-create'); }}>复用提示词</button>
-              <select aria-label="下载格式" value={format} onChange={(event) => setFormat(event.target.value as 'png' | 'jpg' | 'webp')}><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WEBP</option></select>
-              <button type="button" onClick={() => void exportWork(currentWork)}>下载</button>
-            </div>
-          </> : <div className="image-studio-empty">{running ? '正在生成图片…' : '作品将在这里显示'}</div>}
-        </section>
-      </div>}
-
-      {view === 'prompts' && <section className="image-studio-library">
-        <div className="image-studio-library-head"><h2>我的提示词</h2><span>{prompts.length} 条</span></div>
-        <div className="image-studio-prompt-save"><input aria-label="提示词名称" placeholder="名称" value={promptTitle} onChange={(event) => setPromptTitle(event.target.value)} /><button type="button" disabled={!prompt.trim()} onClick={() => void savePrompt(prompt)}>保存当前输入</button></div>
-        <div className="image-studio-prompt-list">{prompts.map((item) => <article key={item.promptId} className="image-studio-prompt-item"><strong>{item.title}</strong><p>{item.contentMarkdown}</p><button type="button" onClick={() => { setPrompt(item.contentMarkdown); onSectionChange('image-studio-create'); showToast('已应用到输入框', 'success'); }}>用于生成</button></article>)}</div>
-      </section>}
-
-      {view === 'works' && <section className="image-studio-library">
-        <div className="image-studio-library-head"><h2>我的作品</h2><span>{state?.works.length || 0} 张</span></div>
-        <div className="image-studio-grid">{state?.works.map((work) => <article key={work.workId} className="image-studio-work-item">
-          <img src={work.assetUrl} alt={work.prompt} loading="lazy" />
-          <div><strong>{work.width} × {work.height}</strong><p>{work.prompt}</p></div>
-          <footer>
-            <button type="button" onClick={() => { setSelectedWorkId(work.workId); onSectionChange('image-studio-create'); }}>查看</button>
-            <button type="button" onClick={() => void updateWorks(work, 'favorite')}>{work.isFavorite ? '取消收藏' : '收藏'}</button>
-            <button type="button" onClick={() => setConfirmDeleteId(work.workId)}>删除</button>
-          </footer>
-          {confirmDeleteId === work.workId && <div className="image-studio-confirm"><span>从作品列表删除？</span><button type="button" onClick={() => void updateWorks(work, 'delete')}>确认</button><button type="button" onClick={() => setConfirmDeleteId(null)}>取消</button></div>}
-        </article>)}</div>
-      </section>}
-    </div>
-  );
+  return <div className="image-studio-page">
+    <header className="image-studio-head"><div><h1>生图模式</h1><p>从想法到图片，简单创作与修改</p></div><nav aria-label="生图模式页面" className="image-studio-tabs">{sections.map((item) => <button key={item.id} type="button" aria-current={(section === item.id || (section === 'image-studio' && item.id === 'image-studio-create')) ? 'page' : undefined} onClick={() => onSectionChange(item.id)}>{item.label}</button>)}</nav></header>
+    {!state && <div className="image-studio-empty">正在读取生图工作区…</div>}
+    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} preset={preset} setPreset={setPreset} count={count} setCount={setCount} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={start} savePrompt={savePrompt} />}
+    {state && view === 'prompts' && <ImageStudioPrompts applyPrompt={applyPrompt} currentPrompt={prompt} />}
+    {state && view === 'works' && <ImageStudioWorks works={state.works} refresh={refresh} openWork={openWork} continueWork={continueWork} />}
+    {conflictDraft && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="草稿冲突" className="image-studio-dialog"><h2>草稿有新版本</h2><p>当前输入和已保存草稿都已保留。请选择要继续使用的一份。</p><div className="image-studio-compare"><div><strong>当前输入</strong><p>{prompt}</p></div><div><strong>已保存草稿</strong><p>{conflictDraft.prompt}</p></div></div><footer><button type="button" onClick={() => void resolveDraftConflict(false)}>载入已存草稿</button><button type="button" className="image-studio-primary" onClick={() => void resolveDraftConflict(true)}>保留当前输入</button></footer></section></div>}
+  </div>;
 }
 
 export default ImageStudioPage;

@@ -1,0 +1,14 @@
+{
+  "mode": "image-normal",
+  "model": "gpt-image-2-1k",
+  "requestMode": "normal",
+  "requestSent": true,
+  "success": true,
+  "at": "2026-09-26T13:12:07.433Z",
+  "responseContentType": "application/json",
+  "responseStatus": 200,
+  "mimeType": "image/png",
+  "width": 1536,
+  "height": 1024,
+  "sha256": "7631944c21436a6a67123ad4ebb2b77269423b03da732767dfebab07e5f3fd81"
+}

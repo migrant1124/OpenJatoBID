@@ -4,6 +4,7 @@ function registerPromptLibraryIpc({ promptLibraryService }) {
   const channels = {
     'prompt-library:list-groups': 'listGroups',
     'prompt-library:create-group': 'createGroup',
+    'prompt-library:update-group': 'updateGroup',
     'prompt-library:delete-group': 'deleteGroup',
     'prompt-library:batch-delete': 'batchDelete',
     'prompt-library:list-prompts': 'listPrompts',
