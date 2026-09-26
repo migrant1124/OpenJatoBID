@@ -1,0 +1,79 @@
+.image-studio-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--yb-text);
+  background: var(--yb-surface);
+}
+
+.image-studio-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px 0;
+  border-bottom: 1px solid var(--yb-border-soft);
+}
+
+.image-studio-head h1 { margin: 0; font-size: 22px; line-height: 1.4; }
+.image-studio-head p { margin: 2px 0 16px; color: var(--yb-text-soft); font-size: 13px; }
+.image-studio-tabs { display: flex; gap: 24px; align-self: stretch; align-items: end; }
+.image-studio-tabs button { height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--yb-text-soft); cursor: pointer; white-space: nowrap; }
+.image-studio-tabs button[aria-current="page"] { color: var(--yb-primary); border-bottom-color: var(--yb-primary); font-weight: 600; }
+
+.image-studio-workspace { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.image-studio-compose { display: flex; flex-direction: column; gap: 12px; padding: 24px; min-height: 0; overflow: auto; border-right: 1px solid var(--yb-border-soft); }
+.image-studio-compose label { font-weight: 600; }
+.image-studio-compose textarea { width: 100%; min-height: 210px; resize: vertical; padding: 12px; border: 1px solid var(--yb-border); border-radius: var(--yb-radius); background: var(--yb-surface); color: var(--yb-text); font: inherit; }
+.image-studio-compose textarea:focus-visible, .image-studio-page button:focus-visible, .image-studio-page select:focus-visible, .image-studio-page input:focus-visible { outline: 2px solid var(--yb-primary); outline-offset: 2px; }
+.image-studio-meta { margin: 0; font-size: 12px; color: var(--yb-text-soft); }
+.image-studio-compose-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-studio-page button, .image-studio-page select, .image-studio-page input { font: inherit; }
+.image-studio-compose-actions button, .image-studio-result-bar button, .image-studio-work-item button, .image-studio-prompt-save button, .image-studio-prompt-item button, .image-studio-confirm button { min-height: 32px; padding: 5px 11px; border: 1px solid var(--yb-border); border-radius: var(--yb-radius); background: var(--yb-surface); color: var(--yb-text); cursor: pointer; }
+.image-studio-compose-actions .image-studio-primary { color: #fff; background: var(--yb-primary); border-color: var(--yb-primary); font-weight: 600; }
+.image-studio-page button:disabled { opacity: .5; cursor: not-allowed; }
+.image-studio-warning { margin: 0; color: #a53d28; font-size: 13px; }
+
+.image-studio-result { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; overflow: hidden; background: var(--yb-bg); }
+.image-studio-result > img { width: 100%; height: 100%; min-height: 0; object-fit: contain; padding: 24px; }
+.image-studio-empty { display: grid; place-items: center; color: var(--yb-text-soft); }
+.image-studio-result-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 24px; background: var(--yb-surface); border-top: 1px solid var(--yb-border-soft); }
+.image-studio-result-bar span { margin-right: auto; color: var(--yb-text-soft); font-size: 13px; }
+.image-studio-result-bar select { min-height: 32px; border: 1px solid var(--yb-border); border-radius: var(--yb-radius); background: var(--yb-surface); }
+
+.image-studio-library { min-height: 0; overflow: auto; padding: 20px 24px 32px; }
+.image-studio-library-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+.image-studio-library-head h2 { margin: 0; font-size: 17px; }
+.image-studio-library-head span { color: var(--yb-text-soft); font-size: 13px; }
+.image-studio-prompt-save { display: flex; gap: 8px; margin-bottom: 16px; }
+.image-studio-prompt-save input { width: min(320px, 100%); min-height: 32px; padding: 5px 9px; border: 1px solid var(--yb-border); border-radius: var(--yb-radius); }
+.image-studio-prompt-list { max-width: 900px; }
+.image-studio-prompt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 20px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--yb-border-soft); }
+.image-studio-prompt-item strong { font-size: 14px; }
+.image-studio-prompt-item p { grid-row: 2; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yb-text-soft); }
+.image-studio-prompt-item button { grid-column: 2; grid-row: 1 / span 2; }
+.image-studio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.image-studio-work-item { min-width: 0; border: 1px solid var(--yb-border-soft); border-radius: var(--yb-radius); overflow: hidden; background: var(--yb-surface); }
+.image-studio-work-item > img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--yb-bg); }
+.image-studio-work-item > div:not(.image-studio-confirm) { padding: 10px 12px 0; }
+.image-studio-work-item strong { font-size: 13px; }
+.image-studio-work-item p { margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yb-text-soft); font-size: 12px; }
+.image-studio-work-item footer, .image-studio-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px 12px; }
+.image-studio-confirm { border-top: 1px solid var(--yb-border-soft); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .image-studio-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(280px, 1fr); overflow: auto; }
+  .image-studio-compose { border-right: 0; border-bottom: 1px solid var(--yb-border-soft); }
+  .image-studio-compose textarea { min-height: 110px; }
+}
+
+@media (max-width: 650px) {
+  .image-studio-head { display: block; padding: 12px 16px 0; }
+  .image-studio-head p { margin-bottom: 2px; }
+  .image-studio-tabs { justify-content: space-between; gap: 8px; }
+  .image-studio-tabs button { font-size: 12px; }
+  .image-studio-compose, .image-studio-library { padding: 16px; }
+}

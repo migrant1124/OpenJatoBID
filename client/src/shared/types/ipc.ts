@@ -667,6 +667,38 @@ export interface PromptItem {
   updatedAt: string;
 }
 
+export interface ImageStudioWork {
+  workId: string;
+  taskId: string;
+  parentWorkId: string | null;
+  assetUrl: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  isFavorite: boolean;
+  createdAt: string;
+  prompt: string;
+  modelProvider: string;
+  modelName: string;
+}
+
+export interface ImageStudioTask {
+  taskId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'unknown';
+  prompt: string;
+  requestedSize: string;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImageStudioState {
+  draft: { prompt: string; revision: number; updatedAt: string };
+  works: ImageStudioWork[];
+  tasks: ImageStudioTask[];
+  imageModel: { available: boolean; size: string };
+}
+
 export interface PromptImportItem {
   importId: string;
   fileName: string;
@@ -775,6 +807,15 @@ export interface YibiaoBridge {
     importSingle: (input: { groupId: string }) => Promise<{ success: boolean; canceled?: boolean; prompt?: PromptItem }>;
     prepareBatchImport: (input: { groupId: string }) => Promise<{ canceled: boolean; items: PromptImportItem[] }>;
     commitBatchImport: (input: { items: Array<Pick<PromptImportItem, 'importId' | 'title' | 'groupId'> & { isFavorite?: boolean }> }) => Promise<{ successCount: number; failedCount: number; results: Array<{ importId: string; promptId?: string; success: boolean; error?: string }> }>;
+  };
+  imageStudio: {
+    getState: () => Promise<ImageStudioState>;
+    saveDraft: (input: { prompt: string; revision: number }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
+    start: (input: { prompt: string }) => Promise<{ taskId: string }>;
+    setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;
+    deleteWork: (input: { workId: string }) => Promise<ImageStudioWork[]>;
+    exportImage: (input: { workId: string; format: 'png' | 'jpg' | 'webp' }) => Promise<{ canceled: boolean; filePath?: string; format?: string; background?: string | null }>;
+    onEvent: (callback: (event: { taskId: string; works: ImageStudioWork[]; tasks: ImageStudioTask[] }) => void) => () => void;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;

@@ -11,6 +11,7 @@ const { registerDuplicateCheckIpc } = require('./duplicateCheckIpc.cjs');
 const { registerExportIpc } = require('./exportIpc.cjs');
 const { registerFileIpc } = require('./fileIpc.cjs');
 const { registerKnowledgeBaseIpc } = require('./knowledgeBaseIpc.cjs');
+const { registerImageStudioIpc } = require('./imageStudioIpc.cjs');
 const { registerPromptLibraryIpc } = require('./promptLibraryIpc.cjs');
 const { registerLicenseIpc } = require('./licenseIpc.cjs');
 const { registerRejectionCheckIpc } = require('./rejectionCheckIpc.cjs');
@@ -33,6 +34,7 @@ const { createExportService } = require('../services/exportService.cjs');
 const { createFileService } = require('../services/fileService.cjs');
 const { createKnowledgeBaseService } = require('../services/knowledgeBaseService.cjs');
 const { createKnowledgeBaseStore } = require('../services/knowledgeBaseStore.cjs');
+const { createImageStudioService } = require('../services/imageStudioService.cjs');
 const { createPromptLibraryService } = require('../services/promptLibraryService.cjs');
 const { createPromptLibraryStore } = require('../services/promptLibraryStore.cjs');
 const { createLicenseService } = require('../services/licenseService.cjs');
@@ -98,6 +100,12 @@ const workspaceDatabaseChannels = [
   'prompt-library:import-single',
   'prompt-library:prepare-batch-import',
   'prompt-library:commit-batch-import',
+  'image-studio:get-state',
+  'image-studio:save-draft',
+  'image-studio:start',
+  'image-studio:set-favorite',
+  'image-studio:delete-work',
+  'image-studio:export-image',
   'technical-plan:load-state',
   'technical-plan:import-tender-document',
   'technical-plan:import-original-plan-document',
@@ -231,6 +239,7 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const conversationStore = createConversationStore({ db: sqliteDatabase.db });
   const promptLibraryStore = createPromptLibraryStore({ db: sqliteDatabase.db });
   const promptLibraryService = createPromptLibraryService({ app, configStore, store: promptLibraryStore });
+  const imageStudioService = createImageStudioService({ db: sqliteDatabase.db, aiService, configStore });
   let conversationService = null;
   const conversationAttachmentService = createConversationAttachmentService({
     app,
@@ -263,9 +272,10 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   registerTaskIpc({ taskService });
   const unregisterConversationIpc = registerConversationIpc({ conversationService, mainWindow });
   registerPromptLibraryIpc({ promptLibraryService });
+  const unregisterImageStudioIpc = registerImageStudioIpc({ service: imageStudioService, mainWindow });
   exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
-  return { sqliteDatabase, technicalPlanProjects, conversationService, unregisterConversationIpc };
+  return { sqliteDatabase, technicalPlanProjects, conversationService, unregisterConversationIpc, unregisterImageStudioIpc };
 }
 
 function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
@@ -290,6 +300,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   let conversationService = null;
   let technicalPlanProjects = null;
   let unregisterConversationIpc = null;
+  let unregisterImageStudioIpc = null;
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
   let workspaceDatabaseStarted = false;
@@ -299,6 +310,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     unregisterDiagnosticsIpc?.();
     unregisterLicenseIpc?.();
     unregisterConversationIpc?.();
+    unregisterImageStudioIpc?.();
     technicalPlanProjects?.close?.();
     await conversationService?.close?.();
     localImageRenderService.dispose?.();
@@ -401,6 +413,7 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
         conversationService = workspaceServices.conversationService;
         technicalPlanProjects = workspaceServices.technicalPlanProjects;
         unregisterConversationIpc = workspaceServices.unregisterConversationIpc;
+        unregisterImageStudioIpc = workspaceServices.unregisterImageStudioIpc;
       } catch (error) {
         databaseStatus.updateStatus({
           phase: 'error',

@@ -946,3 +946,42 @@ CREATE INDEX IF NOT EXISTS idx_prompt_items_group_sort
 ON prompt_items(group_id, sort_order, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_prompt_items_title
 ON prompt_items(title);
+
+CREATE TABLE IF NOT EXISTS image_studio_draft (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  prompt TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS image_studio_tasks (
+  task_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  model_provider TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  requested_size TEXT NOT NULL,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_image_studio_tasks_created
+ON image_studio_tasks(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS image_studio_works (
+  work_id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  parent_work_id TEXT,
+  file_path TEXT NOT NULL,
+  asset_url TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+  deleted_at TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES image_studio_tasks(task_id)
+);
+CREATE INDEX IF NOT EXISTS idx_image_studio_works_created
+ON image_studio_works(created_at DESC);

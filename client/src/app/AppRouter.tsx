@@ -7,6 +7,7 @@ import { isDeveloperDemoSection } from '../features/developer/developerDemoSecti
 const BidOpportunityPage = lazy(() => import('../features/bid-opportunity/pages/BidOpportunityPage'));
 const BusinessBidPage = lazy(() => import('../features/business-bid/pages/BusinessBidPage'));
 const ConversationPage = lazy(() => import('../features/conversation/pages/ConversationPage'));
+const ImageStudioPage = lazy(() => import('../features/image-studio/pages/ImageStudioPage'));
 const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
 const DeveloperDemoPage = lazy(() => import('../features/developer/pages/DeveloperDemoPage'));
 const PiAgentMonitorPage = lazy(() => import('../features/developer/pages/PiAgentMonitorPage'));
@@ -39,6 +40,11 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
       setEditingTemplateId(null);
     }
   }, [activeSection]);
+
+  if (activeSection === 'image-studio' || activeSection === 'image-studio-create'
+    || activeSection === 'image-studio-prompts' || activeSection === 'image-studio-works') {
+    return <Suspense fallback={null}><ImageStudioPage section={activeSection} onSectionChange={onSectionChange} /></Suspense>;
+  }
 
   if (activeMenuItem?.children?.length) {
     return <SecondaryMenuPage menuItem={activeMenuItem} onNavigate={onSectionChange} />;

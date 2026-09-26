@@ -1575,3 +1575,69 @@ T173 → T174 → T175 → T176
 
 - 文件选择支持 PNG、JPG/JPEG、WebP、GIF、BMP；Main 复用 Pi 现有图片转换与压缩能力规范化，不增加依赖。
 - 当前文本模型即多模态模型，图片以独立多模态内容随当前问题发送；模型明确返回不支持图片时复用既有 AI 错误弹窗。
+
+## 23. v1.8.0 生图模式：T180-00 技术计划
+
+> 权威输入：`docs/v1.8.0-spec.md`、`docs/v1.8.0-ui-handoff.md`、`docs/v1.8.0-codex-tasks.md`。需求已确认，H01–H09 具体高保真图尚未确认。本节仅为 plan，未执行 T180-01–12、计费调用或客户端运行验收。这里的 `T180-00` 系列与既有 `T180` Agent runtime 任务不同。
+
+### 23.1 本地基线和可复用能力
+
+- 2026-09-26 只读基线：分支 `v1.8.0-Image-generation`，HEAD `428506f725e2bfc5868710ef8f3e8e1eec28f8f0`；仅三份 v1.8.0 输入文档未跟踪，未修改它们。`origin` 指向 `migrant1124/OpenJatoBID`，`upstream` 指向 `FB208/OpenBidKit_Yibiao`；未同步远端。本地 `client/package.json` 版本为 1.7.5。
+- 导航：`client/src/App.tsx` 的启动/退出默认仍为 `bid-generation`；`Sidebar.tsx` 点击父项传父 ID，`AppRouter.tsx` 对所有有 `children` 的父项先渲染 `SecondaryMenuPage`。新增生图父项若直接沿用该分支，会先出现入口卡片，与默认进入 AI 生图冲突。拟为生图父项做模块内定向，保留其他父项行为及原启动默认；三个二级入口留在主内容区。`SectionId`、`menuConfig.ts`、`AppRouter.tsx`、`Sidebar.tsx` 的图标映射均需同步。
+- UI：`client/src/styles.css` 汇入 `styles/tokens.css`、布局和模块样式；可沿用 `--yb-*` 颜色/间距/字号/圆角、Radix、Toast、内部滚动，不新建全局设计体系。具体高保真尺寸必须对照运行截图。
+- AI：`aiService.cjs` 已有文本队列和独立图片队列，`withQueueScope()` 与 `pauseQueueScope()` 可复用；图像请求限额读 `image_model.concurrency_limit`。现有 `generateImage()` 是以 prompt/size 为主的单图结果路径，OpenAI 兼容分支请求 `/images/generations`，Google 分支另有实现；当前不能据此声称支持多参考图、mask、视觉理解、张数/质量参数或拆层。现有请求内部重试与队列重试都要先核对，未知结果不能盲目业务重发。生成文件目前写入 `generated-images` 并返回 `yibiao-asset` URL/路径；作品长期元数据尚无生图工作台专用 Store。
+- 数据：`sqliteDatabase.cjs` 当前 `schemaVersion = 32`；按版本事务迁移，升级前备份 DB/WAL/SHM，schema health 与 `sql/workspace_schema.sql` 须同步。`prompt_groups`/`prompt_items` 和 `promptLibraryStore.cjs` 已提供分组、收藏、软删除及导入；`prompt_items.source` 的 CHECK 只允许 `manual/single-import/batch-import`，不能直接写新的来源枚举。对话模式已有提示词 UI/IPC，必须保持旧条目和接口可用。
+- 桥接：`preload.cjs` 将同一个 `bridge` 同时暴露为 `window.yibiao` 与 `window.jatoaibid`；`client/src/vite-env.d.ts` 两者共用 `YibiaoBridge`。新增 imageStudio API 拟沿现有 `window.yibiao` 调用，保留别名，不做全仓改名。`electron/ipc/index.cjs` 在工作区 DB 就绪后注册 Store 相关 IPC；业务放 Main service，Renderer 不直连模型或文件系统。
+- 埋点：`App.tsx` 对 `activeSection` 调用 `trackPageView`，`analytics/dashboard/public/src/pages/traffic.js` 提供中文名。新增稳定、低基数的三页映射；不上传 prompt、图片、文件名、路径或密钥。现有 `promptLibrary.test.cjs`、`conversationIpc.test.cjs`、`conversationStore.test.cjs`、UI 测试及 Electron native smoke 可作为相邻回归入口。仓库无统一 `npm test`/lint 脚本。
+
+### 23.2 实施选择及批准门
+
+| 决策 | 可选路径 | 本计划建议及验证条件 |
+| --- | --- | --- |
+| 父菜单默认页 | 改所有父菜单规则；在生图父项定向；模块内部页面宿主 | 仅对生图父项定向至 AI 生图，三子页共用模块宿主；验证旧父菜单仍显示原入口卡片。若高保真要求不同布局，回到 plan 决策。 |
+| 图片任务 | 扩展技术方案专属 `taskService.cjs`；建生图模块 Main 任务服务 | 后者更符合业务隔离，仍复用 `aiService` scope/队列；先验证关闭窗口、恢复、取消与未知结果状态，再固定细节。 |
+| 个人提示词元数据 | 改 `source` CHECK；给旧条目增加可空用途字段/关联记录 | 优先可空用途扩展，保留旧 `source` 值与原导入合同；迁移测试后再确定字段和索引。常用风格可用独立表，不复制个人提示词正文库。 |
+| 拆层/PSD | 已配置的真实分层服务；经验证的等价服务；本地模型 | T180-01 比较真实输出、分辨率、费用/运行条件和 PSD 写入可行性后选择。没有真实非空差异层就阻塞 PSD 交付；不默认要求员工安装 GPU/Python。 |
+
+计划批准只允许进入下一任务的验证准备；付费模型调用、依赖增改、数据迁移落地及大范围 UI 编码各自遵守任务书门槛。高保真 H01/H02 批准前不得进入 T180-02 的视觉落地；H03、H09 分别约束 T180-09、T180-11。
+
+### 23.3 拟改文件与责任（均未修改）
+
+| 任务 | 必需位置/候选文件 | 理由 |
+| --- | --- | --- |
+| T180-01 | `client/electron/services/aiService.cjs` 与相邻探针测试；必要时独立验证脚本 | 基于现有队列验证真实模型合同；是否扩展服务取决于探针，不预建空适配层。 |
+| T180-02/03/08/09 | `client/src/shared/types/navigation.ts`、`client/src/app/menuConfig.ts`、`client/src/app/AppRouter.tsx`、`client/src/components/Sidebar.tsx`、`client/src/features/image-studio/`、`client/src/styles/feature-image-studio.css`、`client/src/styles.css` | 导航、三页宿主、创作和局部涂抹；不改通用二级菜单。 |
+| T180-02/03/09/10/11 | 新增 `client/electron/ipc/imageStudioIpc.cjs`、最小 `client/electron/services/imageStudio*.cjs`，接入 `client/electron/ipc/index.cjs`、`client/electron/preload.cjs`、`client/src/shared/types/ipc.ts` | Main 负责任务、资产、版本与导出；IPC 只转发、事件带任务身份。具体服务文件数随首个纵向闭环定。 |
+| T180-02/06/07/10/11 | `client/electron/services/sqliteDatabase.cjs`、`sql/workspace_schema.sql`，相应 Store/测试 | 草稿、任务、作品、远程缓存、个人用途及图层元数据的版本迁移和恢复。图片像素放模块受管磁盘目录。 |
+| T180-04/05/06/07 | `client/src/shared/prompts/`、`client/electron/services/promptLibraryStore.cjs`、`promptLibraryService.cjs`、`client/electron/ipc/promptLibraryIpc.cjs`，以及 preload/共享类型中既有 promptLibrary 合同 | 统一个人库，保存/优化/反推/中文参考串联，维持原对话导入行为。 |
+| T180-02/12 | `analytics/dashboard/public/src/pages/traffic.js`；仅当既有管理端有独立页面名映射时补对应文件 | 新页面中文名和回归；不改变收集字段或统计能力。 |
+| T180-11/12 | 经能力验证后确定 PSD 写入器及必要依赖；`client/package.json`/锁文件仅在另获依赖批准时 | 真分层 PSD、真实 Photoshop 检查；当前未安装 `ag-psd`/`sharp`，不预设新增依赖。版本源/锁文件只在 T180-12 获批后改。 |
+
+### 23.4 接口和数据合同草案（T180-01 后冻结）
+
+- Renderer → Main：`imageStudio.getCapabilities()` 返回逐能力 `verified/status/limits`；`loadDraft/saveDraft({revision, ...fields})`；`start({kind, draftRevision, sourceAssetIds, referenceRoles, settings})` 返回内部任务 ID；`cancel({taskId})`、`getTask/getWork/listWorks`；`exportImage/exportPsd`。选择图片、落盘和导出路径由 Main 处理。事件至少含 `taskId/kind/stage/status/resultIds/error`，取消订阅返回清理函数；不传像素大数组或密钥。名称和字段是草案，先以 T180-02 最小闭环定稿。
+- 请求快照：冻结原文、用户明确应用的优化稿、实际发送文本、参考资产 ID/角色、模型配置引用、能力版本、父作品 ID、时间；结果记录实际尺寸/编码/哈希和每张成功失败。草稿用 revision 防旧异步结果覆盖新输入；优化/反推/保存均不自动调用付费生图。
+- 持久化：SQLite 中独立命名的草稿、任务、作品/版本、资产引用、来源缓存/翻译、风格及拆层元数据；磁盘中保留输入、原图、结果、图层和 PSD 文件。保存文件成功后再标记结果完成；关联资产删除先查引用，父版本元信息不因子版本存在而消失。迁移保持幂等，先备份再升级，旧版数据可读取；失败恢复和回滚以备份副本为依据，不就地清空旧库。
+- 能力矩阵逐项记录：文字优化/翻译、单图理解、文生图、1–4 参考图、原生 mask/替代方式、拆层。每项区分文档声称、代码适配、模拟返回、真实调用四级；记录端点、输入格式、角色是否实际传达、尺寸/比例/张数/质量、返回方式、超时/查询/取消、费用与部分失败。普通生成接口与拆层接口分别取证；未验证参数不得出现在可用 UI。
+- PSD 合同：源版本与尺寸、真实透明层文件、层序/位置/alpha、合成预览和尺寸差异；至少两个非空且内容不同的层。逐层隐藏、合成一致性及 Photoshop 打开属于独立验收，不把像素文字标成可编辑文本。
+
+### 23.5 顺序、逐项验收与阻塞
+
+| 顺序 | 任务/需求覆盖 | 核心验收和门槛 |
+| --- | --- | --- |
+| 0 | T180-00，Spec 全部范围 | 本地基线、拟改文件、合同草案与取证清单完成；停在本计划批准门。 |
+| 1 | T180-01，US-01/02/03/04/06 的外部能力 | 先离线核配置/响应与样本，再经授权做真实端点小样本；记录单图、1–4 图、视觉、mask、拆层及 PSD 结果，不能用模拟冒充真实。付费请求/依赖需明确授权。 |
+| 2 | H01/H02 代表性设计确认；T180-02，US-01 | 一级入口默认 AI 生图、真实文生图、持久化、真编码 PNG/JPG/WEBP 下载；重启/切页、部分成功和原功能回归。 |
+| 3 | T180-03，US-02；T180-04，US-01/04/05；T180-05，US-04 | 参考角色进入请求且版本不覆盖；优化对比人工应用；识图结果与来源绑定、可编辑/复用。各能力未通过时只阻塞依赖的任务。 |
+| 4 | T180-06/07，US-05；T180-08，简单模式 | 远程中文参考增量同步失败保留缓存；个人库兼容/风格应用；八类预设与三条流程，无专业入口。来源/许可和 H06/H07 须核对。 |
+| 5 | T180-09，US-03；T180-10，US-01/02/03/06 | H03 批准后验证原图坐标、选区外像素保护和新版本；作品恢复、引用安全删除、未知任务不盲重发，H08 对照。 |
+| 6 | T180-11，US-06 | 拆层真实能力与 H09 批准后，真差异图层、分辨率/损失显示、PSD 写入及三类样本真实 Photoshop 人工验收。 |
+| 7 | T180-12，Spec 第 10 节 | `node --test` 聚焦测试、受改 CJS `node --check`、`npm.cmd run build`、Electron 全链路、v1.7.5/对话/提示词/授权/埋点/更新回归；只读 Review 与分层证据。版本准备另按任务书，不等于发布。 |
+
+当前阻塞：T180-01 待计划、渠道/测试素材与必要调用授权；T180-02 待能力及 H01/H02；T180-09 待 mask/标注方案与 H03；T180-11 待真拆层/PSD 写入验证与 H09；其余 T180-03–08/10/12 按表中前置项未启动。若外部拆层不可用，应保留 US-06 未完成，不用假层或隐藏入口宣称 v1.8.0 完成。
+
+### 23.6 高保真与现有页面取证清单
+
+- 在后续获准的 Electron 运行取证中保存同一版本、窗口尺寸、显示缩放及截图时间：现有展开/收起的一级侧栏、带子项父菜单的 `SecondaryMenuPage`、对话模式提示词库/保存操作、结果/下载或导出弹窗、设置页模型配置、Toast/Dialog 与窄窗口状态。当前未启动客户端，以上均为待取证，不填造截图路径。
+- 先做 H01（默认创作/三子入口/空状态）、H02（1–4 参考图角色/结果/操作）、H03（原图坐标遮罩/工具/缩放）、H05（原文/优化稿/变化/取消应用）的代表性设计；每张附布局、复用组件、内部滚动、最长中文文案、键盘与错误状态说明。确认后再做 H04/H06/H07/H08/H09；未确认图片只作设计讨论，不作验收基线。
+- 视觉核对 1440×900、1280×800、实际最窄窗口及 Windows 100%/125%/150%；检查 S01–S12、按钮可读名、焦点恢复与 Esc 不隐性取消任务。设计图和真实 Electron 运行截图分目录、分状态记录。

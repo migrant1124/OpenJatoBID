@@ -139,6 +139,19 @@ const bridge = {
     prepareBatchImport: (input) => ipcRenderer.invoke('prompt-library:prepare-batch-import', input),
     commitBatchImport: (input) => ipcRenderer.invoke('prompt-library:commit-batch-import', input),
   },
+  imageStudio: {
+    getState: () => ipcRenderer.invoke('image-studio:get-state'),
+    saveDraft: (input) => ipcRenderer.invoke('image-studio:save-draft', input),
+    start: (input) => ipcRenderer.invoke('image-studio:start', input),
+    setFavorite: (input) => ipcRenderer.invoke('image-studio:set-favorite', input),
+    deleteWork: (input) => ipcRenderer.invoke('image-studio:delete-work', input),
+    exportImage: (input) => ipcRenderer.invoke('image-studio:export-image', input),
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('image-studio:event', listener);
+      return () => ipcRenderer.removeListener('image-studio:event', listener);
+    },
+  },
   developerTokenStats: {
     openWindow: () => ipcRenderer.invoke('developer-token-stats:open-window'),
     get: () => ipcRenderer.invoke('developer-token-stats:get'),

@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 32;
+const schemaVersion = 33;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1115,6 +1115,47 @@ function createPromptLibrarySchema(db) {
   `);
 }
 
+function createImageStudioSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS image_studio_draft (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      prompt TEXT NOT NULL DEFAULT '',
+      revision INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_tasks (
+      task_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      model_provider TEXT NOT NULL,
+      model_name TEXT NOT NULL,
+      requested_size TEXT NOT NULL,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_tasks_created
+      ON image_studio_tasks(created_at DESC);
+    CREATE TABLE IF NOT EXISTS image_studio_works (
+      work_id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      parent_work_id TEXT,
+      file_path TEXT NOT NULL,
+      asset_url TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+      deleted_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES image_studio_tasks(task_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_works_created
+      ON image_studio_works(created_at DESC);
+  `);
+}
+
 function seedBundledPromptLibrary(db, library = require('../resources/bundled-prompt-library.json')) {
   const at = new Date().toISOString();
   const groupIds = new Map();
@@ -1242,6 +1283,11 @@ const schemaHealthTableGroups = [
     version: 23,
     tables: ['prompt_groups', 'prompt_items'],
     repair: createPromptLibrarySchema,
+  },
+  {
+    version: 33,
+    tables: ['image_studio_draft', 'image_studio_tasks', 'image_studio_works'],
+    repair: createImageStudioSchema,
   },
 ];
 
@@ -1719,6 +1765,11 @@ const migrations = [
     description: '资料重分析后保留旧下游成果的复核标记',
     up(db) { addColumnIfMissing(db, 'technical_plan_meta', 'downstream_review_required', 'INTEGER NOT NULL DEFAULT 0'); },
   },
+  {
+    version: 33,
+    description: '新增生图草稿、任务和作品',
+    up: createImageStudioSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -1826,6 +1877,7 @@ function createTechnicalPlanProjectDatabase(databasePath) {
 module.exports = {
   createConversationSchema,
   createPromptLibrarySchema,
+  createImageStudioSchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,
   createTechnicalPlanProjectDatabase,

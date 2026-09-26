@@ -331,6 +331,7 @@ function normalizeImagePrompt(request) {
   if (!prompt) {
     throw new Error('生图提示词为空');
   }
+  if (request.preservePrompt) return prompt;
 
   const styleHint = request.style === 'realistic_photo'
     ? '画面采用专业实景照片风格，真实、克制、适合投标技术方案插图。'
@@ -1967,5 +1968,5 @@ function createAiService({ app, configStore, analyticsService }) {
 
 module.exports = {
   createAiService,
-  __aiServiceRuntime: { chatWithConfig },
+  __aiServiceRuntime: { chatWithConfig, normalizeImagePrompt },
 };
