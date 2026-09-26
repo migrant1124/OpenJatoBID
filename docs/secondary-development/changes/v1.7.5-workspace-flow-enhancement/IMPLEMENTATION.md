@@ -31,3 +31,7 @@
 - `artifacts/synthetic-analysis-report.docx`、`synthetic-outline.docx` 是服务级合成样例；最终交付以两个 `ui-*.docx` 为准。
 
 五张 `assets/*.png` 的字节数与 SHA-256 均和 `assets/manifest.json` 一致；图片中的示例版本、日期、格式和额外控件未转为产品需求。CSS 仅在技术方案页面范围内调整。
+
+## T07 后续修补：目录排序操作可见性与边界
+
+在 `v1.7.5-workspace` 的 `b322267` 基线上，按反馈补齐排序模式顶部的“升一级／降一级／上移／下移”；同级按钮复用原拖拽的草稿、重编号、ID 映射及一次保存/取消链路。首末同级、一级升层、首项降层、锁定目标和超深目标会禁用对应按钮，并以按钮说明给出原因。合成五级分支实测发现原降级判断会漏放第六级，已修正边界；不改变 Main 的正文保护和项目存储。新增 [`P04-outline-sorting.png`](artifacts/screenshots/P04-outline-sorting.png) 展示隔离合成项目的排序态，验证结果见分层测试报告。未修改 v1.7.4 规格、版本字段、管理端或发布流程。

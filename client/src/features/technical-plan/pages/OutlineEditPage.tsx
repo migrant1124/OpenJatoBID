@@ -224,27 +224,54 @@ function hasLockedSubtree(item: OutlineItem): boolean {
   return Boolean(item.level_locked || item.order_locked || item.format_node_id || item.children?.some(hasLockedSubtree));
 }
 
-function moveOutlineLevel(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): OutlineItem[] {
-  const next = structuredClone(items);
-  const location = findOutlineLocation(next, itemId);
-  if (!location) throw new Error('未找到目录项');
-  const siblings = getOutlineSiblings(next, location.parentId);
+function getLevelMoveBlockReason(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): string | null {
+  const location = findOutlineLocation(items, itemId);
+  if (!location) return '未找到目录项';
+  const siblings = getOutlineSiblings(items, location.parentId);
   const item = siblings?.[location.index];
-  if (!siblings || !item) throw new Error('目录结构无效');
-  if (hasLockedSubtree(item)) throw new Error('该目录层级或顺序由招标文件锁定');
+  if (!siblings || !item) return '目录结构无效';
+  if (direction === 'up' && !location.parentId) return '当前已是一级目录';
+  if (direction === 'down' && location.index === 0) return '没有可作为父级的前一个同级目录';
+  if (hasLockedSubtree(item)) return '该目录层级或顺序由招标文件锁定';
   if (direction === 'up') {
-    if (!location.parentId) throw new Error('当前已是一级目录');
-    const parentLocation = findOutlineLocation(next, location.parentId);
-    const parentSiblings = parentLocation && getOutlineSiblings(next, parentLocation.parentId);
+    const parentLocation = findOutlineLocation(items, location.parentId!);
+    const parentSiblings = parentLocation && getOutlineSiblings(items, parentLocation.parentId);
     const parent = parentSiblings?.[parentLocation?.index ?? -1];
-    if (!parentLocation || !parentSiblings || !parent || parent.level_locked || parent.format_node_id) throw new Error('该父子层级由招标文件锁定');
+    if (!parentLocation || !parentSiblings || !parent || parent.level_locked || parent.format_node_id) return '该父子层级由招标文件锁定';
+  } else {
+    const parent = siblings[location.index - 1];
+    if (parent.level_locked || parent.order_locked || parent.allow_ai_children === false || parent.format_node_id) return '前一个目录不允许添加下级';
+    if (location.level + subtreeDepth(item) >= 5) return '移动后会超过五级目录';
+  }
+  return null;
+}
+
+function getSiblingMoveBlockReason(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): string | null {
+  const location = findOutlineLocation(items, itemId);
+  if (!location) return '未找到目录项';
+  const siblings = getOutlineSiblings(items, location.parentId);
+  if (!siblings) return '目录结构无效';
+  const nextIndex = location.index + (direction === 'up' ? -1 : 1);
+  if (nextIndex < 0) return '当前已是同级首项';
+  if (nextIndex >= siblings.length) return '当前已是同级末项';
+  if (isOutlinePositionLocked(siblings[location.index]) || isOutlinePositionLocked(siblings[nextIndex])) return '该目录或相邻目录的顺序由招标文件锁定';
+  return null;
+}
+
+function moveOutlineLevel(items: OutlineItem[], itemId: string, direction: 'up' | 'down'): OutlineItem[] {
+  const blockReason = getLevelMoveBlockReason(items, itemId, direction);
+  if (blockReason) throw new Error(blockReason);
+  const next = structuredClone(items);
+  const location = findOutlineLocation(next, itemId)!;
+  const siblings = getOutlineSiblings(next, location.parentId)!;
+  const item = siblings[location.index];
+  if (direction === 'up') {
+    const parentLocation = findOutlineLocation(next, location.parentId!)!;
+    const parentSiblings = getOutlineSiblings(next, parentLocation.parentId)!;
     siblings.splice(location.index, 1);
     parentSiblings.splice(parentLocation.index + 1, 0, item);
   } else {
-    if (location.index === 0) throw new Error('没有可作为父级的前一个同级目录');
     const parent = siblings[location.index - 1];
-    if (parent.level_locked || parent.order_locked || parent.allow_ai_children === false || parent.format_node_id) throw new Error('前一个目录不允许添加下级');
-    if (location.level + subtreeDepth(item) > 5) throw new Error('移动后会超过五级目录');
     siblings.splice(location.index, 1);
     parent.children = [...(parent.children || []), item];
   }
@@ -449,6 +476,11 @@ function OutlineEditPage({
   const knowledgePickingDisabled = generating;
   const contentMutationLocked = contentTaskStatus === 'running' || contentTaskStatus === 'pausing' || contentTaskStatus === 'paused';
   const outlineMutationLocked = generating || contentMutationLocked || savingSort;
+  const levelMoveContextReason = isExpansionWorkflow ? '当前为扩写模式，不能升降目录层级' : hasGeneratedContent ? '正文已启动或已有内容，不能升降目录层级' : contentMutationLocked ? '正文生成任务尚未停止' : null;
+  const levelUpBlockReason = levelMoveContextReason || (activeOutlineData && selectedItemId ? getLevelMoveBlockReason(activeOutlineData.outline, selectedItemId, 'up') : '请先选择目录项');
+  const levelDownBlockReason = levelMoveContextReason || (activeOutlineData && selectedItemId ? getLevelMoveBlockReason(activeOutlineData.outline, selectedItemId, 'down') : '请先选择目录项');
+  const siblingUpBlockReason = contentMutationLocked ? '正文生成任务尚未停止' : activeOutlineData && selectedItemId ? getSiblingMoveBlockReason(activeOutlineData.outline, selectedItemId, 'up') : '请先选择目录项';
+  const siblingDownBlockReason = contentMutationLocked ? '正文生成任务尚未停止' : activeOutlineData && selectedItemId ? getSiblingMoveBlockReason(activeOutlineData.outline, selectedItemId, 'down') : '请先选择目录项';
   const progressLogs = task?.logs || [];
   const latestLog = progressLogs[progressLogs.length - 1];
   const progress = generating
@@ -963,24 +995,39 @@ function OutlineEditPage({
     }
   };
 
+  const applySortDraft = (outline: OutlineItem[]) => {
+    if (!draftOutlineData) return;
+    const renumbered = renumberOutlineItemsWithIdMap(outline);
+    sortIdMapRef.current = composeIdMap(sortIdMapRef.current, renumbered.idMap);
+    setDraftOutlineData({ ...draftOutlineData, outline: renumbered.outline });
+    setExpandedItems((prev) => new Set([...prev].map((id) => renumbered.idMap[id] || id)));
+    setSelectedItemId((prev) => (prev ? renumbered.idMap[prev] || prev : prev));
+    setSortDirty(true);
+  };
+
   const changeLevel = (direction: 'up' | 'down') => {
     if (!draftOutlineData || !selectedItemId) return;
-    if (hasGeneratedContent || isExpansionWorkflow) {
-      showToast('正文已启动或当前为扩写模式，不能升降目录层级', 'info');
+    if (levelMoveContextReason) {
+      showToast(levelMoveContextReason, 'info');
       return;
     }
     try {
       const moved = moveOutlineLevel(draftOutlineData.outline, selectedItemId, direction);
-      const renumbered = renumberOutlineItemsWithIdMap(moved);
-      sortIdMapRef.current = composeIdMap(sortIdMapRef.current, renumbered.idMap);
-      setDraftOutlineData({ ...draftOutlineData, outline: renumbered.outline });
-      setExpandedItems((prev) => new Set([...prev].map((id) => renumbered.idMap[id] || id)));
-      setSelectedItemId(renumbered.idMap[selectedItemId] || selectedItemId);
-      setSortDirty(true);
+      applySortDraft(moved);
       setLevelChanged(true);
     } catch (error) {
       showToast(error instanceof Error ? error.message : '调整层级失败', 'info');
     }
+  };
+
+  const moveSibling = (direction: 'up' | 'down') => {
+    if (!draftOutlineData || !selectedItemId) return;
+    const blockReason = getSiblingMoveBlockReason(draftOutlineData.outline, selectedItemId, direction);
+    if (blockReason) { showToast(blockReason, 'info'); return; }
+    const location = findOutlineLocation(draftOutlineData.outline, selectedItemId)!;
+    const siblings = getOutlineSiblings(draftOutlineData.outline, location.parentId)!;
+    const target = siblings[location.index + (direction === 'up' ? -1 : 1)];
+    applySortDraft(reorderOutlineSiblings(draftOutlineData.outline, location.parentId, selectedItemId, target.id, direction === 'up' ? 'before' : 'after'));
   };
 
   const exportOutline = async () => {
@@ -1070,12 +1117,7 @@ function OutlineEditPage({
 
     const position = dropTarget?.itemId === item.id ? dropTarget.position : getDropPosition(event);
     const reordered = reorderOutlineSiblings(draftOutlineData.outline, sourceLocation.parentId, draggingItemId, item.id, position);
-    const renumbered = renumberOutlineItemsWithIdMap(reordered);
-    sortIdMapRef.current = composeIdMap(sortIdMapRef.current, renumbered.idMap);
-    setDraftOutlineData({ ...draftOutlineData, outline: renumbered.outline });
-    setExpandedItems((prev) => new Set([...prev].map((id) => renumbered.idMap[id] || id)));
-    setSelectedItemId((prev) => (prev ? renumbered.idMap[prev] || prev : prev));
-    setSortDirty(true);
+    applySortDraft(reordered);
     setDraggingItemId(null);
     setDropTarget(null);
   };
@@ -1373,6 +1415,10 @@ function OutlineEditPage({
             <div className="outline-tree-tools">
               {sorting ? (
                 <>
+                  <button type="button" onClick={() => changeLevel('up')} disabled={savingSort || Boolean(levelUpBlockReason)} title={levelUpBlockReason || '整棵子树升一级'} aria-description={levelUpBlockReason || undefined}>升一级</button>
+                  <button type="button" onClick={() => changeLevel('down')} disabled={savingSort || Boolean(levelDownBlockReason)} title={levelDownBlockReason || '成为前一个同级目录的最后一个子目录'} aria-description={levelDownBlockReason || undefined}>降一级</button>
+                  <button type="button" onClick={() => moveSibling('up')} disabled={savingSort || Boolean(siblingUpBlockReason)} title={siblingUpBlockReason || '整棵子树在同级上移一位'} aria-description={siblingUpBlockReason || undefined}>上移</button>
+                  <button type="button" onClick={() => moveSibling('down')} disabled={savingSort || Boolean(siblingDownBlockReason)} title={siblingDownBlockReason || '整棵子树在同级下移一位'} aria-description={siblingDownBlockReason || undefined}>下移</button>
                   <button type="button" className="outline-save-sort-action" onClick={() => { void saveSorting().catch((error) => showToast(error instanceof Error ? error.message : '保存排序失败', 'error')); }} disabled={savingSort}>
                     {savingSort ? '正在保存...' : '保存调整'}
                   </button>
@@ -1468,12 +1514,6 @@ function OutlineEditPage({
                     {getOutlineFocusLabel(selectedItem) && <span className="bid-analysis-section-chip">{getOutlineFocusLabel(selectedItem)}</span>}
                   </div>
                   <div className="outline-detail-actions">
-                    {sorting && !isExpansionWorkflow && !hasGeneratedContent && (
-                      <>
-                        <button type="button" className="secondary-action" onClick={() => changeLevel('up')} disabled={savingSort || selectedItemLevel <= 1} title={selectedItemLevel <= 1 ? '当前已是一级目录' : '整棵子树升一级'}>升一级</button>
-                        <button type="button" className="secondary-action" onClick={() => changeLevel('down')} disabled={savingSort} title="成为前一个同级目录的最后一个子目录">降一级</button>
-                      </>
-                    )}
                     {!selectedItem.title_locked && <button type="button" className="primary-action" onClick={() => startEditing(selectedItem)} disabled={outlineMutationLocked || sorting}>编辑</button>}
                     {selectedItem.allow_ai_children !== false && <button type="button" className="secondary-action" onClick={() => { void addChildItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting || selectedItemLevel >= 5} title={selectedItemLevel >= 5 ? '目录最多五级' : undefined}>添加子目录</button>}
                     {!selectedItem.required_in_outline && <button type="button" className="danger-action" onClick={() => { void removeItem(selectedItem.id); }} disabled={outlineMutationLocked || sorting}>删除</button>}
