@@ -1,0 +1,81 @@
+{
+  "initial": {
+    "dialog": {
+      "x": 16,
+      "y": 20,
+      "width": 1504,
+      "height": 984,
+      "top": 20,
+      "right": 1520,
+      "bottom": 1004,
+      "left": 16
+    },
+    "body": {
+      "x": 17,
+      "y": 177.984375,
+      "width": 1502,
+      "height": 755.015625,
+      "top": 177.984375,
+      "right": 1519,
+      "bottom": 933,
+      "left": 17
+    },
+    "stage": {
+      "x": 41,
+      "y": 191.984375,
+      "width": 1024,
+      "height": 727.015625,
+      "top": 191.984375,
+      "right": 1065,
+      "bottom": 919,
+      "left": 41
+    },
+    "panel": {
+      "x": 1085,
+      "y": 191.984375,
+      "width": 410,
+      "height": 727.015625,
+      "top": 191.984375,
+      "right": 1495,
+      "bottom": 919,
+      "left": 1085
+    },
+    "count": 0
+  },
+  "focused": true,
+  "three": {
+    "count": 3,
+    "labels": [
+      "修改区域 1",
+      "修改区域 2",
+      "修改区域 3"
+    ],
+    "prompts": [
+      "把左侧区域改为暖色，保留纹理",
+      "改成深蓝色，保留形状",
+      "改成浅绿色，保留纹理"
+    ],
+    "submit": " 提交局部修改共 3 处修改"
+  },
+  "two": {
+    "count": 2,
+    "prompts": [
+      "把左侧区域改为暖色，保留纹理",
+      "改成浅绿色，保留纹理"
+    ]
+  },
+  "beforeWheel": "89%",
+  "afterWheel": "89%",
+  "scrollBefore": {
+    "left": 0,
+    "top": 91
+  },
+  "scrollAfter": {
+    "left": 0,
+    "top": 182
+  },
+  "afterCtrlWheel": "162%",
+  "dprBefore": 1,
+  "dprAfter": 1,
+  "errors": []
+}

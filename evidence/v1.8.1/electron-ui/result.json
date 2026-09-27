@@ -1,0 +1,23 @@
+{
+  "screenshots": [
+    "create.png",
+    "magic-selection.png",
+    "multi-region-before-submit.png",
+    "prompt-center.png",
+    "reference-viewer.png",
+    "two-regions.png"
+  ],
+  "metrics": {
+    "promptHeight": 210,
+    "toolButtonHeight": 18,
+    "taskTypeButtons": 0,
+    "qualityControls": 2
+  },
+  "regionLabels": [
+    "1",
+    "2"
+  ],
+  "regionInputs": 2,
+  "promptCardCount": 40,
+  "pagination": "上一页\n第 1 / 44 页 · 共 1750 条\n下一页"
+}

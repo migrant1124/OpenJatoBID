@@ -1662,3 +1662,20 @@ T173 → T174 → T175 → T176
 4. W04：仅生图创作局部 CSS 控制输入框与按钮尺寸；同排张数/画幅和草稿恢复；图片预览缩放/切换/独立操作；风格说明、幂等应用及撤销。
 5. W05：Main 后台七天自动同步已启用内置来源；可注入时钟、持久化成功/尝试/退避时间、同源合并；无变化推进检查时间，增量中文化不覆盖用户内容。
 6. W07：V01–V65 按 U/I/E/R/F 分层记录，聚焦/全量测试、构建/打包、真实 Electron 与真实中转分别取证，PSD 样本及 Photoshop 单列；审查只读、修复后复测。状态仅在 `tasks/todo.md`。
+# v1.8.1 生图模式增量计划（2026-09-27）
+
+依据 `docs/v1.8.1-image-mode-optimization-spec.md`，在当前分支保留 v1.8.0 R4 实现。按以下顺序完成并以 `tasks/todo.md` 记录状态：
+
+1. 核对并修正创作页、统一预览、提示词中心与来源更新；沿用已有 Store、IPC 和缓存。
+2. 将局部修改从单遮罩升级为逐区域遮罩及提示词；任务仍由 Main 发出，失败保留前台输入，新结果另存作品。
+3. 用真实 SAM 对象遮罩生成多对象透明像素层，使用现有生图队列调用 GPT Image 2.5 补全背景，复用 PSD 写入器；预览和导出共享图层数据。
+4. 分层运行聚焦测试、构建、隔离 Electron、真实中转与 Photoshop 可用性验收；只读审查当前 diff。真实环境无法执行的项目保留未完成状态，不以模拟结果代替。
+
+## v1.8.1 局部修改 LE-R2（2026-09-27）
+
+按已选 LE-01 和 `docs/v1.8.1-local-edit-{redesign-spec,ui-handoff}.md` 连续实施。只读基线：`v1.8.1-PSDopt` / `a682d9ba52669b3d1ba230cf01c9910a5ad4c812`；四份 LE 输入资料未跟踪，均保留。当前 `ImageStudioRegionEditor` 预置空区域、补减选、粗笔刷及图下输入；`ImageStudioPage.start` 从当前 `selectedWork` 取编辑源，存在窗口打开后切图窜源风险。Main 已有逐区遮罩、一次编辑任务、标注参考、选区外原像素合成及独立作品保存；PSD refine 用独立组件。
+
+1. 建立局部编辑会话的稳定 ID、完整内容快照历史、临时空项结算及可重复逻辑测试；避免改 SQLite 模式。
+2. 在 `ImageStudioRegionEditor.tsx` 和局部作用域 CSS 中实现 LE-01 布局、自由闭合圈选/矩形/SAM、右侧卡片、导航图、单一视图比例及键鼠规则。复用既有 IPC 和 SAM；不改 PSD refine。
+3. 在 `ImageStudioCreate.tsx`/`ImageStudioPage.tsx` 冻结编辑源并让每项意见进入既有 Main 一次提交。仅在实际合同缺口处修改 Main。
+4. 聚焦逻辑与服务测试、构建、隔离 Electron 多尺寸截图、真实 SAM/已授权中转、PSD refine 相邻回归；LE-T01—48 分层记录于 `tasks/todo.md` 和测试报告，最后只读审查。无新费用授权的调用标未执行；不操作 Git 状态或发布。

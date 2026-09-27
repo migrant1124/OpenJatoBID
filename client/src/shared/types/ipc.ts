@@ -706,6 +706,17 @@ export interface ImageStudioState {
   textModelName: string;
 }
 
+export interface ImageStudioRiskResult {
+  risk_level: 'normal' | 'transformable' | 'blocked';
+  categories: string[];
+  reason: string;
+  original_intent: string;
+  safe_alternative: string;
+  can_generate: boolean;
+}
+
+export type ImageStudioStartInput = { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string; description?: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ regionId?: number; tool?: 'brush' | 'rectangle' | 'magic'; prompt: string; maskDataUrl: string }>; parentWorkId?: string; requestId?: string; expectedSourceSha256?: string };
+
 export interface ImageStudioAsset {
   assetId: string;
   assetUrl: string;
@@ -786,6 +797,7 @@ export interface ImageStudioLayerSet {
   createdAt: string;
   lastExportAt: string | null;
   subjectLayerId: string;
+  backgroundLayerId: string | null;
   layers: Array<{ layerId: string; name: string; assetUrl: string; sortOrder: number; visible: boolean }>;
 }
 
@@ -902,13 +914,16 @@ export interface YibiaoBridge {
   imageStudio: {
     getState: () => Promise<ImageStudioState>;
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
-    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; maskDataUrl?: string; parentWorkId?: string }) => Promise<{ taskId: string }>;
+    preflight: (input: ImageStudioStartInput) => Promise<{ checkId: string; risk_result: ImageStudioRiskResult; transformed_prompt: string }>;
+    decideRisk: (input: { checkId: string; confirmed: boolean }) => Promise<void>;
+    start: (input: ImageStudioStartInput & { riskCheckId: string }) => Promise<{ taskId: string }>;
+    segmentObject: (input: { assetId?: string; workId?: string; point: { x: number; y: number } }) => Promise<{ maskDataUrl: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;
     deleteWork: (input: { workId: string }) => Promise<ImageStudioWork[]>;
     exportImage: (input: { workId: string; format: 'png' | 'jpg' | 'webp' }) => Promise<{ canceled: boolean; filePath?: string; format?: string; background?: string | null }>;
     importAsset: () => Promise<{ canceled: boolean; asset?: ImageStudioAsset }>;
-    readManagedImage: (input: { workId?: string; assetId?: string; layerId?: string }) => Promise<{ dataUrl: string; width: number; height: number }>;
+    readManagedImage: (input: { workId?: string; assetId?: string; layerId?: string }) => Promise<{ dataUrl: string; width: number; height: number; sourceSha256: string }>;
     invertImage: (input: { assetId?: string; workId?: string }) => Promise<{ prompt: string; assetId: string | null; workId: string | null }>;
     optimizePrompt: (input: { prompt: string; mode?: string }) => Promise<{ original: string; optimized: string; mode: string }>;
     listMyPrompts: () => Promise<ImageStudioMyPrompt[]>;
@@ -929,7 +944,8 @@ export interface YibiaoBridge {
     listLayerSets: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet[]>;
     createLayerSet: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet>;
     updateLayer: (input: { setId: string; layerId: string; name?: string; visible?: boolean; sortOrder?: number }) => Promise<ImageStudioLayerSet>;
-    refineLayerSet: (input: { setId: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;
+    deleteLayer: (input: { setId: string; layerId: string }) => Promise<ImageStudioLayerSet>;
+    refineLayerSet: (input: { setId: string; layerId?: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;
     exportLayeredPsd: (input: { setId: string }) => Promise<{ canceled: boolean; filePath?: string; layerCount?: number }>;
     onEvent: (callback: (event: { taskId: string; works: ImageStudioWork[]; tasks: ImageStudioTask[]; sourcesChecked?: boolean; updatedSourceIds?: string[] }) => void) => () => void;
   };

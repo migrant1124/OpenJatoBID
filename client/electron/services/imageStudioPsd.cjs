@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const sharp = require('sharp');
 const path = require('node:path');
-const { Worker } = require('node:worker_threads');
 const { writePsdBuffer, readPsd, initializeCanvas } = require('ag-psd');
 
 initializeCanvas(() => { throw new Error('不需要 Canvas 解码'); },
@@ -47,46 +46,60 @@ async function writeLayeredPsd({ layers, outputPath }) {
   return { width, height, layerCount: decoded.length, bytes: buffer.length };
 }
 
-function segmentForeground(filePath, box) {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(path.join(__dirname, 'imageStudioSegmentWorker.cjs'), { workerData: { filePath, box } });
-    worker.once('message', (result) => result.error ? reject(new Error(result.error)) : resolve(result));
-    worker.once('error', reject);
-    worker.once('exit', (code) => { if (code) reject(new Error(`分割工作线程异常退出（${code}）。`)); });
-  });
-}
-
-async function createPixelLayers(filePath, box, subjectName, directory, maskOverride) {
+async function createObjectLayer(filePath, mask, directory) {
   const { data, info } = await sharp(filePath).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  let fullMask;
-  if (maskOverride) {
-    const image = await sharp(maskOverride).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    if (image.info.width !== info.width || image.info.height !== info.height) throw new Error('细修遮罩尺寸与原图不一致。');
-    fullMask = Buffer.alloc(info.width * info.height);
-    for (let i = 0; i < fullMask.length; i += 1) fullMask[i] = image.data[i * 4 + 3];
-  } else {
-    const { mask, width, height } = await segmentForeground(filePath, box);
-    fullMask = Buffer.alloc(info.width * info.height);
-    for (let y = 0; y < info.height; y += 1) {
-      const sourceY = Math.min(height - 1, Math.floor(y * height / info.height));
-      for (let x = 0; x < info.width; x += 1) {
-        fullMask[y * info.width + x] = mask[sourceY * width + Math.min(width - 1, Math.floor(x * width / info.width))];
-      }
-    }
+  if (mask.width !== info.width || mask.height !== info.height) throw new Error('SAM 遮罩尺寸与原图不一致。');
+  const pixels = Buffer.from(data);
+  let occupied = 0;
+  for (let index = 0; index < mask.pixels.length; index += 1) {
+    if (mask.pixels[index]) occupied += 1;
+    else pixels.fill(0, index * 4, index * 4 + 4);
   }
-  if (fullMask.length !== info.width * info.height) throw new Error('分割遮罩与原图尺寸不一致。');
+  if (occupied < mask.pixels.length * .002 || occupied > mask.pixels.length * .95) throw new Error('候选对象遮罩无效。');
   fs.mkdirSync(directory, { recursive: true });
-  const outputs = [];
-  for (const [index, name] of ['背景', subjectName].entries()) {
-    const pixels = Buffer.from(data);
-    for (let i = 0; i < fullMask.length; i += 1) {
-      if (Boolean(fullMask[i] >= 128) !== Boolean(index)) pixels[i * 4 + 3] = 0;
-    }
-    const file = path.join(directory, `${index}-${crypto.randomUUID()}.png`);
-    fs.writeFileSync(file, await sharp(pixels, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer());
-    outputs.push({ name, filePath: file, width: info.width, height: info.height });
-  }
-  return outputs;
+  const filePathOut = path.join(directory, `object-${crypto.randomUUID()}.png`);
+  fs.writeFileSync(filePathOut, await sharp(pixels, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer());
+  return { filePath: filePathOut, width: info.width, height: info.height };
 }
 
-module.exports = { writeLayeredPsd, segmentForeground, createPixelLayers };
+async function createInpaintMask(masks) {
+  const { width, height } = masks[0];
+  const pixels = Buffer.alloc(width * height * 4, 255);
+  for (const mask of masks) {
+    if (mask.width !== width || mask.height !== height) throw new Error('对象遮罩尺寸不一致。');
+    for (let index = 0; index < mask.pixels.length; index += 1) {
+      if (mask.pixels[index]) pixels[index * 4 + 3] = 0;
+    }
+  }
+  return sharp(pixels, { raw: { width, height, channels: 4 } }).png().toBuffer();
+}
+
+async function applyInpaint(base, generated, mask) {
+  const source = await sharp(base).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const fill = await sharp(generated).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (source.info.width !== mask.width || source.info.height !== mask.height ||
+    fill.info.width !== mask.width || fill.info.height !== mask.height) throw new Error('背景补全尺寸与原图不一致。');
+  let outsideDifference = 0; let outsidePixels = 0; let insideDifference = 0; let insidePixels = 0;
+  for (let index = 0; index < mask.pixels.length; index += 1) {
+    if (mask.pixels[index]) {
+      if (fill.data[index * 4 + 3] < 255) throw new Error('背景补全结果仍有透明空洞。');
+      const offset = index * 4;
+      insideDifference += (Math.abs(fill.data[offset] - source.data[offset]) +
+        Math.abs(fill.data[offset + 1] - source.data[offset + 1]) +
+        Math.abs(fill.data[offset + 2] - source.data[offset + 2])) / 3;
+      insidePixels += 1;
+      fill.data.copy(source.data, index * 4, index * 4, index * 4 + 4);
+    } else {
+      const offset = index * 4;
+      outsideDifference += (Math.abs(fill.data[offset] - source.data[offset]) +
+        Math.abs(fill.data[offset + 1] - source.data[offset + 1]) +
+        Math.abs(fill.data[offset + 2] - source.data[offset + 2])) / 3;
+      outsidePixels += 1;
+    }
+  }
+  if (outsideDifference / outsidePixels > 40) throw new Error('背景补全结果明显偏离原图，未生成不可信 PSD。');
+  if (insideDifference / insidePixels < 5) throw new Error('背景补全未改变对象遮挡区域，未生成不可信 PSD。');
+  return sharp(source.data, { raw: { width: mask.width, height: mask.height, channels: 4 } }).png().toBuffer();
+}
+
+module.exports = { writeLayeredPsd, createObjectLayer, createInpaintMask, applyInpaint };

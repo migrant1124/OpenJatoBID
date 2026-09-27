@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 36;
+const schemaVersion = 38;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1156,6 +1156,21 @@ function createImageStudioSchema(db) {
   `);
 }
 
+function createImageStudioRiskSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS image_studio_risk_checks (
+    check_id TEXT PRIMARY KEY,
+    original_prompt TEXT NOT NULL,
+    risk_result TEXT NOT NULL,
+    transformed_prompt TEXT NOT NULL DEFAULT '',
+    user_confirmation TEXT NOT NULL,
+    confirmation_at TEXT,
+    model TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    task_id TEXT
+  )`);
+}
+
 function extendImageStudioSchema(db) {
   addColumnIfMissing(db, 'image_studio_draft', 'state_json', "TEXT NOT NULL DEFAULT '{}'");
   for (const [name, type] of Object.entries({
@@ -1251,6 +1266,11 @@ function extendImageStudioSchema(db) {
   db.exec(`UPDATE image_studio_psd_sessions SET subject_layer_id =
     (SELECT layer_id FROM image_studio_psd_layers WHERE set_id = image_studio_psd_sessions.set_id
      ORDER BY sort_order DESC LIMIT 1) WHERE subject_layer_id IS NULL`);
+  addColumnIfMissing(db, 'image_studio_psd_sessions', 'background_layer_id', 'TEXT');
+  db.exec(`UPDATE image_studio_psd_sessions SET background_layer_id =
+    (SELECT layer_id FROM image_studio_psd_layers WHERE set_id = image_studio_psd_sessions.set_id
+     AND layer_id <> image_studio_psd_sessions.subject_layer_id ORDER BY sort_order LIMIT 1)
+    WHERE background_layer_id IS NULL`);
   for (const [name, type] of Object.entries({
     last_attempt_at: 'TEXT', content_applied_at: 'TEXT', next_retry_at: 'TEXT',
     consecutive_failures: 'INTEGER NOT NULL DEFAULT 0',
@@ -1414,9 +1434,20 @@ const schemaHealthTableGroups = [
     tables: ['image_studio_psd_sessions', 'image_studio_psd_layers'],
     repair: extendImageStudioSchema,
   },
+  {
+    version: 37,
+    tables: ['image_studio_psd_sessions', 'image_studio_psd_layers'],
+    repair: extendImageStudioSchema,
+  },
+  {
+    version: 38,
+    tables: ['image_studio_risk_checks'],
+    repair: createImageStudioRiskSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
+  { version: 38, table: 'image_studio_risk_checks', columns: { confirmation_at: 'TEXT' } },
   { version: 34, table: 'image_studio_draft', columns: { state_json: "TEXT NOT NULL DEFAULT '{}'" } },
   { version: 34, table: 'image_studio_tasks', columns: {
     kind: "TEXT NOT NULL DEFAULT 'generate'", requested_count: 'INTEGER NOT NULL DEFAULT 1',
@@ -1437,6 +1468,7 @@ const schemaHealthColumnGroups = [
   } },
   { version: 35, table: 'image_studio_prompt_meta', columns: { cover_url: "TEXT NOT NULL DEFAULT ''" } },
   { version: 36, table: 'image_studio_psd_sessions', columns: { subject_layer_id: 'TEXT' } },
+  { version: 37, table: 'image_studio_psd_sessions', columns: { background_layer_id: 'TEXT' } },
   {
     version: 23,
     table: 'conversation_threads',
@@ -1930,6 +1962,16 @@ const migrations = [
     description: '为既有 PSD 会话回填稳定主体图层 ID',
     up: extendImageStudioSchema,
   },
+  {
+    version: 37,
+    description: '为多对象 PSD 会话增加背景底板图层 ID',
+    up: extendImageStudioSchema,
+  },
+  {
+    version: 38,
+    description: '生图提示词风险预检留痕',
+    up: createImageStudioRiskSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -2038,6 +2080,7 @@ module.exports = {
   createConversationSchema,
   createPromptLibrarySchema,
   createImageStudioSchema,
+  createImageStudioRiskSchema,
   extendImageStudioSchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,

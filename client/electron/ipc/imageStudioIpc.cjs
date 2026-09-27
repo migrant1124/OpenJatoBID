@@ -3,7 +3,10 @@ const { ipcMain } = require('electron');
 function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:get-state', () => service.getState());
   ipcMain.handle('image-studio:save-draft', (_event, input) => service.saveDraft(input));
-  ipcMain.handle('image-studio:start', (_event, input) => service.start(input));
+  ipcMain.handle('image-studio:preflight', (_event, input) => service.preflight(input));
+  ipcMain.handle('image-studio:decide-risk', (_event, input) => service.decideRisk(input));
+  ipcMain.handle('image-studio:start', (_event, input) => service.submit(input));
+  ipcMain.handle('image-studio:segment-object', (_event, input) => service.segmentObject(input));
   ipcMain.handle('image-studio:cancel-task', (_event, input) => service.cancelTask(input));
   ipcMain.handle('image-studio:set-favorite', (_event, input) => service.setFavorite(input));
   ipcMain.handle('image-studio:delete-work', (_event, input) => service.deleteWork(input));
@@ -30,6 +33,7 @@ function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:list-layer-sets', (_event, input) => service.listLayerSets(input));
   ipcMain.handle('image-studio:create-layer-set', (_event, input) => service.createLayerSet(input));
   ipcMain.handle('image-studio:update-layer', (_event, input) => service.updateLayer(input));
+  ipcMain.handle('image-studio:delete-layer', (_event, input) => service.deleteLayer(input));
   ipcMain.handle('image-studio:refine-layer-set', (_event, input) => service.refineLayerSet(input));
   ipcMain.handle('image-studio:export-layered-psd', (_event, input) => service.exportLayeredPsd(input));
   return service.onEvent((event) => {

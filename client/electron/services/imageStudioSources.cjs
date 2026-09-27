@@ -192,18 +192,16 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
     return { items, total };
   }
 
-  async function load(sourceId, { checkOnly = false, confirmedReplace = false } = {}) {
+  async function load(sourceId, { checkOnly = false } = {}) {
     const source = get(sourceId);
     if (!source || source.deleted_at) throw new Error('来源不存在或已删除。');
     if (source.url === 'local:image-studio-starter') return { count: source.item_count, unchanged: true, local: true };
     if (!checkOnly) db.prepare('UPDATE image_studio_sources SET last_attempt_at = ? WHERE source_id = ?').run(at(), sourceId);
     let payload;
-    let fallback = false;
     try { payload = await readSourceJson(source.url, fetcher, urlValidator, source.content_version || ''); }
     catch (error) {
       if (!source.fallback_url) throw error;
       payload = await readSourceJson(source.fallback_url, fetcher, urlValidator);
-      fallback = true;
     }
     const current = get(sourceId);
     if (!current || current.deleted_at || current.config_revision !== source.config_revision || current.url !== source.url) {
@@ -219,9 +217,6 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
     const hash = crypto.createHash('sha256').update(JSON.stringify(normalized.map(({ hash: _hash, ...item }) => item))).digest('hex');
     if (checkOnly) return { count: normalized.length, hash, revision: source.config_revision };
     if (source.item_count && normalized.length < Math.ceil(source.item_count / 2)) throw new Error('新数据条目异常骤减，旧快照未改变。');
-    if (fallback && source.content_hash && source.content_hash !== hash && !confirmedReplace) {
-      throw new Error('备用版本待核对，旧快照未改变。');
-    }
     if (source.content_hash === hash) {
       db.prepare(`UPDATE image_studio_sources SET last_success_at = ?, content_version = ?, next_retry_at = NULL,
         consecutive_failures = 0, last_error = NULL WHERE source_id = ?`).run(at(), payload.etag, sourceId);

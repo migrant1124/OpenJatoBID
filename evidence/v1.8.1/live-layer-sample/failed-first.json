@@ -1,0 +1,6 @@
+{
+  "success": false,
+  "model": "gpt-image-2.5-sunburst",
+  "error": "SAM 未能选出稳定对象，请选择对象内部的点。",
+  "statusCode": 0
+}

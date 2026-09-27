@@ -1,0 +1,17 @@
+{
+  "imageToCard": true,
+  "cardToImage": true,
+  "redoAfterZoom": true,
+  "redoCount": 1,
+  "beforeMap": [
+    0,
+    91
+  ],
+  "afterMap": [
+    0,
+    182
+  ],
+  "confirmation": true,
+  "retained": "第一处",
+  "focusReturned": true
+}

@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: {
-      ignored: ['**/release/**', '**/node_modules/**'],
+      ignored: ['**/release/**', '**/node_modules/**', '**/vendor/slimsam-77-uniform/**'],
     },
   },
   build: {

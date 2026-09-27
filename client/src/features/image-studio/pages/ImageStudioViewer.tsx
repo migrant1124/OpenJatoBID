@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, X } from 'lucide-react';
 
 export interface StudioViewerImage { url: string; label: string }
 
@@ -33,16 +33,29 @@ export function ImageStudioViewer({ images, initialIndex = 0, onClose }: {
     setScale(Math.max(1, image.naturalWidth / image.clientWidth));
     setOffset({ x: 0, y: 0 });
   }
+  function toggleSize() {
+    if (scale === 1 && offset.x === 0 && offset.y === 0) actualSize();
+    else { setScale(1); setOffset({ x: 0, y: 0 }); }
+  }
   const current = images[index];
   return <div className="image-studio-viewer" role="dialog" aria-modal="true" aria-label="图片预览">
     <div className="image-studio-viewer-toolbar">
       <span>{current.label} · {index + 1}/{images.length}</span>
-      <button type="button" title="缩小" aria-label="缩小" onClick={() => setScale((value) => Math.max(.25, value / 1.25))}><Minus size={18} /></button>
-      <button type="button" title="放大" aria-label="放大" onClick={() => setScale((value) => Math.min(8, value * 1.25))}><Plus size={18} /></button>
-      <button type="button" title="100%" aria-label="100%" onClick={actualSize}><Maximize2 size={18} /></button>
+      <button type="button" title="切换原始尺寸与适应窗口" aria-label="切换预览尺寸" onClick={toggleSize}><Maximize2 size={18} /></button>
       <button type="button" title="关闭预览" aria-label="关闭预览" onClick={onClose}><X size={20} /></button>
     </div>
-    <div className="image-studio-viewer-stage" onPointerMove={(event) => {
+    <div className="image-studio-viewer-stage" onWheel={(event) => {
+      if (!imageRef.current || !event.target || !(event.target as HTMLElement).closest('img')) return;
+      event.preventDefault();
+      const rect = imageRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const next = Math.min(8, Math.max(.25, scale * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+      const factor = next / scale;
+      setOffset((old) => ({ x: old.x + (centerX - event.clientX) * (factor - 1),
+        y: old.y + (centerY - event.clientY) * (factor - 1) }));
+      setScale(next);
+    }} onPointerMove={(event) => {
       if (!drag.current) return;
       setOffset({ x: drag.current.originX + event.clientX - drag.current.x,
         y: drag.current.originY + event.clientY - drag.current.y });

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SectionId } from '../../../shared/types/navigation';
-import type { ImageStudioState, ImageStudioStyle, ImageStudioWork } from '../../../shared/types/ipc';
+import type { ImageStudioRiskResult, ImageStudioStartInput, ImageStudioState, ImageStudioStyle, ImageStudioWork } from '../../../shared/types/ipc';
 import { useToast } from '../../../shared/ui';
 import { ImageStudioCreate, type StudioReference } from './ImageStudioCreate';
 import { ImageStudioPrompts } from './ImageStudioPrompts';
 import { ImageStudioWorks } from './ImageStudioWorks';
+import type { StudioEditRegion } from './ImageStudioRegionEditor';
 
 const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'image-studio-create', label: 'AI 生图' },
@@ -16,7 +17,6 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   const { showToast } = useToast();
   const [state, setState] = useState<ImageStudioState | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [preset, setPreset] = useState('商品图');
   const [count, setCount] = useState(1);
   const [size, setSize] = useState('');
   const [references, setReferences] = useState<StudioReference[]>([]);
@@ -26,12 +26,18 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   const [appliedPrompt, setAppliedPrompt] = useState<{ before: string; after: string } | null>(null);
   const [appliedStyle, setAppliedStyle] = useState<{ styleId: string; version: string; body: string; before?: string; after: string } | null>(null);
   const [conflictDraft, setConflictDraft] = useState<ImageStudioState['draft'] | null>(null);
+  const [preflightBusy, setPreflightBusy] = useState(false);
+  const [pendingRisk, setPendingRisk] = useState<{ checkId: string; result: ImageStudioRiskResult; transformedPrompt: string;
+    input: ImageStudioStartInput; inputKey: string; resolve: (taskId?: string) => void; reject: (error: unknown) => void } | null>(null);
   const revisionRef = useRef(0);
   const lastSavedRef = useRef('');
   const saveQueueRef = useRef(Promise.resolve());
   const readyRef = useRef(false);
   const manuallySelectedRef = useRef(false);
   const conflictRef = useRef(false);
+  const preflightLockRef = useRef(false);
+  const currentInputKeyRef = useRef('');
+  currentInputKeyRef.current = JSON.stringify({ prompt, count, size, references, parentWorkId });
   const view = section === 'image-studio-prompts' ? 'prompts' : section === 'image-studio-works' ? 'works' : 'create';
 
   async function refresh() { setState(await window.yibiao!.imageStudio.getState()); }
@@ -43,14 +49,13 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
       setState(loaded);
       setPrompt(loaded.draft.prompt);
       const saved = loaded.draft.state || {};
-      setPreset(typeof saved.preset === 'string' ? saved.preset : '商品图');
       setCount([1, 2, 4].includes(Number(saved.count)) ? Number(saved.count) : 1);
       setSize(typeof saved.size === 'string' ? saved.size : loaded.imageModel.size || '1024x1024');
       setReferences(Array.isArray(saved.references) ? saved.references as StudioReference[] : []);
       setParentWorkId(typeof saved.parentWorkId === 'string' ? saved.parentWorkId : null);
       setAppliedStyle(saved.appliedStyle && typeof saved.appliedStyle === 'object' ? saved.appliedStyle as typeof appliedStyle : null);
       revisionRef.current = loaded.draft.revision;
-      lastSavedRef.current = JSON.stringify({ prompt: loaded.draft.prompt, preset: saved.preset || '商品图',
+      lastSavedRef.current = JSON.stringify({ prompt: loaded.draft.prompt,
         count: saved.count || 1, size: saved.size || loaded.imageModel.size || '1024x1024',
         references: saved.references || [], parentWorkId: saved.parentWorkId || null, appliedStyle: saved.appliedStyle || null });
       readyRef.current = true;
@@ -67,13 +72,13 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
 
   useEffect(() => {
     if (!readyRef.current || conflictRef.current) return;
-    const value = JSON.stringify({ prompt, preset, count, size, references, parentWorkId, appliedStyle });
+    const value = JSON.stringify({ prompt, count, size, references, parentWorkId, appliedStyle });
     if (value === lastSavedRef.current) return;
     saveQueueRef.current = saveQueueRef.current.then(async () => {
       if (conflictRef.current || value === lastSavedRef.current) return;
-      const data = JSON.parse(value) as { prompt: string; preset: string; count: number; size: string; references: StudioReference[]; parentWorkId: string | null; appliedStyle: typeof appliedStyle };
+      const data = JSON.parse(value) as { prompt: string; count: number; size: string; references: StudioReference[]; parentWorkId: string | null; appliedStyle: typeof appliedStyle };
       const result = await window.yibiao!.imageStudio.saveDraft({ prompt: data.prompt, revision: revisionRef.current,
-        state: { preset: data.preset, count: data.count, size: data.size, references: data.references, parentWorkId: data.parentWorkId, appliedStyle: data.appliedStyle } });
+        state: { count: data.count, size: data.size, references: data.references, parentWorkId: data.parentWorkId, appliedStyle: data.appliedStyle } });
       if (result.conflict) {
         conflictRef.current = true;
         setConflictDraft(result.draft);
@@ -82,25 +87,67 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
       revisionRef.current = result.draft.revision;
       lastSavedRef.current = value;
     }).catch((error) => { showToast(`保存草稿失败：${String(error)}`, 'error'); });
-  }, [prompt, preset, count, size, references, parentWorkId, appliedStyle, showToast]);
+  }, [prompt, count, size, references, parentWorkId, appliedStyle, showToast]);
 
   const selectedWork = state?.works.find((work) => work.workId === selectedWorkId) || state?.works[0] || null;
 
-  async function start(maskDataUrl?: string): Promise<string | void> {
+  async function start(regions?: StudioEditRegion[], sourceWorkId?: string, sourceSha256?: string, requestId?: string): Promise<string | void> {
+    if (preflightLockRef.current || pendingRisk) return;
+    preflightLockRef.current = true;
+    setPreflightBusy(true);
     try {
-      const editWork = maskDataUrl ? selectedWork : null;
+      const inputKey = currentInputKeyRef.current;
+      const editWork = regions ? state?.works.find((work) => work.workId === sourceWorkId) : null;
+      if (regions && !editWork) throw new Error('原图已不存在，请重新打开局部修改。');
       const submittedReferences = editWork ? [{ workId: editWork.workId, role: '主体' }] : references;
       const requestSize = editWork ? `${editWork.width}x${editWork.height}` : size;
       const [width, height] = requestSize.split('x').map(Number);
       const gcd = (a: number, b: number): number => b ? gcd(b, a % b) : a;
       const divisor = gcd(width, height) || 1;
-      const result = await window.yibiao!.imageStudio.start({ prompt, count: maskDataUrl ? 1 : count, size: requestSize,
+      const input: ImageStudioStartInput = { prompt: regions ? regions.map((region) => region.prompt).join('；') : prompt, count: regions ? 1 : count, size: requestSize,
         ratio: `${width / divisor}:${height / divisor}`, references: submittedReferences,
-        kind: maskDataUrl ? 'edit' : undefined, maskDataUrl,
-        parentWorkId: editWork?.workId || parentWorkId || undefined });
+        kind: regions ? 'edit' : undefined, regions, requestId: regions ? requestId : undefined,
+        expectedSourceSha256: regions ? sourceSha256 : undefined,
+        parentWorkId: editWork?.workId || parentWorkId || undefined };
+      const check = await window.yibiao!.imageStudio.preflight(input);
+      if (inputKey !== currentInputKeyRef.current) {
+        if (check.risk_result.risk_level === 'transformable') {
+          await window.yibiao!.imageStudio.decideRisk({ checkId: check.checkId, confirmed: false });
+        }
+        throw new Error('生图输入在预检期间已修改，请重新提交。');
+      }
+      if (check.risk_result.risk_level !== 'normal') {
+        setPreflightBusy(false);
+        return await new Promise<string | void>((resolve, reject) => setPendingRisk({ checkId: check.checkId,
+          result: check.risk_result, transformedPrompt: check.transformed_prompt, input, inputKey, resolve, reject }));
+      }
+      const result = await window.yibiao!.imageStudio.start({ ...input, riskCheckId: check.checkId });
       showToast('已提交生图任务', 'success');
       return result.taskId;
-    } catch (error) { showToast(String(error), 'error'); if (maskDataUrl) throw error; }
+    } catch (error) { showToast(String(error), 'error'); if (regions) throw error; }
+    finally { preflightLockRef.current = false; setPreflightBusy(false); }
+  }
+
+  async function finishRisk(confirmed: boolean) {
+    if (!pendingRisk) return;
+    const current = pendingRisk;
+    setPendingRisk(null);
+    try {
+      if (current.inputKey !== currentInputKeyRef.current) {
+        if (current.result.risk_level === 'transformable') await window.yibiao!.imageStudio.decideRisk({ checkId: current.checkId, confirmed: false });
+        throw new Error('生图输入已修改，请重新进行风险预检。');
+      }
+      if (current.result.risk_level === 'transformable') {
+        await window.yibiao!.imageStudio.decideRisk({ checkId: current.checkId, confirmed });
+        if (confirmed) {
+          const result = await window.yibiao!.imageStudio.start({ ...current.input, riskCheckId: current.checkId });
+          showToast('已按修改后的目的提交生图任务', 'success');
+          current.resolve(result.taskId);
+          return;
+        }
+      }
+      current.resolve();
+    } catch (error) { current.reject(error); showToast(String(error), 'error'); }
   }
 
   async function savePrompt(text: string, originKind = 'manual') {
@@ -131,8 +178,7 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
     setAppliedStyle(null);
   }
   function applyStyle(style: ImageStudioStyle) {
-    if (appliedStyle?.styleId === style.styleId && appliedStyle.version === style.updatedAt &&
-      prompt.includes(appliedStyle.body)) { showToast('该风格已应用', 'info'); return; }
+    if (prompt.includes(style.body.trim())) { showToast('该风格已应用', 'info'); return; }
     const after = `${prompt.trim()}\n${style.body.trim()}`.trim();
     setAppliedPrompt({ before: prompt, after });
     setAppliedStyle({ styleId: style.styleId, version: style.updatedAt, body: style.body.trim(), before: prompt, after });
@@ -144,9 +190,9 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
     if (!conflictDraft) return;
     if (useCurrent) {
       try {
-        const value = JSON.stringify({ prompt, preset, count, size, references, parentWorkId, appliedStyle });
+        const value = JSON.stringify({ prompt, count, size, references, parentWorkId, appliedStyle });
         const result = await window.yibiao!.imageStudio.saveDraft({ prompt, revision: conflictDraft.revision,
-          state: { preset, count, size, references, parentWorkId, appliedStyle } });
+          state: { count, size, references, parentWorkId, appliedStyle } });
         if (result.conflict) { setConflictDraft(result.draft); return; }
         revisionRef.current = result.draft.revision;
         lastSavedRef.current = value;
@@ -154,14 +200,13 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
     } else {
       const saved = conflictDraft.state || {};
       setPrompt(conflictDraft.prompt);
-      setPreset(typeof saved.preset === 'string' ? saved.preset : '商品图');
       setCount([1, 2, 4].includes(Number(saved.count)) ? Number(saved.count) : 1);
       setSize(typeof saved.size === 'string' ? saved.size : state?.imageModel.size || '1024x1024');
       setReferences(Array.isArray(saved.references) ? saved.references as StudioReference[] : []);
       setParentWorkId(typeof saved.parentWorkId === 'string' ? saved.parentWorkId : null);
       setAppliedStyle(saved.appliedStyle && typeof saved.appliedStyle === 'object' ? saved.appliedStyle as typeof appliedStyle : null);
       revisionRef.current = conflictDraft.revision;
-      lastSavedRef.current = JSON.stringify({ prompt: conflictDraft.prompt, preset: saved.preset || '商品图',
+      lastSavedRef.current = JSON.stringify({ prompt: conflictDraft.prompt,
         count: saved.count || 1, size: saved.size || state?.imageModel.size || '1024x1024',
         references: saved.references || [], parentWorkId: saved.parentWorkId || null, appliedStyle: saved.appliedStyle || null });
     }
@@ -179,11 +224,19 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   return <div className="image-studio-page">
     <header className="image-studio-head"><div><h1>生图模式</h1><p>从想法到图片，简单创作与修改</p></div><nav aria-label="生图模式页面" className="image-studio-tabs">{sections.map((item) => <button key={item.id} type="button" aria-current={(section === item.id || (section === 'image-studio' && item.id === 'image-studio-create')) ? 'page' : undefined} onClick={() => onSectionChange(item.id)}>{item.label}</button>)}</nav></header>
     {!state && <div className="image-studio-empty">正在读取生图工作区…</div>}
-    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} preset={preset} setPreset={setPreset} count={count} setCount={setCount} size={size} setSize={setSize} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={start} savePrompt={savePrompt} />}
+    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} count={count} setCount={setCount} size={size} setSize={setSize} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={(regions, sourceWorkId, sourceSha256, requestId) => start(regions, sourceWorkId, sourceSha256, requestId)} savePrompt={savePrompt} preflightBusy={preflightBusy} />}
     {state && view === 'prompts' && <ImageStudioPrompts applyPrompt={applyPrompt} applyStyle={applyStyle} undoStyle={undoAppliedStyle}
       canUndoStyle={Boolean(appliedStyle && typeof appliedStyle.before === 'string' && prompt.startsWith(appliedStyle.after))} appliedStyleId={appliedStyle?.styleId || ''} currentPrompt={prompt} />}
     {state && view === 'works' && <ImageStudioWorks works={state.works} refresh={refresh} openWork={openWork} continueWork={continueWork} />}
     {conflictDraft && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="草稿冲突" className="image-studio-dialog"><h2>草稿有新版本</h2><p>当前输入和已保存草稿都已保留。请选择要继续使用的一份。</p><div className="image-studio-compare"><div><strong>当前输入</strong><p>{prompt}</p></div><div><strong>已保存草稿</strong><p>{conflictDraft.prompt}</p></div></div><footer><button type="button" onClick={() => void resolveDraftConflict(false)}>载入已存草稿</button><button type="button" className="image-studio-primary" onClick={() => void resolveDraftConflict(true)}>保留当前输入</button></footer></section></div>}
+    {pendingRisk && <div className="image-studio-overlay image-studio-risk-overlay"><section role="dialog" aria-modal="true" aria-label="生成前风险预检" className="image-studio-dialog image-studio-risk-dialog" onKeyDown={(event) => { if (event.key === 'Escape') void finishRisk(false); }}>
+      <h2>生成前风险预检</h2><p><strong>{pendingRisk.result.risk_level === 'blocked' ? '当前请求不可生成' : '当前用途需要调整'}</strong></p>
+      <p><strong>原请求风险原因：</strong>{pendingRisk.result.reason}</p>
+      {pendingRisk.result.risk_level === 'transformable' && <><p><strong>修改后的生成目的：</strong>{pendingRisk.result.safe_alternative}</p>
+        <label>修改后的完整提示词<textarea readOnly value={pendingRisk.transformedPrompt} /></label>
+        {pendingRisk.input.references?.length ? <p>确认后将生成全新图片，不发送原参考图或局部修改选区。</p> : null}</>}
+      <footer><button type="button" autoFocus onClick={() => void finishRisk(false)}>取消</button>{pendingRisk.result.risk_level === 'transformable' && <button type="button" className="image-studio-primary" onClick={() => void finishRisk(true)}>确认按新目的生成</button>}</footer>
+    </section></div>}
   </div>;
 }
 
