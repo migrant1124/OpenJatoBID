@@ -81,6 +81,133 @@ test('生图用途元数据跨分组重命名保留，旧对话提示词不混�
   db.close();
 });
 
+test('参考收藏事务去重，取消不删个人副本且来源不覆盖编辑', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  createPromptLibrarySchema(db);
+  createImageStudioSchema(db);
+  extendImageStudioSchema(db);
+  const library = createPromptLibraryStore({ db });
+  const service = createImageStudioService({ db, promptLibraryStore: library,
+    configStore: { load: () => ({ image_model: {} }) },
+    aiService: { getImageModelAvailability: () => ({ available: false }) } });
+  db.prepare(`INSERT INTO image_studio_reference_items (item_id, source_id, title_zh, title_original,
+    prompt_zh, prompt_original, tags_json, cover_url, content_hash, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run('awesome-gpt-image:cup', 'awesome-gpt-image',
+    '杯子', 'Cup', '白色杯子', 'White cup', '["摄影"]', 'https://example.com/cup.png', 'hash-1', '2026-09-01');
+  const input = { sourceId: 'awesome-gpt-image', itemId: 'awesome-gpt-image:cup' };
+  const saved = service.saveMyPrompt({ title: '先另存的杯子', contentMarkdown: '个人先存文本',
+    originKind: 'reference', originSourceId: input.sourceId, originItemId: input.itemId,
+    coverUrl: 'https://example.com/cup.png' });
+  const repeated = service.saveMyPrompt({ title: '上游更新标题', contentMarkdown: '上游更新正文',
+    originKind: 'reference', originSourceId: input.sourceId, originItemId: input.itemId });
+  assert.equal(repeated.promptId, saved.promptId);
+  assert.equal(repeated.contentMarkdown, '个人先存文本');
+  const first = service.toggleReferenceFavorite({ ...input, isFavorite: true });
+  const second = service.toggleReferenceFavorite({ ...input, isFavorite: true });
+  assert.equal(first.promptId, saved.promptId);
+  assert.equal(first.promptId, second.promptId);
+  assert.equal(service.listMyPrompts().length, 1);
+  library.updatePrompt({ promptId: first.promptId, contentMarkdown: '我改过的杯子' });
+  service.toggleReferenceFavorite({ ...input, isFavorite: false });
+  assert.equal(service.listMyPrompts()[0].contentMarkdown, '我改过的杯子');
+  service.toggleReferenceFavorite({ ...input, isFavorite: true });
+  assert.equal(service.listMyPrompts()[0].contentMarkdown, '我改过的杯子');
+  assert.equal(service.listItems({ sourceId: input.sourceId }).items[0].isFavorite, true);
+  assert.equal(service.listMyPrompts()[0].coverUrl, 'https://example.com/cup.png');
+  db.close();
+});
+
+test('受管参考图实际字节超限时不发送模型请求', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-large-ref-'));
+  const filePath = path.join(directory, 'oversized.png');
+  fs.writeFileSync(filePath, Buffer.alloc(25_000_001));
+  const db = new DatabaseSync(':memory:');
+  createImageStudioSchema(db); extendImageStudioSchema(db);
+  db.prepare(`INSERT INTO image_studio_assets (asset_id, file_path, asset_url, mime_type, width, height, sha256, created_at)
+    VALUES ('large', ?, 'yibiao-asset://generated-images/oversized.png', 'image/png', 1, 1, 'hash', '2026-09-01')`).run(filePath);
+  let calls = 0;
+  const service = createImageStudioService({ db, configStore: { load: () => ({ image_model: {} }) },
+    aiService: { getImageModelAvailability: () => ({ available: true }),
+      withQueueScope: () => ({ generateImage: () => { calls += 1; } }) } });
+  assert.throws(() => service.start({ prompt: '产品图', references: [{ assetId: 'large', role: '主体' }] }), /实际 PNG 超过 25 MB/);
+  assert.equal(calls, 0);
+  db.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('局部编辑以标注图请求，并逐像素保留选区外原图', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-edit-'));
+  const db = new DatabaseSync(':memory:');
+  createImageStudioSchema(db); extendImageStudioSchema(db);
+  const source = path.join(directory, 'source.png');
+  const generated = path.join(directory, 'generated.png');
+  await sharp({ create: { width: 8, height: 6, channels: 4, background: '#ff0000' } }).png().toFile(source);
+  await sharp({ create: { width: 8, height: 6, channels: 4, background: '#0000ff' } }).png().toFile(generated);
+  const maskPixels = Buffer.alloc(8 * 6 * 4, 255);
+  maskPixels[(3 * 8 + 4) * 4 + 3] = 0;
+  const mask = await sharp(maskPixels, { raw: { width: 8, height: 6, channels: 4 } }).png().toBuffer();
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO image_studio_assets (asset_id, file_path, asset_url, mime_type, width, height, sha256, created_at)
+    VALUES ('asset', ?, 'yibiao-asset://generated-images/source.png', 'image/png', 8, 6, 'hash', ?)`).run(source, now);
+  let request;
+  const service = createImageStudioService({ db, app: { getPath: () => directory },
+    configStore: { load: () => ({ image_model: { provider: 'mock', model_name: 'gpt-image-2', image_size: '1024x1024' } }) },
+    aiService: { getImageModelAvailability: () => ({ available: true }),
+      withQueueScope: () => ({ generateImage: async (input) => { request = input;
+        return { file_path: generated, asset_url: 'yibiao-asset://generated-images/generated.png', mime_type: 'image/png' }; } }) },
+  });
+  const terminal = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('编辑任务超时')), 5000);
+    service.onEvent((event) => {
+      if (['completed', 'failed', 'unknown'].includes(event.tasks[0]?.status)) {
+        clearTimeout(timeout); resolve(event.tasks[0]);
+      }
+    });
+  });
+  service.start({ prompt: '改蓝', kind: 'edit', size: '8x6', references: [{ assetId: 'asset', role: '主体' }],
+    maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` });
+  const task = await terminal;
+  assert.equal(task.status, 'completed', task.error);
+  assert.equal(request.mask, undefined);
+  assert.equal(request.images.length, 2);
+  assert.match(request.prompt, /红色区域/);
+  assert.equal(request.size, '8x6');
+  const workPath = db.prepare('SELECT file_path AS filePath FROM image_studio_works').get().filePath;
+  const pixels = await sharp(workPath).ensureAlpha().raw().toBuffer();
+  assert.deepEqual([...pixels.subarray(0, 4)], [255, 0, 0, 255]);
+  assert.deepEqual([...pixels.subarray((3 * 8 + 4) * 4, (3 * 8 + 4) * 4 + 4)], [0, 0, 255, 255]);
+  db.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('图层换序后细修仍只写入稳定主体图层', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-psd-order-'));
+  const source = path.join(directory, 'source.png');
+  await sharp({ create: { width: 8, height: 6, channels: 4, background: '#ff0000' } }).png().toFile(source);
+  const db = new DatabaseSync(':memory:');
+  createImageStudioSchema(db); extendImageStudioSchema(db);
+  db.prepare(`INSERT INTO image_studio_psd_sessions
+    (set_id, source_kind, source_id, source_path, width, height, status, created_at, updated_at, subject_layer_id)
+    VALUES ('set', 'asset', 'asset', ?, 8, 6, 'ready', '2026-09-01', '2026-09-01', 'subject')`).run(source);
+  const insert = db.prepare(`INSERT INTO image_studio_psd_layers
+    (layer_id, set_id, name, file_path, asset_url, sort_order, sha256) VALUES (?, 'set', ?, ?, ?, ?, 'hash')`);
+  insert.run('background', '背景', source, 'yibiao-asset://generated-images/background.png', 0);
+  insert.run('subject', '主体', source, 'yibiao-asset://generated-images/subject.png', 1);
+  const service = createImageStudioService({ db, app: { getPath: () => directory },
+    configStore: { load: () => ({ image_model: {} }) }, aiService: { getImageModelAvailability: () => ({ available: false }) } });
+  service.updateLayer({ setId: 'set', layerId: 'background', sortOrder: 1 });
+  service.updateLayer({ setId: 'set', layerId: 'subject', sortOrder: 0 });
+  const maskPixels = Buffer.alloc(8 * 6 * 4);
+  maskPixels[(3 * 8 + 4) * 4 + 3] = 255;
+  const mask = await sharp(maskPixels, { raw: { width: 8, height: 6, channels: 4 } }).png().toBuffer();
+  await service.refineLayerSet({ setId: 'set', maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` });
+  const rows = db.prepare('SELECT layer_id AS id, file_path AS filePath FROM image_studio_psd_layers WHERE set_id = ?').all('set');
+  const subject = await sharp(rows.find((row) => row.id === 'subject').filePath).ensureAlpha().raw().toBuffer();
+  const background = await sharp(rows.find((row) => row.id === 'background').filePath).ensureAlpha().raw().toBuffer();
+  assert.equal(subject[(3 * 8 + 4) * 4 + 3], 255);
+  assert.equal(background[(3 * 8 + 4) * 4 + 3], 0);
+  db.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
 test('停止未发送任务只暂停目标作用域且不调用图片模型', async () => {
   const db = new DatabaseSync(':memory:');
   createImageStudioSchema(db);

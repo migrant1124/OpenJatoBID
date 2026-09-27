@@ -729,6 +729,10 @@ export interface ImageStudioSource {
   contentHash: string | null;
   contentVersion: string | null;
   lastSuccessAt: string | null;
+  lastAttemptAt: string | null;
+  contentAppliedAt: string | null;
+  nextRetryAt: string | null;
+  consecutiveFailures: number;
   lastError: string | null;
 }
 
@@ -742,6 +746,9 @@ export interface ImageStudioReferenceItem {
   author: string;
   sourceUrl: string;
   coverUrl: string;
+  translationStatus: 'ready' | 'pending';
+  isFavorite: boolean;
+  myPromptId: string | null;
 }
 
 export interface ImageStudioStyle {
@@ -764,6 +771,22 @@ export interface ImageStudioMyPrompt {
   notes: string;
   ratio: string;
   originKind: string;
+  originSourceId: string | null;
+  originItemId: string | null;
+  coverUrl: string;
+}
+
+export interface ImageStudioLayerSet {
+  setId: string;
+  sourceKind: 'asset' | 'work';
+  sourceId: string;
+  width: number;
+  height: number;
+  status: string;
+  createdAt: string;
+  lastExportAt: string | null;
+  subjectLayerId: string;
+  layers: Array<{ layerId: string; name: string; assetUrl: string; sortOrder: number; visible: boolean }>;
 }
 
 export interface PromptImportItem {
@@ -879,16 +902,17 @@ export interface YibiaoBridge {
   imageStudio: {
     getState: () => Promise<ImageStudioState>;
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
-    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; parentWorkId?: string }) => Promise<{ taskId: string }>;
+    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; maskDataUrl?: string; parentWorkId?: string }) => Promise<{ taskId: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;
     deleteWork: (input: { workId: string }) => Promise<ImageStudioWork[]>;
     exportImage: (input: { workId: string; format: 'png' | 'jpg' | 'webp' }) => Promise<{ canceled: boolean; filePath?: string; format?: string; background?: string | null }>;
     importAsset: () => Promise<{ canceled: boolean; asset?: ImageStudioAsset }>;
+    readManagedImage: (input: { workId?: string; assetId?: string; layerId?: string }) => Promise<{ dataUrl: string; width: number; height: number }>;
     invertImage: (input: { assetId?: string; workId?: string }) => Promise<{ prompt: string; assetId: string | null; workId: string | null }>;
     optimizePrompt: (input: { prompt: string; mode?: string }) => Promise<{ original: string; optimized: string; mode: string }>;
     listMyPrompts: () => Promise<ImageStudioMyPrompt[]>;
-    saveMyPrompt: (input: { promptId?: string; groupId?: string; title: string; contentMarkdown: string; tags?: string[]; notes?: string; ratio?: string; originKind?: string; originSourceId?: string; originItemId?: string; originVersion?: string }) => Promise<PromptItem>;
+    saveMyPrompt: (input: { promptId?: string; groupId?: string; title: string; contentMarkdown: string; tags?: string[]; notes?: string; ratio?: string; originKind?: string; originSourceId?: string; originItemId?: string; originVersion?: string; coverUrl?: string }) => Promise<PromptItem>;
     listStyles: () => Promise<ImageStudioStyle[]>;
     saveStyle: (input: Partial<ImageStudioStyle>) => Promise<ImageStudioStyle[]>;
     deleteStyle: (input: { styleId: string }) => Promise<ImageStudioStyle[]>;
@@ -899,8 +923,15 @@ export interface YibiaoBridge {
     checkSource: (sourceId: string) => Promise<{ count: number; hash: string; revision: number }>;
     checkSourceUrl: (url: string) => Promise<{ count: number }>;
     refreshSource: (sourceId: string, options?: { confirmedReplace?: boolean }) => Promise<{ count: number; unchanged?: boolean; untranslated?: number }>;
-    listReferenceItems: (input?: { sourceId?: string; query?: string; limit?: number; offset?: number }) => Promise<ImageStudioReferenceItem[]>;
-    onEvent: (callback: (event: { taskId: string; works: ImageStudioWork[]; tasks: ImageStudioTask[] }) => void) => () => void;
+    listReferenceItems: (input?: { sourceId?: string; query?: string; limit?: number; offset?: number }) => Promise<{ items: ImageStudioReferenceItem[]; total: number }>;
+    loadCover: (input: string | { itemId: string; coverUrl: string; retry?: boolean }) => Promise<{ assetUrl: string }>;
+    toggleReferenceFavorite: (input: { sourceId: string; itemId: string; isFavorite: boolean }) => Promise<{ promptId: string | null; isFavorite: boolean }>;
+    listLayerSets: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet[]>;
+    createLayerSet: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet>;
+    updateLayer: (input: { setId: string; layerId: string; name?: string; visible?: boolean; sortOrder?: number }) => Promise<ImageStudioLayerSet>;
+    refineLayerSet: (input: { setId: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;
+    exportLayeredPsd: (input: { setId: string }) => Promise<{ canceled: boolean; filePath?: string; layerCount?: number }>;
+    onEvent: (callback: (event: { taskId: string; works: ImageStudioWork[]; tasks: ImageStudioTask[]; sourcesChecked?: boolean; updatedSourceIds?: string[] }) => void) => () => void;
   };
   developerTokenStats: {
     openWindow: () => Promise<{ success: boolean }>;

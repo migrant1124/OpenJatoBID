@@ -1,0 +1,38 @@
+{
+  "task": {
+    "taskId": "067d0cbf-10b7-4b7d-8653-f36b0a07bd2e",
+    "status": "completed",
+    "kind": "reference",
+    "prompt": "以图 1 的室内猫和客厅为主体，以图 2 的猫眼特写作为色彩风格参考，生成一张自然写实的室内猫照片。",
+    "requestedSize": "1536x1024",
+    "requestedCount": 1,
+    "completedCount": 1,
+    "error": null,
+    "createdAt": "2026-09-26T15:34:13.077Z",
+    "updatedAt": "2026-09-26T15:34:53.233Z"
+  },
+  "work": {
+    "workId": "793f941d-b7cc-4687-b37e-57e8f3f8e022",
+    "kind": "reference",
+    "parentWorkId": "07ad8c64-2c3a-4cb1-9858-6edf7d4c0b95",
+    "generation": {
+      "size": "1536x1024",
+      "ratio": "3:2",
+      "index": 0,
+      "kind": "reference",
+      "references": [
+        {
+          "workId": "07ad8c64-2c3a-4cb1-9858-6edf7d4c0b95",
+          "role": "主体"
+        },
+        {
+          "assetId": "6c579cf4-00b0-4c5a-94a2-9d961a8fb0df",
+          "role": "风格"
+        }
+      ]
+    },
+    "width": 1536,
+    "height": 1024
+  },
+  "globalSizeUnchanged": true
+}

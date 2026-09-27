@@ -1,0 +1,31 @@
+{
+  "task": {
+    "taskId": "d88dfbf7-08d8-4364-b29e-d546f11a95dd",
+    "status": "completed",
+    "kind": "edit",
+    "prompt": "只将猫的眼睛改成明亮的蓝色，保持其它区域不变。",
+    "requestedSize": "1536x1024",
+    "requestedCount": 1,
+    "completedCount": 1,
+    "error": null,
+    "createdAt": "2026-09-26T15:31:43.021Z",
+    "updatedAt": "2026-09-26T15:32:16.968Z"
+  },
+  "parentWorkId": "07ad8c64-2c3a-4cb1-9858-6edf7d4c0b95",
+  "work": {
+    "workId": "c25d850b-a4df-47a1-bb6d-f5dc2a17422f",
+    "parentWorkId": "07ad8c64-2c3a-4cb1-9858-6edf7d4c0b95",
+    "width": 1536,
+    "height": 1024,
+    "kind": "edit"
+  },
+  "maskRetainedOnFailure": null,
+  "screenshot": "edit-complete.png",
+  "outputPath": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\electron-ui\\edit-output.png",
+  "changedPixels": 2346,
+  "outsideChangedPixels": 0,
+  "outputDimensions": [
+    1536,
+    1024
+  ]
+}

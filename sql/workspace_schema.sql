@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 32;
+PRAGMA user_version = 36;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -1008,6 +1008,7 @@ CREATE TABLE IF NOT EXISTS image_studio_prompt_meta (
   tags_json TEXT NOT NULL DEFAULT '[]', notes TEXT NOT NULL DEFAULT '',
   ratio TEXT NOT NULL DEFAULT '', origin_kind TEXT NOT NULL DEFAULT 'manual',
   origin_source_id TEXT, origin_item_id TEXT, origin_version TEXT,
+  cover_url TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL, FOREIGN KEY (prompt_id) REFERENCES prompt_items(prompt_id)
 );
 CREATE TABLE IF NOT EXISTS image_studio_styles (
@@ -1022,7 +1023,9 @@ CREATE TABLE IF NOT EXISTS image_studio_sources (
   deleted_at TEXT, overrides_json TEXT NOT NULL DEFAULT '{}',
   config_revision INTEGER NOT NULL DEFAULT 0,
   content_hash TEXT, content_version TEXT, item_count INTEGER NOT NULL DEFAULT 0,
-  last_success_at TEXT, last_error TEXT, updated_at TEXT NOT NULL
+  last_success_at TEXT, last_attempt_at TEXT, content_applied_at TEXT,
+  next_retry_at TEXT, consecutive_failures INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS image_studio_reference_items (
   item_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, title_zh TEXT NOT NULL,
@@ -1031,10 +1034,19 @@ CREATE TABLE IF NOT EXISTS image_studio_reference_items (
   tags_json TEXT NOT NULL DEFAULT '[]', author TEXT NOT NULL DEFAULT '',
   source_url TEXT NOT NULL DEFAULT '', cover_url TEXT NOT NULL DEFAULT '',
   content_hash TEXT NOT NULL, updated_at TEXT NOT NULL,
+  translation_status TEXT NOT NULL DEFAULT 'pending',
   FOREIGN KEY (source_id) REFERENCES image_studio_sources(source_id)
 );
 CREATE INDEX IF NOT EXISTS idx_image_studio_reference_source
 ON image_studio_reference_items(source_id, item_id);
+CREATE TABLE IF NOT EXISTS image_studio_reference_favorites (
+  source_id TEXT NOT NULL, item_id TEXT NOT NULL, prompt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL, PRIMARY KEY (source_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS image_studio_cover_cache (
+  item_id TEXT PRIMARY KEY, cover_url TEXT NOT NULL, file_path TEXT NOT NULL,
+  asset_url TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS image_studio_layer_sets (
   set_id TEXT PRIMARY KEY, work_id TEXT NOT NULL, width INTEGER NOT NULL,
   height INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -1046,3 +1058,17 @@ CREATE TABLE IF NOT EXISTS image_studio_layers (
   visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
   FOREIGN KEY (set_id) REFERENCES image_studio_layer_sets(set_id)
 );
+CREATE TABLE IF NOT EXISTS image_studio_psd_sessions (
+  set_id TEXT PRIMARY KEY, source_kind TEXT NOT NULL, source_id TEXT NOT NULL,
+  source_path TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+  status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  last_export_at TEXT, subject_layer_id TEXT
+);
+CREATE TABLE IF NOT EXISTS image_studio_psd_layers (
+  layer_id TEXT PRIMARY KEY, set_id TEXT NOT NULL, name TEXT NOT NULL,
+  file_path TEXT NOT NULL, asset_url TEXT NOT NULL, sort_order INTEGER NOT NULL,
+  visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
+  FOREIGN KEY (set_id) REFERENCES image_studio_psd_sessions(set_id)
+);
+CREATE INDEX IF NOT EXISTS idx_image_studio_psd_source
+ON image_studio_psd_sessions(source_kind, source_id, created_at DESC);

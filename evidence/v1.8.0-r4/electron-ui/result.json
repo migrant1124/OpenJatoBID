@@ -1,0 +1,48 @@
+{
+  "metrics": {
+    "textarea": [
+      210
+    ],
+    "tools": [
+      18,
+      18,
+      18
+    ],
+    "presets": [
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23
+    ],
+    "generate": [
+      38
+    ],
+    "size": "1536x1024",
+    "qualityControls": 2
+  },
+  "pagination": "上一页\n第 1 / 44 页 · 共 1750 条\n下一页",
+  "favoritePersonalCount": 1,
+  "screenshots": [
+    "create-1280x800.png",
+    "create-1440x900.png",
+    "edit-complete.png",
+    "edit-crop.png",
+    "edit-failed-selection-retained.png",
+    "edit-output.png",
+    "edit-selection-before-submit.png",
+    "favorite-in-mine.png",
+    "multi-ref-result.png",
+    "prompts-page1.png",
+    "prompts-page2.png",
+    "psd-after-auto.png",
+    "psd-before-auto.png",
+    "psd-refine-selection.png",
+    "psd-refined.png",
+    "psd-subject-hidden.png",
+    "reference-viewer.png"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "success": true,
+  "textCalls": 1,
+  "setId": "ec11ec21-8a34-43db-a48b-a4cf37b5b0cd",
+  "width": 1080,
+  "height": 744,
+  "layers": [
+    {
+      "name": "背景",
+      "filePath": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\psd-poster-sample\\workspace\\generated-images\\0-2215b1c1-8d19-44e6-a1fa-c435c77a08c8.png"
+    },
+    {
+      "name": "柚子观音茶饮杯",
+      "filePath": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\psd-poster-sample\\workspace\\generated-images\\1-314c6980-d4bf-4d37-a194-4e41c7b6a396.png"
+    }
+  ],
+  "psd": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\psd-poster-sample\\tea-poster-layered.psd",
+  "exported": {
+    "width": 1080,
+    "height": 744,
+    "layerCount": 2,
+    "bytes": 6399053
+  }
+}

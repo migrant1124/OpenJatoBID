@@ -149,6 +149,7 @@ const bridge = {
     deleteWork: (input) => ipcRenderer.invoke('image-studio:delete-work', input),
     exportImage: (input) => ipcRenderer.invoke('image-studio:export-image', input),
     importAsset: () => ipcRenderer.invoke('image-studio:import-asset'),
+    readManagedImage: (input) => ipcRenderer.invoke('image-studio:read-managed-image', input),
     invertImage: (input) => ipcRenderer.invoke('image-studio:invert-image', input),
     optimizePrompt: (input) => ipcRenderer.invoke('image-studio:optimize-prompt', input),
     listMyPrompts: () => ipcRenderer.invoke('image-studio:list-my-prompts'),
@@ -164,6 +165,13 @@ const bridge = {
     checkSourceUrl: (url) => ipcRenderer.invoke('image-studio:check-source-url', url),
     refreshSource: (sourceId, options) => ipcRenderer.invoke('image-studio:refresh-source', sourceId, options),
     listReferenceItems: (input) => ipcRenderer.invoke('image-studio:list-reference-items', input),
+    loadCover: (itemId) => ipcRenderer.invoke('image-studio:load-cover', itemId),
+    toggleReferenceFavorite: (input) => ipcRenderer.invoke('image-studio:toggle-reference-favorite', input),
+    listLayerSets: (input) => ipcRenderer.invoke('image-studio:list-layer-sets', input),
+    createLayerSet: (input) => ipcRenderer.invoke('image-studio:create-layer-set', input),
+    updateLayer: (input) => ipcRenderer.invoke('image-studio:update-layer', input),
+    refineLayerSet: (input) => ipcRenderer.invoke('image-studio:refine-layer-set', input),
+    exportLayeredPsd: (input) => ipcRenderer.invoke('image-studio:export-layered-psd', input),
     onEvent: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('image-studio:event', listener);

@@ -9,6 +9,7 @@ function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:delete-work', (_event, input) => service.deleteWork(input));
   ipcMain.handle('image-studio:export-image', (_event, input) => service.exportImage(input));
   ipcMain.handle('image-studio:import-asset', () => service.importAsset());
+  ipcMain.handle('image-studio:read-managed-image', (_event, input) => service.readManagedImage(input));
   ipcMain.handle('image-studio:invert-image', (_event, input) => service.invertImage(input));
   ipcMain.handle('image-studio:optimize-prompt', (_event, input) => service.optimizePrompt(input));
   ipcMain.handle('image-studio:list-my-prompts', () => service.listMyPrompts());
@@ -24,6 +25,13 @@ function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:check-source-url', (_event, url) => service.checkSourceUrl(url));
   ipcMain.handle('image-studio:refresh-source', (_event, sourceId, options) => service.refreshSource(sourceId, options));
   ipcMain.handle('image-studio:list-reference-items', (_event, input) => service.listItems(input));
+  ipcMain.handle('image-studio:load-cover', (_event, itemId) => service.loadCover(itemId));
+  ipcMain.handle('image-studio:toggle-reference-favorite', (_event, input) => service.toggleReferenceFavorite(input));
+  ipcMain.handle('image-studio:list-layer-sets', (_event, input) => service.listLayerSets(input));
+  ipcMain.handle('image-studio:create-layer-set', (_event, input) => service.createLayerSet(input));
+  ipcMain.handle('image-studio:update-layer', (_event, input) => service.updateLayer(input));
+  ipcMain.handle('image-studio:refine-layer-set', (_event, input) => service.refineLayerSet(input));
+  ipcMain.handle('image-studio:export-layered-psd', (_event, input) => service.exportLayeredPsd(input));
   return service.onEvent((event) => {
     if (!mainWindow?.isDestroyed?.() && !mainWindow?.webContents?.isDestroyed?.()) {
       mainWindow.webContents.send('image-studio:event', event);

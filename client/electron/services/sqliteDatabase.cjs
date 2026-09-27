@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 34;
+const schemaVersion = 36;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1212,6 +1212,14 @@ function extendImageStudioSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_image_studio_reference_source
       ON image_studio_reference_items(source_id, item_id);
+    CREATE TABLE IF NOT EXISTS image_studio_reference_favorites (
+      source_id TEXT NOT NULL, item_id TEXT NOT NULL, prompt_id TEXT NOT NULL,
+      created_at TEXT NOT NULL, PRIMARY KEY (source_id, item_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_cover_cache (
+      item_id TEXT PRIMARY KEY, cover_url TEXT NOT NULL, file_path TEXT NOT NULL,
+      asset_url TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS image_studio_layer_sets (
       set_id TEXT PRIMARY KEY, work_id TEXT NOT NULL, width INTEGER NOT NULL,
       height INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -1223,7 +1231,37 @@ function extendImageStudioSchema(db) {
       visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
       FOREIGN KEY (set_id) REFERENCES image_studio_layer_sets(set_id)
     );
+    CREATE TABLE IF NOT EXISTS image_studio_psd_sessions (
+      set_id TEXT PRIMARY KEY, source_kind TEXT NOT NULL, source_id TEXT NOT NULL,
+      source_path TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+      status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      last_export_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_psd_layers (
+      layer_id TEXT PRIMARY KEY, set_id TEXT NOT NULL, name TEXT NOT NULL,
+      file_path TEXT NOT NULL, asset_url TEXT NOT NULL, sort_order INTEGER NOT NULL,
+      visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
+      FOREIGN KEY (set_id) REFERENCES image_studio_psd_sessions(set_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_psd_source
+      ON image_studio_psd_sessions(source_kind, source_id, created_at DESC);
   `);
+  addColumnIfMissing(db, 'image_studio_prompt_meta', 'cover_url', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'image_studio_psd_sessions', 'subject_layer_id', 'TEXT');
+  db.exec(`UPDATE image_studio_psd_sessions SET subject_layer_id =
+    (SELECT layer_id FROM image_studio_psd_layers WHERE set_id = image_studio_psd_sessions.set_id
+     ORDER BY sort_order DESC LIMIT 1) WHERE subject_layer_id IS NULL`);
+  for (const [name, type] of Object.entries({
+    last_attempt_at: 'TEXT', content_applied_at: 'TEXT', next_retry_at: 'TEXT',
+    consecutive_failures: 'INTEGER NOT NULL DEFAULT 0',
+  })) addColumnIfMissing(db, 'image_studio_sources', name, type);
+  addColumnIfMissing(db, 'image_studio_reference_items', 'translation_status', "TEXT NOT NULL DEFAULT 'pending'");
+  db.exec(`UPDATE image_studio_reference_items SET translation_status = 'ready'
+    WHERE translation_status = 'pending' AND prompt_zh <> prompt_original`);
+  const markTranslated = db.prepare("UPDATE image_studio_reference_items SET translation_status = 'ready' WHERE item_id = ?");
+  for (const row of db.prepare("SELECT item_id, prompt_original FROM image_studio_reference_items WHERE translation_status = 'pending'").all()) {
+    if (/[\u3400-\u9fff]/.test(row.prompt_original)) markTranslated.run(row.item_id);
+  }
 }
 
 function seedBundledPromptLibrary(db, library = require('../resources/bundled-prompt-library.json')) {
@@ -1365,6 +1403,17 @@ const schemaHealthTableGroups = [
       'image_studio_sources', 'image_studio_reference_items', 'image_studio_layer_sets', 'image_studio_layers'],
     repair: extendImageStudioSchema,
   },
+  {
+    version: 35,
+    tables: ['image_studio_reference_favorites', 'image_studio_cover_cache',
+      'image_studio_psd_sessions', 'image_studio_psd_layers'],
+    repair: extendImageStudioSchema,
+  },
+  {
+    version: 36,
+    tables: ['image_studio_psd_sessions', 'image_studio_psd_layers'],
+    repair: extendImageStudioSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
@@ -1379,6 +1428,15 @@ const schemaHealthColumnGroups = [
     kind: "TEXT NOT NULL DEFAULT 'generate'", source_asset_id: 'TEXT',
     generation_json: "TEXT NOT NULL DEFAULT '{}'",
   } },
+  { version: 35, table: 'image_studio_sources', columns: {
+    last_attempt_at: 'TEXT', content_applied_at: 'TEXT', next_retry_at: 'TEXT',
+    consecutive_failures: 'INTEGER NOT NULL DEFAULT 0',
+  } },
+  { version: 35, table: 'image_studio_reference_items', columns: {
+    translation_status: "TEXT NOT NULL DEFAULT 'pending'",
+  } },
+  { version: 35, table: 'image_studio_prompt_meta', columns: { cover_url: "TEXT NOT NULL DEFAULT ''" } },
+  { version: 36, table: 'image_studio_psd_sessions', columns: { subject_layer_id: 'TEXT' } },
   {
     version: 23,
     table: 'conversation_threads',
@@ -1860,6 +1918,16 @@ const migrations = [
   {
     version: 34,
     description: '生图来源、参考资产、个人元数据与图层派生记录',
+    up: extendImageStudioSchema,
+  },
+  {
+    version: 35,
+    description: '生图参考收藏、封面缓存、周期检查与真实 PSD 会话',
+    up: extendImageStudioSchema,
+  },
+  {
+    version: 36,
+    description: '为既有 PSD 会话回填稳定主体图层 ID',
     up: extendImageStudioSchema,
   },
 ];

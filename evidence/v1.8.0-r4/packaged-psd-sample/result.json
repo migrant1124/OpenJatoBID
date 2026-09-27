@@ -1,0 +1,15 @@
+{
+  "runtime": "41.5.0",
+  "success": true,
+  "psd": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\packaged-psd-sample\\packaged-cup-layered.psd",
+  "layers": [
+    "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\packaged-psd-sample\\0-a17d7b07-8d7a-452a-85dc-18ef20555b65.png",
+    "D:\\Documents\\OpenJatobid\\evidence\\v1.8.0-r4\\packaged-psd-sample\\1-36622f80-b209-4b8c-88af-55861640816b.png"
+  ],
+  "result": {
+    "width": 1536,
+    "height": 1024,
+    "layerCount": 2,
+    "bytes": 12967144
+  }
+}

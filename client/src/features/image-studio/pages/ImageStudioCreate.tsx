@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, Heart, ImagePlus, Layers3, Lightbulb, RotateCcw, Save, Sparkles, WandSparkles } from 'lucide-react';
+import { Download, Heart, ImagePlus, Layers3, Lightbulb, Paintbrush, RotateCcw, Save, Sparkles, WandSparkles } from 'lucide-react';
 import type { ImageStudioAsset, ImageStudioState, ImageStudioWork } from '../../../shared/types/ipc';
 import { useToast } from '../../../shared/ui';
+import { ImageStudioViewer, type StudioViewerImage } from './ImageStudioViewer';
+import { ImageStudioMaskEditor } from './ImageStudioMaskEditor';
+import { ImageStudioLayers } from './ImageStudioLayers';
 
 export type StudioReference = { assetId?: string; workId?: string; role: string; assetUrl: string };
 
 const presets = ['商品图', '海报图', '宣传图', '插画图', '写实图片', '图标／小元素', '背景图', '局部修图'];
 const roles = ['主体', '风格', '构图', '色彩'];
+const imageSizes = [
+  ['1024x1024', '1:1'], ['1024x2048', '1:2'], ['2048x1024', '2:1'],
+  ['1536x2048', '3:4'], ['2048x1536', '4:3'], ['2048x1152', '16:9'],
+  ['1152x2048', '9:16'], ['1536x1024', '3:2'],
+] as const;
 
 interface Props {
   state: ImageStudioState;
@@ -19,13 +27,16 @@ interface Props {
   setPreset: (value: string) => void;
   count: number;
   setCount: (value: number) => void;
+  size: string;
+  setSize: (value: string) => void;
   references: StudioReference[];
   setReferences: (value: StudioReference[]) => void;
   selectedWork: ImageStudioWork | null;
   selectWork: (id: string) => void;
   newResult: boolean;
   showLatest: () => void;
-  start: () => Promise<void>;
+  start: () => Promise<string | void>;
+  edit: (maskDataUrl: string) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
 }
 
@@ -36,6 +47,9 @@ export function ImageStudioCreate(props: Props) {
   const [candidate, setCandidate] = useState<{ kind: 'optimize' | 'invert'; original: string; text: string; sourceKey: string } | null>(null);
   const [candidateText, setCandidateText] = useState('');
   const [mode, setMode] = useState('优化');
+  const [viewer, setViewer] = useState<{ images: StudioViewerImage[]; index: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
   const requestSerial = useRef(0);
   const selectedSourceKey = props.references[0]?.assetId || props.references[0]?.workId || props.selectedWork?.workId || '';
   const latestSourceKey = useRef(selectedSourceKey);
@@ -102,9 +116,10 @@ export function ImageStudioCreate(props: Props) {
     (candidate.kind === 'optimize' || selectedSourceKey === candidate.sourceKey);
 
   return <div className="image-studio-create-shell">
-    <div className="image-studio-model-line">沿用设置 <span>文本：{props.state.textModelName || '未配置'}</span><span>生图：{props.state.imageModel.name || '未配置'} · {props.state.imageModel.size || '未配置尺寸'}</span></div>
+    <div className="image-studio-model-line">沿用设置 <span>文本：{props.state.textModelName || '未配置'}</span><span>生图：{props.state.imageModel.name || '未配置'}</span></div>
     <div className="image-studio-workspace">
       <section className="image-studio-compose" aria-label="创作输入">
+        <div className="image-studio-compose-fields">
         <div className="image-studio-panel-head"><h2>创作输入</h2><small>自动保存草稿</small></div>
         <label htmlFor="image-studio-prompt">图片需求</label>
         <textarea id="image-studio-prompt" maxLength={10001} value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} placeholder="用中文描述主体、场景、光线与希望保留的细节" />
@@ -120,21 +135,23 @@ export function ImageStudioCreate(props: Props) {
         <div className="image-studio-field-title"><label>参考图片 <span>可选</span></label><small>{props.references.length} / 4</small></div>
         <div className="image-studio-reference-list">
           {props.references.map((reference, index) => <div className="image-studio-reference" key={reference.assetId || reference.workId}>
-            <img src={reference.assetUrl} alt={`参考图片 ${index + 1}`} />
+            <button type="button" className="image-studio-reference-preview-button" title={`放大参考图片 ${index + 1}`} aria-label={`放大参考图片 ${index + 1}`} onClick={() => setViewer({ images: props.references.map((item, position) => ({ url: item.assetUrl, label: `参考图片 ${position + 1}` })), index })}><img src={reference.assetUrl} alt="" /></button>
             <select aria-label={`参考图片 ${index + 1} 用途`} value={reference.role} onChange={(event) => props.setReferences(props.references.map((item, position) => position === index ? { ...item, role: event.target.value } : item))}>{roles.map((role) => <option key={role}>{role}</option>)}</select>
-            <button type="button" aria-label={`移除参考图片 ${index + 1}`} title="移除参考图片" onClick={() => props.setReferences(props.references.filter((_, position) => position !== index))}>×</button>
+            <button type="button" className="image-studio-reference-remove" aria-label={`移除参考图片 ${index + 1}`} title="移除参考图片" onClick={() => props.setReferences(props.references.filter((_, position) => position !== index))}>×</button>
           </div>)}
           {props.references.length < 4 && <button type="button" className="image-studio-add-reference" onClick={() => void importImage()} disabled={busy === 'import'} title="添加参考图片"><ImagePlus size={20} /><span>添加</span></button>}
         </div>
-        {props.references.length > 0 && <p className="image-studio-warning">参考图已保存在草稿中；当前渠道的多图请求合同尚待验证，提交前会明确阻止，不会忽略图片。</p>}
-        <label>图片尺寸</label><div className="image-studio-static-choice">{props.state.imageModel.size || '由设置决定'} <small>仅使用当前已测试配置</small></div>
-        <div className="image-studio-two-fields"><label>生成张数<select value={props.count} onChange={(event) => props.setCount(Number(event.target.value))}><option value={1}>1 张</option><option value={2}>2 张</option><option value={4}>4 张</option></select></label><label>画质<select value="current" disabled><option value="current">当前渠道设置</option></select></label></div>
-        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!props.state.imageModel.available || !props.prompt.trim() || props.prompt.length > 10000 || running}><Sparkles size={17} /> {running ? '生成中' : '生成图片'}</button>
+        <div className="image-studio-two-fields"><label>生成张数<select value={props.count} onChange={(event) => props.setCount(Number(event.target.value))}><option value={1}>1 张</option><option value={2}>2 张</option><option value={4}>4 张</option></select></label><label>图片画幅<select value={props.size} onChange={(event) => props.setSize(event.target.value)}>
+          {!imageSizes.some(([value]) => value === props.size) && props.size && <option value={props.size}>{props.size.replace('x', ' × ')} · 当前设置</option>}
+          {imageSizes.map(([value, ratio]) => <option key={value} value={value}>{value.replace('x', ' × ')} · {ratio}</option>)}
+        </select></label></div>
         {!props.state.imageModel.available && <p className="image-studio-warning">请先在设置中配置可用的生图模型。</p>}
+        </div>
+        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!props.state.imageModel.available || !props.prompt.trim() || props.prompt.length > 10000 || running}><Sparkles size={17} /> {running ? '生成中' : '生成图片'}</button>
       </section>
       <section className="image-studio-result" aria-label="生成结果">
         <div className="image-studio-panel-head"><h2>生成结果</h2><div className="image-studio-task-head">{latestTask && <small>{latestTask.status} · {latestTask.completedCount}/{latestTask.requestedCount}</small>}{running && latestTask && <button type="button" onClick={() => void window.yibiao!.imageStudio.cancelTask({ taskId: latestTask.taskId }).catch((error) => showToast(String(error), 'error'))}>停止等待</button>}</div></div>
-        <div className="image-studio-image-stage">{props.selectedWork ? <img src={props.selectedWork.assetUrl} alt="当前生成作品" /> : <div className="image-studio-empty"><Lightbulb size={30} /><span>作品将在这里显示</span></div>}</div>
+        <div className="image-studio-image-stage">{props.selectedWork ? <button type="button" title="放大当前作品" onClick={() => setViewer({ images: props.state.works.map((work) => ({ url: work.assetUrl, label: `作品 ${work.createdAt}` })), index: props.state.works.findIndex((work) => work.workId === props.selectedWork?.workId) })}><img src={props.selectedWork.assetUrl} alt="当前生成作品" /></button> : <div className="image-studio-empty"><Lightbulb size={30} /><span>作品将在这里显示</span></div>}</div>
         {props.newResult && <button type="button" className="image-studio-new-result" onClick={props.showLatest}>新结果已就绪，点击查看</button>}
         {latestTask && ['unknown', 'paused', 'failed', 'partial'].includes(latestTask.status) && <p className="image-studio-task-warning">{latestTask.status === 'unknown' ? '结果待确认，不会自动重新计费。' : latestTask.error || '任务未完整完成。'}</p>}
         <div className="image-studio-filmstrip">{props.state.works.slice(0, 12).map((work) => <button type="button" key={work.workId} className={work.workId === props.selectedWork?.workId ? 'active' : ''} onClick={() => props.selectWork(work.workId)} title={`查看作品 ${work.createdAt}`}><img src={work.assetUrl} alt="" loading="lazy" /></button>)}</div>
@@ -142,7 +159,8 @@ export function ImageStudioCreate(props: Props) {
           <span>{props.selectedWork ? `${props.selectedWork.width} × ${props.selectedWork.height}` : ''}</span>
           <select aria-label="下载格式" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WEBP</option></select>
           <button type="button" disabled={!props.selectedWork} onClick={() => void exportWork()} title="下载图片"><Download size={16} /> 下载</button>
-          <button type="button" disabled title="分层 PSD 仍需真实像素分割验证"><Layers3 size={16} /> 分层 PSD</button>
+          <button type="button" disabled={!props.selectedWork} onClick={() => setEditing(true)} title="局部修改"><Paintbrush size={16} /> 局部修改</button>
+          <button type="button" disabled={!props.selectedWork} onClick={() => setLayersOpen(true)} title="分层 PSD"><Layers3 size={16} /> 分层 PSD</button>
         </div>
       </section>
       <aside className="image-studio-inspector">
@@ -156,5 +174,8 @@ export function ImageStudioCreate(props: Props) {
       {!applyAllowed && <p className="image-studio-warning">输入或图片已变化；请重新发起操作。</p>}
       <footer><button type="button" onClick={() => setCandidate(null)}>取消</button><button type="button" disabled={!candidateText.trim()} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed || !candidateText.trim()} onClick={() => { props.applyPrompt(candidateText); setCandidate(null); }}>应用到输入框</button></footer>
     </section></div>}
+    {viewer && <ImageStudioViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />}
+    {editing && props.selectedWork && <ImageStudioMaskEditor source={{ workId: props.selectedWork.workId }} mode="edit" onClose={() => setEditing(false)} onSubmit={props.edit} />}
+    {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} onClose={() => setLayersOpen(false)} />}
   </div>;
 }

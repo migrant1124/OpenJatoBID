@@ -407,6 +407,22 @@ async function ensureOk(response, fallbackMessage, options = {}) {
 }
 
 async function fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, fallbackMessage, options = {}) {
+  if (options.images?.length) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(requestBody)) {
+      if (value !== undefined && key !== 'response_format' && key !== 'stream') form.append(key, String(value));
+    }
+    options.images.forEach((image, index) => form.append('image[]', new Blob([image.buffer], { type: image.mimeType || 'image/png' }), `reference-${index + 1}.png`));
+    if (options.mask) form.append('mask', new Blob([options.mask], { type: 'image/png' }), 'mask.png');
+    try {
+      options.onSent?.();
+      const response = await fetch(`${baseUrl}/images/edits`, {
+        method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal: options.signal,
+      });
+      await ensureOk(response, fallbackMessage, { source: options.source || 'openai-compatible-image-edit' });
+      return response;
+    } catch (error) { throw markAiRequestError(error, { retryable: false }); }
+  }
   const sendRequest = async (body) => {
     try {
       options.onSent?.();
@@ -1158,7 +1174,11 @@ async function createImageFromOpenAICompatibleItem(item) {
   }
 
   if (item?.url) {
-    return downloadImage(item.url);
+    try { return await downloadImage(item.url); }
+    catch (error) {
+      if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) throw error;
+      return downloadImage(item.url);
+    }
   }
 
   return null;
@@ -1593,8 +1613,7 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
     model: imageConfig.model_name,
     prompt: normalizeImagePrompt(request),
     size: normalizeOpenAICompatibleImageSize(imageConfig, request.size),
-    response_format: 'url',
-    ...(requestMode === 'stream' ? { stream: true } : {}),
+    ...(request.images?.length ? {} : { response_format: 'url', ...(requestMode === 'stream' ? { stream: true } : {}) }),
   };
   const baseUrl = requireBaseUrl(imageConfig.base_url, `${meta.label} Base URL 缺失，请重新选择服务商后保存配置`);
   let responseData = null;
@@ -1607,7 +1626,7 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
       type: 'image-pending',
       provider: meta.logProvider,
       request_mode: requestMode,
-      url: `${baseUrl}/images/generations`,
+      url: `${baseUrl}/images/${request.images?.length ? 'edits' : 'generations'}`,
       request: requestBody,
       status: 'pending',
       created_at: new Date().toISOString(),
@@ -1619,6 +1638,7 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
         requestBody,
         `${meta.label}生图失败`,
         { signal, source: `${meta.logProvider}-image-model`, noRetry: request.noRetry,
+          images: request.images, mask: request.mask,
           onSent: request.onSent, onResponseHeaders: request.onResponseHeaders },
       ),
       AI_REQUEST_TIMEOUT_MS,

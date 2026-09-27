@@ -1,0 +1,14 @@
+{
+  "viewport": [
+    1024,
+    640
+  ],
+  "equivalentPhysicalViewport": [
+    1280,
+    800
+  ],
+  "generateVisible": true,
+  "sizeReachable": true,
+  "bodyScrolls": false,
+  "composeScrolls": true
+}
