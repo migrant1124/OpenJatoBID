@@ -3,12 +3,11 @@ import { Download, Heart, ImagePlus, Layers3, Lightbulb, Paintbrush, RotateCcw, 
 import type { ImageStudioAsset, ImageStudioState, ImageStudioWork } from '../../../shared/types/ipc';
 import { useToast } from '../../../shared/ui';
 import { ImageStudioViewer, type StudioViewerImage } from './ImageStudioViewer';
-import { ImageStudioMaskEditor } from './ImageStudioMaskEditor';
+import { ImageStudioRegionEditor, type StudioEditRegion } from './ImageStudioRegionEditor';
 import { ImageStudioLayers } from './ImageStudioLayers';
 
 export type StudioReference = { assetId?: string; workId?: string; role: string; assetUrl: string };
 
-const presets = ['商品图', '海报图', '宣传图', '插画图', '写实图片', '图标／小元素', '背景图', '局部修图'];
 const roles = ['主体', '风格', '构图', '色彩'];
 const imageSizes = [
   ['1024x1024', '1:1'], ['1024x2048', '1:2'], ['2048x1024', '2:1'],
@@ -23,8 +22,6 @@ interface Props {
   applyPrompt: (value: string) => void;
   undoAppliedPrompt: () => void;
   canUndoAppliedPrompt: boolean;
-  preset: string;
-  setPreset: (value: string) => void;
   count: number;
   setCount: (value: number) => void;
   size: string;
@@ -36,7 +33,7 @@ interface Props {
   newResult: boolean;
   showLatest: () => void;
   start: () => Promise<string | void>;
-  edit: (maskDataUrl: string) => Promise<string | void>;
+  edit: (regions: StudioEditRegion[]) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
 }
 
@@ -130,8 +127,6 @@ export function ImageStudioCreate(props: Props) {
           <button type="button" onClick={() => void props.savePrompt(props.prompt)} disabled={!props.prompt.trim()} title="保存到我的提示词"><Save size={16} /> 保存</button>
           {props.canUndoAppliedPrompt && <button type="button" onClick={props.undoAppliedPrompt} title="撤销刚应用的提示词"><RotateCcw size={16} /> 撤销应用</button>}
         </div>
-        <label>任务类型</label>
-        <div className="image-studio-presets">{presets.map((item) => <button key={item} type="button" className={props.preset === item ? 'active' : ''} aria-pressed={props.preset === item} onClick={() => props.setPreset(item)}>{item}</button>)}</div>
         <div className="image-studio-field-title"><label>参考图片 <span>可选</span></label><small>{props.references.length} / 4</small></div>
         <div className="image-studio-reference-list">
           {props.references.map((reference, index) => <div className="image-studio-reference" key={reference.assetId || reference.workId}>
@@ -175,7 +170,7 @@ export function ImageStudioCreate(props: Props) {
       <footer><button type="button" onClick={() => setCandidate(null)}>取消</button><button type="button" disabled={!candidateText.trim()} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed || !candidateText.trim()} onClick={() => { props.applyPrompt(candidateText); setCandidate(null); }}>应用到输入框</button></footer>
     </section></div>}
     {viewer && <ImageStudioViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />}
-    {editing && props.selectedWork && <ImageStudioMaskEditor source={{ workId: props.selectedWork.workId }} mode="edit" onClose={() => setEditing(false)} onSubmit={props.edit} />}
+    {editing && props.selectedWork && <ImageStudioRegionEditor source={{ workId: props.selectedWork.workId }} onClose={() => setEditing(false)} onSubmit={props.edit} />}
     {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} onClose={() => setLayersOpen(false)} />}
   </div>;
 }

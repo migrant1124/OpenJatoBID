@@ -6,7 +6,8 @@ const { imageSize } = require('image-size');
 const sharp = require('sharp');
 const { getGeneratedImagesDir } = require('../utils/paths.cjs');
 const { createImageStudioSources, assertPublicUrl } = require('./imageStudioSources.cjs');
-const { createPixelLayers, writeLayeredPsd } = require('./imageStudioPsd.cjs');
+const { createObjectLayer, createInpaintMask, applyInpaint, writeLayeredPsd } = require('./imageStudioPsd.cjs');
+const { segmentObject: runSam, maskPng } = require('./imageStudioSam.cjs');
 
 function createImageStudioService({ app, db, aiService, configStore, promptLibraryStore, dialogApi = dialog }) {
   const listeners = new Set();
@@ -114,7 +115,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     const references = Array.isArray(input.references) ? input.references : [];
     if (references.length > 4) throw new Error('最多选择 4 张参考图片。');
     const kind = input.kind === 'edit' ? 'edit' : references.length ? 'reference' : 'generate';
-    if (kind === 'edit' && (!references.length || !input.maskDataUrl)) throw new Error('局部修改需要原图和选区。');
+    const regions = kind === 'edit' ? (input.regions?.length ? input.regions : [{ prompt, maskDataUrl: input.maskDataUrl }]) : [];
+    if (kind === 'edit' && (!references.length || !regions.length)) throw new Error('局部修改需要原图和选区。');
     const imageInputs = references.map((reference) => {
       const filePath = selectedImage(reference);
       if (!filePath || !fs.existsSync(filePath)) throw new Error('参考图片已丢失，请重新选择。');
@@ -125,14 +127,18 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     if (imageInputs.reduce((total, image) => total + image.buffer.length, 0) > 50_000_000) {
       throw new Error('参考图片总量超过 50 MB，未发送模型请求。');
     }
-    let mask = null;
+    const masks = [];
     if (kind === 'edit') {
-      const encoded = String(input.maskDataUrl).match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
-      if (!encoded) throw new Error('选区不是有效 PNG。');
-      mask = Buffer.from(encoded[1], 'base64');
       const originalSize = imageSize(imageInputs[0].buffer);
-      const maskSize = imageSize(mask);
-      if (originalSize.width !== maskSize.width || originalSize.height !== maskSize.height) throw new Error('选区与原图尺寸不一致。');
+      for (const region of regions) {
+        if (!String(region.prompt || '').trim()) throw new Error('每个修改区域都需要文字要求。');
+        const encoded = String(region.maskDataUrl || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+        if (!encoded) throw new Error('选区不是有效 PNG。');
+        const mask = Buffer.from(encoded[1], 'base64');
+        const maskSize = imageSize(mask);
+        if (originalSize.width !== maskSize.width || originalSize.height !== maskSize.height) throw new Error('选区与原图尺寸不一致。');
+        masks.push(mask);
+      }
     }
     const availability = aiService.getImageModelAvailability();
     if (!availability.available) throw new Error(availability.message);
@@ -155,7 +161,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
       VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(taskId, prompt, config.provider || '', config.model_name || '', size, kind, count,
         JSON.stringify({ size, count, ratio: input.ratio || '', requestMode: 'normal',
-          maskSha256: mask ? crypto.createHash('sha256').update(mask).digest('hex') : null }),
+          regions: regions.map((region, index) => ({ prompt: region.prompt,
+            maskSha256: crypto.createHash('sha256').update(masks[index]).digest('hex') })) }),
         JSON.stringify(references.map(({ assetId, workId, role }) => ({ assetId, workId, role }))),
         input.parentWorkId || null, configFingerprint, at, at);
     emit(taskId);
@@ -166,22 +173,30 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
       let lastError = null;
       let uncertain = false;
       let requestImages = imageInputs;
-      if (mask) {
+      let selectedPixels = null;
+      if (masks.length) {
         try {
-          const pixels = await sharp(mask).ensureAlpha().raw().toBuffer();
+          const regionPixels = await Promise.all(masks.map((mask) => sharp(mask).ensureAlpha().raw().toBuffer()));
           const original = await sharp(imageInputs[0].buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
           let selected = false;
-          for (let i = 3; i < pixels.length; i += 4) {
-            if (pixels[i] !== 0) continue;
-            selected = true;
-            original.data[i - 3] = Math.round(original.data[i - 3] * .4 + 255 * .6);
-            original.data[i - 2] = Math.round(original.data[i - 2] * .4);
-            original.data[i - 1] = Math.round(original.data[i - 1] * .4 + 48 * .6);
+          selectedPixels = new Uint8Array(original.info.width * original.info.height);
+          const marked = regionPixels.map(() => Buffer.from(original.data));
+          for (let i = 0; i < selectedPixels.length; i += 1) {
+            const owner = regionPixels.findIndex((pixels) => pixels[i * 4 + 3] === 0);
+            if (owner < 0) continue;
+            if (regionPixels.slice(owner + 1).some((pixels) => pixels[i * 4 + 3] === 0)) throw new Error('修改区域重叠，请调整后再提交。');
+            selectedPixels[i] = 1; selected = true;
+            const p = i * 4;
+            marked[owner][p] = Math.round(original.data[p] * .4 + 255 * .6);
+            marked[owner][p + 1] = Math.round(original.data[p + 1] * .4);
+            marked[owner][p + 2] = Math.round(original.data[p + 2] * .4 + 48 * .6);
           }
           if (!selected) throw new Error('请先标记需要修改的区域。');
-          const annotated = await sharp(original.data, { raw: { width: original.info.width,
-            height: original.info.height, channels: 4 } }).png().toBuffer();
-          requestImages = [...imageInputs, { buffer: annotated, mimeType: 'image/png', role: '选区标记' }];
+          requestImages = [...imageInputs, ...await Promise.all(marked.map(async (pixels, index) => ({
+            buffer: await sharp(pixels, { raw: { width: original.info.width,
+              height: original.info.height, channels: 4 } }).png().toBuffer(),
+            mimeType: 'image/png', role: `修改区域 ${index + 1} 标记`,
+          })))];
         } catch (error) {
           setTask(taskId, 'failed', String(error.message || error));
           return;
@@ -192,7 +207,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
         let sent = false;
         try {
           const modelPrompt = requestImages.length
-            ? `${prompt}\n${requestImages.map((image, i) => `图 ${i + 1}：${image.role}参考。`).join('\n')}${kind === 'edit' ? '\n图 1 是原图，最后一张图的红色区域是唯一允许修改的选区。输出不包含红色标记，保持其余区域不变。' : ''}`
+            ? `${prompt}\n${requestImages.map((image, i) => `图 ${i + 1}：${image.role}参考。`).join('\n')}${kind === 'edit' ? `\n图 1 是原图。${regions.map((region, i) => `图 ${imageInputs.length + i + 1} 的红色标记是修改区域 ${i + 1}，要求：${region.prompt}。`).join('')}只修改各图标记的对应区域，输出不包含颜色标记，保持其余区域不变。` : ''}`
             : prompt;
           const result = await aiService.withQueueScope(`image-studio:${taskId}`).generateImage({
             prompt: modelPrompt, size, images: requestImages, title: '生图模式', preservePrompt: true,
@@ -212,9 +227,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
             if (generated.info.width !== original.info.width || generated.info.height !== original.info.height) {
               throw new Error('编辑结果与原图尺寸不同，结果已保留但未写入作品。');
             }
-            const maskPixels = await sharp(mask).ensureAlpha().raw().toBuffer();
             for (let i = 0; i < original.data.length; i += 4) {
-              if (maskPixels[i + 3] > 0) generated.data.set(original.data.subarray(i, i + 4), i);
+              if (!selectedPixels[i / 4]) generated.data.set(original.data.subarray(i, i + 4), i);
             }
             const editedName = `studio-edit-${crypto.randomUUID()}.png`;
             const outputDirectory = getGeneratedImagesDir(app);
@@ -233,6 +247,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
               kind === 'edit' ? 'image/png' : result.mime_type || 'image/png', dimensions.width, dimensions.height,
               crypto.createHash('sha256').update(file).digest('hex'),
               JSON.stringify({ size, ratio: input.ratio || '', index, kind,
+                regions: regions.map((region) => ({ prompt: region.prompt })),
                 references: references.map(({ assetId, workId, role }) => ({ assetId, workId, role })) }), new Date().toISOString());
           db.prepare('UPDATE image_studio_works SET kind = ?, source_asset_id = ? WHERE task_id = ? AND file_path = ?')
             .run(kind, references[0]?.assetId || null, taskId, outputPath);
@@ -330,6 +345,14 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     return null;
   }
 
+  async function segmentObject(input = {}) {
+    const filePath = selectedImage(input);
+    if (!filePath || !fs.existsSync(filePath)) throw new Error('请选择存在的图片。');
+    const mask = await runSam(filePath, input.point, path.join(app.getPath('userData'), 'sam-cache'));
+    const png = await maskPng(mask);
+    return { maskDataUrl: `data:image/png;base64,${png.toString('base64')}` };
+  }
+
   async function readManagedImage(input = {}) {
     const filePath = input.layerId ? db.prepare('SELECT file_path FROM image_studio_psd_layers WHERE layer_id = ?').get(input.layerId)?.file_path
       : selectedImage(input);
@@ -344,7 +367,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     const sourceId = input.assetId || input.workId;
     const sessions = db.prepare(`SELECT set_id AS setId, source_kind AS sourceKind, source_id AS sourceId,
       width, height, status, created_at AS createdAt, last_export_at AS lastExportAt,
-      subject_layer_id AS subjectLayerId
+      subject_layer_id AS subjectLayerId, background_layer_id AS backgroundLayerId
       FROM image_studio_psd_sessions WHERE source_kind = ? AND source_id = ? ORDER BY created_at DESC`).all(sourceKind, sourceId);
     const getLayers = db.prepare(`SELECT layer_id AS layerId, name, asset_url AS assetUrl,
       sort_order AS sortOrder, visible FROM image_studio_psd_layers WHERE set_id = ? ORDER BY sort_order`);
@@ -359,26 +382,64 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     const image = await sharp(filePath).rotate().resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84 }).toBuffer();
     const proposal = await aiService.chat({ configSnapshot: configStore.load(), noRetry: true,
       sensitiveImage: true, logTitle: '生图模式-PSD候选', messages: [
-        { role: 'system', content: '识别图片最适合作为前景的单个主体。只返回 JSON：{"name":"简短中文名称","box":[x,y,w,h]}。box 是原图归一化坐标，值 0 到 1，尽量包围整个主体但不要包括大片背景。不要返回 markdown。' },
-        { role: 'user', content: [{ type: 'text', text: '请给出可分层主体候选。' },
+        { role: 'system', content: '列出图中可独立成层的多个具体物体，不要把整图或大块背景当物体。只返回 JSON：{"objects":[{"name":"简短中文名称","box":[x,y,w,h]}]}。box 为原图归一化坐标，值 0 到 1。不要返回 markdown。' },
+        { role: 'user', content: [{ type: 'text', text: '请列出不同物体的分层候选，尽量覆盖可辨识的物体。' },
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}` } }] },
       ] });
-    let candidate;
-    try { candidate = JSON.parse(String(proposal).replace(/^```(?:json)?\s*|\s*```$/g, '')); }
+    let parsed;
+    try { parsed = JSON.parse(String(proposal).replace(/^```(?:json)?\s*|\s*```$/g, '')); }
     catch { throw new Error('视觉模型未返回可解析的分层候选。'); }
-    const box = candidate.box;
-    if (!Array.isArray(box) || box.length !== 4 || box.some((value) => !Number.isFinite(value) || value < 0 || value > 1) ||
-      box[2] <= 0 || box[3] <= 0 || box[0] + box[2] > 1.001 || box[1] + box[3] > 1.001) {
-      throw new Error('视觉模型返回的主体区域无效。');
+    const candidates = parsed.objects;
+    if (!Array.isArray(candidates) || candidates.length < 2) throw new Error('图片中未找到至少两个独立物体，不能生成多对象 PSD。');
+    const dimensions = await sharp(filePath).rotate().metadata();
+    const cacheDirectory = path.join(app.getPath('userData'), 'sam-cache');
+    const objects = [];
+    for (const candidate of candidates) {
+      const box = candidate.box;
+      if (!Array.isArray(box) || box.length !== 4 || box.some((value) => !Number.isFinite(value) || value < 0 || value > 1) ||
+        box[2] <= 0 || box[3] <= 0 || box[0] + box[2] > 1.001 || box[1] + box[3] > 1.001) continue;
+      let mask;
+      try { mask = await runSam(filePath, { x: (box[0] + box[2] / 2) * dimensions.width,
+        y: (box[1] + box[3] / 2) * dimensions.height }, cacheDirectory); }
+      catch { continue; }
+      const duplicate = objects.some((object) => {
+        let intersection = 0; let union = 0;
+        for (let index = 0; index < mask.pixels.length; index += 1) {
+          if (mask.pixels[index] && object.mask.pixels[index]) intersection += 1;
+          if (mask.pixels[index] || object.mask.pixels[index]) union += 1;
+        }
+        return intersection / union > .45;
+      });
+      if (!duplicate) objects.push({ name: String(candidate.name || `对象 ${objects.length + 1}`).slice(0, 40), mask });
     }
-    const files = await createPixelLayers(filePath, box, String(candidate.name || '主体').slice(0, 40), getGeneratedImagesDir(app));
+    if (objects.length < 2) throw new Error('SAM 未分出至少两个不同物体，未创建假图层。');
+    const directory = getGeneratedImagesDir(app);
+    const objectFiles = await Promise.all(objects.map((object) => createObjectLayer(filePath, object.mask, directory)));
+    const configSnapshot = configStore.load();
+    const imageConfig = { ...configSnapshot.image_model, model_name: 'gpt-image-2.5-sunburst',
+      request_mode: 'normal' };
+    let background = await sharp(filePath).rotate().png().toBuffer();
+    for (const object of objects) {
+      const generated = await aiService.withQueueScope(`image-studio:psd:${sourceId}`).generateImage({
+        prompt: `只移除图中的${object.name}，根据周围图像补全它遮挡的背景、纹理与光影。不要添加新物体，保持其余画面不变。`,
+        size: `${dimensions.width}x${dimensions.height}`,
+        images: [{ buffer: background, mimeType: 'image/png' }],
+        mask: await createInpaintMask([object.mask]), title: '生图模式-PSD背景补全', preservePrompt: true, noRetry: true,
+        configSnapshot: { ...configSnapshot, image_model: imageConfig },
+      });
+      background = await applyInpaint(background, generated.file_path, object.mask);
+    }
+    const backgroundPath = path.join(directory, `background-${crypto.randomUUID()}.png`);
+    fs.writeFileSync(backgroundPath, background);
+    const files = [{ name: '背景底板', filePath: backgroundPath },
+      ...objects.map((object, index) => ({ name: object.name, filePath: objectFiles[index].filePath }))];
     const setId = crypto.randomUUID();
     const now = new Date().toISOString();
     db.exec('BEGIN');
     try {
       db.prepare(`INSERT INTO image_studio_psd_sessions
         (set_id, source_kind, source_id, source_path, width, height, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'ready', ?, ?)`).run(setId, sourceKind, sourceId, filePath, files[0].width, files[0].height, now, now);
+        VALUES (?, ?, ?, ?, ?, ?, 'ready', ?, ?)`).run(setId, sourceKind, sourceId, filePath, dimensions.width, dimensions.height, now, now);
       const insert = db.prepare(`INSERT INTO image_studio_psd_layers
         (layer_id, set_id, name, file_path, asset_url, sort_order, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)`);
       files.forEach((layer, index) => {
@@ -386,6 +447,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
         insert.run(layerId, setId, layer.name, layer.filePath,
         `yibiao-asset://generated-images/${path.basename(layer.filePath)}`, index,
         crypto.createHash('sha256').update(fs.readFileSync(layer.filePath)).digest('hex'));
+        if (index === 0) db.prepare('UPDATE image_studio_psd_sessions SET background_layer_id = ? WHERE set_id = ?').run(layerId, setId);
         if (index === 1) db.prepare('UPDATE image_studio_psd_sessions SET subject_layer_id = ? WHERE set_id = ?').run(layerId, setId);
       });
       db.exec('COMMIT');
@@ -396,11 +458,32 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   function updateLayer(input = {}) {
     const layer = db.prepare('SELECT * FROM image_studio_psd_layers WHERE layer_id = ? AND set_id = ?').get(input.layerId, input.setId);
     if (!layer) throw new Error('图层不存在。');
+    const session = db.prepare('SELECT source_kind, source_id, background_layer_id FROM image_studio_psd_sessions WHERE set_id = ?').get(input.setId);
+    if (Number.isInteger(input.sortOrder) && input.sortOrder !== layer.sort_order &&
+      (layer.layer_id === session.background_layer_id || input.sortOrder === 0)) throw new Error('背景底板必须保持在最底层。');
+    if (Number.isInteger(input.sortOrder) && input.sortOrder !== layer.sort_order) {
+      db.prepare('UPDATE image_studio_psd_layers SET sort_order = ? WHERE set_id = ? AND sort_order = ?')
+        .run(layer.sort_order, input.setId, input.sortOrder);
+    }
     db.prepare(`UPDATE image_studio_psd_layers SET name = ?, visible = ?, sort_order = ? WHERE layer_id = ?`)
       .run(String(input.name ?? layer.name).slice(0, 80), input.visible === undefined ? layer.visible : Number(Boolean(input.visible)),
         Number.isInteger(input.sortOrder) ? input.sortOrder : layer.sort_order, layer.layer_id);
-    const session = db.prepare('SELECT source_kind, source_id FROM image_studio_psd_sessions WHERE set_id = ?').get(input.setId);
-    return listLayerSets(session.source_kind === 'asset' ? { assetId: session.source_id } : { workId: session.source_id })[0];
+    return listLayerSets(session.source_kind === 'asset' ? { assetId: session.source_id } : { workId: session.source_id })
+      .find((item) => item.setId === input.setId);
+  }
+
+  function deleteLayer(input = {}) {
+    const layers = db.prepare('SELECT layer_id, sort_order FROM image_studio_psd_layers WHERE set_id = ? ORDER BY sort_order').all(input.setId);
+    const selected = layers.find((layer) => layer.layer_id === input.layerId);
+    const session = db.prepare('SELECT source_kind, source_id, background_layer_id FROM image_studio_psd_sessions WHERE set_id = ?').get(input.setId);
+    if (!selected || selected.layer_id === session.background_layer_id) throw new Error('背景底板不可删除。');
+    db.prepare('DELETE FROM image_studio_psd_layers WHERE layer_id = ?').run(input.layerId);
+    const remaining = layers.filter((layer) => layer.layer_id !== input.layerId);
+    remaining.forEach((layer, index) => db.prepare('UPDATE image_studio_psd_layers SET sort_order = ? WHERE layer_id = ?').run(index, layer.layer_id));
+    db.prepare('UPDATE image_studio_psd_sessions SET subject_layer_id = ?, updated_at = ? WHERE set_id = ?')
+      .run(remaining[1]?.layer_id || null, new Date().toISOString(), input.setId);
+    return listLayerSets(session.source_kind === 'asset' ? { assetId: session.source_id } : { workId: session.source_id })
+      .find((item) => item.setId === input.setId);
   }
 
   async function refineLayerSet(input = {}) {
@@ -409,21 +492,24 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     const encoded = String(input.maskDataUrl || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
     if (!encoded) throw new Error('细修遮罩不是 PNG。');
     const rows = db.prepare('SELECT * FROM image_studio_psd_layers WHERE set_id = ? ORDER BY sort_order').all(input.setId);
-    const subject = rows.find((row) => row.layer_id === session.subject_layer_id);
+    const subject = rows.find((row) => row.layer_id === (input.layerId || session.subject_layer_id));
     if (!subject) throw new Error('主体图层已丢失。');
-    const files = await createPixelLayers(session.source_path, null, subject.name, getGeneratedImagesDir(app), Buffer.from(encoded[1], 'base64'));
+    if (subject.layer_id === session.background_layer_id) throw new Error('背景底板不能按对象轮廓细修。');
+    const image = await sharp(Buffer.from(encoded[1], 'base64')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    if (image.info.width !== session.width || image.info.height !== session.height) throw new Error('细修遮罩尺寸不一致。');
+    const mask = { width: session.width, height: session.height,
+      pixels: Uint8Array.from({ length: session.width * session.height }, (_, index) => image.data[index * 4 + 3]) };
+    const file = await createObjectLayer(session.source_path, mask, getGeneratedImagesDir(app));
     db.exec('BEGIN');
     try {
-      rows.forEach((row) => {
-        const file = files[row.layer_id === session.subject_layer_id ? 1 : 0];
-        db.prepare('UPDATE image_studio_psd_layers SET file_path = ?, asset_url = ?, sha256 = ? WHERE layer_id = ?')
-          .run(file.filePath, `yibiao-asset://generated-images/${path.basename(file.filePath)}`,
-            crypto.createHash('sha256').update(fs.readFileSync(file.filePath)).digest('hex'), row.layer_id);
-      });
+      db.prepare('UPDATE image_studio_psd_layers SET file_path = ?, asset_url = ?, sha256 = ? WHERE layer_id = ?')
+        .run(file.filePath, `yibiao-asset://generated-images/${path.basename(file.filePath)}`,
+          crypto.createHash('sha256').update(fs.readFileSync(file.filePath)).digest('hex'), subject.layer_id);
       db.prepare('UPDATE image_studio_psd_sessions SET updated_at = ? WHERE set_id = ?').run(new Date().toISOString(), input.setId);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
-    return listLayerSets(session.source_kind === 'asset' ? { assetId: session.source_id } : { workId: session.source_id })[0];
+    return listLayerSets(session.source_kind === 'asset' ? { assetId: session.source_id } : { workId: session.source_id })
+      .find((item) => item.setId === input.setId);
   }
 
   async function exportLayeredPsd(input = {}) {
@@ -431,6 +517,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     if (!session) throw new Error('分层会话不存在。');
     const layers = db.prepare('SELECT name, file_path AS filePath, visible FROM image_studio_psd_layers WHERE set_id = ? ORDER BY sort_order')
       .all(input.setId).map((layer) => ({ ...layer, visible: Boolean(layer.visible) }));
+    if (layers.length < 3) throw new Error('至少需要背景和两个真实对象图层才能导出。');
     const selection = await dialogApi.showSaveDialog({ title: '导出分层 PSD', defaultPath: `分层作品-${input.setId.slice(0, 8)}.psd`,
       filters: [{ name: 'Photoshop PSD', extensions: ['psd'] }] });
     if (selection.canceled || !selection.filePath) return { canceled: true };
@@ -629,7 +716,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     getState, saveDraft, start, cancelTask, setFavorite, deleteWork, exportImage,
     importAsset, readManagedImage, invertImage, optimizePrompt, listMyPrompts, saveMyPrompt,
     listStyles, saveStyle, deleteStyle, loadCover, toggleReferenceFavorite,
-    listLayerSets, createLayerSet, updateLayer, refineLayerSet, exportLayeredPsd, ...sources,
+    listLayerSets, createLayerSet, updateLayer, deleteLayer, refineLayerSet, exportLayeredPsd, segmentObject, ...sources,
     onEvent(listener) { listeners.add(listener); return () => listeners.delete(listener); },
   };
 }

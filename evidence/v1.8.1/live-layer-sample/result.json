@@ -1,0 +1,58 @@
+{
+  "success": true,
+  "model": "gpt-image-2.5-sunburst",
+  "width": 1536,
+  "height": 1024,
+  "layers": [
+    {
+      "name": "背景底板",
+      "assetUrl": "yibiao-asset://generated-images/2026-09-27T07-21-56-214Z-1dfd1527-a710-406b-9bc0-9d631c8bc4d2.png"
+    },
+    {
+      "name": "橘猫",
+      "assetUrl": "yibiao-asset://generated-images/object-5ffdfccd-46bf-4b09-b8fe-9cd88c0587c5.png"
+    },
+    {
+      "name": "盆栽植物",
+      "assetUrl": "yibiao-asset://generated-images/object-e3029e52-619f-4711-b98d-d0200a082542.png"
+    },
+    {
+      "name": "编织花盆",
+      "assetUrl": "yibiao-asset://generated-images/object-0258a4b8-eef5-43d4-805a-90ab8fda406e.png"
+    },
+    {
+      "name": "蓝色沙发",
+      "assetUrl": "yibiao-asset://generated-images/object-285814ac-0307-47d9-9694-c2c1fe1302c6.png"
+    },
+    {
+      "name": "红色靠垫",
+      "assetUrl": "yibiao-asset://generated-images/object-c57336e6-4529-45fa-a68b-7f3b7430bc42.png"
+    },
+    {
+      "name": "木质茶几",
+      "assetUrl": "yibiao-asset://generated-images/object-267cc242-de02-4939-9a1f-00ef7bef1e5a.png"
+    },
+    {
+      "name": "白色马克杯",
+      "assetUrl": "yibiao-asset://generated-images/object-7e5906a7-1d49-470b-993a-4fa2ef7fc9e2.png"
+    },
+    {
+      "name": "沙发毯",
+      "assetUrl": "yibiao-asset://generated-images/object-c09fdae7-50f0-4d9e-9144-8469d209b94a.png"
+    },
+    {
+      "name": "书架",
+      "assetUrl": "yibiao-asset://generated-images/object-0a7643a5-bcbf-4d7a-a3a6-a15070ca090a.png"
+    },
+    {
+      "name": "书籍",
+      "assetUrl": "yibiao-asset://generated-images/object-5c3aabc0-21f6-4081-a1d5-8aedea35ac95.png"
+    },
+    {
+      "name": "墙上装饰画",
+      "assetUrl": "yibiao-asset://generated-images/object-951becb1-a332-4621-9b7a-43d98b83ad5b.png"
+    }
+  ],
+  "psd": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.1\\live-layer-sample\\layered-sample.psd",
+  "psdBytes": 61070668
+}

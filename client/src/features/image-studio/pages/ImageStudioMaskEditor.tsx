@@ -18,6 +18,8 @@ export function ImageStudioMaskEditor({ source, initialLayerId, mode, onClose, o
   const [busy, setBusy] = useState(false);
   const [taskId, setTaskId] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const strokes = useRef<Stroke[]>([]);
   const cursor = useRef(0);
   const current = useRef<Stroke | null>(null);
@@ -124,16 +126,27 @@ export function ImageStudioMaskEditor({ source, initialLayerId, mode, onClose, o
       <button type="button" title="撤销" aria-label="撤销" disabled={!cursor.current} onClick={() => { cursor.current -= 1; redraw(); }}><Undo2 size={17} /></button>
       <button type="button" title="重做" aria-label="重做" disabled={cursor.current >= strokes.current.length} onClick={() => { cursor.current += 1; redraw(); }}><Redo2 size={17} /></button>
       <button type="button" title="清空笔画" onClick={() => { strokes.current = []; cursor.current = 0; redraw(); }}><RotateCcw size={17} /> 清空</button>
-      <label>缩放 <input type="range" min="1" max="3" step="0.25" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
+      <label>缩放 <input type="range" min="1" max="8" step="0.25" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
+      <button type="button" onClick={() => { setZoom(1); if (stageRef.current) stageRef.current.scrollTo(0, 0); }}>适应窗口</button>
+      <button type="button" onClick={() => { if (image && stageRef.current) setZoom(Math.max(1, image.width / stageRef.current.clientWidth)); }}>原始尺寸</button>
     </div>
-    <div className="image-studio-mask-stage"><div className="image-studio-mask-frame" style={{ width: `${zoom * 100}%`, aspectRatio: image ? `${image.width}/${image.height}` : '4/3' }}>
+    <div ref={stageRef} className="image-studio-mask-stage" onWheel={(event) => { if ((event.target as HTMLElement).closest('.image-studio-mask-frame')) {
+      event.preventDefault(); const stage = stageRef.current!; const next = Math.min(8, Math.max(1, zoom * (event.deltaY < 0 ? 1.25 : .8)));
+      const factor = next / zoom; const x = event.clientX - stage.getBoundingClientRect().left; const y = event.clientY - stage.getBoundingClientRect().top;
+      const left = (stage.scrollLeft + x) * factor - x; const top = (stage.scrollTop + y) * factor - y;
+      setZoom(next); requestAnimationFrame(() => stage.scrollTo(left, top));
+    } }} onPointerDownCapture={(event) => { if (event.button !== 1) return; const stage = stageRef.current!;
+      pan.current = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop }; stage.setPointerCapture(event.pointerId); event.preventDefault();
+    }} onPointerMove={(event) => { if (!pan.current || !stageRef.current) return;
+      stageRef.current.scrollTo(pan.current.left + pan.current.x - event.clientX, pan.current.top + pan.current.y - event.clientY);
+    }} onPointerUp={() => { pan.current = null; }} onPointerCancel={() => { pan.current = null; }}><div className="image-studio-mask-frame" style={{ width: `${zoom * 100}%`, aspectRatio: image ? `${image.width}/${image.height}` : '4/3' }}>
       {image && <img src={image.dataUrl} alt="待处理原图" />}
       <canvas ref={canvasRef} style={{ opacity: .45 }} aria-label="图片选区画布"
-        onPointerDown={(event) => { current.current = { points: [point(event)], erase, radius }; event.currentTarget.setPointerCapture(event.pointerId); redraw(); }}
+        onPointerDown={(event) => { if (event.button === 1) return; current.current = { points: [point(event)], erase, radius }; event.currentTarget.setPointerCapture(event.pointerId); redraw(); }}
         onPointerMove={(event) => { if (!current.current) return; current.current.points.push(point(event)); redraw(); }}
         onPointerUp={() => { if (!current.current) return; strokes.current = strokes.current.slice(0, cursor.current); strokes.current.push(current.current); cursor.current += 1; current.current = null; redraw(); }} />
     </div></div>
-    <p className="image-studio-muted">{mode === 'edit' ? '红色区域允许修改，选区之外的原图像素会在结果中保留。' : '红色区域属于主体；隐藏主体后未补全的背景可能露出透明区域。'}</p>
+    <p className="image-studio-muted">{mode === 'edit' ? '红色区域允许修改，选区之外的原图像素会在结果中保留。' : '红色区域属于当前对象图层；保存后请在合成预览中检查边缘。'}</p>
     <footer><button type="button" onClick={onClose}>取消</button><button type="button" className="image-studio-primary" disabled={busy || Boolean(taskId) || !image} onClick={() => void submit()}>{busy || taskId ? '处理中' : mode === 'edit' ? '提交局部修改' : '保存细修'}</button></footer>
     <span hidden>{revision}</span>
   </section></div>;

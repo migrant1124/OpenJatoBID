@@ -4,30 +4,46 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const sharp = require('sharp');
-const { createPixelLayers, writeLayeredPsd } = require('./imageStudioPsd.cjs');
+const { readPsd } = require('ag-psd');
+const { createObjectLayer, createInpaintMask, applyInpaint, writeLayeredPsd } = require('./imageStudioPsd.cjs');
 
-test('真实产品照沿主体轮廓分层，合成逐像素等于原图并导出 PSD', async () => {
-  const input = path.join(__dirname, '../../../evidence/v1.8.0-r3/live-image-normal-current-model.png');
-  const output = process.env.R4_SAMPLE_OUTPUT || fs.mkdtempSync(path.join(os.tmpdir(), 'image-studio-segment-'));
-  fs.mkdirSync(output, { recursive: true });
+test('两个独立遮罩生成透明对象层、补洞遮罩和三层 PSD', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'image-studio-layers-'));
   try {
-    const layers = await createPixelLayers(input, [.1, .1, .8, .8], '白色陶瓷杯', output);
-    const subject = await sharp(layers[1].filePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const extents = new Set();
-    for (let y = 0; y < subject.info.height; y += 24) {
-      let count = 0;
-      for (let x = 0; x < subject.info.width; x += 1) if (subject.data[(y * subject.info.width + x) * 4 + 3]) count += 1;
-      if (count) extents.add(count);
+    const source = path.join(directory, 'source.png');
+    const background = path.join(directory, 'background.png');
+    const output = path.join(directory, 'result.psd');
+    const width = 16; const height = 12;
+    await sharp({ create: { width, height, channels: 4, background: '#ff5500' } }).png().toFile(source);
+    await sharp({ create: { width, height, channels: 4, background: '#669944' } }).png().toFile(background);
+    const masks = [2, 9].map((left) => ({ width, height, pixels: Uint8Array.from({ length: width * height }, (_, index) => {
+      const x = index % width; const y = Math.floor(index / width);
+      return x >= left && x < left + 4 && y >= 3 && y < 9 ? 255 : 0;
+    }) }));
+    const objects = await Promise.all(masks.map((mask) => createObjectLayer(source, mask, directory)));
+    const first = await sharp(objects[0].filePath).ensureAlpha().raw().toBuffer();
+    const second = await sharp(objects[1].filePath).ensureAlpha().raw().toBuffer();
+    assert.equal(first[(4 * width + 3) * 4 + 3], 255);
+    assert.equal(first[(4 * width + 10) * 4 + 3], 0);
+    assert.equal(second[(4 * width + 10) * 4 + 3], 255);
+    const inpaint = await sharp(await createInpaintMask(masks)).ensureAlpha().raw().toBuffer();
+    assert.equal(inpaint[(4 * width + 3) * 4 + 3], 0);
+    assert.equal(inpaint[(4 * width + 10) * 4 + 3], 0);
+    assert.equal(inpaint[3], 255);
+    await assert.rejects(applyInpaint(source, background, masks[0]), /偏离原图/);
+    await assert.rejects(applyInpaint(source, source, masks[0]), /未改变/);
+    const proposed = await sharp(source).ensureAlpha().raw().toBuffer();
+    for (let index = 0; index < masks[0].pixels.length; index += 1) if (masks[0].pixels[index]) {
+      proposed.set([102, 153, 68], index * 4);
     }
-    assert.ok(extents.size > 10, '主体应有随行变化的轮廓，不是矩形切片');
-    const original = await sharp(input).rotate().ensureAlpha().raw().toBuffer();
-    const background = await sharp(layers[0].filePath).ensureAlpha().raw().toBuffer();
-    for (let i = 0; i < original.length; i += 4) {
-      const source = subject.data[i + 3] ? subject.data : background;
-      assert.deepEqual(source.subarray(i, i + 4), original.subarray(i, i + 4));
-    }
-    const psd = await writeLayeredPsd({ layers, outputPath: path.join(output, 'product-cup-layered.psd') });
-    assert.equal(psd.layerCount, 2);
-    assert.ok(psd.bytes > 100_000);
-  } finally { if (!process.env.R4_SAMPLE_OUTPUT) fs.rmSync(output, { recursive: true, force: true }); }
+    await sharp(proposed, { raw: { width, height, channels: 4 } }).png().toFile(background);
+    fs.writeFileSync(background, await applyInpaint(source, background, masks[0]));
+    const filled = await sharp(background).ensureAlpha().raw().toBuffer();
+    assert.deepEqual([...filled.subarray(0, 4)], [255, 85, 0, 255]);
+    assert.deepEqual([...filled.subarray((4 * width + 3) * 4, (4 * width + 3) * 4 + 4)], [102, 153, 68, 255]);
+    const result = await writeLayeredPsd({ layers: [{ name: '背景底板', filePath: background },
+      ...objects.map((object, index) => ({ name: `对象 ${index + 1}`, filePath: object.filePath }))], outputPath: output });
+    assert.equal(result.layerCount, 3);
+    assert.equal(readPsd(fs.readFileSync(output), { useImageData: true }).children.length, 3);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

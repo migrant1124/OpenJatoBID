@@ -786,6 +786,7 @@ export interface ImageStudioLayerSet {
   createdAt: string;
   lastExportAt: string | null;
   subjectLayerId: string;
+  backgroundLayerId: string | null;
   layers: Array<{ layerId: string; name: string; assetUrl: string; sortOrder: number; visible: boolean }>;
 }
 
@@ -902,7 +903,8 @@ export interface YibiaoBridge {
   imageStudio: {
     getState: () => Promise<ImageStudioState>;
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
-    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; maskDataUrl?: string; parentWorkId?: string }) => Promise<{ taskId: string }>;
+    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ prompt: string; maskDataUrl: string }>; parentWorkId?: string }) => Promise<{ taskId: string }>;
+    segmentObject: (input: { assetId?: string; workId?: string; point: { x: number; y: number } }) => Promise<{ maskDataUrl: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;
     deleteWork: (input: { workId: string }) => Promise<ImageStudioWork[]>;
@@ -929,7 +931,8 @@ export interface YibiaoBridge {
     listLayerSets: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet[]>;
     createLayerSet: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet>;
     updateLayer: (input: { setId: string; layerId: string; name?: string; visible?: boolean; sortOrder?: number }) => Promise<ImageStudioLayerSet>;
-    refineLayerSet: (input: { setId: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;
+    deleteLayer: (input: { setId: string; layerId: string }) => Promise<ImageStudioLayerSet>;
+    refineLayerSet: (input: { setId: string; layerId?: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;
     exportLayeredPsd: (input: { setId: string }) => Promise<{ canceled: boolean; filePath?: string; layerCount?: number }>;
     onEvent: (callback: (event: { taskId: string; works: ImageStudioWork[]; tasks: ImageStudioTask[]; sourcesChecked?: boolean; updatedSourceIds?: string[] }) => void) => () => void;
   };

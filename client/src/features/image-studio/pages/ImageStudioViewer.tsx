@@ -40,9 +40,21 @@ export function ImageStudioViewer({ images, initialIndex = 0, onClose }: {
       <button type="button" title="缩小" aria-label="缩小" onClick={() => setScale((value) => Math.max(.25, value / 1.25))}><Minus size={18} /></button>
       <button type="button" title="放大" aria-label="放大" onClick={() => setScale((value) => Math.min(8, value * 1.25))}><Plus size={18} /></button>
       <button type="button" title="100%" aria-label="100%" onClick={actualSize}><Maximize2 size={18} /></button>
+      <button type="button" title="适应窗口" aria-label="适应窗口" onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }); }}>适应窗口</button>
       <button type="button" title="关闭预览" aria-label="关闭预览" onClick={onClose}><X size={20} /></button>
     </div>
-    <div className="image-studio-viewer-stage" onPointerMove={(event) => {
+    <div className="image-studio-viewer-stage" onWheel={(event) => {
+      if (!imageRef.current || !event.target || !(event.target as HTMLElement).closest('img')) return;
+      event.preventDefault();
+      const rect = imageRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const next = Math.min(8, Math.max(.25, scale * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+      const factor = next / scale;
+      setOffset((old) => ({ x: old.x + (centerX - event.clientX) * (factor - 1),
+        y: old.y + (centerY - event.clientY) * (factor - 1) }));
+      setScale(next);
+    }} onPointerMove={(event) => {
       if (!drag.current) return;
       setOffset({ x: drag.current.originX + event.clientX - drag.current.x,
         y: drag.current.originY + event.clientY - drag.current.y });

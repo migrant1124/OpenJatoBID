@@ -4,6 +4,7 @@
 # 用户配置文件
 user_config.json
 config.json
+!client/vendor/slimsam-77-uniform/config.json
 *.private.md
 
 # 上传文件目录

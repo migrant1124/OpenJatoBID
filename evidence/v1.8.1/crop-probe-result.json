@@ -1,0 +1,12 @@
+{
+  "model": "gpt-image-2.5-sunburst",
+  "crop": {
+    "left": 0,
+    "top": 0,
+    "width": 1024,
+    "height": 1024
+  },
+  "outsideDifference": 56.9424776926757,
+  "generated": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.1\\gpt-image-2.5-sunburst-crop.png",
+  "composite": "D:\\Documents\\OpenJatobid\\evidence\\v1.8.1\\gpt-image-2.5-sunburst-crop-composite.png"
+}

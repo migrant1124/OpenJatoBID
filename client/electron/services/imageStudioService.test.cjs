@@ -143,9 +143,11 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
   const generated = path.join(directory, 'generated.png');
   await sharp({ create: { width: 8, height: 6, channels: 4, background: '#ff0000' } }).png().toFile(source);
   await sharp({ create: { width: 8, height: 6, channels: 4, background: '#0000ff' } }).png().toFile(generated);
-  const maskPixels = Buffer.alloc(8 * 6 * 4, 255);
-  maskPixels[(3 * 8 + 4) * 4 + 3] = 0;
-  const mask = await sharp(maskPixels, { raw: { width: 8, height: 6, channels: 4 } }).png().toBuffer();
+  const masks = await Promise.all([4, 5, 6].map(async (x) => {
+    const pixels = Buffer.alloc(8 * 6 * 4, 255);
+    pixels[(3 * 8 + x) * 4 + 3] = 0;
+    return sharp(pixels, { raw: { width: 8, height: 6, channels: 4 } }).png().toBuffer();
+  }));
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO image_studio_assets (asset_id, file_path, asset_url, mime_type, width, height, sha256, created_at)
     VALUES ('asset', ?, 'yibiao-asset://generated-images/source.png', 'image/png', 8, 6, 'hash', ?)`).run(source, now);
@@ -164,18 +166,26 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
       }
     });
   });
-  service.start({ prompt: '改蓝', kind: 'edit', size: '8x6', references: [{ assetId: 'asset', role: '主体' }],
-    maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` });
+  service.start({ prompt: '分区修改', kind: 'edit', size: '8x6', references: [{ assetId: 'asset', role: '主体' }],
+    regions: masks.map((mask, index) => ({ prompt: ['改蓝', '改绿', '改黄'][index],
+      maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` })) });
   const task = await terminal;
   assert.equal(task.status, 'completed', task.error);
   assert.equal(request.mask, undefined);
-  assert.equal(request.images.length, 2);
-  assert.match(request.prompt, /红色区域/);
+  assert.equal(request.images.length, 4);
+  assert.match(request.prompt, /图 2 的红色标记是修改区域 1，要求：改蓝/);
+  assert.match(request.prompt, /图 4 的红色标记是修改区域 3，要求：改黄/);
+  const marked = await Promise.all(request.images.slice(1).map((image) => sharp(image.buffer).raw().toBuffer()));
+  assert.equal(marked[0][(3 * 8 + 4) * 4 + 2], 29);
+  assert.equal(marked[0][(3 * 8 + 5) * 4 + 2], 0);
+  assert.equal(marked[1][(3 * 8 + 5) * 4 + 2], 29);
+  assert.equal(marked[2][(3 * 8 + 6) * 4 + 2], 29);
   assert.equal(request.size, '8x6');
   const workPath = db.prepare('SELECT file_path AS filePath FROM image_studio_works').get().filePath;
   const pixels = await sharp(workPath).ensureAlpha().raw().toBuffer();
   assert.deepEqual([...pixels.subarray(0, 4)], [255, 0, 0, 255]);
   assert.deepEqual([...pixels.subarray((3 * 8 + 4) * 4, (3 * 8 + 4) * 4 + 4)], [0, 0, 255, 255]);
+  assert.deepEqual([...pixels.subarray((3 * 8 + 6) * 4, (3 * 8 + 6) * 4 + 4)], [0, 0, 255, 255]);
   db.close(); fs.rmSync(directory, { recursive: true, force: true });
 });
 
@@ -186,25 +196,30 @@ test('图层换序后细修仍只写入稳定主体图层', async () => {
   const db = new DatabaseSync(':memory:');
   createImageStudioSchema(db); extendImageStudioSchema(db);
   db.prepare(`INSERT INTO image_studio_psd_sessions
-    (set_id, source_kind, source_id, source_path, width, height, status, created_at, updated_at, subject_layer_id)
-    VALUES ('set', 'asset', 'asset', ?, 8, 6, 'ready', '2026-09-01', '2026-09-01', 'subject')`).run(source);
+    (set_id, source_kind, source_id, source_path, width, height, status, created_at, updated_at, subject_layer_id, background_layer_id)
+    VALUES ('set', 'asset', 'asset', ?, 8, 6, 'ready', '2026-09-01', '2026-09-01', 'subject', 'background')`).run(source);
+  db.prepare(`INSERT INTO image_studio_psd_sessions
+    (set_id, source_kind, source_id, source_path, width, height, status, created_at, updated_at)
+    VALUES ('newer', 'asset', 'asset', ?, 8, 6, 'ready', '2026-09-02', '2026-09-02')`).run(source);
   const insert = db.prepare(`INSERT INTO image_studio_psd_layers
     (layer_id, set_id, name, file_path, asset_url, sort_order, sha256) VALUES (?, 'set', ?, ?, ?, ?, 'hash')`);
   insert.run('background', '背景', source, 'yibiao-asset://generated-images/background.png', 0);
   insert.run('subject', '主体', source, 'yibiao-asset://generated-images/subject.png', 1);
+  insert.run('other', '另一对象', source, 'yibiao-asset://generated-images/other.png', 2);
   const service = createImageStudioService({ db, app: { getPath: () => directory },
     configStore: { load: () => ({ image_model: {} }) }, aiService: { getImageModelAvailability: () => ({ available: false }) } });
-  service.updateLayer({ setId: 'set', layerId: 'background', sortOrder: 1 });
-  service.updateLayer({ setId: 'set', layerId: 'subject', sortOrder: 0 });
+  assert.throws(() => service.updateLayer({ setId: 'set', layerId: 'background', sortOrder: 1 }), /最底层/);
+  assert.equal(service.updateLayer({ setId: 'set', layerId: 'subject', sortOrder: 2 }).setId, 'set');
   const maskPixels = Buffer.alloc(8 * 6 * 4);
   maskPixels[(3 * 8 + 4) * 4 + 3] = 255;
   const mask = await sharp(maskPixels, { raw: { width: 8, height: 6, channels: 4 } }).png().toBuffer();
-  await service.refineLayerSet({ setId: 'set', maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` });
+  assert.equal((await service.refineLayerSet({ setId: 'set', maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` })).setId, 'set');
   const rows = db.prepare('SELECT layer_id AS id, file_path AS filePath FROM image_studio_psd_layers WHERE set_id = ?').all('set');
   const subject = await sharp(rows.find((row) => row.id === 'subject').filePath).ensureAlpha().raw().toBuffer();
   const background = await sharp(rows.find((row) => row.id === 'background').filePath).ensureAlpha().raw().toBuffer();
   assert.equal(subject[(3 * 8 + 4) * 4 + 3], 255);
-  assert.equal(background[(3 * 8 + 4) * 4 + 3], 0);
+  assert.equal(background[(3 * 8 + 4) * 4 + 3], 255);
+  assert.equal(service.deleteLayer({ setId: 'set', layerId: 'other' }).setId, 'set');
   db.close(); fs.rmSync(directory, { recursive: true, force: true });
 });
 

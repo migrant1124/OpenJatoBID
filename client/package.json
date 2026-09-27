@@ -1,6 +1,6 @@
 {
   "name": "jatoaibid",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "description": "佳图智能投标助手独立桌面客户端",
   "author": "Jato Digital Technology Co., Ltd.",
@@ -53,6 +53,10 @@
       "signAndEditExecutable": false,
       "extraResources": [
         {
+          "from": "vendor/slimsam-77-uniform",
+          "to": "sam-model"
+        },
+        {
           "from": "vendor/agent-tools/win32-${arch}",
           "to": "agent-tools/win32-${arch}",
           "filter": [
@@ -81,6 +85,10 @@
       "identity": null,
       "category": "public.app-category.business",
       "extraResources": [
+        {
+          "from": "vendor/slimsam-77-uniform",
+          "to": "sam-model"
+        },
         {
           "from": "vendor/agent-tools/darwin-${arch}",
           "to": "agent-tools/darwin-${arch}",
@@ -136,13 +144,13 @@
   "dependencies": {
     "@earendil-works/pi-ai": "0.80.10",
     "@earendil-works/pi-coding-agent": "0.80.10",
+    "@huggingface/transformers": "^4.3.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@techstark/opencv-js": "5.0.0-release.1",
     "adm-zip": "^0.5.17",
     "ag-psd": "^31.0.2",
     "ajv": "^8.17.1",
