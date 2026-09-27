@@ -9,6 +9,17 @@ const { createImageStudioSources, assertPublicUrl } = require('./imageStudioSour
 const { createObjectLayer, createInpaintMask, applyInpaint, writeLayeredPsd } = require('./imageStudioPsd.cjs');
 const { segmentObject: runSam, maskPng } = require('./imageStudioSam.cjs');
 
+function hasSubstantiveOverlap(first, second, width, height) {
+  let sharedInterior = 0;
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    const i = (y * width + x) * 4 + 3;
+    if ([i, i - 4, i + 4, i - width * 4, i + width * 4].every((at) => first[at] === 0 && second[at] === 0)) {
+      if (++sharedInterior >= 4) return true;
+    }
+  }
+  return false;
+}
+
 function createImageStudioService({ app, db, aiService, configStore, promptLibraryStore, dialogApi = dialog }) {
   const listeners = new Set();
   const stoppedTasks = new Set();
@@ -107,6 +118,10 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   }
 
   function start(input = {}) {
+    if (input.kind === 'edit' && input.requestId) {
+      const prior = db.prepare("SELECT task_id AS taskId FROM image_studio_tasks WHERE kind = 'edit' AND json_extract(request_json, '$.requestId') = ?").get(input.requestId);
+      if (prior) return prior;
+    }
     const prompt = String(input.prompt || '').trim();
     if (!prompt) throw new Error('请先输入图片需求。');
     if (prompt.length > 10000) throw new Error('图片需求最多 10,000 字，请缩短后再提交。');
@@ -129,6 +144,9 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     }
     const masks = [];
     if (kind === 'edit') {
+      if (input.expectedSourceSha256 && crypto.createHash('sha256').update(imageInputs[0].buffer).digest('hex') !== input.expectedSourceSha256) {
+        throw new Error('原图在编辑期间已变化，请重新打开局部修改。');
+      }
       const originalSize = imageSize(imageInputs[0].buffer);
       for (const region of regions) {
         if (!String(region.prompt || '').trim()) throw new Error('每个修改区域都需要文字要求。');
@@ -155,13 +173,24 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     })).digest('hex');
     const taskId = crypto.randomUUID();
     const at = new Date().toISOString();
+    const maskAssets = masks.map((mask, index) => {
+      const name = `studio-edit-mask-${taskId}-${index + 1}.png`;
+      const directory = getGeneratedImagesDir(app);
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, name), mask);
+      return `yibiao-asset://generated-images/${name}`;
+    });
     db.prepare(`INSERT INTO image_studio_tasks
       (task_id, status, prompt, model_provider, model_name, requested_size, kind,
        requested_count, request_json, reference_assets_json, parent_work_id, config_fingerprint, created_at, updated_at)
       VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(taskId, prompt, config.provider || '', config.model_name || '', size, kind, count,
-        JSON.stringify({ size, count, ratio: input.ratio || '', requestMode: 'normal',
-          regions: regions.map((region, index) => ({ prompt: region.prompt,
+        JSON.stringify({ size, count, ratio: input.ratio || '', requestMode: 'normal', requestId: input.requestId,
+          sourceWorkId: kind === 'edit' ? references[0]?.workId : undefined,
+          sourceSha256: kind === 'edit' ? crypto.createHash('sha256').update(imageInputs[0].buffer).digest('hex') : undefined,
+          regions: regions.map((region, index) => ({ regionId: region.regionId, displayNumber: index + 1,
+            tool: region.tool || null,
+            prompt: region.prompt, maskAssetUrl: maskAssets[index],
             maskSha256: crypto.createHash('sha256').update(masks[index]).digest('hex') })) }),
         JSON.stringify(references.map(({ assetId, workId, role }) => ({ assetId, workId, role }))),
         input.parentWorkId || null, configFingerprint, at, at);
@@ -181,10 +210,14 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
           let selected = false;
           selectedPixels = new Uint8Array(original.info.width * original.info.height);
           const marked = regionPixels.map(() => Buffer.from(original.data));
+          for (let a = 0; a < regionPixels.length; a += 1) for (let b = a + 1; b < regionPixels.length; b += 1) {
+            if (hasSubstantiveOverlap(regionPixels[a], regionPixels[b], original.info.width, original.info.height)) {
+              throw new Error('修改区域重叠，请调整后再提交。');
+            }
+          }
           for (let i = 0; i < selectedPixels.length; i += 1) {
             const owner = regionPixels.findIndex((pixels) => pixels[i * 4 + 3] === 0);
             if (owner < 0) continue;
-            if (regionPixels.slice(owner + 1).some((pixels) => pixels[i * 4 + 3] === 0)) throw new Error('修改区域重叠，请调整后再提交。');
             selectedPixels[i] = 1; selected = true;
             const p = i * 4;
             marked[owner][p] = Math.round(original.data[p] * .4 + 255 * .6);
@@ -359,7 +392,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     if (!filePath || !fs.existsSync(filePath)) throw new Error('受管图片已丢失。');
     const png = await sharp(filePath).rotate().png().toBuffer();
     const dimensions = imageSize(png);
-    return { dataUrl: `data:image/png;base64,${png.toString('base64')}`, width: dimensions.width, height: dimensions.height };
+    return { dataUrl: `data:image/png;base64,${png.toString('base64')}`, width: dimensions.width, height: dimensions.height,
+      sourceSha256: crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex') };
   }
 
   function listLayerSets(input = {}) {
@@ -721,4 +755,4 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   };
 }
 
-module.exports = { createImageStudioService };
+module.exports = { createImageStudioService, hasSubstantiveOverlap };

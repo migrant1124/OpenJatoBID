@@ -33,7 +33,7 @@ interface Props {
   newResult: boolean;
   showLatest: () => void;
   start: () => Promise<string | void>;
-  edit: (regions: StudioEditRegion[]) => Promise<string | void>;
+  edit: (regions: StudioEditRegion[], sourceWorkId: string, sourceSha256: string, requestId: string) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
 }
 
@@ -45,7 +45,8 @@ export function ImageStudioCreate(props: Props) {
   const [candidateText, setCandidateText] = useState('');
   const [mode, setMode] = useState('优化');
   const [viewer, setViewer] = useState<{ images: StudioViewerImage[]; index: number } | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editingSource, setEditingSource] = useState<{ workId: string; width: number; height: number } | null>(null);
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const requestSerial = useRef(0);
   const selectedSourceKey = props.references[0]?.assetId || props.references[0]?.workId || props.selectedWork?.workId || '';
@@ -154,7 +155,7 @@ export function ImageStudioCreate(props: Props) {
           <span>{props.selectedWork ? `${props.selectedWork.width} × ${props.selectedWork.height}` : ''}</span>
           <select aria-label="下载格式" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WEBP</option></select>
           <button type="button" disabled={!props.selectedWork} onClick={() => void exportWork()} title="下载图片"><Download size={16} /> 下载</button>
-          <button type="button" disabled={!props.selectedWork} onClick={() => setEditing(true)} title="局部修改"><Paintbrush size={16} /> 局部修改</button>
+          <button ref={editTriggerRef} type="button" disabled={!props.selectedWork} onClick={() => { if (props.selectedWork) setEditingSource({ workId: props.selectedWork.workId, width: props.selectedWork.width, height: props.selectedWork.height }); }} title="局部修改"><Paintbrush size={16} /> 局部修改</button>
           <button type="button" disabled={!props.selectedWork} onClick={() => setLayersOpen(true)} title="分层 PSD"><Layers3 size={16} /> 分层 PSD</button>
         </div>
       </section>
@@ -170,7 +171,7 @@ export function ImageStudioCreate(props: Props) {
       <footer><button type="button" onClick={() => setCandidate(null)}>取消</button><button type="button" disabled={!candidateText.trim()} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed || !candidateText.trim()} onClick={() => { props.applyPrompt(candidateText); setCandidate(null); }}>应用到输入框</button></footer>
     </section></div>}
     {viewer && <ImageStudioViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />}
-    {editing && props.selectedWork && <ImageStudioRegionEditor source={{ workId: props.selectedWork.workId }} onClose={() => setEditing(false)} onSubmit={props.edit} />}
+    {editingSource && <ImageStudioRegionEditor source={editingSource} onClose={() => { setEditingSource(null); requestAnimationFrame(() => editTriggerRef.current?.focus()); }} onSubmit={props.edit} />}
     {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} onClose={() => setLayersOpen(false)} />}
   </div>;
 }

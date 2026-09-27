@@ -85,9 +85,10 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
 
   const selectedWork = state?.works.find((work) => work.workId === selectedWorkId) || state?.works[0] || null;
 
-  async function start(regions?: StudioEditRegion[]): Promise<string | void> {
+  async function start(regions?: StudioEditRegion[], sourceWorkId?: string, sourceSha256?: string, requestId?: string): Promise<string | void> {
     try {
-      const editWork = regions ? selectedWork : null;
+      const editWork = regions ? state?.works.find((work) => work.workId === sourceWorkId) : null;
+      if (regions && !editWork) throw new Error('原图已不存在，请重新打开局部修改。');
       const submittedReferences = editWork ? [{ workId: editWork.workId, role: '主体' }] : references;
       const requestSize = editWork ? `${editWork.width}x${editWork.height}` : size;
       const [width, height] = requestSize.split('x').map(Number);
@@ -95,7 +96,8 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
       const divisor = gcd(width, height) || 1;
       const result = await window.yibiao!.imageStudio.start({ prompt: regions ? regions.map((region) => region.prompt).join('；') : prompt, count: regions ? 1 : count, size: requestSize,
         ratio: `${width / divisor}:${height / divisor}`, references: submittedReferences,
-        kind: regions ? 'edit' : undefined, regions,
+        kind: regions ? 'edit' : undefined, regions, requestId: regions ? requestId : undefined,
+        expectedSourceSha256: regions ? sourceSha256 : undefined,
         parentWorkId: editWork?.workId || parentWorkId || undefined });
       showToast('已提交生图任务', 'success');
       return result.taskId;
@@ -176,7 +178,7 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   return <div className="image-studio-page">
     <header className="image-studio-head"><div><h1>生图模式</h1><p>从想法到图片，简单创作与修改</p></div><nav aria-label="生图模式页面" className="image-studio-tabs">{sections.map((item) => <button key={item.id} type="button" aria-current={(section === item.id || (section === 'image-studio' && item.id === 'image-studio-create')) ? 'page' : undefined} onClick={() => onSectionChange(item.id)}>{item.label}</button>)}</nav></header>
     {!state && <div className="image-studio-empty">正在读取生图工作区…</div>}
-    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} count={count} setCount={setCount} size={size} setSize={setSize} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={(regions) => start(regions)} savePrompt={savePrompt} />}
+    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} count={count} setCount={setCount} size={size} setSize={setSize} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={(regions, sourceWorkId, sourceSha256, requestId) => start(regions, sourceWorkId, sourceSha256, requestId)} savePrompt={savePrompt} />}
     {state && view === 'prompts' && <ImageStudioPrompts applyPrompt={applyPrompt} applyStyle={applyStyle} undoStyle={undoAppliedStyle}
       canUndoStyle={Boolean(appliedStyle && typeof appliedStyle.before === 'string' && prompt.startsWith(appliedStyle.after))} appliedStyleId={appliedStyle?.styleId || ''} currentPrompt={prompt} />}
     {state && view === 'works' && <ImageStudioWorks works={state.works} refresh={refresh} openWork={openWork} continueWork={continueWork} />}

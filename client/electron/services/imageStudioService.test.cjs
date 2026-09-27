@@ -8,7 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const sharp = require('sharp');
 const { __aiServiceRuntime } = require('./aiService.cjs');
 const { createImageStudioSchema, createPromptLibrarySchema, extendImageStudioSchema } = require('./sqliteDatabase.cjs');
-const { createImageStudioService } = require('./imageStudioService.cjs');
+const { createImageStudioService, hasSubstantiveOverlap } = require('./imageStudioService.cjs');
 const { createPromptLibraryStore } = require('./promptLibraryStore.cjs');
 
 test('草稿、生成快照、作品恢复与三种真实编码导出', async () => {
@@ -166,9 +166,13 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
       }
     });
   });
-  service.start({ prompt: '分区修改', kind: 'edit', size: '8x6', references: [{ assetId: 'asset', role: '主体' }],
-    regions: masks.map((mask, index) => ({ prompt: ['改蓝', '改绿', '改黄'][index],
-      maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` })) });
+  const editInput = { prompt: '分区修改', kind: 'edit', size: '8x6', requestId: 'same-edit-request',
+    references: [{ assetId: 'asset', role: '主体' }],
+    regions: masks.map((mask, index) => ({ regionId: index + 10, prompt: ['改蓝', '改绿', '改黄'][index],
+      maskDataUrl: `data:image/png;base64,${mask.toString('base64')}` })) };
+  assert.throws(() => service.start({ ...editInput, requestId: 'changed-source', expectedSourceSha256: 'wrong' }), /原图在编辑期间已变化/);
+  const firstSubmission = service.start(editInput);
+  assert.equal(service.start(editInput).taskId, firstSubmission.taskId);
   const task = await terminal;
   assert.equal(task.status, 'completed', task.error);
   assert.equal(request.mask, undefined);
@@ -181,12 +185,29 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
   assert.equal(marked[1][(3 * 8 + 5) * 4 + 2], 29);
   assert.equal(marked[2][(3 * 8 + 6) * 4 + 2], 29);
   assert.equal(request.size, '8x6');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM image_studio_tasks').get().count, 1);
+  const snapshot = JSON.parse(db.prepare('SELECT request_json FROM image_studio_tasks').get().request_json);
+  assert.equal(snapshot.requestId, editInput.requestId);
+  assert.deepEqual(snapshot.regions.map((region) => [region.regionId, region.displayNumber, region.prompt]),
+    [[10, 1, '改蓝'], [11, 2, '改绿'], [12, 3, '改黄']]);
+  assert.equal(snapshot.regions.every((region) => region.maskAssetUrl && region.maskSha256), true);
+  assert.equal(fs.existsSync(path.join(directory, 'workspace', 'generated-images', path.basename(snapshot.regions[0].maskAssetUrl))), true);
   const workPath = db.prepare('SELECT file_path AS filePath FROM image_studio_works').get().filePath;
   const pixels = await sharp(workPath).ensureAlpha().raw().toBuffer();
   assert.deepEqual([...pixels.subarray(0, 4)], [255, 0, 0, 255]);
   assert.deepEqual([...pixels.subarray((3 * 8 + 4) * 4, (3 * 8 + 4) * 4 + 4)], [0, 0, 255, 255]);
   assert.deepEqual([...pixels.subarray((3 * 8 + 6) * 4, (3 * 8 + 6) * 4 + 4)], [0, 0, 255, 255]);
   db.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('局部选区接边可提交，实质交叠会拦截', () => {
+  const mask = (left, right) => {
+    const pixels = Buffer.alloc(12 * 8 * 4, 255);
+    for (let y = 1; y < 7; y += 1) for (let x = left; x <= right; x += 1) pixels[(y * 12 + x) * 4 + 3] = 0;
+    return pixels;
+  };
+  assert.equal(hasSubstantiveOverlap(mask(1, 5), mask(5, 9), 12, 8), false);
+  assert.equal(hasSubstantiveOverlap(mask(1, 7), mask(4, 9), 12, 8), true);
 });
 
 test('图层换序后细修仍只写入稳定主体图层', async () => {

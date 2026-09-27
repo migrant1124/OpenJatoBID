@@ -1,0 +1,6 @@
+{
+  "draft": "把这一处改为暖色，保留纹理",
+  "regions": 1,
+  "error": "局部修改未提交：Error: Error invoking remote method 'image-studio:start': Error: 生图模型未测试可用",
+  "taskDelta": 0
+}
