@@ -175,11 +175,10 @@ jobs:
             analytics/worker/src/routes/updates.test.js `
             client/scripts/package-build-config.test.cjs
 
-      - name: Preflight Worker test license
+      - name: Preflight public Worker update route
         env:
           UPDATE_WORKER_BASE_URL: ${{ vars.UPDATE_WORKER_BASE_URL }}
-          JATOBID_UPDATE_TEST_LICENSE_JSON: ${{ secrets.JATOBID_UPDATE_TEST_LICENSE_JSON }}
-          WORKER_RELEASE_VERIFY_MODE: license
+          WORKER_RELEASE_VERIFY_MODE: preflight
         run: node .github/scripts/verify-worker-release.mjs
 
       - name: Install client dependencies
@@ -322,7 +321,6 @@ jobs:
       - name: Verify Worker latest and full EXE download
         env:
           UPDATE_WORKER_BASE_URL: ${{ vars.UPDATE_WORKER_BASE_URL }}
-          JATOBID_UPDATE_TEST_LICENSE_JSON: ${{ secrets.JATOBID_UPDATE_TEST_LICENSE_JSON }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: node .github/scripts/verify-worker-release.mjs
 

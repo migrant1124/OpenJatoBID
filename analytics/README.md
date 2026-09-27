@@ -46,8 +46,8 @@
 | `GET/POST /api/license-config`   | KV                      | `ADMIN_TOKEN`           | 授权配置后台管理                                                                                            |
 | `GET /resources`                 | `RESOURCE_DB` + AE      | 无                       | 客户端资源列表，点击量为 D1 累计 + AE 今天                                                                          |
 | `GET/POST/DELETE /api/resources` | `RESOURCE_DB` + R2 + AE | `ADMIN_TOKEN`           | 资源管理                                                                                                |
-| `POST /updates/latest`           | 私有 R2 + 管理端授权公钥         | JSON Body 中的本地许可证       | 校验完整必要载荷、年度有效期、离线校验期限和签名后，返回 `release/latest.json` 和无许可证查询参数的下载 URL                                 |
-| `GET /updates/download`          | 私有 R2 + 管理端授权公钥         | `X-Jato-License` Header | 执行同一完整许可证校验并校验 `release/<version>/` 规范 key 后流式返回安装包                                                 |
+| `GET/POST /updates/latest`       | 私有 R2                  | 无                       | 返回 `release/latest.json` 和 Worker 下载 URL；保留 POST 兼容旧客户端                                                |
+| `GET /updates/download`          | 私有 R2                  | 无                       | 校验 `release/<version>/` 规范 key 后流式返回安装包                                                                  |
 
 旧 `/api/summary` 已删除。
 
@@ -110,11 +110,10 @@ Worker 运行时还需要在 Cloudflare 后台配置 Secret：
 | `GITHUB_API_TOKEN`                  | 可选，降低 GitHub API 限流概率                          |
 | `LICENSE_PRIVATE_KEY_JWK`           | ECDSA P-256 私钥 JWK，用于签发客户端 license             |
 | `LICENSE_KEY_ID`                    | 可选，授权签名 key id，默认 `official-build-key-2026-01` |
-| `JATOBID_UPDATE_LICENSE_PUBLIC_KEY` | 局域网管理端授权公钥 PEM，用于校验客户端本地许可证后放行更新下载             |
 
 不要在 `wrangler.jsonc` 增加 `secrets.required`。
 
-授权密钥使用 ECDSA P-256 JWK，用于 Worker 签发旧版云端 license；构建证明密钥是独立用途，不复用该密钥。构建证明私钥配置在 GitHub Actions Secret `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`，Worker 更新下载授权使用局域网管理端公钥 `JATOBID_UPDATE_LICENSE_PUBLIC_KEY`：
+授权密钥使用 ECDSA P-256 JWK，用于 Worker 签发旧版云端 license；构建证明密钥是独立用途，不复用该密钥。构建证明私钥配置在 GitHub Actions Secret `JATOBID_BUILD_ATTESTATION_PRIVATE_KEY_JWK`：
 
 ```powershell
 node -e "const { webcrypto } = require('node:crypto'); (async () => { const key = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']); console.log(JSON.stringify(await webcrypto.subtle.exportKey('jwk', key.privateKey))); })();"

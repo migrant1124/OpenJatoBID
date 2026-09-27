@@ -3,12 +3,10 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
-const { getLicenseFilePath } = require('../utils/paths.cjs');
 
 const UPDATE_RELEASE_API = 'https://bidupdat.migrant1124.workers.dev/updates/latest';
 const UPDATE_RELEASE_DOWNLOAD_URL = 'https://bidupdat.migrant1124.workers.dev/updates/latest';
-const LICENSE_HEADER = 'X-Jato-License';
-const UPDATE_STAGES = new Set(['latest', 'license', 'select-asset', 'download', 'integrity', 'open-installer']);
+const UPDATE_STAGES = new Set(['latest', 'select-asset', 'download', 'integrity', 'open-installer']);
 
 let autoUpdaterInstance = null;
 let downloadedUpdateVersion = '';
@@ -133,99 +131,13 @@ function requestJson(url, label, headers = {}, stage = 'latest') {
   });
 }
 
-function postJson(url, label, body, headers = {}, stage = 'latest') {
-  return new Promise((resolve, reject) => {
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      reject(createUpdateError(stage, 'UPDATE_RESPONSE_INVALID', `${label}地址无效`));
-      return;
-    }
-
-    const payload = JSON.stringify(body || {});
-    const request = https.request(parsedUrl, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'yibiao-client',
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-        ...headers,
-      },
-    }, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        response.resume();
-        postJson(new URL(response.headers.location, parsedUrl).toString(), label, body, headers, stage).then(resolve, reject);
-        return;
-      }
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        readLimitedErrorBody(response).then(() => reject(createHttpStatusError(stage, label, response.statusCode)));
-        return;
-      }
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch {
-          reject(createUpdateError(stage, 'UPDATE_RESPONSE_INVALID', `解析${label}响应失败`));
-        }
-      });
-    });
-    request.on('error', (error) => reject(toUpdateError(error, stage)));
-    request.setTimeout(10000, () => {
-      request.destroy(createUpdateError(stage, 'UPDATE_TIMEOUT', '请求超时'));
-    });
-    request.write(payload);
-    request.end();
-  });
-}
-
-function base64UrlEncodeText(value) {
-  return Buffer.from(String(value || ''), 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function readUpdateLicense(app) {
-  if (!app) {
-    return null;
-  }
-  try {
-    const licensePath = getLicenseFilePath(app);
-    if (!fs.existsSync(licensePath)) {
-      return null;
-    }
-    const license = JSON.parse(fs.readFileSync(licensePath, 'utf8'));
-    return license && typeof license === 'object' ? license : null;
-  } catch {
-    return null;
-  }
-}
-
-function getUpdateLicenseHeader(app) {
-  const license = readUpdateLicense(app);
-  if (!license) {
-    throw createUpdateError('license', 'UPDATE_LICENSE_MISSING', '请先完成软件授权后再检查更新');
-  }
-  return base64UrlEncodeText(JSON.stringify(license));
-}
-
 function normalizeUpdateSha256(value) {
   const normalized = String(value || '').trim().replace(/^sha256:/i, '').toLowerCase();
   return /^[0-9a-f]{64}$/.test(normalized) ? normalized : '';
 }
 
-async function fetchAuthorizedLatestRelease(options = {}) {
-  const license = readUpdateLicense(options.app);
-  if (!license) {
-    throw createUpdateError('license', 'UPDATE_LICENSE_MISSING', '请先完成软件授权后再检查更新');
-  }
-
-  const result = await postJson(UPDATE_RELEASE_API, '更新服务 ', { license }, {}, 'latest');
+async function fetchLatestRelease() {
+  const result = await requestJson(UPDATE_RELEASE_API, '更新服务 ');
   const release = result?.release || {};
   const files = Array.isArray(release.assets)
     ? release.assets.map((asset) => ({
@@ -248,7 +160,7 @@ async function fetchAuthorizedLatestRelease(options = {}) {
     throw createUpdateError('latest', 'UPDATE_RESPONSE_INVALID', '更新服务返回的数据不完整');
   }
   return {
-    channel: 'authorized',
+    channel: 'cloudflare-r2',
     version,
     name: release.name || '',
     body: release.body || '',
@@ -287,13 +199,8 @@ function pickPlatformDownloadFile(files = []) {
   return null;
 }
 
-function fetchLatestRelease(_channel, options = {}) {
-  return fetchAuthorizedLatestRelease(options);
-}
-
 async function getLatestVersion(options = {}) {
-  const channel = getUpdateChannel(options.configStore);
-  return fetchLatestRelease(channel, options);
+  return fetchLatestRelease();
 }
 
 async function getUpdateDownloadUrl() {
@@ -563,7 +470,6 @@ async function runDirectUpdateCheck(options, release, channel) {
     await downloadFile(download.url, destinationPath, {
       expectedSize,
       expectedSha256,
-      headers: { [LICENSE_HEADER]: getUpdateLicenseHeader(app) },
       onProgress: (percent) => {
         setProgressBar(mainWindow, Math.max(0, Math.min(1, percent / 100)));
         onProgress?.(percent);
@@ -589,7 +495,7 @@ async function runDirectUpdateCheck(options, release, channel) {
 async function runUpdateCheck(options = {}) {
   const { app, mainWindow, onProgress, onDownloaded, onError } = options;
   const channel = getUpdateChannel(options.configStore);
-  const release = await fetchLatestRelease(channel, options);
+  const release = await fetchLatestRelease();
   if (!release.version || compareVersions(release.version, app.getVersion()) <= 0) {
     return { enabled: true, updateAvailable: false, channel };
   }
