@@ -706,6 +706,17 @@ export interface ImageStudioState {
   textModelName: string;
 }
 
+export interface ImageStudioRiskResult {
+  risk_level: 'normal' | 'transformable' | 'blocked';
+  categories: string[];
+  reason: string;
+  original_intent: string;
+  safe_alternative: string;
+  can_generate: boolean;
+}
+
+export type ImageStudioStartInput = { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string; description?: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ regionId?: number; tool?: 'brush' | 'rectangle' | 'magic'; prompt: string; maskDataUrl: string }>; parentWorkId?: string; requestId?: string; expectedSourceSha256?: string };
+
 export interface ImageStudioAsset {
   assetId: string;
   assetUrl: string;
@@ -903,7 +914,9 @@ export interface YibiaoBridge {
   imageStudio: {
     getState: () => Promise<ImageStudioState>;
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
-    start: (input: { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ regionId?: number; tool?: 'brush' | 'rectangle' | 'magic'; prompt: string; maskDataUrl: string }>; parentWorkId?: string; requestId?: string; expectedSourceSha256?: string }) => Promise<{ taskId: string }>;
+    preflight: (input: ImageStudioStartInput) => Promise<{ checkId: string; risk_result: ImageStudioRiskResult; transformed_prompt: string }>;
+    decideRisk: (input: { checkId: string; confirmed: boolean }) => Promise<void>;
+    start: (input: ImageStudioStartInput & { riskCheckId: string }) => Promise<{ taskId: string }>;
     segmentObject: (input: { assetId?: string; workId?: string; point: { x: number; y: number } }) => Promise<{ maskDataUrl: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;

@@ -3,7 +3,9 @@ const { ipcMain } = require('electron');
 function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:get-state', () => service.getState());
   ipcMain.handle('image-studio:save-draft', (_event, input) => service.saveDraft(input));
-  ipcMain.handle('image-studio:start', (_event, input) => service.start(input));
+  ipcMain.handle('image-studio:preflight', (_event, input) => service.preflight(input));
+  ipcMain.handle('image-studio:decide-risk', (_event, input) => service.decideRisk(input));
+  ipcMain.handle('image-studio:start', (_event, input) => service.submit(input));
   ipcMain.handle('image-studio:segment-object', (_event, input) => service.segmentObject(input));
   ipcMain.handle('image-studio:cancel-task', (_event, input) => service.cancelTask(input));
   ipcMain.handle('image-studio:set-favorite', (_event, input) => service.setFavorite(input));

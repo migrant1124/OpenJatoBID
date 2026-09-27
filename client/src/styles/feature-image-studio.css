@@ -126,6 +126,8 @@
 .image-studio-checkbox { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; }
 .image-studio-overlay { position: fixed; z-index: 3000; inset: 0; display: grid; place-items: center; padding: 24px; background: #17253f77; }
 .image-studio-overlay-top { z-index: 3001; }
+.image-studio-risk-overlay { z-index: 3002; }
+.image-studio-risk-dialog textarea { min-height: 160px; }
 .image-studio-dialog { display: flex; flex-direction: column; gap: 13px; width: min(700px, 100%); max-height: min(780px, 92vh); overflow: auto; padding: 20px; border: 1px solid #dce5f0; border-radius: 7px; background: #fff; box-shadow: 0 18px 48px #12214044; }
 .image-studio-dialog .image-studio-panel-head { flex: none; }
 .image-studio-dialog > textarea { min-height: 180px; }

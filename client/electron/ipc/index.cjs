@@ -102,6 +102,8 @@ const workspaceDatabaseChannels = [
   'prompt-library:commit-batch-import',
   'image-studio:get-state',
   'image-studio:save-draft',
+  'image-studio:preflight',
+  'image-studio:decide-risk',
   'image-studio:start',
   'image-studio:set-favorite',
   'image-studio:delete-work',

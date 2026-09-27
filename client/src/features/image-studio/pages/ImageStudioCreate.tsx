@@ -35,6 +35,7 @@ interface Props {
   start: () => Promise<string | void>;
   edit: (regions: StudioEditRegion[], sourceWorkId: string, sourceSha256: string, requestId: string) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
+  preflightBusy: boolean;
 }
 
 export function ImageStudioCreate(props: Props) {
@@ -143,7 +144,7 @@ export function ImageStudioCreate(props: Props) {
         </select></label></div>
         {!props.state.imageModel.available && <p className="image-studio-warning">请先在设置中配置可用的生图模型。</p>}
         </div>
-        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!props.state.imageModel.available || !props.prompt.trim() || props.prompt.length > 10000 || running}><Sparkles size={17} /> {running ? '生成中' : '生成图片'}</button>
+        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!props.state.imageModel.available || !props.prompt.trim() || props.prompt.length > 10000 || running || props.preflightBusy}><Sparkles size={17} /> {props.preflightBusy ? '风险预检中' : running ? '生成中' : '生成图片'}</button>
       </section>
       <section className="image-studio-result" aria-label="生成结果">
         <div className="image-studio-panel-head"><h2>生成结果</h2><div className="image-studio-task-head">{latestTask && <small>{latestTask.status} · {latestTask.completedCount}/{latestTask.requestedCount}</small>}{running && latestTask && <button type="button" onClick={() => void window.yibiao!.imageStudio.cancelTask({ taskId: latestTask.taskId }).catch((error) => showToast(String(error), 'error'))}>停止等待</button>}</div></div>

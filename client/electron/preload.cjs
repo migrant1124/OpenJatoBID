@@ -143,6 +143,8 @@ const bridge = {
   imageStudio: {
     getState: () => ipcRenderer.invoke('image-studio:get-state'),
     saveDraft: (input) => ipcRenderer.invoke('image-studio:save-draft', input),
+    preflight: (input) => ipcRenderer.invoke('image-studio:preflight', input),
+    decideRisk: (input) => ipcRenderer.invoke('image-studio:decide-risk', input),
     start: (input) => ipcRenderer.invoke('image-studio:start', input),
     segmentObject: (input) => ipcRenderer.invoke('image-studio:segment-object', input),
     cancelTask: (input) => ipcRenderer.invoke('image-studio:cancel-task', input),
