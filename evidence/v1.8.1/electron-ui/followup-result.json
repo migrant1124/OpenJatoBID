@@ -1,0 +1,14 @@
+{
+  "layout": {
+    "promptHeight": 280,
+    "gapBelowChoices": 16,
+    "fieldsClientHeight": 597,
+    "fieldsScrollHeight": 597
+  },
+  "viewerButtons": [
+    "切换预览尺寸",
+    "关闭预览"
+  ],
+  "actualTransform": "translate(0px, 0px) scale(1.024)",
+  "fitTransform": "translate(0px, 0px) scale(1)"
+}
