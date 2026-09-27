@@ -1,0 +1,13 @@
+{
+  "before": {
+    "scrollHeight": 1433,
+    "clientHeight": 436,
+    "firstHeight": 348.59375,
+    "firstTop": 264.484375,
+    "toolsBottom": 250.484375
+  },
+  "after": {
+    "scrollTop": 500,
+    "lastVisible": false
+  }
+}
