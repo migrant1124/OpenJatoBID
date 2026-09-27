@@ -1,6 +1,6 @@
 # Cloudflare CI/CD 配置说明
 
-本文只覆盖 OpenJatoBID 当前发布链路中的 Cloudflare 部分：现有 `bidupdat` Worker、私有 R2 更新制品、更新检查/授权下载代理，以及 Worker 自身的 Cloudflare Workers Builds。不要创建 Cloudflare Pages，不要使用 Cloudflare Containers，也不要把本地 Electron 应用业务后端迁移到 Cloudflare。
+本文只覆盖 OpenJatoBID 当前发布链路中的 Cloudflare 部分：现有 `bidupdat` Worker、私有 R2 更新制品、公开的更新检查/下载代理，以及 Worker 自身的 Cloudflare Workers Builds。不要创建 Cloudflare Pages，不要使用 Cloudflare Containers，也不要把本地 Electron 应用业务后端迁移到 Cloudflare。
 
 ## 现有 Worker
 
@@ -66,7 +66,7 @@ R2 API Token 或 S3 凭证必须限制到 bucket `jatoaibid`，权限为对象�
 7. 预检 job 验证四个输入和客户端 Release 状态；客户端尚未正式发布时，客户端与管理端 job 在预检后并行，客户端保持原发布门禁。客户端已经正式发布且资产白名单正确时跳过客户端，只补发管理端。
 8. 管理端先保存完整 Draft 资产，再发布不可变 R2 版本目录；R2 失败重试复用 Draft 原始资产，不重新构建同版本；新建或修复 Draft 前必须确认同版本 R2 对象全部不存在。
 
-如果 Worker 验证或 GitHub Release 正式化失败，workflow 会用 `.release-state/previous-latest.json` 回滚 R2 `release/latest.json`。成功后才清理多余旧版本，只保留当前版本和发布前稳定版本。
+如果 Worker 公开更新查询、完整 EXE 下载校验或 GitHub Release 正式化失败，workflow 会用 `.release-state/previous-latest.json` 回滚 R2 `release/latest.json`。成功后才清理多余旧版本，只保留当前版本和发布前稳定版本。
 
 ## 禁止事项
 

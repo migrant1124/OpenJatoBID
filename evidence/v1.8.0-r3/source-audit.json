@@ -1,0 +1,86 @@
+{
+  "registryCommit": "bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef",
+  "manifestGeneratedAt": "2026-09-26T08:32:53+00:00",
+  "manifestTotal": 1742,
+  "verifiedTotal": 1742,
+  "noticeUrl": "https://github.com/yukkcat/image-prompts/blob/main/NOTICE.md",
+  "sources": [
+    {
+      "id": "banana-prompt-quicker",
+      "count": 323,
+      "sha256": "0ae590d56820d1d9716691e96410ee6869dec28a7261de397f74ad2f6cbedda5",
+      "chineseTitle": 321,
+      "chinesePrompt": 313,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/banana-prompt-quicker.json",
+      "homepage": "https://glidea.github.io/banana-prompt-quicker/",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "davidwu-gpt-image2-prompts",
+      "count": 494,
+      "sha256": "bc61473b87e53acd514d14e1936f3490fe7d9db3cf004d5730dda9f28cda1dbf",
+      "chineseTitle": 494,
+      "chinesePrompt": 259,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/davidwu-gpt-image2-prompts.json",
+      "homepage": "https://github.com/davidwuw0811-boop/awesome-gpt-image2-prompts",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "freestylefly-gpt-image-2",
+      "count": 541,
+      "sha256": "10c2dbd21864a00652d28e54bbbbdab19d3213d22db8e305bc642eaa77247a97",
+      "chineseTitle": 541,
+      "chinesePrompt": 289,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/freestylefly-gpt-image-2.json",
+      "homepage": "https://github.com/freestylefly/awesome-gpt-image-2",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "awesome-gpt-image",
+      "count": 53,
+      "sha256": "e5508cad635279cd2c9ddda70d422ad9de8700e7e349e463f2fe433e562a99ec",
+      "chineseTitle": 53,
+      "chinesePrompt": 53,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/awesome-gpt-image.json",
+      "homepage": "https://github.com/ZeroLu/awesome-gpt-image",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "awesome-gpt4o-image-prompts",
+      "count": 76,
+      "sha256": "ece926584179496d426bd9703c0ea30a13b89a9ce0101bb340056d049e58979d",
+      "chineseTitle": 39,
+      "chinesePrompt": 38,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/awesome-gpt4o-image-prompts.json",
+      "homepage": "https://github.com/ImgEdify/Awesome-GPT4o-Image-Prompts",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "youmind-gpt-image-2",
+      "count": 126,
+      "sha256": "beaaa12576934414cdb045a76341df4fd6d397e53755930848e7cb2bbf8991ce",
+      "chineseTitle": 126,
+      "chinesePrompt": 119,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/youmind-gpt-image-2.json",
+      "homepage": "https://github.com/YouMind-OpenLab/awesome-gpt-image-2",
+      "redistributionRights": "unverified",
+      "bundled": false
+    },
+    {
+      "id": "youmind-nano-banana-pro",
+      "count": 129,
+      "sha256": "cbbd26684493070471d2bcdc6252d7b56590e98a74fafbda0994d1b88cb1b41d",
+      "chineseTitle": 129,
+      "chinesePrompt": 127,
+      "pinnedUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/bd36e0bcd624a36f86fdd5d9fa1756de1bd9d2ef/dist/sources/youmind-nano-banana-pro.json",
+      "homepage": "https://github.com/YouMind-OpenLab/awesome-nano-banana-pro-prompts",
+      "redistributionRights": "unverified",
+      "bundled": false
+    }
+  ]
+}

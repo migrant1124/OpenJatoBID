@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "presetRevision": "v1.8.0-r3",
+  "purpose": "R3 实施用默认来源配置；只含来源元数据，不是已构建的中文提示词数据包",
+  "upstreamRepository": "basketikun/infinite-canvas",
+  "upstreamFile": "web/src/services/api/prompt-source-presets.ts",
+  "upstreamBlobSha": "8b55248fed7c6a0c79f498f39e1c20adad7c239d",
+  "verifiedOn": "2026-09-26",
+  "registryHomepage": "https://github.com/yukkcat/image-prompts",
+  "manifestUrl": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/manifest.json",
+  "downloadPolicy": {
+    "initialRead": "bundled-verified-snapshot",
+    "remoteDefault": "same-as-infinite-canvas",
+    "unverifiedProxyEnabled": false,
+    "mainlandNetworkVerified": false
+  },
+  "sources": [
+    {
+      "id": "banana-prompt-quicker",
+      "name": "Banana Prompt Quicker",
+      "homepage": "https://glidea.github.io/banana-prompt-quicker/",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/banana-prompt-quicker.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "davidwu-gpt-image2-prompts",
+      "name": "DavidWu GPT Image 2",
+      "homepage": "https://github.com/davidwuw0811-boop/awesome-gpt-image2-prompts",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/davidwu-gpt-image2-prompts.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "freestylefly-gpt-image-2",
+      "name": "Freestylefly GPT Image 2",
+      "homepage": "https://github.com/freestylefly/awesome-gpt-image-2",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/freestylefly-gpt-image-2.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "awesome-gpt-image",
+      "name": "Awesome GPT Image",
+      "homepage": "https://github.com/ZeroLu/awesome-gpt-image",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/awesome-gpt-image.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "awesome-gpt4o-image-prompts",
+      "name": "Awesome GPT-4o",
+      "homepage": "https://github.com/ImgEdify/Awesome-GPT4o-Image-Prompts",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/awesome-gpt4o-image-prompts.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "youmind-gpt-image-2",
+      "name": "YouMind GPT Image 2",
+      "homepage": "https://github.com/YouMind-OpenLab/awesome-gpt-image-2",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/youmind-gpt-image-2.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    },
+    {
+      "id": "youmind-nano-banana-pro",
+      "name": "YouMind Nano Banana Pro",
+      "homepage": "https://github.com/YouMind-OpenLab/awesome-nano-banana-pro-prompts",
+      "url": "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/youmind-nano-banana-pro.json",
+      "enabled": true,
+      "builtIn": true,
+      "fallbackUrls": []
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "backupFolder": "C:\\Users\\MiG\\AppData\\Local\\OpenJatoBID-R4-backup-20260926-224943",
+  "isolatedCopy": "C:\\Users\\MiG\\AppData\\Local\\OpenJatoBID-R4-migration-test\\workspace\\yibiao.sqlite",
+  "before": {
+    "version": 34,
+    "counts": {
+      "image_studio_draft": 1,
+      "image_studio_tasks": 3,
+      "image_studio_works": 1,
+      "image_studio_assets": 2,
+      "image_studio_sources": 7,
+      "image_studio_reference_items": 1742,
+      "image_studio_prompt_meta": 0,
+      "prompt_items": 57
+    }
+  },
+  "after": {
+    "version": 36,
+    "counts": {
+      "image_studio_draft": 1,
+      "image_studio_tasks": 3,
+      "image_studio_works": 1,
+      "image_studio_assets": 2,
+      "image_studio_sources": 7,
+      "image_studio_reference_items": 1742,
+      "image_studio_prompt_meta": 0,
+      "prompt_items": 57
+    },
+    "newTables": true
+  },
+  "repeat": {
+    "version": 36,
+    "counts": {
+      "image_studio_draft": 1,
+      "image_studio_tasks": 3,
+      "image_studio_works": 1,
+      "image_studio_assets": 2,
+      "image_studio_sources": 7,
+      "image_studio_reference_items": 1742,
+      "image_studio_prompt_meta": 0,
+      "prompt_items": 57
+    }
+  },
+  "preserved": true
+}

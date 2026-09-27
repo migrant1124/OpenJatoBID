@@ -5,12 +5,6 @@
   "compatibility_date": "2026-07-14",
   "workers_dev": true,
   "keep_vars": true,
-  "secrets": {
-    "required": [
-      "JATOBID_UPDATE_LICENSE_PUBLIC_KEY"
-    ]
-  },
-
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

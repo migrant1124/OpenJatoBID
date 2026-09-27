@@ -17,6 +17,10 @@ const navigationIcons: Record<SectionId, ComponentType<SVGProps<SVGSVGElement>>>
   'existing-plan-expansion': DocumentIcon,
   'business-bid': BriefcaseIcon,
   conversation: ConversationIcon,
+  'image-studio': ImageStudioIcon,
+  'image-studio-create': ImageStudioIcon,
+  'image-studio-prompts': ImageStudioIcon,
+  'image-studio-works': ImageStudioIcon,
   'knowledge-base': ArchiveIcon,
   'document-knowledge-base': ArchiveIcon,
   'image-knowledge-base': ArchiveIcon,
@@ -230,6 +234,16 @@ function ConversationIcon(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <path d="M7 17.5 3.5 20v-5A7.5 7.5 0 0 1 3 12.5C3 8.36 7.03 5 12 5s9 3.36 9 7.5S16.97 20 12 20c-1.88 0-3.63-.48-5-1.3" />
       <path d="M8 12h.01M12 12h.01M16 12h.01" />
+    </svg>
+  );
+}
+
+function ImageStudioIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8" cy="9" r="1.5" />
+      <path d="m4 17 5-5 3 3 3-4 5 6" />
     </svg>
   );
 }

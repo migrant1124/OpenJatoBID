@@ -1,0 +1,24 @@
+{
+  "mode": "image",
+  "model": "gpt-image-2-1k",
+  "requestSent": true,
+  "success": false,
+  "at": "2026-09-26T13:11:11.992Z",
+  "responseContentType": "text/event-stream",
+  "responseStatus": 200,
+  "error": "金龙中转站生图未返回图片数据",
+  "statusCode": 0,
+  "responseShape": {
+    "keys": [
+      "stream",
+      "data",
+      "errors",
+      "completed",
+      "usage"
+    ],
+    "dataCount": 0,
+    "firstItemKeys": [],
+    "completedKeys": [],
+    "errorCodes": []
+  }
+}

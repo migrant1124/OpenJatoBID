@@ -1,11 +1,13 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { __test__ } = require('./updateService.cjs');
+const { __test__, getLatestVersion } = require('./updateService.cjs');
 
 function createTempDirectory(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'jatobid-update-'));
@@ -46,6 +48,26 @@ test('compares stable versions and rejects prerelease ambiguity', () => {
 test('uses the Cloudflare R2 update channel for both current and legacy configuration', () => {
   assert.equal(__test__.normalizeUpdateChannel('cloudflare-r2'), 'cloudflare-r2');
   assert.equal(__test__.normalizeUpdateChannel('github'), 'cloudflare-r2');
+});
+
+test('checks updates without a local license or license header', async (t) => {
+  t.mock.method(https, 'get', (_url, options, callback) => {
+    assert.equal(options.headers['X-Jato-License'], undefined);
+    const request = new EventEmitter();
+    request.setTimeout = () => {};
+    process.nextTick(() => {
+      const response = new EventEmitter();
+      response.statusCode = 200;
+      response.headers = {};
+      callback(response);
+      response.emit('data', JSON.stringify({ release: { version: '9.9.9', files: [] } }));
+      response.emit('end');
+    });
+    return request;
+  });
+  const release = await getLatestVersion();
+  assert.equal(release.version, '9.9.9');
+  assert.equal(release.channel, 'cloudflare-r2');
 });
 
 test('normalizes manifest and GitHub digest SHA-256 values', () => {

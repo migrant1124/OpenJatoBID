@@ -107,6 +107,7 @@ function createPromptLibraryService({ app, configStore, store, dialogApi = dialo
   return {
     listGroups: () => store.listGroups(),
     createGroup: (input) => store.createGroup(input),
+    updateGroup: (input) => store.updateGroup(input),
     deleteGroup: (input) => store.deleteGroup(input.groupId),
     batchDelete: (input) => store.batchDelete(input),
     listPrompts: (input) => store.listPrompts(input),

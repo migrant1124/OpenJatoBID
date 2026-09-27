@@ -45,6 +45,16 @@ export const appMenuItems: AppMenuItem[] = [
     description: '实时对话生成方案或优化',
   },
   {
+    id: 'image-studio',
+    label: '生图模式',
+    description: '图片创作与作品管理',
+    children: [
+      { id: 'image-studio-create', label: 'AI 生图', description: '根据中文需求创作图片' },
+      { id: 'image-studio-prompts', label: '提示词中心', description: '管理个人提示词' },
+      { id: 'image-studio-works', label: '我的作品', description: '查看和导出图片' },
+    ],
+  },
+  {
     id: 'template-settings',
     label: '模板设置',
     description: '标书导出模板与排版配置',

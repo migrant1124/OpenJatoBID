@@ -76,7 +76,7 @@ function createAiRequestQueue(options = {}) {
       const result = await job.runner({ attempt: job.attempts, maxAttempts: AI_REQUEST_MAX_ATTEMPTS });
       job.resolve(result);
     } catch (error) {
-      if (isRetryableAiRequestError(error) && job.attempts < AI_REQUEST_MAX_ATTEMPTS) {
+      if (isRetryableAiRequestError(error) && job.attempts < job.maxAttempts) {
         job.attempts += 1;
         scheduleRetry(job);
       } else {
@@ -95,6 +95,7 @@ function createAiRequestQueue(options = {}) {
         resolve,
         reject,
         scopeId: String(options.scopeId || options.queueScopeId || '').trim(),
+        maxAttempts: options.maxAttempts || AI_REQUEST_MAX_ATTEMPTS,
         attempts: 1,
         retryTimer: null,
       };

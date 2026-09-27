@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "textCalls": 1,
+  "setId": "773c3f30-f46c-4245-b8f8-ceeefacc5cc0",
+  "width": 1536,
+  "height": 1024,
+  "layers": [
+    {
+      "name": "背景",
+      "assetUrl": "yibiao-asset://generated-images/0-449a27d1-8767-40a7-b215-7bd45351c344.png"
+    },
+    {
+      "name": "白色马克杯",
+      "assetUrl": "yibiao-asset://generated-images/1-48195908-14f1-4752-99ba-53f84653985f.png"
+    }
+  ]
+}

@@ -331,6 +331,7 @@ function normalizeImagePrompt(request) {
   if (!prompt) {
     throw new Error('生图提示词为空');
   }
+  if (request.preservePrompt) return prompt;
 
   const styleHint = request.style === 'realistic_photo'
     ? '画面采用专业实景照片风格，真实、克制、适合投标技术方案插图。'
@@ -346,6 +347,12 @@ function safeImageResponse(data) {
       : data?.data,
     candidates: Array.isArray(data?.candidates) ? '[candidates omitted]' : data?.candidates,
   };
+}
+
+function safeVisionRequest(body) {
+  return JSON.parse(JSON.stringify(body, (key, value) =>
+    key === 'url' && typeof value === 'string' && value.startsWith('data:image/')
+      ? '[image data omitted]' : value));
 }
 
 function copyRawAiErrorResponse(source, target) {
@@ -400,8 +407,25 @@ async function ensureOk(response, fallbackMessage, options = {}) {
 }
 
 async function fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, fallbackMessage, options = {}) {
+  if (options.images?.length) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(requestBody)) {
+      if (value !== undefined && key !== 'response_format' && key !== 'stream') form.append(key, String(value));
+    }
+    options.images.forEach((image, index) => form.append('image[]', new Blob([image.buffer], { type: image.mimeType || 'image/png' }), `reference-${index + 1}.png`));
+    if (options.mask) form.append('mask', new Blob([options.mask], { type: 'image/png' }), 'mask.png');
+    try {
+      options.onSent?.();
+      const response = await fetch(`${baseUrl}/images/edits`, {
+        method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal: options.signal,
+      });
+      await ensureOk(response, fallbackMessage, { source: options.source || 'openai-compatible-image-edit' });
+      return response;
+    } catch (error) { throw markAiRequestError(error, { retryable: false }); }
+  }
   const sendRequest = async (body) => {
     try {
+      options.onSent?.();
       return await fetch(`${baseUrl}/images/generations`, {
         method: 'POST',
         headers: createHeaders(apiKey),
@@ -422,7 +446,7 @@ async function fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, 
     responseFormatUnsupportedChecker: isResponseFormatUnsupported,
   });
 
-  if (requestBody.response_format && error.responseFormatUnsupported) {
+  if (requestBody.response_format && error.responseFormatUnsupported && !options.noRetry) {
     const retryBody = { ...requestBody };
     delete retryBody.response_format;
     const retryResponse = await sendRequest(retryBody);
@@ -1129,7 +1153,9 @@ async function readOpenAICompatibleImageStream(response) {
 
 async function requestOpenAICompatibleImageData(baseUrl, apiKey, requestBody, fallbackMessage, options = {}) {
   const response = await fetchOpenAICompatibleImageResponse(baseUrl, apiKey, requestBody, fallbackMessage, options);
-  if (requestBody.stream) {
+  const contentType = response.headers.get('content-type') || '';
+  options.onResponseHeaders?.({ contentType, status: response.status });
+  if (requestBody.stream && contentType.includes('text/event-stream')) {
     return readOpenAICompatibleImageStream(response);
   }
   try {
@@ -1148,7 +1174,11 @@ async function createImageFromOpenAICompatibleItem(item) {
   }
 
   if (item?.url) {
-    return downloadImage(item.url);
+    try { return await downloadImage(item.url); }
+    catch (error) {
+      if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) throw error;
+      return downloadImage(item.url);
+    }
   }
 
   return null;
@@ -1278,6 +1308,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
   const logTitle = resolveAiLogTitle(request, '文本请求');
   const requestMode = normalizeTextRequestMode(config);
   let requestBody = createChatRequestBody(config, request, { stream: requestMode === 'stream' });
+  const logRequestBody = () => request.sensitiveImage ? safeVisionRequest(requestBody) : requestBody;
   let responseData = null;
   let errorMessage = '';
   let analyticsTracked = false;
@@ -1290,17 +1321,17 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat-pending',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       status: 'pending',
       created_at: new Date().toISOString(),
     });
     let result = null;
-    result = await runWithAiRetry(() => runWithOperationTimeout(async (timeoutSignal) => {
+    result = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(async (timeoutSignal) => {
       const signal = request.signal ? AbortSignal.any([timeoutSignal, request.signal]) : timeoutSignal;
       try {
         return await requestTextAi(app, config, requestBody, { signal, requestMode });
       } catch (error) {
-        if (!request.response_format || !error.responseFormatUnsupported) {
+        if (!request.response_format || !error.responseFormatUnsupported || request.noRetry) {
           throw error;
         }
 
@@ -1320,7 +1351,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       response: responseData,
       content,
       created_at: new Date().toISOString(),
@@ -1343,7 +1374,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
       type: 'chat-error',
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
-      request: requestBody,
+      request: logRequestBody(),
       response: getAiErrorLogResponse(error, responseData),
       error: getAiErrorLogError(error, errorMessage),
       created_at: new Date().toISOString(),
@@ -1582,8 +1613,7 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
     model: imageConfig.model_name,
     prompt: normalizeImagePrompt(request),
     size: normalizeOpenAICompatibleImageSize(imageConfig, request.size),
-    response_format: 'url',
-    ...(requestMode === 'stream' ? { stream: true } : {}),
+    ...(request.images?.length ? {} : { response_format: 'url', ...(requestMode === 'stream' ? { stream: true } : {}) }),
   };
   const baseUrl = requireBaseUrl(imageConfig.base_url, `${meta.label} Base URL 缺失，请重新选择服务商后保存配置`);
   let responseData = null;
@@ -1596,18 +1626,20 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
       type: 'image-pending',
       provider: meta.logProvider,
       request_mode: requestMode,
-      url: `${baseUrl}/images/generations`,
+      url: `${baseUrl}/images/${request.images?.length ? 'edits' : 'generations'}`,
       request: requestBody,
       status: 'pending',
       created_at: new Date().toISOString(),
     });
-    responseData = await runWithAiRetry(() => runWithOperationTimeout(
+    responseData = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(
       (signal) => requestOpenAICompatibleImageData(
         baseUrl,
         imageConfig.api_key,
         requestBody,
         `${meta.label}生图失败`,
-        { signal, source: `${meta.logProvider}-image-model` },
+        { signal, source: `${meta.logProvider}-image-model`, noRetry: request.noRetry,
+          images: request.images, mask: request.mask,
+          onSent: request.onSent, onResponseHeaders: request.onResponseHeaders },
       ),
       AI_REQUEST_TIMEOUT_MS,
     ));
@@ -1784,11 +1816,11 @@ function createAiService({ app, configStore, analyticsService }) {
   }
 
   function enqueueTextRequest(request, runner) {
-    return textRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request) });
+    return textRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request), maxAttempts: request?.noRetry ? 1 : undefined });
   }
 
   function enqueueImageRequest(request, runner) {
-    return imageRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request) });
+    return imageRequestQueue.enqueue(runner, { scopeId: getQueueScopeId(request), maxAttempts: request?.noRetry ? 1 : undefined });
   }
 
   const service = {
@@ -1797,8 +1829,9 @@ function createAiService({ app, configStore, analyticsService }) {
     },
 
     async chat(request) {
+      const frozenConfig = request.configSnapshot || (request.freezeConfig ? configStore.load() : null);
       return enqueueTextRequest(request, () => {
-        const config = configStore.load();
+        const config = frozenConfig || configStore.load();
         return chatWithConfig(app, config, request, analyticsService);
       });
     },
@@ -1912,8 +1945,9 @@ function createAiService({ app, configStore, analyticsService }) {
     },
 
     async generateImage(request) {
+      const frozenConfig = request.configSnapshot || (request.freezeConfig ? configStore.load() : null);
       return enqueueImageRequest(request, () => {
-        const config = configStore.load();
+        const config = frozenConfig || configStore.load();
         return generateImageWithConfig(app, config, request, analyticsService);
       });
     },
@@ -1967,5 +2001,5 @@ function createAiService({ app, configStore, analyticsService }) {
 
 module.exports = {
   createAiService,
-  __aiServiceRuntime: { chatWithConfig },
+  __aiServiceRuntime: { chatWithConfig, normalizeImagePrompt },
 };

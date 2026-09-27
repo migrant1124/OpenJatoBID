@@ -5,6 +5,10 @@ import { state } from '../state.js';
 const pageLabels = {
   'bid-generation': '标书生成',
   conversation: '对话模式',
+  'image-studio': '生图模式',
+  'image-studio-create': '生图模式 - AI 生图',
+  'image-studio-prompts': '生图模式 - 提示词中心',
+  'image-studio-works': '生图模式 - 我的作品',
   'technical-plan': '技术方案',
   'existing-plan-expansion': '标书生成 - 已有方案扩写',
   'technical-plan/document-analysis': '技术方案 - 上传招标文件',

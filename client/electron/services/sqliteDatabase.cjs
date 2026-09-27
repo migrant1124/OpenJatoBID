@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 32;
+const schemaVersion = 36;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1115,6 +1115,155 @@ function createPromptLibrarySchema(db) {
   `);
 }
 
+function createImageStudioSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS image_studio_draft (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      prompt TEXT NOT NULL DEFAULT '',
+      revision INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_tasks (
+      task_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      model_provider TEXT NOT NULL,
+      model_name TEXT NOT NULL,
+      requested_size TEXT NOT NULL,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_tasks_created
+      ON image_studio_tasks(created_at DESC);
+    CREATE TABLE IF NOT EXISTS image_studio_works (
+      work_id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      parent_work_id TEXT,
+      file_path TEXT NOT NULL,
+      asset_url TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+      deleted_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES image_studio_tasks(task_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_works_created
+      ON image_studio_works(created_at DESC);
+  `);
+}
+
+function extendImageStudioSchema(db) {
+  addColumnIfMissing(db, 'image_studio_draft', 'state_json', "TEXT NOT NULL DEFAULT '{}'");
+  for (const [name, type] of Object.entries({
+    kind: "TEXT NOT NULL DEFAULT 'generate'",
+    requested_count: 'INTEGER NOT NULL DEFAULT 1',
+    completed_count: 'INTEGER NOT NULL DEFAULT 0',
+    request_json: "TEXT NOT NULL DEFAULT '{}'",
+    reference_assets_json: "TEXT NOT NULL DEFAULT '[]'",
+    parent_work_id: 'TEXT',
+    config_fingerprint: 'TEXT',
+    sent_at: 'TEXT',
+  })) addColumnIfMissing(db, 'image_studio_tasks', name, type);
+  for (const [name, type] of Object.entries({
+    kind: "TEXT NOT NULL DEFAULT 'generate'",
+    source_asset_id: 'TEXT',
+    generation_json: "TEXT NOT NULL DEFAULT '{}'",
+  })) addColumnIfMissing(db, 'image_studio_works', name, type);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS image_studio_assets (
+      asset_id TEXT PRIMARY KEY, file_path TEXT NOT NULL, asset_url TEXT NOT NULL,
+      mime_type TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+      sha256 TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_prompt_meta (
+      prompt_id TEXT PRIMARY KEY, purpose TEXT NOT NULL DEFAULT 'image',
+      tags_json TEXT NOT NULL DEFAULT '[]', notes TEXT NOT NULL DEFAULT '',
+      ratio TEXT NOT NULL DEFAULT '', origin_kind TEXT NOT NULL DEFAULT 'manual',
+      origin_source_id TEXT, origin_item_id TEXT, origin_version TEXT,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (prompt_id) REFERENCES prompt_items(prompt_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_styles (
+      style_id TEXT PRIMARY KEY, name TEXT NOT NULL, body TEXT NOT NULL,
+      ratio TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_sources (
+      source_id TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL,
+      homepage TEXT NOT NULL DEFAULT '', fallback_url TEXT NOT NULL DEFAULT '',
+      built_in INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1,
+      deleted_at TEXT, overrides_json TEXT NOT NULL DEFAULT '{}',
+      config_revision INTEGER NOT NULL DEFAULT 0,
+      content_hash TEXT, content_version TEXT, item_count INTEGER NOT NULL DEFAULT 0,
+      last_success_at TEXT, last_error TEXT, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_reference_items (
+      item_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, title_zh TEXT NOT NULL,
+      title_original TEXT NOT NULL, prompt_zh TEXT NOT NULL,
+      prompt_original TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]', author TEXT NOT NULL DEFAULT '',
+      source_url TEXT NOT NULL DEFAULT '', cover_url TEXT NOT NULL DEFAULT '',
+      content_hash TEXT NOT NULL, updated_at TEXT NOT NULL,
+      FOREIGN KEY (source_id) REFERENCES image_studio_sources(source_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_reference_source
+      ON image_studio_reference_items(source_id, item_id);
+    CREATE TABLE IF NOT EXISTS image_studio_reference_favorites (
+      source_id TEXT NOT NULL, item_id TEXT NOT NULL, prompt_id TEXT NOT NULL,
+      created_at TEXT NOT NULL, PRIMARY KEY (source_id, item_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_cover_cache (
+      item_id TEXT PRIMARY KEY, cover_url TEXT NOT NULL, file_path TEXT NOT NULL,
+      asset_url TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_layer_sets (
+      set_id TEXT PRIMARY KEY, work_id TEXT NOT NULL, width INTEGER NOT NULL,
+      height INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+      FOREIGN KEY (work_id) REFERENCES image_studio_works(work_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_layers (
+      layer_id TEXT PRIMARY KEY, set_id TEXT NOT NULL, name TEXT NOT NULL,
+      file_path TEXT NOT NULL, asset_url TEXT NOT NULL, sort_order INTEGER NOT NULL,
+      visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
+      FOREIGN KEY (set_id) REFERENCES image_studio_layer_sets(set_id)
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_psd_sessions (
+      set_id TEXT PRIMARY KEY, source_kind TEXT NOT NULL, source_id TEXT NOT NULL,
+      source_path TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+      status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      last_export_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS image_studio_psd_layers (
+      layer_id TEXT PRIMARY KEY, set_id TEXT NOT NULL, name TEXT NOT NULL,
+      file_path TEXT NOT NULL, asset_url TEXT NOT NULL, sort_order INTEGER NOT NULL,
+      visible INTEGER NOT NULL DEFAULT 1, sha256 TEXT NOT NULL,
+      FOREIGN KEY (set_id) REFERENCES image_studio_psd_sessions(set_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_image_studio_psd_source
+      ON image_studio_psd_sessions(source_kind, source_id, created_at DESC);
+  `);
+  addColumnIfMissing(db, 'image_studio_prompt_meta', 'cover_url', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'image_studio_psd_sessions', 'subject_layer_id', 'TEXT');
+  db.exec(`UPDATE image_studio_psd_sessions SET subject_layer_id =
+    (SELECT layer_id FROM image_studio_psd_layers WHERE set_id = image_studio_psd_sessions.set_id
+     ORDER BY sort_order DESC LIMIT 1) WHERE subject_layer_id IS NULL`);
+  for (const [name, type] of Object.entries({
+    last_attempt_at: 'TEXT', content_applied_at: 'TEXT', next_retry_at: 'TEXT',
+    consecutive_failures: 'INTEGER NOT NULL DEFAULT 0',
+  })) addColumnIfMissing(db, 'image_studio_sources', name, type);
+  addColumnIfMissing(db, 'image_studio_reference_items', 'translation_status', "TEXT NOT NULL DEFAULT 'pending'");
+  db.exec(`UPDATE image_studio_reference_items SET translation_status = 'ready'
+    WHERE translation_status = 'pending' AND prompt_zh <> prompt_original`);
+  const markTranslated = db.prepare("UPDATE image_studio_reference_items SET translation_status = 'ready' WHERE item_id = ?");
+  for (const row of db.prepare("SELECT item_id, prompt_original FROM image_studio_reference_items WHERE translation_status = 'pending'").all()) {
+    if (/[\u3400-\u9fff]/.test(row.prompt_original)) markTranslated.run(row.item_id);
+  }
+}
+
 function seedBundledPromptLibrary(db, library = require('../resources/bundled-prompt-library.json')) {
   const at = new Date().toISOString();
   const groupIds = new Map();
@@ -1243,9 +1392,51 @@ const schemaHealthTableGroups = [
     tables: ['prompt_groups', 'prompt_items'],
     repair: createPromptLibrarySchema,
   },
+  {
+    version: 33,
+    tables: ['image_studio_draft', 'image_studio_tasks', 'image_studio_works'],
+    repair: createImageStudioSchema,
+  },
+  {
+    version: 34,
+    tables: ['image_studio_assets', 'image_studio_prompt_meta', 'image_studio_styles',
+      'image_studio_sources', 'image_studio_reference_items', 'image_studio_layer_sets', 'image_studio_layers'],
+    repair: extendImageStudioSchema,
+  },
+  {
+    version: 35,
+    tables: ['image_studio_reference_favorites', 'image_studio_cover_cache',
+      'image_studio_psd_sessions', 'image_studio_psd_layers'],
+    repair: extendImageStudioSchema,
+  },
+  {
+    version: 36,
+    tables: ['image_studio_psd_sessions', 'image_studio_psd_layers'],
+    repair: extendImageStudioSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
+  { version: 34, table: 'image_studio_draft', columns: { state_json: "TEXT NOT NULL DEFAULT '{}'" } },
+  { version: 34, table: 'image_studio_tasks', columns: {
+    kind: "TEXT NOT NULL DEFAULT 'generate'", requested_count: 'INTEGER NOT NULL DEFAULT 1',
+    completed_count: 'INTEGER NOT NULL DEFAULT 0', request_json: "TEXT NOT NULL DEFAULT '{}'",
+    reference_assets_json: "TEXT NOT NULL DEFAULT '[]'", parent_work_id: 'TEXT',
+    config_fingerprint: 'TEXT', sent_at: 'TEXT',
+  } },
+  { version: 34, table: 'image_studio_works', columns: {
+    kind: "TEXT NOT NULL DEFAULT 'generate'", source_asset_id: 'TEXT',
+    generation_json: "TEXT NOT NULL DEFAULT '{}'",
+  } },
+  { version: 35, table: 'image_studio_sources', columns: {
+    last_attempt_at: 'TEXT', content_applied_at: 'TEXT', next_retry_at: 'TEXT',
+    consecutive_failures: 'INTEGER NOT NULL DEFAULT 0',
+  } },
+  { version: 35, table: 'image_studio_reference_items', columns: {
+    translation_status: "TEXT NOT NULL DEFAULT 'pending'",
+  } },
+  { version: 35, table: 'image_studio_prompt_meta', columns: { cover_url: "TEXT NOT NULL DEFAULT ''" } },
+  { version: 36, table: 'image_studio_psd_sessions', columns: { subject_layer_id: 'TEXT' } },
   {
     version: 23,
     table: 'conversation_threads',
@@ -1719,6 +1910,26 @@ const migrations = [
     description: '资料重分析后保留旧下游成果的复核标记',
     up(db) { addColumnIfMissing(db, 'technical_plan_meta', 'downstream_review_required', 'INTEGER NOT NULL DEFAULT 0'); },
   },
+  {
+    version: 33,
+    description: '新增生图草稿、任务和作品',
+    up: createImageStudioSchema,
+  },
+  {
+    version: 34,
+    description: '生图来源、参考资产、个人元数据与图层派生记录',
+    up: extendImageStudioSchema,
+  },
+  {
+    version: 35,
+    description: '生图参考收藏、封面缓存、周期检查与真实 PSD 会话',
+    up: extendImageStudioSchema,
+  },
+  {
+    version: 36,
+    description: '为既有 PSD 会话回填稳定主体图层 ID',
+    up: extendImageStudioSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -1826,6 +2037,8 @@ function createTechnicalPlanProjectDatabase(databasePath) {
 module.exports = {
   createConversationSchema,
   createPromptLibrarySchema,
+  createImageStudioSchema,
+  extendImageStudioSchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,
   createTechnicalPlanProjectDatabase,

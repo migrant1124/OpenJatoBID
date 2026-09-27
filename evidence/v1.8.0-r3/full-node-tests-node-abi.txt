@@ -1,0 +1,649 @@
+✔ registers conversation handlers and forwards public events (2.9697ms)
+✔ starts and closes the license lifecycle and forwards service status events to the renderer (3.1687ms)
+✔ conversation reasoning effort from Pi reaches the configured upstream request (0.9587ms)
+✔ conversation proxy diagnostics omit endpoint and prompt fingerprints (0.6078ms)
+✔ image capability errors are detected only for multimodal requests (0.4463ms)
+✔ conversation analytics omit the configured model endpoint (3.4095ms)
+✔ keeps a bounded queue and discards expired events (13.5503ms)
+✔ queues an event locally when no LAN server has been configured (2.4878ms)
+✔ flushes queued events to the configured LAN manager and removes accepted ids (1.3984ms)
+✔ format requirements is the third required Markdown task and the old structured task is inactive (2.1242ms)
+✔ format requirements accepts only the fixed first-line status marker (0.3359ms)
+✔ format requirements uses one Markdown chat request and no JSON or anchor path (0.4836ms)
+✖ single-item format retry stores valid Markdown and rejects a missing status marker (3.6861ms)
+✔ 资料修订后拒绝单项重跑，避免新来源快照混入旧成功项 (2.9176ms)
+✔ 采购与报价使用摘要结构化 JSON 固定 schema (1.8737ms)
+✔ 分段招标解析会报告每段完成及合并阶段 (1.2065ms)
+✔ 采购与报价解析仅发送采购报价相关片段 (2.5882ms)
+✔ 技术评分要求解析完成后自动识别重点编写项，失败前不阻断解析任务 (1.8761ms)
+✔ 重点编写项识别失败时按普通目录流程完成招标文件解析 (1.038ms)
+✔ 多标段识别仅返回一个有效标段时恢复为单标段 (4.0069ms)
+✔ 多标段识别会并发提交全部文本分段，再等待候选合并 (5.9096ms)
+✔ 并发分段有一段失败后，其他完成请求不会将任务恢复为运行中 (2.894ms)
+✔ 多标段识别清理展示描述中的原始行号、分隔符和换行标签 (1.1196ms)
+✔ process renders nodes and source edges rather than flat cards (3.1693ms)
+✔ organization renders nodes and source edges rather than flat cards (0.3472ms)
+✔ timeline renders nodes and source edges rather than flat cards (13.1563ms)
+✔ architecture renders nodes and source edges rather than flat cards (0.4783ms)
+✔ 接受受控 RACI JSON DSL (1.4927ms)
+✔ 拒绝 HTML、未知字段和不存在的边引用 (0.7983ms)
+✔ persists LAN management identity without replacing the existing analytics client id (30.1586ms)
+✔ does not create a LongCat profile for new configurations (3.6693ms)
+✔ preserves an existing LongCat provider as a legacy configuration (7.5183ms)
+✔ migrates local rendering defaults without dropping LAN or unknown configuration fields (10.127ms)
+✔ migrates the obsolete GitHub update channel to the Cloudflare R2 channel (8.1146ms)
+✔ Content Plan v5 保留完整章节写作合同并拒绝 v4 复用 (4.7855ms)
+✔ 旧策略计划保持结构可读并保留原方案来源映射 (1.5618ms)
+✔ 深度写作合同进入正文提示词，编排提示词要求完整合同 (1.3944ms)
+✔ 三级叶子正文请求获得本节时限、交付形式与祖先共通边界 (0.7734ms)
+✔ 正文消息使用 1.7.3 共用政策并移除机械短句硬规则 (0.5255ms)
+✔ 正文计划格式化保留排除边界并省略无意义空字段 (1.1992ms)
+✔ 纯正文和 JSON 修订路径选择适用政策且保留协议 (1.007ms)
+✔ 评分价值扩写提示词保留章节合同而非只按字数扩写 (0.8202ms)
+✔ 正文扩写按多个精确锚点局部插入，不重写整节正文 (3.1263ms)
+✔ 正文扩写拒绝模糊、重复或受保护 Markdown 范围 (1.1607ms)
+✔ 原方案补写复用精确锚点和受保护范围运行时 (2.0925ms)
+✔ 原方案优化必须原样保留既有表格和图片引用 (1.2136ms)
+✔ 最低字数补目录接受同一二级目录下六个独立三级叶子 (1.4768ms)
+✔ 最低字数补目录接受三级叶子和单分支，人工祖先不可追加 (0.6603ms)
+✔ 正文补目录与 JSON 修复使用自然拆分规则及原补丁形状 (0.8862ms)
+✔ 正文补目录示例 parent_id 不指向人工祖先下的 locked 节点 (0.3975ms)
+✔ 正文补目录不把非法 children 静默降为三级叶子 (0.7748ms)
+✔ 最低字数补目录仅允许重点章节新增五级叶子，且不拆分已有正文节点 (0.5493ms)
+✔ 项目理解扩写和重生成必须保留既有证据标记 (0.4521ms)
+✔ 创意 AI 生图提示词使用 Creative Brief 且禁止伪造品牌资产 (1.75ms)
+✔ 安监环视觉风格将专业对象和已确认配色传入 HTML 与 AI 生图上下文 (0.3266ms)
+✔ HTML 图种选择固定横版画布，未知类型保守采用 4:3 (2.3314ms)
+✔ HTML 探测和截图共用同一固定画布 (3.1935ms)
+✔ normal HTML illustration follows the upstream prompt, persists source, renders PNG and returns asset URL (0.8759ms)
+✔ HTML illustration resumes from the deterministic saved source without calling the model (0.6251ms)
+✔ long HTML illustration uses the Agent output contract (1.1413ms)
+✔ HTML illustration resumes directly from the recorded source path (0.5934ms)
+✔ HTML render failure keeps the persisted source path for the next run (0.8886ms)
+✔ HTML 横向溢出会反馈诊断并在限定轮次内修复 (0.7964ms)
+✔ HTML 文字变形诊断会反馈给布局修复，并在修复后保存 PNG (1.1562ms)
+✔ HTML 布局诊断持续失败时保留源码且不保存 PNG (1.6093ms)
+✖ illustration cleanup changes only freeform leaves (3.5806ms)
+✖ illustration apply rejects protected targets (3.7236ms)
+✔ 人工祖先保护未逐个标记的后代图片和附件引用 (0.7429ms)
+✔ 多张图片按不同正文块锚点插入同一小节且保留顺序 (15.3486ms)
+✔ 正文块哈希失配时退化到章节末尾并返回人工核对标记 (0.6083ms)
+✔ AI 与 HTML 候选独立保留，不因另一类图片数量或相同作用被挤占 (9.5201ms)
+✔ 图片编排只接受 HTML 和 AI 类型 (1.0953ms)
+✔ 图片编排配置不再携带数量上限 (0.4609ms)
+✔ 视觉风格按项目专业对象和核心成果识别，不被 Agent 示例风格带偏 (0.9358ms)
+✔ 通用工作动作不足以推荐视觉风格 (0.536ms)
+✔ 视觉节奏诊断只给出建议，不改变已选择图片计划 (1.2011ms)
+✔ 大量长文小节未配图时拒绝图片编排结果 (0.9596ms)
+✔ 人工编辑章节不计入图片覆盖和视觉节奏诊断 (0.6515ms)
+✔ 四级和五级正文叶子都可进入图片编排，人工五级叶子继续排除 (0.565ms)
+✔ 人工祖先下未逐个标记的叶子不进入自动配图 (0.5761ms)
+✔ 评分价值和合同缺口优先级不再按最短正文排序 (1.8529ms)
+✔ 质量审核输出评分覆盖、执行性、合规和模拟评分 (2.3219ms)
+✔ 质量诊断定位非开头精确重复和轻微改写候选，不改变准入语义 (2.4553ms)
+✔ 质量诊断保留数值和否定差异，忽略受保护表格，并识别碎片句 (0.487ms)
+✔ manual leaves are export-complete without generated body text (1.9467ms)
+✔ 轻量章节上下文保留静态职责、排除主题并限制已落盘摘录预算 (1.9787ms)
+✔ 10001 visible characters become one exact UTF-8 ready TXT attachment (76.7884ms)
+✔ attachment selection prevalidates the whole batch and returns visible placeholders before serial parsing (55.5233ms)
+✔ six selected attachments are rejected before any metadata or copy is created (12.0889ms)
+✔ attachment errors exposed to Renderer never include source paths (0.6191ms)
+✔ common image formats are normalized for multimodal requests without document parsing (111.1057ms)
+✔ history keeps only completed user/assistant messages before the current message (2.2575ms)
+✔ workspace exposes attachment content as files instead of inlining it into the prompt (1.3059ms)
+✔ workspace sends images separately from text files and keeps base64 out of the prompt workspace (0.5314ms)
+✔ reasoning negotiation only falls back for explicit capability errors (1.3069ms)
+✔ deleting the last thread creates exactly one replacement thread (9.5556ms)
+✔ send returns placeholders immediately, streams in memory, and persists once on completion (21.7016ms)
+✔ cancel aborts the active Pi task and persists streamed partial content once (4.2324ms)
+✔ store creates a thread, binds a ready attachment, and persists a completed response transactionally (10.3603ms)
+✔ store recovers interrupted assistant messages as errors (2.156ms)
+✔ uses a fixed Windows bootstrap path outside Electron userData (1.2805ms)
+✔ persists only the management address and public-key trust bootstrap fields (13.4972ms)
+(node:21688) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ standalone export contains only the selected answer and no technical-plan disclaimer (213.6315ms)
+✔ standalone export does not duplicate an existing H1 (21.114ms)
+✔ 重点编写项识别只以技术评分要求为模型输入 (4.6041ms)
+✔ 流式请求收到 JSON 图片响应时仍保存真图，且不重试计费请求 (53.6202ms)
+✔ 两个真实差异像素层写成可解析 PSD，拒绝重复整图 (70.0929ms)
+✔ 草稿、生成快照、作品恢复与三种真实编码导出 (259.5735ms)
+✔ 生图用途元数据跨分组重命名保留，旧对话提示词不混入 (38.6549ms)
+✔ 停止未发送任务只暂停目标作用域且不调用图片模型 (23.9754ms)
+✔ 来源覆盖与删除不会被内置默认值复活 (12.8245ms)
+✔ 来源校验、原子刷新、骤减和改址晚响应保护 (56.7222ms)
+✔ 批量删除会先校验全部文档，存在无效 ID 时不删除任何已选文档 (14.2977ms)
+✔ 批量删除去重后清理所选文档、调试日志和导入图片 (13.1325ms)
+✔ long-document orchestration segments all four stages, item-splits, ignores batchSize, and still uses injected aiService (1701.109ms)
+✔ low-context oversized business block fails before any AI request (17.4918ms)
+✔ one oversized paragraph becomes unique persisted blocks and completes all four stages (145.6892ms)
+✔ one oversized knowledge item fails before sending an over-budget follow-up request (25.4307ms)
+✔ ordinary short documents keep the single-segment service flow (38.3603ms)
+✔ uses the 400000 fallback, 80% request budget, 20% reserve, and fixed-message deduction (2.7147ms)
+✔ fails closed before splitting one business block across low-context segments (1.2537ms)
+✔ packs consecutive blocks without loss, duplication, or ordinary single-block splitting (1.6959ms)
+✔ keeps substantive short templates and leaves empty templates non-analyzable (4.4807ms)
+✔ packs item sub-batches by serialized length without loss or duplication (0.7754ms)
+✔ merges segmented extraction and match results deterministically (0.5578ms)
+✔ gives every ordinarily matched block one deterministic existing-item owner (0.8975ms)
+✔ recovery ownership is matches > new_items > discarded and ranges are rebuilt from claimed ids (0.6405ms)
+✔ uses a byte-stable block prefix before each stage task suffix (0.5601ms)
+✔ waits exactly 5000ms and prevents fan-out when the active-task guard changes (0.8708ms)
+✔ allSettled runner waits for every started task and then throws the first rejection (13.9705ms)
+✔ allows an injected fetch implementation without loading undici (124.8198ms)
+✔ uses undici fetch when no fetch implementation is injected (131.588ms)
+✔ sends authorization requests only to the configured LAN management address (2.3558ms)
+✔ maps network failures to a stable unreachable error (1.0413ms)
+✔ subscribes to authorization SSE with a Bearer watch token and never puts credentials in the URL (5.1267ms)
+✔ acknowledges a revocation with the short watch token in a POST body (0.566ms)
+✔ adds the default management port to a plain LAN IP (1.9872ms)
+✔ preserves an explicitly configured port (0.378ms)
+✔ rejects paths, credentials, public protocols, and invalid ports (0.8853ms)
+✔ 大 PDF 子进程按页分片解析并合并 Markdown (1875.4218ms)
+✔ builds a stable Device Code from the OS machine id without Client ID, MAC, or app version (2.7434ms)
+✔ logs in through the LAN manager, pins its public key, and saves a local signed license (22.2017ms)
+✔ allows local login during the thirty-day window but pauses after the deadline (9.1654ms)
+✔ records a server revocation immediately and refuses later offline login (16.7007ms)
+✔ rejects a different management public key after first trust is established (6.343ms)
+✔ coalesces concurrent lifecycle verification requests (9.0055ms)
+✔ validates new licenses by Device Code before the legacy fingerprint (6.7932ms)
+✔ keeps validating legacy licenses that only contain deviceFingerprint (7.4052ms)
+✔ sends both stable Device Code and legacy identifiers without using Client ID as the device identity (19.7425ms)
+✔ includes Device Code and legacy identifiers in authorization applications (2.1012ms)
+✔ starts the real-time watch as soon as a pending application is approved (5.4712ms)
+✔ restores the management address and pinned key from Bootstrap after reinstall and logs in without a new application (5.6425ms)
+✔ uses a manually restored management address for normal login without opening an application flow (4.2879ms)
+✔ refuses to replace a public key pinned in Bootstrap (2.9121ms)
+✔ treats conflicting user-config and Bootstrap public keys as a trust failure (2.7121ms)
+✔ persists REVOKED in the local License and never falls back to offline authorization (17.6521ms)
+✔ persists NOT_AUTHORIZED in the local License and never falls back to offline authorization (11.2352ms)
+✔ handles an SSE revocation immediately, persists it, acknowledges it, and emits an unauthorized status (10.0546ms)
+✔ emits an SSE revocation without waiting for an acknowledgement request that never settles (8.9286ms)
+✔ verifies immediately before reconnecting a disconnected real-time watch (22.9517ms)
+✔ keeps the thirty-minute verification interval as a fallback (12.0702ms)
+✔ restores a reinstalled client through a real temporary Bootstrap file after user config and License are deleted (46.3022ms)
+✔ 隐藏渲染窗口保持隔离、沙箱和 Web 安全 (2.3102ms)
+✔ 旧 HTML 只读渲染时移除脚本、事件和远程资源 (1.5623ms)
+✔ 本地渲染并发归一化固定在 1 到 20，非法值回到 5 (1.5041ms)
+✔ 长图连续 RGBA 内存估算不作为像素上限 (0.3795ms)
+✔ 完整 HTML 生图文档注入截图样式时不嵌套第二个 html 文档 (0.8399ms)
+✔ 固定横版截图容器只在新 HTML 路径设置目标高度 (1.7031ms)
+✔ 缺少显式 body 的完整 HTML 仍会在运行时把已有正文纳入截图根节点 (0.5481ms)
+✔ HTML 布局探针覆盖文字变形、裁切、遮挡和重叠，不把竖排文字列为问题 (0.4231ms)
+✔ 本地 HTML 临时文件使用 file URL 加载，避免渲染阶段缺少路径转换函数 (0.3512ms)
+(node:34964) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 人工祖先的全部叶子继承 AI 禁写，且不阻止导出 (3.5917ms)
+✔ 四级和五级叶子都进入正文生成目标，人工五级叶子继续排除 (0.9267ms)
+✔ 同章三级、四级、重点五级共七个叶子按实际树选取 (0.6068ms)
+✔ 目录语义审查只接受展示型结论，不能携带目录修改结果 (2.3832ms)
+✔ 目录生成保留招标文件规定的一级目录，并将全部节点默认设为 AI 编制 (2.1704ms)
+✔ 目录生成不得改写招标文件规定的一级目录 (0.3329ms)
+✔ 只读语义审查收到来源和要求，warning 不回写目录 (1.9579ms)
+✔ 三级叶子可省略或提供空 children，但非法 children 类型仍拒绝 (0.6899ms)
+✔ 目录生成实际流程会清除模型返回的人工和旧责任字段 (7.9819ms)
+✔ 目录生成接受同一二级目录下六个独立三级叶子 (3.0555ms)
+✔ 重点章节允许以三级主题、四级分支和五级叶子补充目录 (0.5181ms)
+✔ 自然混合目录保留三级、四级、五级叶子及 AI 单分支 (0.5966ms)
+✔ 取消数量门禁不放过重复节点身份和非法 children (0.9177ms)
+✔ 知识库补目录保留人工和已有正文节点，并接受六个独立三级叶子 (2.4328ms)
+✔ 知识库补丁不得修改人工祖先的未逐级标记后代 (0.5583ms)
+✔ 知识库增补和修复的最终请求沿用自然拆分且只返回 patch (1.2463ms)
+✔ 非重点章节拒绝模型新增五级目录 (0.4976ms)
+✔ 目录不再受五级深化门槛限制 (1.5221ms)
+✔ 评分矩阵不再绑定目录主承载或人工责任 (4.5203ms)
+✔ focus labels use service plan, highest score ties, then next distinct score (5.0428ms)
+✔ does not invent score focus when scores are unavailable (0.6129ms)
+✔ json-validation 只允许当前工作区内的相对文件 (3.2974ms)
+✔ json-validation 使用预置 Schema 校验工作区输出 (67.9207ms)
+✔ Pi 重试错误标准化仅处理已知瞬时上游错误 (1.4417ms)
+✔ conversation read-only tools reject absolute and parent paths outside the workspace (1.8932ms)
+✔ conversation Pi tool definitions enforce the same root at execution time (3.3764ms)
+✔ ask-user 将用户回答作为结构化工具结果返回 (1.7607ms)
+✔ ask-user 拒绝多个自定义输入选项 (1.3911ms)
+(node:28624) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 项目理解位置计划器在合法父节点内幂等补全 (4.5998ms)
+✔ 项目概况不误判为项目理解，但真实分析章节可复用 (0.3981ms)
+✔ 无安全位置和用户排除时不擅自新增一级章 (0.3781ms)
+✔ 正文引用校验拒绝孤儿标记和无标记事实 (1.145ms)
+✔ 项目理解子树只按归并后的独立 theme 自然拆分并聚合审核 (2.9277ms)
+✔ 刷新产生 pending 版本时不使当前正文审核失效 (2.0537ms)
+✔ 相同输入缓存命中会落盘成功任务，强制刷新会绕过缓存 (3.9804ms)
+✔ 授权知识库条目转为内部来源时不泄漏本地路径 (0.843ms)
+✔ 配置公开检索时为公开来源保留至少一个预算槽位 (0.404ms)
+✔ 讲话与适用性属性只有逐字存在于来源时才保留 (1.9058ms)
+✔ 层层关联只接受模型明确返回且端点与支撑证据均存在的关系 (2.4187ms)
+✔ Word 导出按首次出现编号并只追加已使用的参考依据 (1.3493ms)
+✔ 人工复核只能接受显式可确认缺口，阻断缺口仍输出待复核稿 (0.6124ms)
+✔ 已安排项目理解但尚无研究版本时 Word 仍标记待复核 (0.3797ms)
+✔ 项目理解出处进入真实 DOCX 文本与超链接关系 (206.8963ms)
+✔ 局部 Word 导出只装配所选项目理解小节的引用 (0.9342ms)
+✔ 研究入口拒绝密钥、本地路径和过长查询 (0.689ms)
+✔ SSRF 地址检查覆盖 IPv4 映射 IPv6 与本地网段 (6.573ms)
+✔ 无 Content-Length 的响应流在超过 2MB 时立即拒绝 (1.1884ms)
+✔ 整体研究预算和取消能结束业务等待并暂停当前 AI 队列 scope (13.1193ms)
+✔ 项目理解取消信号会中止模型传输且不触发重试 (65.6563ms)
+✔ HTML 正文提取忽略脚本并保留发布元数据 (13.5266ms)
+✔ HTML 正文提取支持政府站常见 GBK 编码 (23.9255ms)
+✔ Brave 检索配置保存在本地配置并限制预算范围 (29.1293ms)
+✔ SQLite v25 持久化项目理解状态，用户删除节点后记录排除 (99.1081ms)
+✔ 安装包固有提示词按稳定 ID 初始化且不污染同名用户分组 (4.6968ms)
+✔ 真实安装包资源可完整初始化 6 个分组和 31 条提示词 (7.3409ms)
+✔ 提示词分组和提示词 CRUD 持久化并执行软删除约束 (30.0017ms)
+✔ 默认通用分组可连同组内提示词删除 (2.8337ms)
+✔ 批量导入复用文档解析并保持一个文档对应一条提示词 (33.3691ms)
+✖ 章节写作合同指纹会覆盖目录、矩阵、事实和知识库版本 (4.336ms)
+✖ 章节任务书按二级目录共享评分职责且合同校验完整字段 (2.1888ms)
+✔ 快速诊断不调用外部模型并返回安全状态 (6.3927ms)
+✔ current procurement pricing and legacy quotation rows are excluded from technical prompt contexts (2.4507ms)
+(node:46188) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ technical-plan export ignores renderer outline and uses the authoritative store (2.367ms)
+✖ pending and manual responses hard-block technical-plan export (1.7024ms)
+✖ only missing required evidence can pass after explicit risk acknowledgement (0.3936ms)
+✔ heading numbering uses auto, source, and none policies without duplicates (1.0662ms)
+✔ generic DOCX export keeps renderer outline and applies policy-aware headings (155.1605ms)
+✔ authoritative manually filled Markdown reaches DOCX without rewriting content (28.0071ms)
+✔ Word 同时保留三级、四级、五级正文标题及内容且不输出节点说明 (18.1183ms)
+✔ 普通与章框 Word 均保留历史父节点正文且不导出内部说明 (29.9865ms)
+✔ a generated PNG referenced by authoritative Markdown is embedded into DOCX media (20.7727ms)
+✔ 合成项目A/B独立持久化，打开项目不运行任务 (268.1384ms)
+✔ 运行中拒绝切换和删除；取消删除不调用服务 (132.7234ms)
+✔ 删除受管图片失败时保留项目和数据，解除文件锁后可重试 (134.9232ms)
+✔ 项目目录部分删除失败后从备份恢复并允许重试 (120.4063ms)
+✔ 项目受管父目录为链接时拒绝越界删除 (72.9586ms)
+✔ 目标数据库缺失时打开失败且 Main 仍绑定原项目 (86.1706ms)
+✔ 旧单项目只登记一次，且新项目删除不影响旧项目 (87.8851ms)
+✔ 旧项目删除失败回滚数据库与修订文件，重试只清旧项目 (72.3609ms)
+✔ 同一项目分批追加不清旧解析；重复字节跳过，同名异内容待选择 (94.7329ms)
+✔ 投标范围配置变更不清空旧解析和目录 (80.3889ms)
+✔ 重选标段保留旧成果并使分析来源与旧标段快照过期 (86.3838ms)
+✔ 格式解析变化只标记旧下游待复核，不清目录和正文 (69.7005ms)
+✔ 外部原件在解析与复制之间变化时拒绝落库 (81.1626ms)
+✔ 正文开始后 Main 拒绝层级调整且保留已存目录 (71.33ms)
+✔ 旧目录节点补齐 v1.4.5 质量字段默认值 (2.724ms)
+✔ 要求响应矩阵拒绝未知评分点映射并规范化来源引用 (3.6907ms)
+✔ 目录准入 Gate 阻止未满足条件的增值锚点进入目录 (3.5552ms)
+✔ 三重反查会拒绝未映射评分点与未处理风险 (7.8539ms)
+✔ 通过 Gate 的目录锚点可供目录生成使用 (1.156ms)
+(node:35920) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 解析报告按已选项目顺序保留结构化值、来源和过期状态 (4.0192ms)
+✔ 解析报告的 Markdown 表格在 DOCX 中保持可编辑单元格 (172.4957ms)
+✔ 纯大纲 DOCX 包含全部层级和可选说明，不含正文及假页码 (16.7852ms)
+✔ normalizes sanitized bid analysis diagnostic contract for storage (2.9496ms)
+✔ loads bid analysis diagnostic contract from stored row JSON (1.3615ms)
+✔ success contract clears previous diagnostic while preserving analysis context (0.366ms)
+✔ stale analysis result is not persisted as a manual-review diagnostic (0.2974ms)
+✔ 新技术方案默认使用多标段识别 (164.9529ms)
+✔ 字数规则固定启用，兼容旧的总开关状态 (131.2312ms)
+✖ v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼容 (104.034ms)
+✔ 正文生成配置不再保存最低字数，字数控制仅保留目录快照 (87.0386ms)
+✔ 中断的正文全量生成会恢复持久化备份 (4.4372ms)
+✔ 目录任务成功后以一次提交保存，并保留生成阶段的重点标签 (2.9115ms)
+✔ selects the normalized Windows EXE before MSI and ZIP (1.7358ms)
+✔ compares stable versions and rejects prerelease ambiguity (0.4841ms)
+✔ uses the Cloudflare R2 update channel for both current and legacy configuration (0.2272ms)
+✔ normalizes manifest and GitHub digest SHA-256 values (0.3599ms)
+✔ keeps update errors stage-aware and removes HTML from the user message (1.8486ms)
+✔ reuses a cached update only when size and SHA-256 both match (25.325ms)
+✔ downloads atomically and deletes a stale cache when SHA-256 verification fails (143.0115ms)
+✔ HTML screenshot retry succeeds on the third attempt and reports both retries (2.9983ms)
+✔ packages only target-platform Agent tools (2.7906ms)
+node:internal/modules/cjs/loader:1505
+  throw err;
+  ^
+
+Error: Cannot find module 'playwright'
+Require stack:
+- D:\Documents\OpenJatobid\client\scripts\v175-outline-sort.test.cjs
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1502:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1073:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1097:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1118:12)
+    at Module._load (node:internal/modules/cjs/loader:1287:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1602:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (D:\Documents\OpenJatobid\client\scripts\v175-outline-sort.test.cjs:6:23)
+    at Module._compile (node:internal/modules/cjs/loader:1856:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'D:\\Documents\\OpenJatobid\\client\\scripts\\v175-outline-sort.test.cjs'
+  ]
+}
+
+Node.js v26.1.0
+✖ scripts\v175-outline-sort.test.cjs (192.6422ms)
+✔ license status subscription stays mounted before and after authorization (1.7729ms)
+✔ authorization confirmation rereads persisted status and rejects a concurrent invalidation event (0.6121ms)
+✔ startup login reflects an invalidation that arrives while authorization confirmation is in flight (0.3432ms)
+✔ 会话列表按时间归类、悬停显示菜单并支持批量删除 (2.6374ms)
+✔ 批量删除期间不加载即将删除的会话 (0.9753ms)
+✔ 对话输入框仅通过上边沿调节高度 (0.3862ms)
+✔ 系统提示词分组默认显示 (1.8704ms)
+✔ 提示词覆盖当前输入框内容 (64.2916ms)
+✔ 文件夹重命名使用受控 Radix Dialog，不再调用 window.prompt (2.3605ms)
+✔ 重命名提交显式保护空值、同名、重复提交和 IPC 空返回 (0.5195ms)
+✔ Viewer Header 使用独立语义区并将模式和开发者操作分组 (0.7499ms)
+✔ Viewer Header 支持长文件名和三档无横向滚动布局 (9.3955ms)
+✔ 文档列表支持当前文件夹多选、全选和批量删除 (1.0061ms)
+✔ 无可沉淀正文使用中性的已跳过状态，不显示为失败 (0.3876ms)
+✔ 开发者模式可一次提交全部待匹配文档，并说明匹配对象 (0.2712ms)
+✔ 后台任务回放后以工作区完整快照清除已失效的运行态 (1.3543ms)
+✖ 图片编排确认突出 AI 推荐并将人工选择作为兜底 (5.2259ms)
+✔ 图片编排确认使用紧凑顶部与风格图标 (4.1085ms)
+✔ 目录生成配置按实际区块数量分配行高，知识库选择区占据剩余空间 (2.5195ms)
+✔ 字数预设固定生效，不再展示总开关 (0.4945ms)
+✔ 目录生成弹窗扩大工作面并压缩 Agent 调试卡片 (0.902ms)
+✔ 目录排序提供同级上移下移，并在非法层级目标上禁用操作 (0.6118ms)
+ℹ tests 306
+ℹ suites 0
+ℹ pass 296
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2714.5979
+
+✖ failing tests:
+
+test at electron\services\bidAnalysisMarkdownFormat.test.cjs:92:1
+✖ single-item format retry stores valid Markdown and rejects a missing status marker (3.6861ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'error' !== 'success'
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\bidAnalysisMarkdownFormat.test.cjs:116:10)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'error',
+    expected: 'success',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron\services\contentIllustrationGeneration.protection.test.cjs:26:1
+✖ illustration cleanup changes only freeform leaves (3.5806ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '承诺原文'
+  - '承诺原文\n' +
+  -   '\n' +
+  -   '<!-- yibiao-illustration:start id="old" -->\n' +
+  -   '旧图\n' +
+  -   '<!-- yibiao-illustration:end -->'
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\contentIllustrationGeneration.protection.test.cjs:28:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '承诺原文',
+    expected: '承诺原文\n\n<!-- yibiao-illustration:start id="old" -->\n旧图\n<!-- yibiao-illustration:end -->',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron\services\contentIllustrationGeneration.protection.test.cjs:34:1
+✖ illustration apply rejects protected targets (3.7236ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\contentIllustrationGeneration.protection.test.cjs:35:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /不可写入的受控响应节点/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at electron\services\sectionWritingContract.test.cjs:13:1
+✖ 章节写作合同指纹会覆盖目录、矩阵、事实和知识库版本 (4.336ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'standard' !== 'deep'
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\sectionWritingContract.test.cjs:25:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'standard',
+    expected: 'deep',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron\services\sectionWritingContract.test.cjs:30:1
+✖ 章节任务书按二级目录共享评分职责且合同校验完整字段 (2.1888ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'R1.P1'
+  - ]
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\sectionWritingContract.test.cjs:36:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'R1.P1' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at electron\services\technicalPlanExport.test.cjs:48:1
+✖ pending and manual responses hard-block technical-plan export (1.7024ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\technicalPlanExport.test.cjs:54:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /请处理后再导出/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at electron\services\technicalPlanExport.test.cjs:61:1
+✖ only missing required evidence can pass after explicit risk acknowledgement (0.3936ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\technicalPlanExport.test.cjs:70:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /强制证明材料缺失，确认风险后方可导出/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at electron\services\technicalPlanStore.qualityPersistence.test.cjs:64:1
+✖ v1.4.5 质量矩阵和目录质量字段可持久化且旧字段保持兼容 (104.034ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - true
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\electron\services\technicalPlanStore.qualityPersistence.test.cjs:135:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts\v175-outline-sort.test.cjs:1:1
+✖ scripts\v175-outline-sort.test.cjs (192.6422ms)
+  'test failed'
+
+test at src\features\technical-plan\pages\ContentEditPage.illustrationConfirmation.ui.test.cjs:9:1
+✖ 图片编排确认突出 AI 推荐并将人工选择作为兜底 (5.2259ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /content-regenerate-card-head illustration-confirmation-headline/. Input:
+  
+  '<Dialog.Title>图片编排确认</Dialog.Title>\r\n' +
+    '              <Dialog.Description>请确认本次技术方案的配图计划，确认后开始生成。</Dialog.Description>\r\n' +
+    '            </div>\r\n' +
+    '            <div className="illustration-confirmation-overview">\r\n' +
+    '              <div className="illustration-confirmation-metrics">\r\n' +
+    '                <span>预计生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b><em>张</em></span>\r\n' +
+    "                <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'html').length || 0}</b><em>张</em></span>\r\n" +
+    "                <span>AI 生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === 'ai').length || 0}</b><em>张</em></span>\r\n" +
+    '              </div>\r\n' +
+    '              <div className="illustration-style-controls">\r\n' +
+    "                <section className={`illustration-style-card${recommendedVisualStyle ? '' : ' is-empty'}`}>\r\n" +
+    '                  <div className="illustration-style-recommendation">\r\n' +
+    '                    <span>AI 推荐视觉风格</span>\r\n' +
+    "                    <strong>{recommendedVisualStyle || 'AI 未推荐'}</strong>\r\n" +
+    '                    <p>{recommendedVisualStyle\r\n' +
+    "                      ? `依据：${(illustrationPlanDraft?.recommended_visual_style_evidence || []).join(' · ') || '项目核心对象与成果'}`\r\n" +
+    "                      : '未识别到足够的专业领域证据，请人工选择。'}</p>\r\n" +
+    '                  </div>\r\n' +
+    '                  <div className="illustration-style-icon-panel">\r\n' +
+    '                    <VisualStyleIcon style={selectedVisualStyle} />\r\n' +
+    "                    <span>{selectedVisualStyle || '待选择'}</span>\r\n" +
+    '                  </div>\r\n' +
+    '                  <div className="illustration-style-manual">\r\n' +
+    '                    <div className="illustration-style-manual-head">\r\n' +
+    '                      <span>人工兜底调整</span>\r\n' +
+    '                      {hasManualVisualStyle ? <i>已人工指定</i> : null}\r\n' +
+    '                    </div>\r\n' +
+    '                    <select\r\n' +
+    '                      aria-label="人工兜底调整全文视觉风格"\r\n' +
+    '                      value={selectedVisualStyle}\r\n' +
+    '                      onChange={(event) => setIllustrationPlanDraft((plan) => plan ? {\r\n' +
+    '                        ...plan,\r\n' +
+    '                        visual_style: event.target.value === plan.recommended_visual_style ? undefined : event.target.value,\r\n' +
+    '                      } : plan)}\r\n' +
+    '                    >\r\n' +
+    '                      {!recommendedVisualStyle ? <option value="">请选择</option> : null}\r\n' +
+    '                      {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}\r\n' +
+    '                    </select>\r\n' +
+    '                    <p>仅当 AI 推荐与项目实际不符时调整；确认后全文配图统一按人工选择执行。</p>\r\n' +
+    '                  </div>\r\n' +
+    '                </section>\r\n' +
+    '              </div>\r\n' +
+    '            </div>\r\n' +
+    '            {illustrationPlanDraft?.visual_rhythm_diagnostics?.length ? <div className="illustration-rhythm-diagnostics" role="status">\r\n' +
+    '              <strong>视觉节奏建议</strong>\r\n' +
+    '              <ul>{illustrationPlanDraft.visual_rhythm_diagnostics.map((diagnostic) => <li key={diagnostic.code}>{diagnostic.message}</li>)}</ul>\r\n' +
+    '            </div> : null}\r\n' +
+    '            <div className="illustration-confirmation-table">\r\n' +
+    '              <div className="illustration-confirmation-row illustration-confirmation-head"><span>生成</span><span>章节与锚点</span><span>图片标题</span><span>类型</span><span>图表类型与视觉作用</span></div>\r\n' +
+    '              {illustrationPlanDraft?.items.map((item) => (\r\n' +
+    '                <div className="illustration-confirmation-row" key={item.item_id}>\r\n' +
+    '                  <input type="checkbox" checked={item.selected !== false} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, selected: event.target.checked } : candidate) } : plan)} />\r\n' +
+    "                  <span>{item.section_ids.join('、')}</span>\r\n" +
+    '                  <input value={item.title} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, title: event.target.value } : candidate) } : plan)} />\r\n' +
+    '                  <select value={item.kind} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, kind: event.target.value as ContentIllustrationKind } : candidate) } : plan)}><option value="html">HTML</option><option value="ai">AI</option></select>\r\n' +
+    "                  <span>{item.image_type} · {item.visual_role || item.purpose || '未指定'}</span>\r\n" +
+    '                </div>\r\n' +
+    '              ))}\r\n' +
+    '            </div>\r\n' +
+    '            <p className="illustration-confirmation-note">图片编号和图注将在正文中自动生成。</p>\r\n' +
+    '            <div className="content-regenerate-actions">\r\n' +
+    '              <button type="button" className="secondary-action" onClick={() => void saveIllustrationPlanConfirmation(false)}>保存计划</button>\r\n' +
+    '              <button type="button" className="primary-action" onClick={() => void saveIllustrationPlanConfirmation(true)}>确认并开始生成</button>\r\n' +
+    '            </div>\r\n' +
+    '          </Dialog.Content>\r\n' +
+    '        </Dialog.Portal>\r\n' +
+    '      </Dialog.Root>\r\n' +
+    '\r\n' +
+    '      <Dialog.Root\r\n' +
+    '        open={Boolean(requirementItem)}\r\n' +
+    '        onOpenChange={(open) => {\r\n' +
+    '          if (!open) {\r\n' +
+    '            setRequirementItem(null);\r\n' +
+    "            setRegenerateRequirement('');\r\n" +
+    '          }\r\n' +
+    '        }}\r\n' +
+    '      >\r\n' +
+    '        <Dialog.Portal>\r\n' +
+    '          <Dialog.Overlay className="content-regenerate-modal" />\r\n' +
+    '          <Dialog.Content className="content-regenerate-card">\r\n' +
+    '            <div className="content-regenerate-card-head">\r\n' +
+    '              <span className="section-kicker">重新生成</span>\r\n' +
+    '              <Dialog.Title>{requirementItem?.id} {requirementItem?.title}</Dialog.Title>\r\n' +
+    '              <Dialog.Description>输入本次重新生成的具体要求，AI 会只覆盖当前小节正文。</Dialog.Description>\r\n' +
+    '            </div>\r\n' +
+    '            <textarea\r\n' +
+    '              value={regenerateRequirement}\r\n' +
+    '              onChange={(event) => setRegenerateRequirement(event.target.value)}\r\n' +
+    '              placeholder="例如：强化实施步骤，减少背景描述，突出设备配置与运维响应。"\r\n' +
+    '            />\r\n' +
+    '            <div className="content-regenerate-actions">\r\n' +
+    '              <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>\r\n' +
+    '              <button type="button" className="primary-action" onClick={startSectionRegeneration} disabled={taskBlocksGeneration}>开始重新生成</button>\r\n' +
+    '            </div>\r\n' +
+    '          </Dialog.Content>\r\n' +
+    '        </Dialog.Portal>\r\n' +
+    '      </Dialog.Root>\r\n' +
+    '      <Dialog.Root open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>\r\n' +
+    '        <Dialog.Portal>\r\n' +
+    '          <Dialog.Overlay className="image-preview-modal" />\r\n' +
+    '          <Dialog.Content className="image-preview-card">\r\n' +
+    '            <Dialog.Close className="image-preview-close" type="button" aria-label="关闭图片预览">×</Dialog.Close>\r\n' +
+    "            <Dialog.Title>{previewImage?.alt || '图片预览'}</Dialog.Title>\r\n" +
+    '            {previewImage && <img src={previewImage.src} alt={previewImage.alt} />}\r\n' +
+    '          </Dialog.Content>\r\n' +
+    '        </Dialog.Portal>\r\n' +
+    '      </Dialog.Root>\r\n' +
+    '    </div>\r\n' +
+    '  );\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    'export default ContentEditPage;\r'
+  
+      at TestContext.<anonymous> (D:\Documents\OpenJatobid\client\src\features\technical-plan\pages\ContentEditPage.illustrationConfirmation.ui.test.cjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<Dialog.Title>图片编排确认</Dialog.Title>\r\n              <Dialog.Description>请确认本次技术方案的配图计划，确认后开始生成。</Dialog.Description>\r\n            </div>\r\n            <div className="illustration-confirmation-overview">\r\n              <div className="illustration-confirmation-metrics">\r\n                <span>预计生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false).length || 0}</b><em>张</em></span>\r\n                <span>HTML 图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === \'html\').length || 0}</b><em>张</em></span>\r\n                <span>AI 生成图片 <b>{illustrationPlanDraft?.items.filter((item) => item.selected !== false && item.kind === \'ai\').length || 0}</b><em>张</em></span>\r\n              </div>\r\n              <div className="illustration-style-controls">\r\n                <section className={`illustration-style-card${recommendedVisualStyle ? \'\' : \' is-empty\'}`}>\r\n                  <div className="illustration-style-recommendation">\r\n                    <span>AI 推荐视觉风格</span>\r\n                    <strong>{recommendedVisualStyle || \'AI 未推荐\'}</strong>\r\n                    <p>{recommendedVisualStyle\r\n                      ? `依据：${(illustrationPlanDraft?.recommended_visual_style_evidence || []).join(\' · \') || \'项目核心对象与成果\'}`\r\n                      : \'未识别到足够的专业领域证据，请人工选择。\'}</p>\r\n                  </div>\r\n                  <div className="illustration-style-icon-panel">\r\n                    <VisualStyleIcon style={selectedVisualStyle} />\r\n                    <span>{selectedVisualStyle || \'待选择\'}</span>\r\n                  </div>\r\n                  <div className="illustration-style-manual">\r\n                    <div className="illustration-style-manual-head">\r\n                      <span>人工兜底调整</span>\r\n                      {hasManualVisualStyle ? <i>已人工指定</i> : null}\r\n                    </div>\r\n                    <select\r\n                      aria-label="人工兜底调整全文视觉风格"\r\n                      value={selectedVisualStyle}\r\n                      onChange={(event) => setIllustrationPlanDraft((plan) => plan ? {\r\n                        ...plan,\r\n                        visual_style: event.target.value === plan.recommended_visual_style ? undefined : event.target.value,\r\n                      } : plan)}\r\n                    >\r\n                      {!recommendedVisualStyle ? <option value="">请选择</option> : null}\r\n                      {visualStyleOptions.map((style) => <option key={style} value={style}>{style}</option>)}\r\n                    </select>\r\n                    <p>仅当 AI 推荐与项目实际不符时调整；确认后全文配图统一按人工选择执行。</p>\r\n                  </div>\r\n                </section>\r\n              </div>\r\n            </div>\r\n            {illustrationPlanDraft?.visual_rhythm_diagnostics?.length ? <div className="illustration-rhythm-diagnostics" role="status">\r\n              <strong>视觉节奏建议</strong>\r\n              <ul>{illustrationPlanDraft.visual_rhythm_diagnostics.map((diagnostic) => <li key={diagnostic.code}>{diagnostic.message}</li>)}</ul>\r\n            </div> : null}\r\n            <div className="illustration-confirmation-table">\r\n              <div className="illustration-confirmation-row illustration-confirmation-head"><span>生成</span><span>章节与锚点</span><span>图片标题</span><span>类型</span><span>图表类型与视觉作用</span></div>\r\n              {illustrationPlanDraft?.items.map((item) => (\r\n                <div className="illustration-confirmation-row" key={item.item_id}>\r\n                  <input type="checkbox" checked={item.selected !== false} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, selected: event.target.checked } : candidate) } : plan)} />\r\n                  <span>{item.section_ids.join(\'、\')}</span>\r\n                  <input value={item.title} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, title: event.target.value } : candidate) } : plan)} />\r\n                  <select value={item.kind} onChange={(event) => setIllustrationPlanDraft((plan) => plan ? { ...plan, items: plan.items.map((candidate) => candidate.item_id === item.item_id ? { ...candidate, kind: event.target.value as ContentIllustrationKind } : candidate) } : plan)}><option value="html">HTML</option><option value="ai">AI</option></select>\r\n                  <span>{item.image_type} · {item.visual_role || item.purpose || \'未指定\'}</span>\r\n                </div>\r\n              ))}\r\n            </div>\r\n            <p className="illustration-confirmation-note">图片编号和图注将在正文中自动生成。</p>\r\n            <div className="content-regenerate-actions">\r\n              <button type="button" className="secondary-action" onClick={() => void saveIllustrationPlanConfirmation(false)}>保存计划</button>\r\n              <button type="button" className="primary-action" onClick={() => void saveIllustrationPlanConfirmation(true)}>确认并开始生成</button>\r\n            </div>\r\n          </Dialog.Content>\r\n        </Dialog.Portal>\r\n      </Dialog.Root>\r\n\r\n      <Dialog.Root\r\n        open={Boolean(requirementItem)}\r\n        onOpenChange={(open) => {\r\n          if (!open) {\r\n            setRequirementItem(null);\r\n            setRegenerateRequirement(\'\');\r\n          }\r\n        }}\r\n      >\r\n        <Dialog.Portal>\r\n          <Dialog.Overlay className="content-regenerate-modal" />\r\n          <Dialog.Content className="content-regenerate-card">\r\n            <div className="content-regenerate-card-head">\r\n              <span className="section-kicker">重新生成</span>\r\n              <Dialog.Title>{requirementItem?.id} {requirementItem?.title}</Dialog.Title>\r\n              <Dialog.Description>输入本次重新生成的具体要求，AI 会只覆盖当前小节正文。</Dialog.Description>\r\n            </div>\r\n            <textarea\r\n              value={regenerateRequirement}\r\n              onChange={(event) => setRegenerateRequirement(event.target.value)}\r\n              placeholder="例如：强化实施步骤，减少背景描述，突出设备配置与运维响应。"\r\n            />\r\n            <div className="content-regenerate-actions">\r\n              <Dialog.Close className="secondary-action" type="button">取消</Dialog.Close>\r\n              <button type="button" className="primary-action" onClick={startSectionRegeneration} disabled={taskBlocksGeneration}>开始重新生成</button>\r\n            </div>\r\n          </Dialog.Content>\r\n        </Dialog.Portal>\r\n      </Dialog.Root>\r\n      <Dialog.Root open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>\r\n        <Dialog.Portal>\r\n          <Dialog.Overlay className="image-preview-modal" />\r\n          <Dialog.Content className="image-preview-card">\r\n            <Dialog.Close className="image-preview-close" type="button" aria-label="关闭图片预览">×</Dialog.Close>\r\n            <Dialog.Title>{previewImage?.alt || \'图片预览\'}</Dialog.Title>\r\n            {previewImage && <img src={previewImage.src} alt={previewImage.alt} />}\r\n          </Dialog.Content>\r\n        </Dialog.Portal>\r\n      </Dialog.Root>\r\n    </div>\r\n  );\r\n}\r\n\r\nexport default ContentEditPage;\r',
+    expected: /content-regenerate-card-head illustration-confirmation-headline/,
+    operator: 'match',
+    diff: 'simple'
+  }

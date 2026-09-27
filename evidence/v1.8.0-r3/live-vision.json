@@ -1,0 +1,9 @@
+{
+  "mode": "vision",
+  "model": "gpt-6-sol",
+  "requestSent": true,
+  "success": true,
+  "at": "2026-09-26T13:08:21.234Z",
+  "response": "主要颜色是红色。",
+  "imageBytesSent": 341
+}
