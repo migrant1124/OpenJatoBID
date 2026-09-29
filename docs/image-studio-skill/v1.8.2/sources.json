@@ -1,0 +1,141 @@
+{
+  "checkedAt": "2026-09-28",
+  "repositoryCommit": "733dad029b33d937bf2dfc3dc4bfa2cddad495ab",
+  "sources": [
+    {
+      "id": "O1",
+      "title": "OpenAI · GPT Image 2",
+      "url": "https://developers.openai.com/api/docs/models/gpt-image-2",
+      "note": "快速、高质量的生成和编辑；灵活尺寸、高保真图像输入。"
+    },
+    {
+      "id": "O2",
+      "title": "OpenAI · GPT Image 2.5 Sunburst",
+      "url": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+      "note": "以编辑精度为重要定位，接受文字及图像输入。"
+    },
+    {
+      "id": "O3",
+      "title": "OpenAI · GPT Image 2.5 Flare",
+      "url": "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare",
+      "note": "定位快速、高质量的日常生图。"
+    },
+    {
+      "id": "O4",
+      "title": "OpenAI · Introducing ChatGPT Images 2.5",
+      "url": "https://openai.com/index/introducing-chatgpt-images-2-5/",
+      "note": "Sunburst 更适合高精度视觉工作，生成时间较长；Flare 面向日常和快速迭代。厂商数据不等于金龙实测。"
+    },
+    {
+      "id": "O5",
+      "title": "OpenAI · Image generation",
+      "url": "https://developers.openai.com/api/docs/guides/image-generation",
+      "note": "文字位置、连续一致性和精确构图仍有限制；复杂请求可能较慢；服务端内容限制仍适用。"
+    },
+    {
+      "id": "G1",
+      "title": "Google · Nano Banana image generation",
+      "url": "https://ai.google.dev/gemini-api/docs/image-generation",
+      "note": "Nano Banana Pro 与 Nano Banana 2 的定位、官方标识、参考输入和输出限制。"
+    },
+    {
+      "id": "G2",
+      "title": "Google · Nano Banana Pro",
+      "url": "https://blog.google/innovation-and-ai/products/nano-banana-pro/",
+      "note": "复杂视觉、文字、创意控制和专业素材的官方介绍。"
+    },
+    {
+      "id": "G3",
+      "title": "Google · Nano Banana 2",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/nano-banana-2/",
+      "note": "快速迭代、文字渲染、图像本地化和参考图一致性的官方介绍。"
+    },
+    {
+      "id": "G4",
+      "title": "Google · Gemini 3 Pro Image",
+      "url": "https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image",
+      "note": "当前官方模型页；不能据此推断金龙的模型 ID。"
+    },
+    {
+      "id": "G5",
+      "title": "Google · Gemini 3.1 Flash Image",
+      "url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image",
+      "note": "当前官方模型页；不能据此推断金龙的模型 ID。"
+    },
+    {
+      "id": "Y1",
+      "title": "YouMind · AI image prompts Skill",
+      "url": "https://github.com/YouMind-OpenLab/ai-image-prompts-skill",
+      "note": "知识来源与原始推荐工作流；不是另一个生图模型。"
+    },
+    {
+      "id": "Y2",
+      "title": "YouMind · SKILL.md",
+      "url": "https://github.com/YouMind-OpenLab/ai-image-prompts-skill/blob/main/SKILL.md",
+      "note": "动态分类、相关案例和参考图信息。接入时适配为应用内优化，不照搬多轮聊天。"
+    },
+    {
+      "id": "Y3",
+      "title": "YouMind · setup.js",
+      "url": "https://github.com/YouMind-OpenLab/ai-image-prompts-skill/blob/main/scripts/setup.js",
+      "note": "现有 --check 路径会跳过已有文件；不作为产品更新器。"
+    },
+    {
+      "id": "Y4",
+      "title": "YouMind · LICENSE",
+      "url": "https://github.com/YouMind-OpenLab/ai-image-prompts-skill/blob/main/LICENSE",
+      "note": "保留 MIT 版权及许可文本。第三方样例图权利不作无限保证。"
+    },
+    {
+      "id": "R1",
+      "title": "OpenJatoBID · ImageStudioCreate.tsx",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/client/src/features/image-studio/pages/ImageStudioCreate.tsx",
+      "note": "现有创作页、优化、反推、保存、撤销、生成、对比弹窗。"
+    },
+    {
+      "id": "R2",
+      "title": "OpenJatoBID · imageStudioService.cjs",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/client/electron/services/imageStudioService.cjs",
+      "note": "现有 optimizePrompt、preflight、submit、start 及 PSD 调用。"
+    },
+    {
+      "id": "R3",
+      "title": "OpenJatoBID · aiService.cjs",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/client/electron/services/aiService.cjs",
+      "note": "统一模型队列、金龙默认地址和请求路径。"
+    },
+    {
+      "id": "R4",
+      "title": "OpenJatoBID · imageStudioSources.cjs",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/client/electron/services/imageStudioSources.cjs",
+      "note": "来源、快照、刷新、中文化和下载限制。"
+    },
+    {
+      "id": "R5",
+      "title": "OpenJatoBID · AGENTS.md",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/AGENTS.md",
+      "note": "CommonJS/TypeScript、Main/IPC、UI、统计和 Git 操作约束。"
+    },
+    {
+      "id": "R6",
+      "title": "OpenJatoBID · v1.8.0 UI Handoff",
+      "url": "https://github.com/migrant1124/OpenJatoBID/blob/733dad029b33d937bf2dfc3dc4bfa2cddad495ab/docs/v1.8.0-ui-handoff-final.md",
+      "note": "原有外壳与页面组织，不重做一级导航。"
+    },
+    {
+      "id": "J1",
+      "title": "金龙生图入口",
+      "url": "https://img-api.jlaudeapi.com/",
+      "note": "页面为动态应用；本次未取得登录后的模型能力目录及鉴权实测。"
+    }
+  ],
+  "userEvidence": [
+    {
+      "id": "U1",
+      "title": "用户提供的金龙中转站模型列表截图",
+      "path": "evidence/jinlong-model-list-20260929.png",
+      "providedAt": "2026-09-29",
+      "scope": "六个请求ID字符串确认；不是连通性、协议或费用测试"
+    }
+  ]
+}

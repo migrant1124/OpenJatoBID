@@ -977,6 +977,15 @@ CREATE TABLE IF NOT EXISTS image_studio_tasks (
 CREATE INDEX IF NOT EXISTS idx_image_studio_tasks_created
 ON image_studio_tasks(created_at DESC);
 
+CREATE TABLE IF NOT EXISTS image_studio_requests (
+  feature TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  input_fingerprint TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (feature, request_id)
+);
+
 CREATE TABLE IF NOT EXISTS image_studio_works (
   work_id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,

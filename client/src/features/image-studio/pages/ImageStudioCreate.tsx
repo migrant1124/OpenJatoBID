@@ -26,6 +26,8 @@ interface Props {
   setCount: (value: number) => void;
   size: string;
   setSize: (value: string) => void;
+  modelKey: string;
+  setModelKey: (value: string) => void;
   references: StudioReference[];
   setReferences: (value: StudioReference[]) => void;
   selectedWork: ImageStudioWork | null;
@@ -35,28 +37,42 @@ interface Props {
   start: () => Promise<string | void>;
   edit: (regions: StudioEditRegion[], sourceWorkId: string, sourceSha256: string, requestId: string) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
-  preflightBusy: boolean;
+  startBusy: boolean;
 }
 
 export function ImageStudioCreate(props: Props) {
   const { showToast } = useToast();
   const [format, setFormat] = useState<'png' | 'jpg' | 'webp'>('png');
   const [busy, setBusy] = useState<'optimize' | 'invert' | 'import' | null>(null);
-  const [candidate, setCandidate] = useState<{ kind: 'optimize' | 'invert'; original: string; text: string; sourceKey: string } | null>(null);
+  const [candidate, setCandidate] = useState<{ kind: 'optimize' | 'invert'; original: string; sourceKey: string; snapshotKey: string;
+    complete: boolean; status: string; sourceStatus: string; sources: Array<{ itemId: string; title: string; card: string; sourceId: string }>; cacheHit: boolean } | null>(null);
   const [candidateText, setCandidateText] = useState('');
   const [mode, setMode] = useState('优化');
+  const [useKnowledge, setUseKnowledge] = useState(true);
   const [viewer, setViewer] = useState<{ images: StudioViewerImage[]; index: number } | null>(null);
   const [editingSource, setEditingSource] = useState<{ workId: string; width: number; height: number } | null>(null);
   const editTriggerRef = useRef<HTMLButtonElement>(null);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [modelHelp, setModelHelp] = useState(false);
   const requestSerial = useRef(0);
+  const optimizationRef = useRef<{ requestId: string; unsubscribe: () => void; cancelled: boolean } | null>(null);
   const selectedSourceKey = props.references[0]?.assetId || props.references[0]?.workId || props.selectedWork?.workId || '';
   const latestSourceKey = useRef(selectedSourceKey);
   latestSourceKey.current = selectedSourceKey;
   const running = props.state.tasks.some((task) => ['queued', 'running', 'sent', 'downloading'].includes(task.status));
   const latestTask = props.state.tasks[0];
+  const selectedModel = props.state.models.find((model) => model.key === props.modelKey);
+  const action = props.references.length ? 'reference' : 'generate';
+  const canGenerate = Boolean(props.state.connection.configured && selectedModel?.actions.includes(action));
 
-  useEffect(() => () => { requestSerial.current += 1; }, []);
+  useEffect(() => () => {
+    requestSerial.current += 1;
+    if (optimizationRef.current) {
+      void window.yibiao!.imageStudio.cancelOptimization(optimizationRef.current.requestId);
+      optimizationRef.current.unsubscribe();
+      optimizationRef.current = null;
+    }
+  }, []);
 
   async function importImage() {
     if (props.references.length >= 4) return;
@@ -71,18 +87,59 @@ export function ImageStudioCreate(props: Props) {
     finally { setBusy(null); }
   }
 
-  async function optimize() {
+  const snapshotKey = JSON.stringify({ modelKey: props.modelKey, size: props.size,
+    references: props.references.map(({ assetId, workId, role }) => ({ assetId, workId, role })) });
+
+  function closeCandidate() {
+    requestSerial.current += 1;
+    if (optimizationRef.current) {
+      void window.yibiao!.imageStudio.cancelOptimization(optimizationRef.current.requestId);
+      optimizationRef.current.unsubscribe();
+      optimizationRef.current = null;
+    }
+    setCandidate(null);
+    setBusy(null);
+  }
+
+  async function optimize(force = false) {
     if (!props.prompt.trim()) return;
+    if (optimizationRef.current) closeCandidate();
     const serial = ++requestSerial.current;
     const original = props.prompt;
+    const requestId = crypto.randomUUID();
+    let lastSequence = 0;
+    const unsubscribe = window.yibiao!.imageStudio.onOptimizationEvent((event) => {
+      if (event.requestId !== requestId || event.sequence <= lastSequence || serial !== requestSerial.current) return;
+      lastSequence = event.sequence;
+      if (event.delta) setCandidateText((text) => text + event.delta);
+      setCandidate((current) => current?.kind === 'optimize' ? { ...current, status: event.status } : current);
+    });
+    optimizationRef.current = { requestId, unsubscribe, cancelled: false };
+    setCandidate({ kind: 'optimize', original, sourceKey: '', snapshotKey,
+      complete: false, status: 'searching', sourceStatus: 'searching', sources: [], cacheHit: false });
+    setCandidateText('');
     setBusy('optimize');
     try {
-      const result = await window.yibiao!.imageStudio.optimizePrompt({ prompt: original, mode });
+      const result = await window.yibiao!.imageStudio.optimizePrompt({ prompt: original, mode,
+        modelKey: props.modelKey, size: props.size,
+        references: props.references.map(({ assetId, workId, role }) => ({ assetId, workId, role })),
+        useKnowledge, force, requestId });
       if (serial !== requestSerial.current) return;
-      setCandidate({ kind: 'optimize', original, text: result.optimized, sourceKey: '' });
+      setCandidate({ kind: 'optimize', original, sourceKey: '', snapshotKey,
+        complete: result.complete, status: result.complete ? 'completed' : 'needs_review', sourceStatus: result.sourceStatus,
+        sources: result.sources, cacheHit: result.cacheHit });
       setCandidateText(result.optimized);
-    } catch (error) { showToast(String(error), 'error'); }
-    finally { if (serial === requestSerial.current) setBusy(null); }
+    } catch (error) {
+      if (serial === requestSerial.current) {
+        const cancelled = optimizationRef.current?.requestId === requestId && optimizationRef.current.cancelled;
+        setCandidate((current) => current?.kind === 'optimize' ? { ...current, status: cancelled ? 'cancelled' : 'failed' } : current);
+        if (!cancelled) showToast(String(error), 'error');
+      }
+    } finally {
+      unsubscribe();
+      if (optimizationRef.current?.requestId === requestId) optimizationRef.current = null;
+      if (serial === requestSerial.current) setBusy(null);
+    }
   }
 
   async function invert() {
@@ -97,7 +154,8 @@ export function ImageStudioCreate(props: Props) {
         workId: 'workId' in target ? target.workId : undefined,
       });
       if (serial !== requestSerial.current || latestSourceKey.current !== sourceKey) return;
-      setCandidate({ kind: 'invert', original: props.prompt, text: result.prompt, sourceKey });
+      setCandidate({ kind: 'invert', original: props.prompt, sourceKey, snapshotKey: '',
+        complete: true, status: 'completed', sourceStatus: '', sources: [], cacheHit: false });
       setCandidateText(result.prompt);
     } catch (error) { showToast(String(error), 'error'); }
     finally { if (serial === requestSerial.current) setBusy(null); }
@@ -111,11 +169,15 @@ export function ImageStudioCreate(props: Props) {
     } catch (error) { showToast(String(error), 'error'); }
   }
 
-  const applyAllowed = candidate && props.prompt === candidate.original &&
-    (candidate.kind === 'optimize' || selectedSourceKey === candidate.sourceKey);
+  const requiredLiterals = candidate ? [...candidate.original.matchAll(/[“"]([^”"]+)[”"]/g)].map((match) => match[1]) : [];
+  const requiredVariables = candidate ? [...candidate.original.matchAll(/\{[^{}]+\}/g)].map((match) => match[0]) : [];
+  const candidateValid = Boolean(candidateText.trim()) && [...requiredLiterals, ...requiredVariables].every((value) => candidateText.includes(value));
+  const applyAllowed = candidate && props.prompt === candidate.original && candidate.status !== 'failed' &&
+    candidate.status !== 'cancelled' && candidate.status !== 'streaming' && candidate.status !== 'searching' && candidate.status !== 'queued' &&
+    candidateValid && (candidate.kind === 'optimize' ? snapshotKey === candidate.snapshotKey : selectedSourceKey === candidate.sourceKey);
 
   return <div className="image-studio-create-shell">
-    <div className="image-studio-model-line">沿用设置 <span>文本：{props.state.textModelName || '未配置'}</span><span>生图：{props.state.imageModel.name || '未配置'}</span></div>
+    <div className="image-studio-model-line">文本：{props.state.textModelName || '未配置'} <span>生图连接：金龙中转站 · {props.state.connection.configured ? '已配置 Key' : '未配置 Key'}</span></div>
     <div className="image-studio-workspace">
       <section className="image-studio-compose" aria-label="创作输入">
         <div className="image-studio-compose-fields">
@@ -124,7 +186,6 @@ export function ImageStudioCreate(props: Props) {
         <textarea id="image-studio-prompt" maxLength={10001} value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} placeholder="用中文描述主体、场景、光线与希望保留的细节" />
         <div className="image-studio-field-foot"><span>{props.prompt.length.toLocaleString()} / 10,000</span></div>
         <div className="image-studio-tool-row">
-          <button type="button" onClick={() => void optimize()} disabled={!props.prompt.trim() || Boolean(busy)} title="优化提示词"><WandSparkles size={16} /> 优化提示词</button>
           <button type="button" onClick={() => void invert()} disabled={Boolean(busy)} title="根据图片生成参考描述"><ImagePlus size={16} /> 反推提示词</button>
           <button type="button" onClick={() => void props.savePrompt(props.prompt)} disabled={!props.prompt.trim()} title="保存到我的提示词"><Save size={16} /> 保存</button>
           {props.canUndoAppliedPrompt && <button type="button" onClick={props.undoAppliedPrompt} title="撤销刚应用的提示词"><RotateCcw size={16} /> 撤销应用</button>}
@@ -138,13 +199,15 @@ export function ImageStudioCreate(props: Props) {
           </div>)}
           {props.references.length < 4 && <button type="button" className="image-studio-add-reference" onClick={() => void importImage()} disabled={busy === 'import'} title="添加参考图片"><ImagePlus size={20} /><span>添加</span></button>}
         </div>
+        <div className="image-studio-model-action"><label>本次生图模型<select value={props.modelKey} onChange={(event) => props.setModelKey(event.target.value)}>{props.state.models.map((model) => <option value={model.key} key={model.key}>{model.requestModelId}</option>)}</select></label><button type="button" onClick={() => void optimize()} disabled={!props.prompt.trim() || Boolean(busy)}><WandSparkles size={16} /> 优化提示词</button></div>
+        <div className="image-studio-model-rule"><small>已自动匹配模型优化规则</small><button type="button" onClick={() => setModelHelp(true)}>模型选择说明</button></div>
         <div className="image-studio-two-fields"><label>生成张数<select value={props.count} onChange={(event) => props.setCount(Number(event.target.value))}><option value={1}>1 张</option><option value={2}>2 张</option><option value={4}>4 张</option></select></label><label>图片画幅<select value={props.size} onChange={(event) => props.setSize(event.target.value)}>
           {!imageSizes.some(([value]) => value === props.size) && props.size && <option value={props.size}>{props.size.replace('x', ' × ')} · 当前设置</option>}
           {imageSizes.map(([value, ratio]) => <option key={value} value={value}>{value.replace('x', ' × ')} · {ratio}</option>)}
         </select></label></div>
-        {!props.state.imageModel.available && <p className="image-studio-warning">请先在设置中配置可用的生图模型。</p>}
+        {!props.state.connection.configured && <p className="image-studio-warning">请先在设置中填写金龙中转站的生图模型 API Key。</p>}
         </div>
-        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!props.state.imageModel.available || !props.prompt.trim() || props.prompt.length > 10000 || running || props.preflightBusy}><Sparkles size={17} /> {props.preflightBusy ? '风险预检中' : running ? '生成中' : '生成图片'}</button>
+        <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!canGenerate || !props.prompt.trim() || props.prompt.length > 10000 || running || props.startBusy}><Sparkles size={17} /> {running || props.startBusy ? '生成中' : '生成图片'}</button>
       </section>
       <section className="image-studio-result" aria-label="生成结果">
         <div className="image-studio-panel-head"><h2>生成结果</h2><div className="image-studio-task-head">{latestTask && <small>{latestTask.status} · {latestTask.completedCount}/{latestTask.requestedCount}</small>}{running && latestTask && <button type="button" onClick={() => void window.yibiao!.imageStudio.cancelTask({ taskId: latestTask.taskId }).catch((error) => showToast(String(error), 'error'))}>停止等待</button>}</div></div>
@@ -166,13 +229,14 @@ export function ImageStudioCreate(props: Props) {
       </aside>
     </div>
     {candidate && <div className="image-studio-overlay" role="presentation"><section role="dialog" aria-modal="true" aria-label={candidate.kind === 'optimize' ? '提示词优化' : '图片反推提示词'} className="image-studio-dialog">
-      <div className="image-studio-panel-head"><h2>{candidate.kind === 'optimize' ? '提示词优化与对比' : '图片反推提示词'}</h2><button type="button" aria-label="关闭" onClick={() => setCandidate(null)}>×</button></div>
-      {candidate.kind === 'optimize' ? <><label>方向<select value={mode} onChange={(event) => setMode(event.target.value)}><option>优化</option><option>扩写</option><option>简化</option><option>英文</option><option>双语</option><option>商业海报</option><option>产品摄影</option><option>写实</option><option>插画</option></select></label><div className="image-studio-compare"><div><strong>原文</strong><p>{candidate.original}</p></div><div><strong>优化稿</strong><textarea value={candidateText} onChange={(event) => setCandidateText(event.target.value)} /></div></div></> : <><p className="image-studio-muted">根据图片生成参考描述，不代表原始提示词。</p><textarea value={candidateText} onChange={(event) => setCandidateText(event.target.value)} /></>}
-      {!applyAllowed && <p className="image-studio-warning">输入或图片已变化；请重新发起操作。</p>}
-      <footer><button type="button" onClick={() => setCandidate(null)}>取消</button><button type="button" disabled={!candidateText.trim()} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed || !candidateText.trim()} onClick={() => { props.applyPrompt(candidateText); setCandidate(null); }}>应用到输入框</button></footer>
+      <div className="image-studio-panel-head"><h2>{candidate.kind === 'optimize' ? '提示词优化与对比' : '图片反推提示词'}</h2><button type="button" aria-label="关闭" onClick={closeCandidate}>×</button></div>
+      {candidate.kind === 'optimize' ? <><p>当前生图模型：{selectedModel?.name} · {candidate.status === 'searching' ? '正在查找资料' : candidate.status === 'queued' ? '等待模型' : candidate.status === 'streaming' ? '生成中' : candidate.status === 'completed' ? '已完成' : candidate.status === 'needs_review' ? '需核对' : candidate.status === 'failed' ? '失败' : candidate.status === 'cancelled' ? '已取消' : candidate.status}</p><label>方向<select value={mode} onChange={(event) => setMode(event.target.value)}><option>优化</option><option>扩写</option><option>简化</option><option>英文</option><option>双语</option><option>商业海报</option><option>产品摄影</option><option>写实</option><option>插画</option></select></label><label><input type="checkbox" checked={useKnowledge} onChange={(event) => setUseKnowledge(event.target.checked)} /> 参考案例优化</label><div className="image-studio-compare"><div><strong>原文</strong><p>{candidate.original}</p></div><div><strong>优化稿</strong><textarea value={candidateText} readOnly={busy === 'optimize'} onChange={(event) => setCandidateText(event.target.value)} /></div></div><p>本次向 AI 提供 {candidate.sources.length} 条参考案例。{candidate.sourceStatus === 'no_match' ? '未找到相关案例，已按普通优化处理。' : ['loading', 'timeout', 'error'].includes(candidate.sourceStatus) ? '知识暂不可用，已按普通优化处理。' : ''}{candidate.cacheHit ? '复用历史结果。' : ''}{props.references.length ? '本次未分析图片内容，仅使用参考图用途。' : ''}</p><details><summary>查看实际提供的案例</summary>{candidate.sources.map((source) => <p key={source.itemId}><strong>{source.title}</strong> · {source.sourceId}<br />{source.card}</p>)}</details></> : <><p className="image-studio-muted">根据图片生成参考描述，不代表原始提示词。</p><textarea value={candidateText} onChange={(event) => setCandidateText(event.target.value)} /></>}
+      {!applyAllowed && candidate.status !== 'searching' && candidate.status !== 'queued' && candidate.status !== 'streaming' && <p className="image-studio-warning">输入、参考图片、模型或画幅已变化，或指定文字/模板变量需要核对；请重新优化或修正候选。</p>}
+      <footer><button type="button" onClick={closeCandidate}>取消</button>{candidate.kind === 'optimize' && <><button type="button" disabled={busy !== 'optimize'} onClick={() => { if (optimizationRef.current) { optimizationRef.current.cancelled = true; void window.yibiao!.imageStudio.cancelOptimization(optimizationRef.current.requestId); } }}>停止</button><button type="button" disabled={busy === 'optimize'} onClick={() => void optimize(true)}>重新优化</button></>}<button type="button" disabled={!applyAllowed} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed} onClick={() => { props.applyPrompt(candidateText); closeCandidate(); }}>应用到输入框</button></footer>
     </section></div>}
+    {modelHelp && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="模型选择说明" className="image-studio-dialog"><div className="image-studio-panel-head"><h2>模型选择说明</h2><button type="button" onClick={() => setModelHelp(false)}>×</button></div><div className="image-studio-model-comparison">{props.state.models.map((model) => <div key={model.key}><strong>{model.name}</strong><small>{model.key === 'banana2' ? '上一版生图模型' : model.requestModelId}</small><p>{model.key === 'sunburst' ? '精细编辑与高精度视觉工作。' : model.key === 'flare' ? '日常快速生图与迭代。' : model.key === 'banana_pro' ? '复杂图文、多图和品牌一致性。' : model.key === 'banana2' ? '日常配图与快速迭代。' : model.key === 'gpt2_1k' ? '价格便宜速度快。' : '通用图像生成与编辑。'}</p></div>)}</div><p>资料核实日期：2026-09-29。来源：<button type="button" onClick={() => void window.yibiao?.openExternal('https://developers.openai.com/api/docs/guides/image-generation')}>OpenAI</button>、<button type="button" onClick={() => void window.yibiao?.openExternal('https://ai.google.dev/gemini-api/docs/image-generation')}>Google</button>。</p><footer><button type="button" onClick={() => setModelHelp(false)}>返回创作</button></footer></section></div>}
     {viewer && <ImageStudioViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />}
     {editingSource && <ImageStudioRegionEditor source={editingSource} onClose={() => { setEditingSource(null); requestAnimationFrame(() => editTriggerRef.current?.focus()); }} onSubmit={props.edit} />}
-    {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} onClose={() => setLayersOpen(false)} />}
+    {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} modelKey={props.modelKey} onClose={() => setLayersOpen(false)} />}
   </div>;
 }

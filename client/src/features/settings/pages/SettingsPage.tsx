@@ -610,9 +610,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
     [state.textModel.provider]: textProfileFromState(state.textModel),
   });
 
+  const oneKUsesNormalRequest = state.imageModel.provider === 'jinlong' && state.imageModel.model_name === 'gpt-image-2-1k';
   const getCurrentImageModelProfiles = (): ImageModelProfiles => ({
     ...state.imageModelProfiles,
-    [state.imageModel.provider]: imageProfileFromState(state.imageModel),
+    [state.imageModel.provider]: imageProfileFromState(oneKUsesNormalRequest
+      ? { ...state.imageModel, request_mode: 'normal' } : state.imageModel),
   });
 
   const createClientConfig = (): ClientConfig => {
@@ -1754,11 +1756,14 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             <label className="settings-row">
               <div className="settings-row-copy">
                 <strong>请求方式</strong>
-                <span>流式请求只影响后端调用方式，应用仍等待完整图片生成后继续流程</span>
+                <span>{oneKUsesNormalRequest
+                  ? '该型号当前使用普通请求，以便接收完整图片结果'
+                  : '流式请求只影响后端调用方式，应用仍等待完整图片生成后继续流程'}</span>
               </div>
               <select
-                value={state.imageModel.request_mode}
+                value={oneKUsesNormalRequest ? 'normal' : state.imageModel.request_mode}
                 onChange={(event) => updateImageModelConfig({ request_mode: event.target.value as AiRequestMode })}
+                disabled={oneKUsesNormalRequest}
               >
                 {aiRequestModeOptions.map((option) => (
                   <option value={option.value} key={option.value}>{option.label}</option>

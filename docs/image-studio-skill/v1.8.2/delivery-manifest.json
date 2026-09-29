@@ -1,0 +1,207 @@
+{
+  "targetClientVersion": "1.8.2",
+  "documentRevision": "R2",
+  "revisedAt": "2026-09-29",
+  "archiveRoot": "v1.8.2/",
+  "repositoryDestination": "docs/image-studio-skill/v1.8.2/",
+  "approvedModelIds": [
+    "gpt-image-2",
+    "gpt-image-2-1k",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-flare",
+    "Nano Banana Pro",
+    "Nano Banana 2"
+  ],
+  "plannedTestCount": 68,
+  "files": [
+    {
+      "path": "01-生图模式技能接入规格.md",
+      "bytes": 30653,
+      "sha256": "8a3b06eb3995d461fc28a3b5648cbbbe1448a15a36f44518538768f7468bb8a8"
+    },
+    {
+      "path": "02-UI设计交接.md",
+      "bytes": 10788,
+      "sha256": "3f001cbfc01ff05eab059d5139607452fed3d584facdc9c3b7f5efa9437a0da1"
+    },
+    {
+      "path": "03-Codex执行提示词.md",
+      "bytes": 14117,
+      "sha256": "dd4fad1d1ba50b8df7c6f311a96f089e43214164be9a2bb5eeb6b67ab5dae9c1"
+    },
+    {
+      "path": "04-验收测试用例.md",
+      "bytes": 11585,
+      "sha256": "5ce0bdc8cfa540553f8fef1fca9dac22e2c1f94defa6eef3d71bdab4487c6259"
+    },
+    {
+      "path": "05-官网来源与核实边界.md",
+      "bytes": 9025,
+      "sha256": "72895fa9a53abe2a885024b14bbda25eb26e833c73a33e72519348fc10fdeb97"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4122,
+      "sha256": "bd41a58f74ba63ee1a81c72c77611be02d04ebfae3a3df0a0abcfd32973acb1b"
+    },
+    {
+      "path": "UI-七图总览.png",
+      "bytes": 1096365,
+      "sha256": "c6c58168574f4ded48426252116550e58085e457543480f2ca1f65ec8b11afc3",
+      "width": 1752,
+      "height": 2482
+    },
+    {
+      "path": "UI-设计索引.html",
+      "bytes": 3620,
+      "sha256": "c39fd9a4e9b74fd5090e765c083218403d63a249e109db53a5624a83f1d3fc9e"
+    },
+    {
+      "path": "config/knowledge-update.design.json",
+      "bytes": 519,
+      "sha256": "964d5bdffb24323c9f7f022f1e41b73f9a8db429706b9d542633201873e35083"
+    },
+    {
+      "path": "config/model-registry.design.json",
+      "bytes": 4474,
+      "sha256": "f258bb767592e9f42646fc2eace8b75a84865cb2497affc809550f06ef4657dd"
+    },
+    {
+      "path": "evidence/jinlong-model-list-20260929.png",
+      "bytes": 20532,
+      "sha256": "026df6eacd0857227aecfe5aadf3d05fa7aa82ba84152caaa722efbd8c925d85",
+      "width": 276,
+      "height": 542
+    },
+    {
+      "path": "media/cup.jpg",
+      "bytes": 43006,
+      "sha256": "cf1fefc3c26f71740837804c58eccfa2536f01e87f7c6b0bca03a7e045e2527c",
+      "width": 426,
+      "height": 585
+    },
+    {
+      "path": "media/cup2.jpg",
+      "bytes": 41720,
+      "sha256": "d1ac491b328e4ae3e21f0d7b932c2b4383b9780585336e3e11bbe677b9bfd5a5",
+      "width": 426,
+      "height": 585
+    },
+    {
+      "path": "media/style.jpg",
+      "bytes": 38377,
+      "sha256": "bae1341baecea8667ecbfdf01593a66a10365058543895a24784ab9ae8d8734a",
+      "width": 426,
+      "height": 585
+    },
+    {
+      "path": "sources.json",
+      "bytes": 6090,
+      "sha256": "bd4233771d7b147538ef27289c419efafb2fd4e6ffb7df29e33eb992e7022c54"
+    },
+    {
+      "path": "ui/H01-创作主界面.html",
+      "bytes": 21517,
+      "sha256": "c7cef8b01238ed9dfbd2a43cf1c25e525e74decbe0fb42bfa0ef86c5cff3ef3a"
+    },
+    {
+      "path": "ui/H01-创作主界面.png",
+      "bytes": 396274,
+      "sha256": "1fb25504f72ec4c0f36f2b155b3b166a8ef7778cfd99e00fd9a9f9eea560d289",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H02-模型选择说明.html",
+      "bytes": 24909,
+      "sha256": "d173becb6c9047ed47a9aff5f3280721059d46efb68876f77a9ddce7ff1dde83"
+    },
+    {
+      "path": "ui/H02-模型选择说明.png",
+      "bytes": 267582,
+      "sha256": "a112d8182cdb41a559bb091e5572fd9e6efdcf4ec5c03aef85d4ca137ee34e88",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H03-模型选择列表.html",
+      "bytes": 23123,
+      "sha256": "9ed09bc10365a7f6b912d0502bfb50451e2d4fbcb3953d84f78d1a32d5415743"
+    },
+    {
+      "path": "ui/H03-模型选择列表.png",
+      "bytes": 379956,
+      "sha256": "6b35e97a75d4b75c1f377da5ccaaa6d7d43e7d2c592541ed735cbefa0647e8e2",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H04-提示词优化对比.html",
+      "bytes": 24596,
+      "sha256": "ddcb4d10f9a9e751ab05b8b004fff1c098cb7e0dba20f4b36b66ef007f653ca6"
+    },
+    {
+      "path": "ui/H04-提示词优化对比.png",
+      "bytes": 246981,
+      "sha256": "dd43af08baa403177cf175db41ee3f1aa4524de4676d6d0abb8c04026827a584",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H05-技能知识更新.html",
+      "bytes": 25109,
+      "sha256": "f9d029b1a47decb1eaf700c76027d5116f302b92b9f385102d38472936863e52"
+    },
+    {
+      "path": "ui/H05-技能知识更新.png",
+      "bytes": 244597,
+      "sha256": "d7fa668a3baf45e220d86df750bcd3b258eee3c7b1fdf8b913865553ea811143",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H06-金龙密钥设置.html",
+      "bytes": 23622,
+      "sha256": "e1ed2eaebdfffbac0183c9adb7243b8f8e899130708ec2c70a73236360db0963"
+    },
+    {
+      "path": "ui/H06-金龙密钥设置.png",
+      "bytes": 234439,
+      "sha256": "6bbd039974da41e38d700a57b04ca10f6d92809efef654915ce2da24151f7088",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui/H07-反推提示词.html",
+      "bytes": 23608,
+      "sha256": "3855480986aa66c91554f2dc74df4605a8bc84af82b528cee06dd074caa63f34"
+    },
+    {
+      "path": "ui/H07-反推提示词.png",
+      "bytes": 340100,
+      "sha256": "ac593e1079fdab406d73e0d6d747bfb8126cc5bf9fa39870a091ec724cd9e806",
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "path": "ui-render-checks.json",
+      "bytes": 16003,
+      "sha256": "f385608ddaa4b66fcaad7bbd552f39cc617a67a292484bb301f5406a7966e028"
+    },
+    {
+      "path": "ui-views.json",
+      "bytes": 861,
+      "sha256": "bcef84f2af043a834337458ef3405423aea8fb62f270647207b3612ea27bc700"
+    },
+    {
+      "path": "交付检查记录.md",
+      "bytes": 2474,
+      "sha256": "ca67860191b7722cef6e99948485fcc24f6145133e5e63307fdeb16274856cfe"
+    },
+    {
+      "path": "阅读版.html",
+      "bytes": 91808,
+      "sha256": "11e0bfdfb7e3447dc81b3d7f59a2e253a298d85a68b27d4b242299873c7868f7"
+    }
+  ]
+}
