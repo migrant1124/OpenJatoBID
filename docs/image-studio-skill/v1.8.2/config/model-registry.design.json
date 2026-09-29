@@ -29,11 +29,11 @@
       "knowledgeProfile": "gpt-image",
       "idEvidence": "用户2026-09-29金龙模型列表截图确认；见evidence/jinlong-model-list-20260929.png",
       "channelVerified": false,
-      "protocol": "existing-jinlong-image-adapter-to-verify",
+      "protocol": "jinlong-images-generations-normal",
       "requestIdConfirmed": true,
       "requestIdConfirmedAt": "2026-09-29",
       "selectable": true,
-      "channelVerificationNote": "仅确认请求ID；未做真实鉴权或出图测试，协议与动作支持须单独核实"
+      "channelVerificationNote": "公开模型页示例为非流式 /v1/images/generations；本地模拟通过，真实响应结构与出图仍待核实"
     },
     {
       "key": "sunburst",
@@ -71,11 +71,11 @@
       "knowledgeProfile": "nano-banana-pro",
       "idEvidence": "用户2026-09-29金龙模型列表截图确认；见evidence/jinlong-model-list-20260929.png",
       "channelVerified": false,
-      "protocol": "existing-jinlong-image-adapter-to-verify",
+      "protocol": "jinlong-gemini-generateContent",
       "requestIdConfirmed": true,
       "requestIdConfirmedAt": "2026-09-29",
       "selectable": true,
-      "channelVerificationNote": "仅确认请求ID；未做真实鉴权或出图测试，协议与动作支持须单独核实"
+      "channelVerificationNote": "金龙公开模型页列出 /v1beta/models/{model}:generateContent；本地模拟请求通过，未做真实鉴权或出图测试"
     },
     {
       "key": "banana2",
@@ -85,11 +85,11 @@
       "knowledgeProfile": "nano-banana-2",
       "idEvidence": "用户2026-09-29金龙模型列表截图确认；见evidence/jinlong-model-list-20260929.png",
       "channelVerified": false,
-      "protocol": "existing-jinlong-image-adapter-to-verify",
+      "protocol": "jinlong-gemini-generateContent",
       "requestIdConfirmed": true,
       "requestIdConfirmedAt": "2026-09-29",
       "selectable": true,
-      "channelVerificationNote": "仅确认请求ID；未做真实鉴权或出图测试，协议与动作支持须单独核实"
+      "channelVerificationNote": "金龙公开模型页列出 /v1beta/models/{model}:generateContent；本地模拟请求通过，未做真实鉴权或出图测试"
     }
   ],
   "targetClientVersion": "1.8.2",

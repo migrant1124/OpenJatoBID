@@ -25,6 +25,7 @@ const textTokenStatsStore = require('./textTokenStatsStore.cjs');
 
 const AI_REQUEST_TIMEOUT_MS = 600000;
 const IMAGE_MODEL_TEST_TIMEOUT_MESSAGE = '生图模型测试超时，请检查 Base URL、API Key 或模型名称';
+const JINLONG_NANO_BASE_URL = 'https://jlaudeapi.com/v1beta';
 const ANALYTICS_PROJECT_NAME = 'yibiao-client';
 const OPENAI_IMAGE_PROVIDER_META = {
   jinlong: {
@@ -210,6 +211,23 @@ function normalizeOpenAICompatibleImageSize(imageConfig, requestSize) {
 function normalizeGoogleImageSize(imageConfig) {
   const size = String(imageConfig?.image_size || '1K').trim();
   return size || '1K';
+}
+
+function isJinlongNanoImage(imageConfig) {
+  return imageConfig?.provider === 'jinlong'
+    && ['Nano Banana Pro', 'Nano Banana 2'].includes(imageConfig.model_name);
+}
+
+function isJinlongImage2OneK(imageConfig) {
+  return imageConfig?.provider === 'jinlong' && imageConfig.model_name === 'gpt-image-2-1k';
+}
+
+function nanoImageConfig(size) {
+  const ratios = { '1024x1024': '1:1', '1024x2048': '9:16', '2048x1024': '16:9',
+    '1536x2048': '3:4', '2048x1536': '4:3', '2048x1152': '16:9',
+    '1152x2048': '9:16', '1536x1024': '3:2' };
+  const selected = String(size || '1024x1024');
+  return { imageSize: selected === '1024x1024' ? '1K' : '2K', aspectRatio: ratios[selected] || '1:1' };
 }
 
 function createAbortError() {
@@ -1196,23 +1214,31 @@ async function createImageFromOpenAICompatibleItem(item) {
 
 function getOpenAICompatibleImageFailureMessage(responseData, fallbackMessage) {
   const firstError = Array.isArray(responseData?.errors) ? responseData.errors.find((item) => item?.message) : null;
-  return firstError?.message || fallbackMessage;
+  if (firstError?.message) return firstError.message;
+  const message = responseData?.error?.message || responseData?.msg || responseData?.message;
+  if (message) return `${fallbackMessage}：${String(message).slice(0, 300)}`;
+  if (responseData?.task_id || responseData?.taskId) return `${fallbackMessage}：渠道返回任务 ID，当前响应尚无图片`;
+  const fields = responseData && typeof responseData === 'object' ? Object.keys(responseData).slice(0, 8).join('、') : '无';
+  return `${fallbackMessage}（响应字段：${fields || '无'}）`;
 }
 
-function createGoogleImageRequestBody(prompt, imageSize) {
+function createGoogleImageRequestBody(prompt, imageSize, options = {}) {
   const generationConfig = {
     responseModalities: ['TEXT', 'IMAGE'],
   };
   const normalizedImageSize = String(imageSize || '').trim();
   if (normalizedImageSize) {
-    generationConfig.imageConfig = { imageSize: normalizedImageSize };
+    generationConfig.imageConfig = { imageSize: normalizedImageSize,
+      ...(options.aspectRatio ? { aspectRatio: options.aspectRatio } : {}) };
   }
 
   return {
     contents: [
       {
         role: 'user',
-        parts: [{ text: prompt }],
+        parts: [{ text: prompt }, ...(options.images || []).map((image) => ({ inlineData: {
+          mimeType: image.mimeType || 'image/png', data: image.buffer.toString('base64'),
+        } }))],
       },
     ],
     generationConfig,
@@ -1268,9 +1294,12 @@ async function readGoogleImageStream(response) {
 async function requestGoogleImageData(baseUrl, imageConfig, requestBody, requestMode, fallbackMessage, options = {}) {
   let response = null;
   try {
+    options.onSent?.();
     response = await fetch(createGoogleImageUrl(baseUrl, imageConfig.model_name, requestMode), {
       method: 'POST',
-      headers: createGoogleHeaders(imageConfig.api_key),
+      headers: isJinlongNanoImage(imageConfig)
+        ? { 'Content-Type': 'application/json', Authorization: `Bearer ${imageConfig.api_key}` }
+        : createGoogleHeaders(imageConfig.api_key),
       body: JSON.stringify(requestBody),
       signal: options.signal,
     });
@@ -1278,7 +1307,7 @@ async function requestGoogleImageData(baseUrl, imageConfig, requestBody, request
     throw markAiRequestError(error, { retryable: true });
   }
 
-  await ensureOk(response, fallbackMessage, { source: 'google-image-model' });
+  await ensureOk(response, fallbackMessage, { source: isJinlongNanoImage(imageConfig) ? 'jinlong-image-model' : 'google-image-model' });
   if (requestMode === 'stream') {
     return readGoogleImageStream(response);
   }
@@ -1408,6 +1437,7 @@ async function chatWithConfig(app, config, request, analyticsService) {
 
 async function testOpenAICompatibleImageModel(app, config, provider, analyticsService) {
   const imageConfig = config.image_model || {};
+  const oneK = isJinlongImage2OneK(imageConfig);
   const meta = OPENAI_IMAGE_PROVIDER_META[provider] || OPENAI_IMAGE_PROVIDER_META.volcengine;
   let responseData = null;
   let analyticsTracked = false;
@@ -1421,14 +1451,14 @@ async function testOpenAICompatibleImageModel(app, config, provider, analyticsSe
   }
 
   const baseUrl = requireBaseUrl(imageConfig.base_url, `${meta.label} Base URL 缺失，请重新选择服务商后保存配置`);
-  const requestMode = normalizeImageRequestMode(imageConfig);
+  const requestMode = oneK ? 'normal' : normalizeImageRequestMode(imageConfig);
   const requestId = createRequestId();
   const logTitle = `AI生图测试-${meta.label}`;
   const requestBody = {
     model: imageConfig.model_name,
     prompt: '大字报，内容是“Jato AI BID 运行正常”',
     size: normalizeOpenAICompatibleImageSize(imageConfig),
-    response_format: 'url',
+    ...(oneK ? {} : { response_format: 'url' }),
     ...(requestMode === 'stream' ? { stream: true } : {}),
   };
 
@@ -1445,13 +1475,13 @@ async function testOpenAICompatibleImageModel(app, config, provider, analyticsSe
       created_at: new Date().toISOString(),
     });
     try {
-      responseData = await runWithAiRetry(() => runWithOperationTimeout(
+      responseData = await (oneK ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(
         (signal) => requestOpenAICompatibleImageData(
           baseUrl,
           imageConfig.api_key,
           requestBody,
           `${meta.label}生图测试失败`,
-          { signal },
+          { signal, noRetry: oneK },
         ),
         AI_REQUEST_TIMEOUT_MS,
       ));
@@ -1524,21 +1554,26 @@ async function testOpenAICompatibleImageModel(app, config, provider, analyticsSe
 
 async function testGoogleImageModel(app, config, analyticsService) {
   const imageConfig = config.image_model || {};
+  const nano = isJinlongNanoImage(imageConfig);
+  const provider = nano ? 'jinlong' : 'google-ai-studio';
+  const label = nano ? '金龙中转站' : 'Google AI Studio';
   let analyticsTracked = false;
 
   if (!imageConfig.api_key) {
-    throw new Error('请先填写 Google AI Studio API Key');
+    throw new Error(`请先填写${label} API Key`);
   }
 
   if (!imageConfig.model_name) {
-    throw new Error('请先填写 Google 生图模型名称');
+    throw new Error(`请先填写${label}生图模型名称`);
   }
 
-  const baseUrl = requireBaseUrl(imageConfig.base_url, 'Google AI Studio Base URL 缺失，请重新选择服务商后保存配置');
-  const requestMode = normalizeImageRequestMode(imageConfig);
+  const baseUrl = nano ? JINLONG_NANO_BASE_URL
+    : requireBaseUrl(imageConfig.base_url, 'Google AI Studio Base URL 缺失，请重新选择服务商后保存配置');
+  const requestMode = nano ? 'normal' : normalizeImageRequestMode(imageConfig);
   const requestId = createRequestId();
-  const logTitle = 'AI生图测试-Google AI Studio';
-  const requestBody = createGoogleImageRequestBody('大字报，内容是“Jato AI BID 运行正常”', normalizeGoogleImageSize(imageConfig));
+  const logTitle = `AI生图测试-${label}`;
+  const size = nano ? nanoImageConfig(imageConfig.image_size) : { imageSize: normalizeGoogleImageSize(imageConfig) };
+  const requestBody = createGoogleImageRequestBody('大字报，内容是“Jato AI BID 运行正常”', size.imageSize, size);
   const url = createGoogleImageUrl(baseUrl, imageConfig.model_name, requestMode);
   let responseData = null;
 
@@ -1547,7 +1582,7 @@ async function testGoogleImageModel(app, config, analyticsService) {
       request_id: requestId,
       log_title: logTitle,
       type: 'image-test-pending',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
       url,
       request: requestBody,
@@ -1560,7 +1595,7 @@ async function testGoogleImageModel(app, config, analyticsService) {
         imageConfig,
         requestBody,
         requestMode,
-        'Google AI Studio 生图测试失败',
+        `${label}生图测试失败`,
         { signal },
       ),
       AI_REQUEST_TIMEOUT_MS,
@@ -1571,14 +1606,14 @@ async function testGoogleImageModel(app, config, analyticsService) {
     const inlineData = getGoogleImageInlineData(responseData);
 
     if (!inlineData?.data) {
-      throw createAiResponseDataError('Google AI Studio 生图测试未返回图片数据', responseData);
+      throw createAiResponseDataError(`${label}生图测试未返回图片数据`, responseData);
     }
 
     writeAiLog(app, config, {
       request_id: requestId,
       log_title: logTitle,
       type: 'image-test',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
       request: requestBody,
       response: safeImageResponse(responseData),
@@ -1604,7 +1639,7 @@ async function testGoogleImageModel(app, config, analyticsService) {
       request_id: requestId,
       log_title: logTitle,
       type: 'image-test-error',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
       request: requestBody,
       response: getAiErrorLogResponse(error, responseData ? safeImageResponse(responseData) : null),
@@ -1619,15 +1654,16 @@ async function testGoogleImageModel(app, config, analyticsService) {
 
 async function generateOpenAICompatibleImage(app, config, request, provider, analyticsService) {
   const imageConfig = config.image_model || {};
+  const oneK = isJinlongImage2OneK(imageConfig);
   const meta = OPENAI_IMAGE_PROVIDER_META[provider] || OPENAI_IMAGE_PROVIDER_META.volcengine;
   const requestId = createRequestId();
   const logTitle = resolveAiLogTitle(request, request.title ? `AI生图-${request.title}` : 'AI生图');
-  const requestMode = normalizeImageRequestMode(imageConfig);
+  const requestMode = oneK ? 'normal' : normalizeImageRequestMode(imageConfig);
   const requestBody = {
     model: imageConfig.model_name,
     prompt: normalizeImagePrompt(request),
     size: normalizeOpenAICompatibleImageSize(imageConfig, request.size),
-    ...(request.images?.length ? {} : { response_format: 'url', ...(requestMode === 'stream' ? { stream: true } : {}) }),
+    ...(request.images?.length || oneK ? {} : { response_format: 'url', ...(requestMode === 'stream' ? { stream: true } : {}) }),
   };
   const baseUrl = requireBaseUrl(imageConfig.base_url, `${meta.label} Base URL 缺失，请重新选择服务商后保存配置`);
   let responseData = null;
@@ -1704,11 +1740,19 @@ async function generateOpenAICompatibleImage(app, config, request, provider, ana
 
 async function generateGoogleImage(app, config, request, analyticsService) {
   const imageConfig = config.image_model || {};
+  const nano = isJinlongNanoImage(imageConfig);
+  const provider = nano ? 'jinlong' : 'google-ai-studio';
+  const label = nano ? '金龙中转站' : 'Google AI Studio';
   const requestId = createRequestId();
   const logTitle = resolveAiLogTitle(request, request.title ? `AI生图-${request.title}` : 'AI生图');
-  const requestMode = normalizeImageRequestMode(imageConfig);
-  const requestBody = createGoogleImageRequestBody(normalizeImagePrompt(request), normalizeGoogleImageSize(imageConfig));
-  const baseUrl = requireBaseUrl(imageConfig.base_url, 'Google AI Studio Base URL 缺失，请重新选择服务商后保存配置');
+  const requestMode = nano ? 'normal' : normalizeImageRequestMode(imageConfig);
+  const size = nano ? nanoImageConfig(request.size || imageConfig.image_size) : { imageSize: normalizeGoogleImageSize(imageConfig) };
+  const requestBody = createGoogleImageRequestBody(normalizeImagePrompt(request), size.imageSize,
+    { ...size, images: nano ? request.images : undefined });
+  const logRequestBody = request.images?.length ? JSON.parse(JSON.stringify(requestBody,
+    (key, value) => key === 'data' && typeof value === 'string' ? '[image data omitted]' : value)) : requestBody;
+  const baseUrl = nano ? JINLONG_NANO_BASE_URL
+    : requireBaseUrl(imageConfig.base_url, 'Google AI Studio Base URL 缺失，请重新选择服务商后保存配置');
   const url = createGoogleImageUrl(baseUrl, imageConfig.model_name, requestMode);
   let responseData = null;
   let analyticsTracked = false;
@@ -1718,21 +1762,21 @@ async function generateGoogleImage(app, config, request, analyticsService) {
       request_id: requestId,
       log_title: logTitle,
       type: 'image-pending',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
       url,
-      request: requestBody,
+      request: logRequestBody,
       status: 'pending',
       created_at: new Date().toISOString(),
     });
-    responseData = await runWithAiRetry(() => runWithOperationTimeout(
+    responseData = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(
       (signal) => requestGoogleImageData(
         baseUrl,
         imageConfig,
         requestBody,
         requestMode,
-        'Google AI Studio 生图失败',
-        { signal },
+        `${label}生图失败`,
+        { signal, onSent: request.onSent },
       ),
       AI_REQUEST_TIMEOUT_MS,
     ));
@@ -1741,7 +1785,7 @@ async function generateGoogleImage(app, config, request, analyticsService) {
     const inlineData = getGoogleImageInlineData(responseData);
 
     if (!inlineData?.data) {
-      throw createAiResponseDataError('Google AI Studio 生图未返回图片数据', responseData);
+      throw createAiResponseDataError(`${label}生图未返回图片数据`, responseData);
     }
 
     const saved = saveGeneratedImage(app, {
@@ -1752,9 +1796,9 @@ async function generateGoogleImage(app, config, request, analyticsService) {
       request_id: requestId,
       log_title: logTitle,
       type: 'image',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
-      request: requestBody,
+      request: logRequestBody,
       response: safeImageResponse(responseData),
       result: saved,
       created_at: new Date().toISOString(),
@@ -1769,9 +1813,9 @@ async function generateGoogleImage(app, config, request, analyticsService) {
       request_id: requestId,
       log_title: logTitle,
       type: 'image-error',
-      provider: 'google-ai-studio',
+      provider,
       request_mode: requestMode,
-      request: requestBody,
+      request: logRequestBody,
       response: getAiErrorLogResponse(error, responseData ? safeImageResponse(responseData) : null),
       error: getAiErrorLogError(error, error.message),
       created_at: new Date().toISOString(),
@@ -1786,6 +1830,10 @@ async function generateImageWithConfig(app, config, request, analyticsService) {
   const availability = getImageModelAvailability(config);
   if (!availability.available) {
     throw new Error(availability.message);
+  }
+
+  if (isJinlongNanoImage(config.image_model)) {
+    return generateGoogleImage(app, config, request, analyticsService);
   }
 
   if (config.image_model?.provider === 'jinlong' || config.image_model?.provider === 'volcengine' || config.image_model?.provider === 'agnes' || config.image_model?.provider === 'custom') {
@@ -1928,6 +1976,10 @@ function createAiService({ app, configStore, analyticsService }) {
         analytics_client_id: config.analytics_client_id || currentConfig.analytics_client_id,
         analytics_created_at: config.analytics_created_at || currentConfig.analytics_created_at,
       };
+
+      if (isJinlongNanoImage(trackedConfig.image_model)) {
+        return testGoogleImageModel(app, trackedConfig, analyticsService);
+      }
 
       if (trackedConfig.image_model?.provider === 'jinlong' || trackedConfig.image_model?.provider === 'volcengine' || trackedConfig.image_model?.provider === 'agnes' || trackedConfig.image_model?.provider === 'custom') {
         return testOpenAICompatibleImageModel(app, trackedConfig, trackedConfig.image_model.provider, analyticsService);
