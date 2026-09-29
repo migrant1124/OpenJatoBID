@@ -1,0 +1,32 @@
+{
+  "documentRevision": "R1",
+  "implementationBaseline": "v1.8.2",
+  "releaseVersion": null,
+  "repoCommit": "401199121ca57ba30d622af31829e9ffccb59230",
+  "assets": [
+    {
+      "file": "ui/H01-已确认-提示词优化与对比.png",
+      "purpose": "用户最后确认的优化对比设计",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "702a2abb343bdd86c8ce1674cbd9a14bd31c5356ab581bb63456b1c726de8397",
+      "unchangedFromApprovedSource": true
+    },
+    {
+      "file": "ui/H02-已确认-案例图文详情.png",
+      "purpose": "用户最后确认的案例图文设计",
+      "width": 1448,
+      "height": 1086,
+      "sha256": "d2af9b1a6a7514007ad4c5eaf6b9132aa49c7070ce3cb45900445d1a460fcda9",
+      "unchangedFromApprovedSource": true
+    },
+    {
+      "file": "evidence/原页面问题截图.png",
+      "purpose": "用户报告问题的旧页面",
+      "width": 695,
+      "height": 1175,
+      "sha256": "0b786c58ddc67019880f359ca8f8dad179760ff15e8ef03f7ae78545200436d2",
+      "unchangedFromApprovedSource": null
+    }
+  ]
+}

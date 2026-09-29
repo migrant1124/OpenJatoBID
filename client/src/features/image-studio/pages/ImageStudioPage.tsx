@@ -33,6 +33,7 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   const saveQueueRef = useRef(Promise.resolve());
   const readyRef = useRef(false);
   const manuallySelectedRef = useRef(false);
+  const latestWorkIdRef = useRef<string | null>(null);
   const conflictRef = useRef(false);
   const startLockRef = useRef(false);
   const view = section === 'image-studio-prompts' ? 'prompts' : section === 'image-studio-works' ? 'works' : 'create';
@@ -44,6 +45,7 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
     void window.yibiao!.imageStudio.getState().then((loaded) => {
       if (!live) return;
       setState(loaded);
+      latestWorkIdRef.current = loaded.works[0]?.workId || null;
       setPrompt(loaded.draft.prompt);
       const saved = loaded.draft.state || {};
       setCount([1, 2, 4].includes(Number(saved.count)) ? Number(saved.count) : 1);
@@ -59,9 +61,10 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
       readyRef.current = true;
     }).catch((error) => showToast(String(error), 'error'));
     const unsubscribe = window.yibiao!.imageStudio.onEvent((event) => {
+      if (manuallySelectedRef.current && event.works[0]?.workId !== latestWorkIdRef.current) setNewResult(true);
+      latestWorkIdRef.current = event.works[0]?.workId || null;
       setState((current) => {
         if (!current) return current;
-        if (manuallySelectedRef.current && event.works[0]?.workId !== current.works[0]?.workId) setNewResult(true);
         return { ...current, tasks: event.tasks, works: event.works };
       });
     });
@@ -107,18 +110,25 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
         expectedSourceSha256: regions ? sourceSha256 : undefined,
         parentWorkId: editWork?.workId || parentWorkId || undefined };
       const result = await window.yibiao!.imageStudio.start(input);
-      showToast('已提交生图任务', 'success');
+      showToast(regions ? '已提交局部修改任务' : '已提交生图任务', 'success');
       return result.taskId;
     } catch (error) { showToast(String(error), 'error'); if (regions) throw error; }
     finally { startLockRef.current = false; setStartBusy(false); }
   }
 
-  async function savePrompt(text: string, originKind = 'manual') {
+  async function savePrompt(text: string, originKind = 'manual', meta?: { sourceId: string; itemId: string; version: string; note: string; coverUrl: string }) {
     if (!text.trim()) return;
     try {
-      await window.yibiao!.imageStudio.saveMyPrompt({ title: text.trim().slice(0, 24), contentMarkdown: text, originKind });
+      await window.yibiao!.imageStudio.saveMyPrompt({ title: text.trim().slice(0, 24), contentMarkdown: text,
+        originKind, originSourceId: meta?.sourceId, originItemId: meta?.itemId, originVersion: meta?.version,
+        notes: meta?.note, coverUrl: meta?.coverUrl });
       showToast('已保存到我的提示词', 'success');
     } catch (error) { showToast(String(error), 'error'); }
+  }
+  async function canApplyToDraft() {
+    await saveQueueRef.current;
+    const latest = await window.yibiao!.imageStudio.getState();
+    return !conflictRef.current && latest.draft.revision === revisionRef.current && latest.draft.prompt === prompt;
   }
 
   function applyPrompt(text: string) {
@@ -127,6 +137,11 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
     setPrompt(text);
     onSectionChange('image-studio-create');
     showToast('已应用到创作输入', 'success');
+  }
+  function newDraft() {
+    setPrompt(''); setReferences([]); setParentWorkId(null);
+    setCount(1); setAppliedPrompt(null); setAppliedStyle(null);
+    showToast('已新建空白创作', 'success');
   }
   function undoAppliedPrompt() {
     if (!appliedPrompt || prompt !== appliedPrompt.after) return;
@@ -188,7 +203,7 @@ function ImageStudioPage({ section, onSectionChange }: { section: SectionId; onS
   return <div className="image-studio-page">
     <header className="image-studio-head"><div><h1>生图模式</h1><p>从想法到图片，简单创作与修改</p></div><nav aria-label="生图模式页面" className="image-studio-tabs">{sections.map((item) => <button key={item.id} type="button" aria-current={(section === item.id || (section === 'image-studio' && item.id === 'image-studio-create')) ? 'page' : undefined} onClick={() => onSectionChange(item.id)}>{item.label}</button>)}</nav></header>
     {!state && <div className="image-studio-empty">正在读取生图工作区…</div>}
-    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} applyPrompt={applyPrompt} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} count={count} setCount={setCount} size={size} setSize={setSize} modelKey={modelKey} setModelKey={setModelKey} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={(regions, sourceWorkId, sourceSha256, requestId) => start(regions, sourceWorkId, sourceSha256, requestId)} savePrompt={savePrompt} startBusy={startBusy} />}
+    {state && view === 'create' && <ImageStudioCreate state={state} prompt={prompt} setPrompt={setPrompt} newDraft={newDraft} applyPrompt={applyPrompt} canApplyToDraft={canApplyToDraft} undoAppliedPrompt={undoAppliedPrompt} canUndoAppliedPrompt={Boolean(appliedPrompt && prompt === appliedPrompt.after)} count={count} setCount={setCount} size={size} setSize={setSize} modelKey={modelKey} setModelKey={setModelKey} references={references} setReferences={setReferences} selectedWork={selectedWork} selectWork={(id) => { setSelectedWorkId(id); manuallySelectedRef.current = true; setNewResult(false); }} newResult={newResult} showLatest={() => { setSelectedWorkId(null); manuallySelectedRef.current = false; setNewResult(false); }} start={() => start()} edit={(regions, sourceWorkId, sourceSha256, requestId) => start(regions, sourceWorkId, sourceSha256, requestId)} savePrompt={savePrompt} startBusy={startBusy} />}
     {state && view === 'prompts' && <ImageStudioPrompts applyPrompt={applyPrompt} applyStyle={applyStyle} undoStyle={undoAppliedStyle}
       canUndoStyle={Boolean(appliedStyle && typeof appliedStyle.before === 'string' && prompt.startsWith(appliedStyle.after))} appliedStyleId={appliedStyle?.styleId || ''} currentPrompt={prompt} />}
     {state && view === 'works' && <ImageStudioWorks works={state.works} refresh={refresh} openWork={openWork} continueWork={continueWork} />}

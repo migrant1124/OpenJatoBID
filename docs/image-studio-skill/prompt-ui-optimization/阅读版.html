@@ -1,0 +1,2100 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenJatoBID｜完整优化文档</title><style>
+:root { color-scheme:light; --ink:#1d2c42; --muted:#62728a; --blue:#185adb; --line:#dce5f0; }
+*{box-sizing:border-box} body{margin:0;background:#f3f6fa;color:var(--ink);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;font-size:15px;line-height:1.8}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+header.hero{background:#12243f;color:white;padding:34px 42px;margin-bottom:26px}
+.hero .eyebrow{font-size:12px;letter-spacing:.14em;color:#b6c9e9}.hero h1{font-size:28px;margin:8px 0}.hero p{margin:0;color:#d6e0ef}
+.layout{display:grid;grid-template-columns:235px minmax(0,1150px);gap:24px;max-width:1470px;padding:0 24px 44px;margin:auto}
+nav{align-self:start;position:sticky;top:18px;background:white;border:1px solid var(--line);border-radius:12px;padding:18px;font-size:14px}nav a{display:block;padding:7px 0}nav small{display:block;border-top:1px solid var(--line);margin-top:12px;padding-top:12px;color:var(--muted)}
+article{background:white;border:1px solid var(--line);border-radius:14px;padding:30px 38px;margin-bottom:28px;overflow-wrap:anywhere;scroll-margin-top:18px}
+h1{font-size:26px;line-height:1.5}h2{font-size:21px;margin-top:30px;padding-bottom:8px;border-bottom:1px solid var(--line)}h3{font-size:17px;margin-top:24px}h4{font-size:16px}p{margin:10px 0 16px}
+table{display:block;overflow:auto;border-collapse:collapse;width:100%;margin:16px 0 22px;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:75px}th{background:#edf3fb;text-align:left}tr:nth-child(even) td{background:#fafcff}
+pre{background:#f1f5fa;border:1px solid var(--line);border-radius:8px;padding:18px;overflow:auto;font-size:13px;line-height:1.75}code{font-family:Consolas,"Microsoft YaHei",monospace}p code,td code{background:#eff4fa;padding:2px 5px;border-radius:3px}
+img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}blockquote{margin:18px 0;border-left:3px solid var(--blue);padding:10px 18px;background:#f3f7fd}.label{color:var(--muted);font-size:12px;letter-spacing:.06em}.actions{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}.tag{display:inline-block;background:#eaf2ff;padding:5px 12px;border-radius:6px;font-size:13px;color:#245eb2}
+@media(max-width:1000px){.layout{display:block;padding:0 12px}nav{position:static;margin-bottom:18px}article{padding:20px}.hero{padding:24px!important}table{font-size:13px}}
+@media print{nav,.hero .actions{display:none}.layout{display:block;max-width:none;padding:0}body{background:white}article{border:0;padding:0;break-before:page}pre{white-space:pre-wrap}table{display:table;font-size:10px}th,td{padding:5px}h2,h3{break-after:avoid}}
+</style></head><body><header class="hero"><div class="eyebrow">OPENJATOBID · DESIGN & IMPLEMENTATION</div><h1>提示词优化对比与案例图文详情</h1><p>以用户最后确认的两张图为基准 · v1.8.2 发布后增量修复 · 文档 R1</p></header><div class="layout"><nav><strong>文档目录</strong><a href="#doc0">README</a><a href="#doc1">01-完整优化规格</a><a href="#doc2">02-UI-Handoff</a><a href="#doc3">03-Codex执行提示词</a><a href="#doc4">04-验收测试用例</a><a href="#doc5">05-现状核查与来源</a><a href="UI-设计索引.html">查看两张已确认原图</a><small>这是规格阅读页，不是已经开发完成的产品界面。真实业务与外部模型测试须由实施者另行执行。</small></nav><main><article id="doc0"><div class="label">README.md</div><h1>OpenJatoBID｜提示词优化对比与案例图文优化包</h1>
+<p><strong>适用基线：已发布的 v1.8.2。文档修订：R1。下一发布版本未指定。</strong></p>
+<h2>1. 这次改什么</h2>
+<p>仅修复两页：宽幅「提示词优化与对比」，以及能看真实案例图片、完整中文和已发送片段的「查看实际提供的案例」。原有反推、主创作的模型选择/优化按钮位置、独立生成、六模型范围和金龙配置不变。用户最后确认的两张设计图原样随包。</p>
+<h2>2. 文件怎么放</h2>
+<p>ZIP 解压后得到 <code>prompt-ui-optimization</code> 文件夹。将<strong>整个文件夹</strong>放入：</p>
+<pre><code class="language-text">D:\Documents\OpenJatobid\docs\image-studio-skill\
+</code></pre>
+<p>最后路径应为：</p>
+<pre><code class="language-text">D:\Documents\OpenJatobid\docs\image-studio-skill\prompt-ui-optimization\01-完整优化规格.md
+</code></pre>
+<p>不要套成 <code>prompt-ui-optimization\prompt-ui-optimization</code>。旧 <code>docs/image-studio-skill/v1.8.2/</code> 开发资料可以保留；本轮是独立增量包，不覆盖已发布版本规格。本目录不是 Skill 运行目录，不放进 <code>.agents/skills</code>、<code>node_modules</code> 或软件安装目录。</p>
+<h2>3. 文件索引</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="01-%E5%AE%8C%E6%95%B4%E4%BC%98%E5%8C%96%E8%A7%84%E6%A0%BC.md">01-完整优化规格.md</a></td>
+<td>最终业务范围、流程、状态、数据快照、缓存、中文、异常与验收</td>
+</tr>
+<tr>
+<td><a href="#doc2">02-UI-Handoff.md</a></td>
+<td>两页组件、尺寸、按钮、滚动、焦点、响应式和局部CSS参考</td>
+</tr>
+<tr>
+<td><a href="03-Codex%E6%89%A7%E8%A1%8C%E6%8F%90%E7%A4%BA%E8%AF%8D.md">03-Codex执行提示词.md</a></td>
+<td>可粘贴总任务＋每步输入/输出/约束/退出条件</td>
+</tr>
+<tr>
+<td><a href="04-%E9%AA%8C%E6%94%B6%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B.md">04-验收测试用例.md</a></td>
+<td>待执行的逐项测试和性能采样规则</td>
+</tr>
+<tr>
+<td><a href="05-%E7%8E%B0%E7%8A%B6%E6%A0%B8%E6%9F%A5%E4%B8%8E%E6%9D%A5%E6%BA%90.md">05-现状核查与来源.md</a></td>
+<td>仓库固定提交证据、官方交互/安全参考及未实测事项</td>
+</tr>
+<tr>
+<td><a href="%E9%98%85%E8%AF%BB%E7%89%88.html">阅读版.html</a></td>
+<td>浏览器阅读全部文档，不是应用原型</td>
+</tr>
+<tr>
+<td><a href="UI-%E8%AE%BE%E8%AE%A1%E7%B4%A2%E5%BC%95.html">UI-设计索引.html</a></td>
+<td>两张已确认原图的独立查看入口</td>
+</tr>
+<tr>
+<td><code>ui/</code></td>
+<td>两张已确认设计图；不要只复制Markdown漏掉此目录</td>
+</tr>
+<tr>
+<td><code>evidence/</code></td>
+<td>用户旧页面截图，仅作复现对照</td>
+</tr>
+<tr>
+<td><code>assets-manifest.json</code></td>
+<td>原图分辨率、校验和与对应资产说明</td>
+</tr>
+</tbody>
+</table>
+<h2>4. 给 Codex 的启动指令</h2>
+<pre><code class="language-text">本轮资料已经放在 docs/image-studio-skill/prompt-ui-optimization/。
+请先阅读根目录 AGENTS.md、开发说明.md 和本轮 README.md，
+再完整阅读 03-Codex执行提示词.md，按其中总任务和分步要求实施。
+业务以01规格为准；UI以02交接和ui内最后确认的两图为准。
+这是一轮 v1.8.2 发布后的局部修复，不自行改版本，不回退当前代码。
+不擅自提交、推送、合并、打标签、发布或发起收费模型测试。
+实施记录、真实截图和测试报告放在本轮目录的 implementation/。
+</code></pre>
+<p>意思是：让 Codex 明确读取这次增量规格而非旧发布包，保留已确认界面和现有功能，把开发记录写回同一文件夹。产品代码按项目模块规范修改，不写在 docs 里。</p>
+<h2>5. 哪些图上内容不应硬编码</h2>
+<p>固定「3条」、模型名、示例文本、<code>353 / 2000</code> 都是设计示意；真实计数与模型来自会话，应用上限仍为10,000。四个常用方向优先呈现，旧方向按钮化保留；完整中文不能用摘要代替；案例页应用的是当前案例正文，覆盖前确认，不自动添加图片或生成。</p>
+<h2>6. 交付状态</h2>
+<p>本包是规格和设计资料，不是已经写入仓库的补丁。已确认两张图不需要再次重选布局；下一版本号/发布仍由用户单独决定。测试表全部初始为待执行，不以文档生成代替工程验收。</p>
+</article><article id="doc1"><div class="label">01-完整优化规格.md</div><h1>OpenJatoBID｜提示词优化对比与案例图文详情优化规格</h1>
+<p><strong>文档编号：IMG-PROMPT-UX-01｜文档修订：R1｜编制日期：2026-09-29</strong></p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>约定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实施基线</td>
+<td>已发布的客户端 v1.8.2；本次读取的 main 提交为 <code>401199121ca57ba30d622af31829e9ffccb59230</code></td>
+</tr>
+<tr>
+<td>本轮性质</td>
+<td>v1.8.2 发布后的局部缺陷修复与体验优化，不重做整个生图模式</td>
+</tr>
+<tr>
+<td>下一发布版本</td>
+<td>用户尚未指定。R1 是文档修订号，不是软件版本；不得自行升级为 v1.8.3，也不得重新发布 v1.8.2</td>
+</tr>
+<tr>
+<td>设计依据</td>
+<td>用户最后确认的两张独立图：H01「提示词优化与对比」、H02「查看实际提供的案例」</td>
+</tr>
+<tr>
+<td>交付内容</td>
+<td>业务规格、UI Handoff、Codex 分步指令、验收用例、证据索引及已确认原图</td>
+</tr>
+<tr>
+<td>本文状态</td>
+<td>开发实施依据；不表示代码已修改、测试已通过或模型接口已实测</td>
+</tr>
+</tbody>
+</table>
+<h2>0. 一句话总结</h2>
+<p>在不改变员工原有生图操作的前提下，把优化弹窗改成宽幅、可完整阅读的对比界面，并让本次案例真正能看图、读完整中文、核对 AI 实际收到的资料，减少盲目应用和反复滚动的风险；具体节省时间由实施后的对照测试确定。</p>
+<h2>1. 本轮最终决定</h2>
+<p>本轮保留用户最后确认的两张设计图，不改成三列工作台、不嵌入一长串图文、不改造一级导航。页面一处理「原文与优化稿的比较和编辑」；页面二处理「本次案例的图片、中文全文与真实引用内容」。两页分别呈现，共用当前优化会话，返回后不丢内容。</p>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>确定要求</th>
+<th>验收重点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R01</td>
+<td>优化弹窗改为宽幅；高度受窗口约束</td>
+<td>不再出现又窄又长、底部按钮在屏幕外的布局</td>
+</tr>
+<tr>
+<td>R02</td>
+<td>原独立大对勾改为带图标的案例信息栏</td>
+<td>图标不是复选框，不产生不明开关</td>
+</tr>
+<tr>
+<td>R03</td>
+<td>优化方向使用按钮式单选</td>
+<td>单击选择不偷偷发起付费请求；通过「重新优化」执行</td>
+</tr>
+<tr>
+<td>R04</td>
+<td>原文与优化稿同高，右侧更宽且编辑区填满剩余高度</td>
+<td>滚动发生在真实文本区，不是小输入框嵌套在大空白卡片中</td>
+</tr>
+<tr>
+<td>R05</td>
+<td>案例展示为独立的第二页：上方案例卡、左图、右中文、下方实际引用</td>
+<td>图片和正文都必须对应本次案例，不重新搜索凑数</td>
+</tr>
+<tr>
+<td>R06</td>
+<td>完整中文提示词、原文和已发送片段相互区分</td>
+<td>不能把 360/450 字符摘要标成完整提示词</td>
+</tr>
+<tr>
+<td>R07</td>
+<td>案例页保留图中的复制、保存、应用、关闭、返回动作</td>
+<td>保存与应用的对象明确；任何操作均不自动生图</td>
+</tr>
+<tr>
+<td>R08</td>
+<td>优化与案例媒体/翻译解耦</td>
+<td>点优化不等待案例下载/翻译；不开案例不加载案例图片</td>
+</tr>
+<tr>
+<td>R09</td>
+<td>保留 v1.8.2 已有模型选择与连接配置</td>
+<td>不修改六模型范围、Key、Base URL、其他模块默认配置</td>
+</tr>
+<tr>
+<td>R10</td>
+<td>不恢复已取消的「图像生成预检风险评估」</td>
+<td>此次不是重新引入审核模型/风险弹窗；保留技术校验及供应商自身限制</td>
+</tr>
+</tbody>
+</table>
+<p>**范围解释：**本包里的两张图是已确认的视觉依据，原样附带；图中固定案例数量、示例业务文案、模型名称和 <code>353 / 2000</code> 不作为运行时常量。下文明确了动态数据、历史能力兼容和错误状态，不能把这些补全误解为允许自由重画。</p>
+<h2>2. 用户故事与使用路径</h2>
+<h3>2.1 用户故事</h3>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>希望完成的任务</th>
+<th>获得的价值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通创作员工</td>
+<td>点「优化提示词」后，能一眼看到原文和完整优化稿</td>
+<td>减少来回滚动，不需理解 Skill、检索或接口概念</td>
+</tr>
+<tr>
+<td>修改提示词的员工</td>
+<td>在大编辑区直接调整优化稿，再应用</td>
+<td>不被窄小输入框限制，改稿有明确控制权</td>
+</tr>
+<tr>
+<td>想理解案例的员工</td>
+<td>点击本次案例，看到真实图和完整中文</td>
+<td>知道参考内容是什么，而非只看到技术摘要</td>
+</tr>
+<tr>
+<td>复用案例的员工</td>
+<td>复制、保存或明确应用当前案例提示词</td>
+<td>不错把优化稿、案例译文和原文混为一谈</td>
+</tr>
+<tr>
+<td>维护人员</td>
+<td>能核对本次真正发送给 AI 的案例片段</td>
+<td>发现错配、陈旧缓存和过度引用，有据可查</td>
+</tr>
+</tbody>
+</table>
+<h3>2.2 主路径</h3>
+<p>创作页已有文字 → 选择本次生图模型 → 点击模型选择后面的「优化提示词」 → 页面一立即打开并显示真实进度 → 完成后检查/编辑优化稿 → 「应用到输入框」 → 返回原创作页 → 用户单独决定是否生成图片。</p>
+<h3>2.3 案例查看路径</h3>
+<p>页面一 → 点击「查看实际提供的案例」 → 打开页面二 → 默认选中本轮第一条案例 → 点击其他案例卡切换图文 → 查看原文或实际引用片段 → 「返回优化对比」或「关闭」 → 回到未被改动的页面一。</p>
+<h3>2.4 案例复用路径</h3>
+<p>页面二 → 选定案例与显示语言 → 复制，或保存到我的提示词，或点击「应用到输入框」 → 应用前明确告知将替换创作输入、不会添加案例图片 → 用户确认后才替换 → 保留撤销与本轮优化稿快照 → 不自动优化、不自动生成。</p>
+<p>**既有反推路径不变：**图片 →「反推提示词」→ 预览并应用。它不是此次优化技能的替代品，也不是新增功能的必经步骤。</p>
+<h2>3. 当前代码核查与问题定位</h2>
+<p>以下是对固定 main 提交的静态核查，不是用户电脑上的运行结论。证据的文件位置和永久链接见 <a href="05-%E7%8E%B0%E7%8A%B6%E6%A0%B8%E6%9F%A5%E4%B8%8E%E6%9D%A5%E6%BA%90.md">05-现状核查与来源.md</a>。</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>已确认现状</th>
+<th>本轮处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ImageStudioCreate.tsx</code></td>
+<td>优化候选和反推共用弹窗；方向是 <code>&lt;select&gt;</code>；存在裸 checkbox；案例仅渲染标题、来源与 <code>card</code></td>
+<td>分离专用优化/案例组件，保护反推；方向按钮化，补案例页 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/src/features/image-studio/pages/ImageStudioCreate.tsx">S02</a></td>
+</tr>
+<tr>
+<td><code>imageStudioKnowledgeWorker.cjs</code></td>
+<td>工作线程读入完整知识行，但搜索结果只返回卡片、图片地址等，不返回完整 <code>prompt</code>；卡片截至 450 字符</td>
+<td>增加按稳定 ID 与版本读取完整详情的能力 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioKnowledgeWorker.cjs">S03</a></td>
+</tr>
+<tr>
+<td><code>build-image-studio-knowledge.cjs</code></td>
+<td>知识行含 <code>prompt</code>、<code>sourceMedia</code>、分类；卡片由标题、描述和原文前 360 字符拼成；没有完整中文译文字段</td>
+<td>复用已有正文，补中文与来源状态，不能重写摘要冒充全文 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/scripts/build-image-studio-knowledge.cjs">S04</a></td>
+</tr>
+<tr>
+<td><code>imageStudioService.cjs / optimizePrompt()</code></td>
+<td>合并旧参考库和 YouMind 候选，最多三条；构造上下文时再次截短卡片；结果中 sources 不是最终发送字符串的精确记录</td>
+<td>冻结「实际发送片段」及案例快照，区别完整详情和模型输入 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioService.cjs">S05</a></td>
+</tr>
+<tr>
+<td><code>imageStudioKnowledge.cjs</code></td>
+<td>知识包更新后会终止旧工作线程并启用新版本；搜索有 500ms 等待预算</td>
+<td>详情不能只依赖更新后的最新工作线程；本轮快照独立可读 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioKnowledge.cjs">S06</a></td>
+</tr>
+<tr>
+<td><code>imageStudioService.cjs / loadCover()</code></td>
+<td>已有图片下载、缓存与失败处理；旧参考库与知识包的 ID/媒体结构不同</td>
+<td>复用底层图片能力，新增可信案例到媒体的适配 <a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioService.cjs">S07</a></td>
+</tr>
+</tbody>
+</table>
+<p>**需要在实际页面进一步确认：**具体哪个 CSS 选择器造成 checkbox 放大、textarea 高度不匹配、弹窗纵向拉长。开发时检查计算样式、父容器尺寸和溢出规则；本文件不把未运行验证的 CSS 猜测写成既定根因。</p>
+<h2>4. 页面一：提示词优化与对比</h2>
+<h3>4.1 布局</h3>
+<p>从上至下为：标题/关闭 → 状态条 → 方向按钮组 → 案例信息栏 → 左原文/右优化稿 → 简短说明 → 底部固定操作栏。保持已确认 H01 的视觉层次，右侧占对比区域约 56%，左侧约 44%。中间箭头仅为装饰，不可点击。</p>
+<p>宽幅适配而不是写死一个长宽比。1440×900、1280×800 环境应能看到标题、方向、充足的文本区和底部动作；小窗口允许紧凑排布和内容区滚动，但不能让按钮不可达。具体尺寸与 CSS 见 Handoff。</p>
+<h3>4.2 状态条</h3>
+<p>显示本轮请求提交时冻结的生图模型和优化状态，不跟随后台全局模型变化改写历史显示。状态值：查找资料、等待模型、生成中、已完成、需核对、失败、已停止、历史结果。</p>
+<p>只有真实完成时显示绿色完成图标。点击方向后但尚未重新执行时，显示「方向已调整，点击重新优化生效」，原结果仍标记其实际执行方向，不能冒充新方向结果。</p>
+<h3>4.3 优化方向按钮</h3>
+<p>按钮为单选，选中用蓝色底和清楚的焦点态，不用复选框或下拉。图中四项「商业海报、产品摄影、包装设计、电商主图」列为常用项；服务层为后两项补齐模式白名单和实际规则，不能点击后仍按商业海报执行。</p>
+<p>**已有方向兼容：**当前服务还支持「优化、扩写、简化、英文、双语、写实、插画」。用户没有明确要求删除这些能力，仍以同式按钮保留，排列在常用项之后，空间不足换行，不另造一个下拉菜单。H01 的单行四按钮是常用方向展示，不是删除其他方向的指令。首次默认沿用已有「优化」或当前选择，不因为截图高亮商业海报而把所有请求默认变成商业海报。</p>
+<p>切换只更新待执行选项，不发起 AI 请求。生成中禁用方向切换，或要求先停止当前任务；本轮采用<strong>禁用方向切换</strong>，避免多种行为。重新优化前如有人工编辑，使用现有确认模式提示将替换候选，原编辑稿仍保存为当前会话草稿。</p>
+<h3>4.4 对勾与案例信息栏</h3>
+<p>移除原页面中孤立的大 checkbox，按 H01 换成文件/资料线性图标和信息栏。它是状态，不是勾选项。不要把图标做成能点击但没有说明的控件。</p>
+<p>信息栏依真实值显示「本次向 AI 提供 N 条参考案例」「未找到相关案例，已按普通优化处理」「案例知识暂不可用，已按普通优化处理」或「参考案例已关闭」。继续尊重已有来源和知识启用配置；不得为去掉 checkbox 而忽略后台 <code>useKnowledge=false</code> 或停用来源。</p>
+<p>按已确认图保留信息栏右端与页脚左侧两个同名案例入口；两者打开同一个 H02，共享数据。**本轮不擅自合并入口、改变位置或变成内联长列表。**没有实际案例时两个入口均不可操作，并有零案例说明。</p>
+<p>图中「生成更优质」「提升表现力」只是设计示意，产品不固定宣称质量已提升。推荐真实文案：「参考相关案例中的表达方式，不改变你的明确要求。」</p>
+<h3>4.5 对比阅读与编辑</h3>
+<p>原文只读，保留换行与段落；右侧为可编辑的最终优化稿，标题区附「复制」。两侧卡片外高相同，右侧 textarea 从标题下方一直占满到字符计数上方。采用可伸缩布局与 <code>min-height:0</code>，不得以固定 rows 或 150px/200px 高度缩在卡片顶部。</p>
+<p>每一侧仅一个文本滚动容器。不要在大卡片上滚动，同时又在内部小 textarea 滚动。原文和优化稿默认独立滚动，不强行按行同步，因为两段文本长度和段落未必对应。</p>
+<p>沿用创作输入 <strong>10,000 字符</strong>的业务上限；图中 <code>353 / 2000</code> 不实施。长稿可完整查看、复制和编辑；超过应用上限时显示实数并禁止应用，要求缩短，不能裁掉尾部静默成功。中文输入法组合输入期间不误截断或提交。</p>
+<p>流式输出中编辑区只读。用户向上阅读后不持续把滚动位置拉回末尾；可提供轻量「回到最新」状态操作，不抢阅读位置。部分流式结果不能直接应用为完成稿。</p>
+<h3>4.6 底部动作</h3>
+<table>
+<thead>
+<tr>
+<th>动作</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>取消/右上关闭</td>
+<td>结束页面一；运行中取消本轮模型请求；不改创作输入。当前人工候选草稿保留，避免误关造成损失</td>
+</tr>
+<tr>
+<td>停止</td>
+<td>仅运行中显示，停止当前优化，保留已返回文字供阅读；不标为完成</td>
+</tr>
+<tr>
+<td>重新优化</td>
+<td>以当前创作输入、模型、参数与所选方向创建新请求；不自动生图；新旧结果分开</td>
+</tr>
+<tr>
+<td>保存到我的提示词</td>
+<td>保存页面一当前完整优化稿，不保存原文或案例全文；保存不改变创作输入</td>
+</tr>
+<tr>
+<td>应用到输入框</td>
+<td>通过完整性与输入版本检查后，应用页面一当前优化稿；保留原有撤销</td>
+</tr>
+<tr>
+<td>复制</td>
+<td>复制优化稿正文，不附带来源计数、状态、模板标题或隐藏标记</td>
+</tr>
+</tbody>
+</table>
+<p>应用资格由明确的允许状态计算，不能用「排除几个失败状态」让新状态误通过。只有完整生成或已通过本地复核的人工完整修正稿能应用；网络中断/停止的半段输出不因包含几个必留文字就认定完整。</p>
+<h2>5. 页面二：查看实际提供的案例</h2>
+<h3>5.1 固定结构</h3>
+<p>保持 H02：标题/关闭 → 本轮案例说明与「返回优化对比」 → 水平案例卡片组 → 左侧完整大图与右侧中文阅读区 →「本次实际提供给 AI 的内容」折叠区 → 底部说明与关闭/保存/应用。</p>
+<p>页面二独立于页面一的排版和滚动。采用专用案例详情 Dialog，打开时页面一的会话和编辑稿保留、不可交互，视觉上不叠两张可操作卡片；关闭案例页回到页面一。不是在原对比卡下追加内容，也不替换整个生图工作区路由。</p>
+<h3>5.2 案例卡片</h3>
+<p>案例条数与本轮实际提供的记录一致，通常为 0–3 条；不得固定三张演示卡。顶部卡显示缩略图、案例标题和真实标签。标签缺失时隐藏，不能为填满视觉元素编造模型或效果标签。</p>
+<p>点击后同时切换大图、标题、中文、原文、来源、已发送片段。当前案例使用描边和选中状态。案例状态以 <code>sourceId + itemId + contentHash</code> 区分，不能只用容易冲突的数字 itemId。</p>
+<p>旧参考提示词库和 YouMind 知识包都可能被本轮引用，两种来源的详情必须都能打开。不能只修 YouMind，导致旧库案例点击后空白。</p>
+<h3>5.3 左侧真实样例图</h3>
+<p>使用该案例来源提供的 <code>sourceMedia</code> 或 <code>coverUrl</code>，保持比例完整显示，使用 contain，不强行铺满裁切产品、标题或边界。允许点击放大，复用现有图片查看器。</p>
+<p>一条案例多张图时，左右箭头切换当前案例的图，不切换案例；计数为实际 <code>1 / N</code>。只有一张时隐藏或禁用箭头，不能像示意图那样 1/1 仍显示可切换状态。</p>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>显示与行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>尚未加载</td>
+<td>显示稳定尺寸占位，文本仍可阅读</td>
+</tr>
+<tr>
+<td>正在加载</td>
+<td>显示加载状态，不让阅读区跟着跳动</td>
+</tr>
+<tr>
+<td>正常</td>
+<td>显示真实缓存媒体；可放大</td>
+</tr>
+<tr>
+<td>来源无图</td>
+<td>「该案例未提供样例图」，不能找另一张相似图代替</td>
+</tr>
+<tr>
+<td>网络/格式失败</td>
+<td>「图片暂未加载成功」及重试；不阻止读中文或返回</td>
+</tr>
+<tr>
+<td>仅有可用本地缓存</td>
+<td>直接展示，不因离线清空</td>
+</tr>
+</tbody>
+</table>
+<p>不重新生成图片填空，不自动将案例图片加入用户参考图，不把展示图片称为本次 AI 已分析过的图片。</p>
+<h3>5.4 右侧完整中文与原文</h3>
+<p>默认显示可信的<strong>完整中文提示词</strong>。原文就是中文时标记「原始中文」；有来源译文时标记「来源提供」；机器翻译标记「AI 译文，未人工核对」。这些是轻量状态文字，不另加复杂操作页。</p>
+<p>「查看原文」在同一阅读区切换为原始正文，并变成「查看中文」。切换保留各语言滚动位置。右側使用宽大只读阅读区，不用小 textarea；需要修改时先明确应用到创作输入或使用已有个人库编辑流程。</p>
+<p>复制、保存、应用均针对<strong>当前阅读区明确显示的语言版本</strong>。按钮提示或底部说明标清「当前操作对象：案例中文提示词/案例原文」。绝不在看中文时复制英文，或把案例摘要作为中文全文保存。</p>
+<h3>5.5 中文补全策略</h3>
+<ol>
+<li>优先读取来源已有完整中文与可信译文缓存；校验必须绑定原文内容哈希。仅含少量中文品牌词的英文段落，不算完整中文。</li>
+<li>知识整理/更新环节可以增量准备中文，允许维护者统一生成并随合法知识包分发；不得让每台员工电脑首启时偷偷全库付费翻译。</li>
+<li>遇到未翻译的单条案例，保持同一布局，阅读区显示「该案例暂未提供中文全文」和「翻译为中文」。说明「将使用当前文本模型，可能产生接口费用」，用户主动点击后只翻译当前案例，不阻塞优化。</li>
+<li>翻译完成自动显示中文并缓存。缓存命中不重复请求。失败保留原文并允许用户明确重试，不自动循环计费。</li>
+<li>不把翻译作为补写、摘要、润色、优化；保持数值、段落意图、否定条件、专名和模板变量。要求原样上屏的引号文字保留原字符，必要解释放在提示词外的状态说明，不插入生成内容。</li>
+<li>超长正文无法在一次翻译预算内完整处理时，明确「正文过长，暂未生成完整译文」，保留原文；不得把半段翻译标成完成。维护侧可分段校验后发布完整译文，不能擅自提高员工端付费调用次数。</li>
+</ol>
+<h3>5.6 本次实际提供给 AI 的内容</h3>
+<p>默认按 H02 显示在图文下方，可折叠。它展示当前案例在<strong>该次优化实际请求体中</strong>出现的文本/片段。标签、描述、模型名只有真的发送过才可列为已提供信息。</p>
+<p>冻结上下文不等于已发送。排队时可记录「已选案例，待提供」；请求真正提交后才能标「本次向 AI 提供」。请求已提交不等于证明模型逐条采纳。命中历史缓存时标记「历史结果及其原始参考资料」，不宣称本轮重新发送。</p>
+<p>完整案例正文、中文译文和样例图供员工阅读，与已发送片段分开。若只发了摘要，明确「本次仅发送下方片段；完整中文和图片用于查看」。不得事后让 AI 生成一份「采用原因」冒充调用记录。</p>
+<p>代码目前两次截短 card，最终组成 context 后还有总长限制。本次修复必须以最终请求组装后的字符串为准记录 <code>sentExcerpt</code>；不能直接把搜索返回的 450 字符 card 当成已发送全文。<a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioService.cjs">S03</a></p>
+<h3>5.7 返回、关闭、保存与应用</h3>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>唯一语义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>返回优化对比</td>
+<td>关闭案例页并恢复页面一，保留人工编辑稿、方向、滚动和选中案例</td>
+</tr>
+<tr>
+<td>案例页右上 × / 底部关闭 / Esc</td>
+<td>仅关闭案例页，等价返回；不连带退出整个优化会话</td>
+</tr>
+<tr>
+<td>保存到我的提示词</td>
+<td>保存当前案例的完整显示文本和来源元数据，不保存页面一优化稿；图像只保存出处/已允许的本地引用，不擅自批量下载</td>
+</tr>
+<tr>
+<td>应用到输入框</td>
+<td>应用当前案例显示文本，而不是页面一优化稿；覆盖前提示「将当前案例提示词替换创作输入，不会添加案例图片，也不会生成图片」；确认后写入主创作输入并关闭两页，保留撤销及未丢失的本轮优化稿快照</td>
+</tr>
+</tbody>
+</table>
+<p>案例主动应用是用户明确换用另一段需求，不能套用「优化稿必须包含原需求所有必留词」的检查而错误阻止。案例应用仍须校验当前显示正文完整、长度、输入修订和明确覆盖确认；未填写的模板变量原样保留并提示，不自动虚构变量值。</p>
+<p>浏览或切换语言本身不覆盖任何输入。案例应用与优化稿应用是两种明确动作，必须记录 <code>originKind</code>，方便撤销和收藏追溯。案例正文超过创作输入 10,000 字符时不可自动裁切应用；仍可阅读/复制，保存遵守原个人库的长度约束并说明。</p>
+<h2>6. 不可混淆的数据对象</h2>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>含义</th>
+<th>是否可以修改</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>创作输入</td>
+<td>用户当前准备交给生图模型的文字</td>
+<td>用户/明确应用动作可修改</td>
+</tr>
+<tr>
+<td>本轮原文</td>
+<td>发起优化时的用户原文快照</td>
+<td>只读，不随输入改变</td>
+</tr>
+<tr>
+<td>优化稿</td>
+<td>当前优化结果及用户改稿</td>
+<td>页面一可编辑</td>
+</tr>
+<tr>
+<td>案例原文</td>
+<td>第三方来源的完整原始提示词</td>
+<td>只读，不被翻译覆盖</td>
+</tr>
+<tr>
+<td>案例中文</td>
+<td>原文的完整中文或译文</td>
+<td>缓存独立，不冒充原文</td>
+</tr>
+<tr>
+<td>已发送片段</td>
+<td>本轮真实提供给优化模型的资料</td>
+<td>不可变，只能读取</td>
+</tr>
+<tr>
+<td>案例样例图</td>
+<td>来源提供的效果图</td>
+<td>缓存/查看，不默认变成用户参考图</td>
+</tr>
+</tbody>
+</table>
+<p>UI 图片中的示例文案不得作为产品默认提示词、数据库种子或安全规则。自动化测试使用茶叶礼盒、无商标杯具、普通海报等中性内容，不复用图中具体品牌推广文本。</p>
+<h2>7. 数据契约与快照</h2>
+<p>下面是建议契约，不要求照抄命名；业务语义必须保留，兼容现有结构后再落地。</p>
+<h3>7.1 优化会话 <code>OptimizationSession</code></h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型/说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sessionId / requestId</td>
+<td>本地生成的会话与本轮请求标识；重新优化产生新 requestId</td>
+</tr>
+<tr>
+<td>inputFingerprint</td>
+<td>原文、方向、模型键、画幅、参考图顺序/哈希/用途、知识开关、规则版本及配置修订的组合</td>
+</tr>
+<tr>
+<td>originalPrompt / candidateText / editedText</td>
+<td>原文、模型完整结果、用户编辑稿分别存储</td>
+</tr>
+<tr>
+<td>requestedMode / completedMode</td>
+<td>当前选项与已经执行的方向分别保存</td>
+</tr>
+<tr>
+<td>selectedModelSnapshot</td>
+<td>提交时实际模型键及显示名；不保存 Key</td>
+</tr>
+<tr>
+<td>status / streamComplete / validation</td>
+<td>真实任务状态、流结束完整性、本地复核结果</td>
+</tr>
+<tr>
+<td>caseSnapshotIds / sentContext</td>
+<td>实际案例快照顺序及最终拼接上下文；没有引用即空</td>
+</tr>
+<tr>
+<td>knowledgeVersions / optimizerRuleVersion</td>
+<td>用到的知识/来源/规则版本</td>
+</tr>
+<tr>
+<td>refsAnalyzed / caseImagesSent</td>
+<td>本轮是否识别用户图片、是否发送案例图片；不得推测</td>
+</tr>
+<tr>
+<td>createdAt / endedAt / timings / cacheHit</td>
+<td>操作追踪与耗时；不上传私人提示词</td>
+</tr>
+</tbody>
+</table>
+<h3>7.2 案例快照 <code>CaseSnapshot</code></h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>caseSnapshotId</td>
+<td>内部不可预测标识，详情 IPC 只接受本轮授权范围内标识</td>
+</tr>
+<tr>
+<td>sourceKind</td>
+<td><code>reference-library</code> 或 <code>youmind-knowledge</code>，不能混表硬查</td>
+</tr>
+<tr>
+<td>sourceId / itemId / sourceVersion / contentHash</td>
+<td>联合身份；摘要哈希与正文哈希区分</td>
+</tr>
+<tr>
+<td>titleOriginal / titleZh / titleTranslationStatus</td>
+<td>原始及中文标题，标记是否翻译</td>
+</tr>
+<tr>
+<td>promptOriginal / promptLanguage</td>
+<td>完整原始正文，不使用 card 替代</td>
+</tr>
+<tr>
+<td>promptZh / translationStatus / translatorVersion</td>
+<td>可选完整中文及明确来源；由独立缓存提供亦可</td>
+</tr>
+<tr>
+<td>media[]</td>
+<td>稳定 URL/排序/已知源哈希/本地受管引用；没有图即空数组</td>
+</tr>
+<tr>
+<td>categories / needReferenceImages</td>
+<td>真实来源字段；缺失不编造</td>
+</tr>
+<tr>
+<td>sourceUrl / attribution</td>
+<td>原始出处与署名；没有条目链接时只能显示真实仓库/来源主页</td>
+</tr>
+<tr>
+<td>sentExcerpt / sentLabel / sentOrder / sentHash</td>
+<td>最终发给 AI 的文本及次序；不是重建的展示摘要</td>
+</tr>
+<tr>
+<td>detailAvailability</td>
+<td>available / legacy-unavailable / missing；兼容旧缓存</td>
+</tr>
+</tbody>
+</table>
+<h3>7.3 冻结时机和更新竞态</h3>
+<p>完成本地候选筛选后，为最终选中的少量案例冻结标题、正文、媒体地址及来源版本；封装已发送片段后固定 <code>sentContext</code>。从此本轮案例展示读取该快照，不再按最新知识搜索。</p>
+<p>工作线程可一次为最多三条结果带回完整字段供 Main 快照保存，Renderer 初次只拿轻量元数据，用户打开案例时再读正文详情。不得在 Main 中反复同步解压整库，也不能为补图文把整库发送给 Renderer 或模型。</p>
+<p>旧参考库的详情通过稳定 ID 查询，不用标题模糊匹配。若本轮使用了翻译后的旧库正文，要记录实际发送的那份文本，不应事后换回原文再宣称已发送。</p>
+<p>知识更新在途时，不销毁当前会话对旧详情的读取能力。签名原包不直接修改；译文保存在独立的用户数据缓存。本轮已抓取的媒体字节可固定使用；未在当时下载的远端图，只能称「来源当前可访问的样例图」，不能声称已证明生成时字节一致。</p>
+<p>旧版本成功缓存若没有完整快照，不伪造历史详情；显示「此历史结果未保存完整案例详情」，可读原有发送摘要，用户主动重新优化后建立新快照。</p>
+<h2>8. 接口与组件边界</h2>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>建议改动</th>
+<th>约束</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Renderer</td>
+<td>拆分 <code>ImageStudioPromptOptimizeDialog</code>、<code>ImageStudioCaseDialog</code> 和轻量案例组件；继续由父级维护会话</td>
+<td>不修改全局应用壳，不重写反推/生成/作品页</td>
+</tr>
+<tr>
+<td>preload 与类型</td>
+<td>增加只读案例详情、媒体读取、单条翻译及取消能力；同步 <code>ipc.ts</code></td>
+<td>不把 ipcRenderer、fs、Key 暴露到页面</td>
+</tr>
+<tr>
+<td>IPC</td>
+<td>校验 sender、参数类型、会话所属窗口、案例 ID</td>
+<td>业务逻辑仍放 Service</td>
+</tr>
+<tr>
+<td>Service</td>
+<td>增加案例会话/快照存储，复用 <code>aiService</code> 与图片缓存</td>
+<td>AI 翻译仍进现有全局队列，不绕开并发与计费记录</td>
+</tr>
+<tr>
+<td>Knowledge Worker</td>
+<td>保留搜索；增加版本一致的详情读取或一次性带回选中条目</td>
+<td>不在每次切案例重建索引</td>
+</tr>
+<tr>
+<td>数据库</td>
+<td>新增局部会话、案例快照、译文索引；复用个人提示词存储</td>
+<td>迁移幂等、可升级，不丢旧草稿/收藏/作品</td>
+</tr>
+</tbody>
+</table>
+<p>建议接口语义：<code>getOptimizationCases(sessionId)</code>、<code>getOptimizationCaseDetail(sessionId, caseSnapshotId)</code>、<code>loadOptimizationCaseImage(sessionId, caseSnapshotId, imageIndex)</code>、<code>translateOptimizationCase(...)</code>、<code>cancelCaseTranslation(...)</code>。名称以实际代码规范为准，不允许前端传任意 URL、本地路径或任意 prompt 冒充当前案例。</p>
+<p>读取详情和翻译属于独立操作，不让它们触发 <code>optimizePrompt()</code> 或 <code>generateImage()</code>。翻译只发送该公开案例正文，不附用户当前提示词和参考图。</p>
+<h2>9. 加载、缓存、取消与性能</h2>
+<h3>9.1 请求边界</h3>
+<p>一次优化继续最多一次改写模型请求；案例图片读取为文件/网络下载，不是生图请求；单条中文翻译是用户主动的独立文本请求，单次点击最多一次，不自动修复/重试。状态、日志和用量要分别统计，不能把翻译算进「一次优化只有一次请求」来隐藏费用。</p>
+<h3>9.2 缓存策略</h3>
+<p>图片缓存键至少包含稳定来源身份、媒体 URL/索引及内容版本；有内容哈希时使用实际哈希。译文缓存键至少包含原文哈希、目标语言和翻译规则版本。并发点击同一案例采用在途合并，同一条待译文不能重复计费。</p>
+<p>结果缓存包含本轮实际来源快照，命中后恢复该历史快照而非重新挑案例。知识开关、模式、模型、画幅、图片顺序/用途/哈希、规则版本变化均应失效；不允许失败/取消/截断稿进入成功缓存。</p>
+<p>会话和快照存 SQLite，图片走现有受管目录。只在请求开始、完整结果、失败、用户保存/应用等节点落盘，不逐 token 写数据库。建议保留最近 100 个已结束会话且最长 30 天；活动会话及已收藏资料不因清理丢失。若现有项目已有保留策略，以更严格且不破坏用户数据的策略为准，并记录实际值。</p>
+<h3>9.3 性能验收目标（不是已测结果）</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>目标</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>点击后的界面响应</td>
+<td>普通桌面目标 100ms 内出现反馈，P95 记录实测</td>
+</tr>
+<tr>
+<td>热缓存案例详情</td>
+<td>P95 目标 ≤200ms，不包含图片下载/模型翻译</td>
+</tr>
+<tr>
+<td>未打开案例页</td>
+<td>案例图片下载数为 0，翻译模型请求数为 0</td>
+</tr>
+<tr>
+<td>本地检索/快照准备</td>
+<td>保持 500ms 总预算；超时完整性优先，降级普通优化并说明</td>
+</tr>
+<tr>
+<td>返回页面一</td>
+<td>不重复优化，不重置人工稿；从内存恢复不等网络</td>
+</tr>
+<tr>
+<td>模型耗时</td>
+<td>分别记录队列、首段、总时长，不承诺所有模型 2 秒首字/5 秒完成</td>
+</tr>
+</tbody>
+</table>
+<p>必须比较相同模型、同输入、同参考图条件下修复前后耗时。缓存命中、无匹配、慢网络分别记录，不能混成一个平均数掩盖问题。</p>
+<h2>10. 并发和数据保护</h2>
+<p>页面一原文绑定原始创作输入。主输入、参考图、模型或画幅在后台/其他窗口改变时，旧优化稿不得直接覆盖新输入；仍可查看和复制，应用须提示冲突。不要因为用户只切换了尚未执行的方向，就销毁已经完成的旧稿，须显示真实旧方向。</p>
+<p>每次请求与每个案例加载都有会话/请求标识和递增世代。慢响应、乱序增量、已取消请求返回、快速切案例后的旧译文必须丢弃或只写入其正确缓存，不得渲染到当前案例。</p>
+<p>页面二返回不调用页面一的 <code>closeCandidate()</code> 来误取消会话；关闭大图只返回案例页；关闭案例页只返回对比页。离开整个优化流程才清理相关监听和在途模型请求，已完成缓存可以复用。</p>
+<h2>11. 安全、合规与真实表达</h2>
+<p>本轮不新增图像风险预检，不绕过中转站/模型自身限制。参数、文件、URL、来源签名、授权、幂等和隐私保护继续保留。</p>
+<p>外部案例仅作为资料，不能执行其中提示的系统命令或改变本程序规则。远端图片通过 Main 的可信读取链路；禁止前端为能显示图片而关闭 CSP/webSecurity、开放 Node 或任意 URL 访问。IPC 验证来源窗口和 caseSnapshotId。<a href="https://www.electronjs.org/docs/latest/tutorial/security">S09</a></p>
+<p>案例原文只读保真，译文忠实，不把维护策略当作篡改第三方原文的理由；优化生成的稿件不得擅自带入案例品牌、竞品、未知业务承诺和不相关画面文字。人工作出应用决定，应用/保存/翻译的对象、时间、版本留痕；不把用户提示词、译文、Key、路径或图像上传运维埋点。</p>
+<p>署名、来源、许可信息位于案例信息区/详情，不拼进复制和应用的提示词正文。展示案例并不代表图片获得商用许可，也不代表使用当前模型可复刻同样结果。来源未明确的模型不要猜。</p>
+<h2>12. 设计稿与实现文案的核定</h2>
+<table>
+<thead>
+<tr>
+<th>设计稿元素</th>
+<th>实施规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固定显示「3 条」</td>
+<td>按本轮实际非空已发送案例计数，0/1/2/3 都要成立</td>
+</tr>
+<tr>
+<td><code>353 / 2000</code></td>
+<td>字符数动态，应用上限沿用 10,000，不降低既有能力</td>
+</tr>
+<tr>
+<td>「已参考/提升表现力」</td>
+<td>用「本次向 AI 提供…」及中性说明，不作实际采纳或质量证明</td>
+</tr>
+<tr>
+<td>「未分析图片内容」</td>
+<td>基于真实请求 <code>refsAnalyzed</code> 显示；当前链路仅用途，不能因展示案例图就变成已识图</td>
+</tr>
+<tr>
+<td>四个方向按钮</td>
+<td>四常用项先排；原有模式同式按钮后置换行，服务联动，不静默删除</td>
+</tr>
+<tr>
+<td>案例 1/1 左右箭头</td>
+<td>无第二张时不可点击或不显示</td>
+</tr>
+<tr>
+<td>模型名/示例文本</td>
+<td>显示当前会话真实内容；不把图上的样本写成默认数据</td>
+</tr>
+<tr>
+<td>页面一两个案例入口</td>
+<td>依最后确认图保留，统一打开同一页面二</td>
+</tr>
+<tr>
+<td>页面二「应用到输入框」</td>
+<td>保留按钮，但明确应用当前案例显示正文，覆盖前确认，不套用图片</td>
+</tr>
+</tbody>
+</table>
+<h2>13. 验收口径</h2>
+<p>必须同时通过布局、状态、数据、性能、回归五类验收。只让编译通过、只展示茶礼示意图、只用假数据渲染中文，不算本轮完成。</p>
+<p>对应完整测试表见 <a href="04-%E9%AA%8C%E6%94%B6%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B.md">04-验收测试用例.md</a>。核心必过项：宽屏和缩放下无小文本框/大空白；方向按钮实效；两类来源均有正确详情；中文是全文；发送片段真实；更新后历史不串；案例复制/保存/应用对象正确；无新增隐性生图/翻译请求；返回不丢人工稿。</p>
+<p>真实付费模型测试必须先列清测试内容和费用范围并取得用户授权。没有授权时可完成 mock/离线/数据库/UI 验证，接口联调项标记未执行，不假称通过。</p>
+<h2>14. 实施顺序与交付门槛</h2>
+<p>依次进行现状复现 → 会话及案例数据契约 → 页面一布局/状态 → 页面二图文和来源 → 中文翻译缓存 → 实际引用记录与应用保护 → 分层测试及截图比对。属于同一轮完整交付，不拆第一版/第二版功能包。</p>
+<p>每一步细化输入、输出、约束和退出条件见 <a href="03-Codex%E6%89%A7%E8%A1%8C%E6%8F%90%E7%A4%BA%E8%AF%8D.md">03-Codex执行提示词.md</a>。现有代码比本次核查更新时，只合并本轮相关改动，不回退 main 或覆盖用户工作。</p>
+<h2>15. 文档及实施记录位置</h2>
+<p>本包整体放置到：</p>
+<pre><code class="language-text">D:\Documents\OpenJatobid\docs\image-studio-skill\prompt-ui-optimization\
+</code></pre>
+<p>此目录是本轮<strong>开发资料</strong>，不是 Skill 运行目录。不要放到 <code>node_modules</code> 或把设计图复制到正式案例库；无需覆盖上一轮 <code>v1.8.2</code> 规格。</p>
+<p>Codex 实施记录统一放在 <code>implementation/</code>，至少包括现状复现、实施计划、改动清单、迁移/回滚说明、测试报告、真实运行截图和未完成项。运行时数据仍进入项目原有 Electron userData/SQLite，不能写进 docs。</p>
+<h2>16. 不做事项</h2>
+<p>本轮不更换模型、不改金龙配置、不重构作品/分层 PSD、不重排创作主界面、不改一级 Tab、不重启多轮 Agent、不增加 Embedding/Rerank 服务、不重做签名发布更新体系、不全库自动付费翻译、不恢复生成前风险预检。</p>
+<p>新增案例字段需兼容现有知识包；确需更新包时必须走已有构建/签名验证，不临时关闭校验。除用户另行授权外，不改版本号、不提交、不推送、不合并、不打标签、不发布。</p>
+<h2>17. 完成定义</h2>
+<p>开发交付时：全部本轮文件可定位；两张真实运行截图与 H01/H02 对照；测试逐项标注实际状态和证据；人工编辑与返回路径可复现；来源和全中文展示用真实数据验证；所有未测试的外部网络和费用项明确列出。</p>
+<p><strong>设计图已获用户确认，不需要再次要求用户选择全新布局；代码完成不等于获得发布授权。</strong></p>
+<h2>18. 代码与官方依据快捷引用</h2>
+<p>详细事实范围及逐项链接见05证据索引；以下引用不代表完成运行验证。</p>
+</article><article id="doc2"><div class="label">02-UI-Handoff.md</div><h1>UI Handoff｜优化对比与本次案例图文</h1>
+<p><strong>修订：R1｜业务权威：01-完整优化规格.md｜仅以本包两张已确认图为视觉依据</strong></p>
+<h2>1. 设计基线</h2>
+<p><img src="ui/H01-%E5%B7%B2%E7%A1%AE%E8%AE%A4-%E6%8F%90%E7%A4%BA%E8%AF%8D%E4%BC%98%E5%8C%96%E4%B8%8E%E5%AF%B9%E6%AF%94.png" alt="H01 已确认的优化对比界面" /></p>
+<p><img src="ui/H02-%E5%B7%B2%E7%A1%AE%E8%AE%A4-%E6%A1%88%E4%BE%8B%E5%9B%BE%E6%96%87%E8%AF%A6%E6%83%85.png" alt="H02 已确认的案例详情界面" /></p>
+<p>两张原图均为 1448×1086 像素，本包不改变原图。图像是布局、视觉层级与组件位置的参考，不是把整图按比例缩成可点击背景，也不是固定窗口尺寸。</p>
+<p>保留浅灰蓝遮罩、白色圆角弹窗、细边框、克制蓝色强调和大面积阅读区。正式实现优先复用项目已有颜色/字体 token、全局 CSS 与 Radix 组件，不引入 Tailwind 或新 UI 框架，不重画应用外壳。</p>
+<h2>2. 尺寸与阅读优先级</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>参考值/规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>宽屏弹窗宽度</td>
+<td><code>min(1320px, 100vw - 64px)</code></td>
+</tr>
+<tr>
+<td>宽屏弹窗高度</td>
+<td><code>min(920px, 100dvh - 64px)</code>；不使用固定 aspect-ratio</td>
+</tr>
+<tr>
+<td>圆角</td>
+<td>14–18px，优先现有 token</td>
+</tr>
+<tr>
+<td>弹窗内边距</td>
+<td>横向 24–28px；短高窗口 16–20px</td>
+</tr>
+<tr>
+<td>页面主标题</td>
+<td>22–24px，600/700 字重</td>
+</tr>
+<tr>
+<td>区域标题</td>
+<td>17–18px</td>
+</tr>
+<tr>
+<td>正文</td>
+<td>15–16px；行高 1.6–1.75；不得靠 10px 小字塞满</td>
+</tr>
+<tr>
+<td>辅助说明</td>
+<td>12–13px，保证对比度</td>
+</tr>
+<tr>
+<td>按钮</td>
+<td>高 36–40px；可点击区域至少 32px</td>
+</tr>
+<tr>
+<td>栏间距</td>
+<td>16–20px；H01 箭头放间隔中，不占一整列宽</td>
+</tr>
+<tr>
+<td>页脚</td>
+<td>60–72px 固定占位；内容滚动时保持可见</td>
+</tr>
+<tr>
+<td>H01 比较区域</td>
+<td>左 44% / 右 56%，同外高；实际编辑器占满右栏剩余空间</td>
+</tr>
+<tr>
+<td>H02 图文区域</td>
+<td>左 52% / 右 48%；图片 contain，正文一层滚动</td>
+</tr>
+</tbody>
+</table>
+<p>**响应式验收矩阵：**1440×900、1280×800、1024×768；Windows 100%、125%、150% 缩放。记录实际 CSS viewport，而非用截图像素冒充逻辑尺寸。</p>
+<p>可用宽度不足 900px 时压缩边距、方向按钮换行，保持两栏可读；不足 760px 时两栏上下排列，内容区内部滚动，页脚按钮换行但始终可达。若项目最小窗口已大于此值，不擅自修改窗口限制，仍处理高 DPI 导致的短可视区。</p>
+<p>正常高度下优先把剩余空间分给正文；短窗口压缩非关键间距，不压缩成小 textarea；极短高度允许对比主体容器单层滚动，不让整个桌面窗口出现外层和内层两条无意义长滚动条。</p>
+<h2>3. H01 组件交接</h2>
+<table>
+<thead>
+<tr>
+<th>标记</th>
+<th>组件</th>
+<th>位置与要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A01</td>
+<td>标题与关闭</td>
+<td>顶部一行；关闭不自动应用；运行中须取消当前请求</td>
+</tr>
+<tr>
+<td>A02</td>
+<td>当前模型与状态</td>
+<td>标题下浅蓝条；显示请求快照，不从变化后的全局配置伪装更新</td>
+</tr>
+<tr>
+<td>A03</td>
+<td>优化方向按钮组</td>
+<td>状态下方；单选，选中蓝底；原有模式保留，新增图中的包装设计/电商主图</td>
+</tr>
+<tr>
+<td>A04</td>
+<td>案例信息栏</td>
+<td>文件图标＋真实 N 条说明＋右侧案例入口；不是 checkbox</td>
+</tr>
+<tr>
+<td>A05</td>
+<td>原文卡</td>
+<td>左侧只读，段落保留，独立滚动</td>
+</tr>
+<tr>
+<td>A06</td>
+<td>优化稿卡</td>
+<td>右侧更宽，header 与复制固定；正文填满；底部实数字数</td>
+</tr>
+<tr>
+<td>A07</td>
+<td>图像使用说明</td>
+<td>比较区下轻量一行，可换行，不额外放大卡片</td>
+</tr>
+<tr>
+<td>A08</td>
+<td>页脚左入口</td>
+<td>按图保留第二个案例入口，与 A04 行为相同</td>
+</tr>
+<tr>
+<td>A09</td>
+<td>页脚动作</td>
+<td>取消、运行中停止、重新优化、保存到我的提示词、应用到输入框</td>
+</tr>
+</tbody>
+</table>
+<h3>A03：方向按钮的完整口径</h3>
+<p>常用项首先显示：商业海报、产品摄影、包装设计、电商主图。既有其他模式继续以按钮接续：优化、扩写、简化、英文、双语、写实、插画；不通过图片示意隐藏旧功能。允许两行，不再用下拉。首次进入沿用已有方向，不强制采用截图的商业海报。</p>
+<p>采用 <code>radiogroup</code>/<code>radio</code> 语义或等价可访问单选组件，提供 <code>aria-checked</code>；方向键移动焦点并改变选择，不产生 AI 请求。生成中只读/禁用，防止结果和新选项混淆。</p>
+<h3>A04：复选框消除</h3>
+<p>删除巨大的裸 checkbox，使用现有线性资料图标。成功图标仅用于状态，不与「参考案例是否开启」混用。来源启停仍沿用现有设置；未启用时说明「参考案例已关闭」，不能移除 UI 后反而强制开启。</p>
+<h3>A06：滚动修复的关键</h3>
+<p>外卡片、正文区域和 textarea 的 flex/grid 高度必须形成完整传递链。卡片固定 header 后，编辑器用 <code>flex:1; min-height:0</code> 获取剩余空间；正文的 overflow 只能在其自身出现。禁用鼠标拖动 resize 打破卡片等高，允许自动换行和文本选择。</p>
+<p>流式有文字返回才显示文字，不做假打字动画。用户不在底部时不强制自动滚动；结束后可编辑。输入、模型或图片已变化时显示可理解提示，停止旧稿直接覆盖。</p>
+<h3>A09：可用状态</h3>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>可用动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>查找/排队/生成中</td>
+<td>停止、取消；复制已返回文字可保留但不得称完整；不允许应用和保存为正式稿</td>
+</tr>
+<tr>
+<td>完整已完成/有效历史缓存</td>
+<td>复制、重做、编辑、保存、应用</td>
+</tr>
+<tr>
+<td>需核对</td>
+<td>编辑、复制；通过本地必留项与长度校验后可应用；此状态不等同流式中断</td>
+</tr>
+<tr>
+<td>失败/中断/停止</td>
+<td>查看部分文本、重新优化、取消；无完成稿时禁止应用</td>
+</tr>
+<tr>
+<td>输入冲突/旧模型</td>
+<td>允许阅读、复制和保存完整稿；禁止静默覆盖新输入</td>
+</tr>
+</tbody>
+</table>
+<h2>4. H02 组件交接</h2>
+<table>
+<thead>
+<tr>
+<th>标记</th>
+<th>组件</th>
+<th>位置与要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B01</td>
+<td>标题与关闭</td>
+<td>「查看实际提供的案例」；关闭仅返回 H01</td>
+</tr>
+<tr>
+<td>B02</td>
+<td>数量信息与返回</td>
+<td>浅蓝横条；左真实数量，右「返回优化对比」</td>
+</tr>
+<tr>
+<td>B03</td>
+<td>案例切换卡</td>
+<td>顶部水平 1–3 卡，真实图/标题/标签；键盘可选中</td>
+</tr>
+<tr>
+<td>B04</td>
+<td>大图查看</td>
+<td>左侧占主体，不裁切；有多图才出现可用箭头</td>
+</tr>
+<tr>
+<td>B05</td>
+<td>完整中文阅读区</td>
+<td>右侧填满，中文/原文切换，复制可达；提示词全文只读</td>
+</tr>
+<tr>
+<td>B06</td>
+<td>实际发送区</td>
+<td>图文下方折叠块，展示原始记录，不动态编造优化理由</td>
+</tr>
+<tr>
+<td>B07</td>
+<td>来源与说明</td>
+<td>轻量出处和译文标记，放图文标题附近或原有说明行，不新造大卡片</td>
+</tr>
+<tr>
+<td>B08</td>
+<td>页脚动作</td>
+<td>关闭、保存到我的提示词、应用到输入框；保持图的位置与层级</td>
+</tr>
+</tbody>
+</table>
+<h3>B03 与 B04：切换与放大</h3>
+<p>顶部卡片切换案例；大图左右箭头切换同一案例的多张样例图。两种行为不同，ARIA 名称明确。样例图 1/1 时禁用或隐藏箭头。点击大图进入既有查看器，退出只返回 H02，不连带退出 H01。</p>
+<p>图片可保留适量背景留白，不为填满区域做 cover 裁切。横竖图切换时 B05 宽高不跳动。失败时固定占位说明，单张重试，不在 Toast 中循环弹错。</p>
+<h3>B05：完整中文与未知状态</h3>
+<ul>
+<li>有中文：标题「中文提示词」＋来源/AI 译文轻标记；按钮「查看原文」「复制」。</li>
+<li>查看原文：标题「原始提示词」；按钮改「查看中文」「复制」。复制对象跟随当前文字。</li>
+<li>没有中文：同一阅读区内显示缺失说明，提供「翻译为中文」及费用提示，不新开第三个功能页面。</li>
+<li>翻译中：只显示当前案例翻译状态，保留原文切换，用户可返回；其他案例不被串写。</li>
+<li>原文缺失：显示缺失原因，禁用不可能完成的复制/保存/应用；不能拿摘要代替。</li>
+<li>正文较长：只在 B05 内滚动，保留换行，不用 line-clamp 截正文。</li>
+</ul>
+<h3>B06：展开方式</h3>
+<p>按图展示在大图/中文区下方。展开内容短时不让窗口整体增长；内容很长时该区域有受控高度。短窗口允许主体区整体单层滚动以读完，页脚始终在外层固定。</p>
+<p>显示真实发送的字段。当前若只发送了「案例 ID（标题）：片段」，就按原样展示；图中的标签、摘要、风格关键词三行仅在真实请求确实包含对应内容时出现，不能根据图凭空补三行。</p>
+<h3>B08：应用对象提示</h3>
+<p>保留按钮文字「应用到输入框」，在本页底部说明当前操作对象为案例中文/原文。点击时用项目已有确认交互说明将替换创作输入而非编辑页面一优化稿。默认不合并两个提示词、不添加案例图、不更换模型、不触发生图。</p>
+<p>仅在用户主动应用时做覆盖确认，不给普通查看/返回增加强制确认。应用前主输入版本变化则中止覆盖并提示，不能覆盖其他窗口新稿。</p>
+<h2>5. 两页导航与焦点</h2>
+<p>页面一会话状态由父级或专用 store 保存，打开页面二只改变展示层，不调用清空候选的方法。页面二有自己完整布局与滚动；背景页面一保持 inert，只有最上层可操作。采用单活动 Dialog 控制焦点，避免两个 focus trap 互相争夺。</p>
+<p>打开长文本 Dialog 时优先把焦点放到可聚焦标题或首个明确操作，不把整个巨大 Dialog 容器作为焦点。Tab 在当前 Dialog 内循环；Esc 仅关闭当前最上层；返回后焦点回到原案例入口。此行为参考 W3C APG 的 Dialog 指引，详见来源 S08。</p>
+<p>关闭顺序：大图 → 案例页 → 优化页 → 原优化按钮。对非顶层不响应 Esc。背景遮罩点击默认不关闭，防止误点丢稿；保留明确关闭按钮。</p>
+<h2>6. 组件层级建议</h2>
+<pre><code class="language-text">ImageStudioCreate
+└─ OptimizationSessionController
+   ├─ PromptOptimizeDialog（H01）
+   │  ├─ StatusStrip / DirectionRadioButtons
+   │  ├─ CaseInfoBar
+   │  ├─ PromptComparePanels
+   │  └─ FixedActionFooter
+   └─ CaseDetailsDialog（H02）
+      ├─ CaseTabs
+      ├─ CaseImageViewer
+      ├─ CasePromptReader
+      ├─ SentContextEvidence
+      └─ FixedActionFooter
+</code></pre>
+<p>这段结构的意思是：同一会话管理两张界面的数据；原文、优化稿和案例详情分工明确。关闭案例页只撤掉案例展示，不删除正在编辑的优化稿。它不是要求重写所有父组件。</p>
+<h2>7. 局部 CSS 参考</h2>
+<p>以下仅表达布局原则，开发前需核对现有 token 与计算样式，不是可绕过当前样式系统的整站补丁。</p>
+<pre><code class="language-css">/* 只约束新优化/案例弹窗，不影响反推和其他通用弹窗。 */
+.image-studio-prompt-dialog {
+  width: min(1320px, calc(100vw - 64px));
+  height: min(920px, calc(100dvh - 64px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.image-studio-prompt-dialog__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.image-studio-prompt-dialog__compare {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, .44fr) minmax(0, .56fr);
+  gap: 18px;
+}
+.image-studio-prompt-dialog__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.image-studio-prompt-dialog__reader,
+.image-studio-prompt-dialog__editor {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+}
+.image-studio-prompt-dialog__editor { resize: none; }
+.image-studio-prompt-dialog__header,
+.image-studio-prompt-dialog__footer { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .image-studio-prompt-dialog {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+  .image-studio-prompt-dialog__compare {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .image-studio-prompt-dialog__panel { min-height: 240px; }
+  .image-studio-prompt-dialog__footer { flex-wrap: wrap; }
+}
+</code></pre>
+<p>通俗解释：先给弹窗一个受屏幕限制的整体空间；标题和底部不被挤走；中间剩余空间交给正文；右侧编辑器把这块空间全部用上，而不是在顶部放一个很小的框。小窗口才改为上下排列，不能一开始就把正常桌面压成竖长条。</p>
+<p>须另外配置 padding、颜色、焦点和短高度策略，不能只复制上面片段就声称已与设计图一致。特别检查 <code>input</code> 通配样式，不让文本输入框宽度规则污染 radio/checkbox/图标按钮。</p>
+<h2>8. 视觉验收清单</h2>
+<table>
+<thead>
+<tr>
+<th>验收点</th>
+<th>通过标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>宽幅布局</td>
+<td>同窗口下比原页面更适合横向阅读，标题和页脚同时可见</td>
+</tr>
+<tr>
+<td>文本区利用</td>
+<td>右侧编辑器底边接近右卡片底部，无卡片下半部人为大空白</td>
+</tr>
+<tr>
+<td>单选按钮</td>
+<td>有当前选择、焦点、禁用与未执行提示，不像下拉/复选框</td>
+</tr>
+<tr>
+<td>案例栏</td>
+<td>不出现孤立大勾；真实数量和入口在约定位置</td>
+</tr>
+<tr>
+<td>H02 图文</td>
+<td>图片完整，中文可读，切换同步，无相邻案例内容混搭</td>
+</tr>
+<tr>
+<td>所有按钮</td>
+<td>不被截断、不遮住正文、不只有 hover 才能发现</td>
+</tr>
+<tr>
+<td>键盘/缩放</td>
+<td>指定尺寸及 DPI 下操作可达，焦点不跑到背景</td>
+</tr>
+<tr>
+<td>真实数据</td>
+<td>最终运行截图来自真实用例，不用设计稿贴图假装运行 UI</td>
+</tr>
+</tbody>
+</table>
+<p>实际 QA 报告须列出「已匹配/待修复/未验证」及截图路径，不把本 Handoff 当作已通过测试的证明。</p>
+</article><article id="doc3"><div class="label">03-Codex执行提示词.md</div><h1>Codex 执行提示词｜优化对比与案例图文详情</h1>
+<h2>一、直接粘贴的总任务</h2>
+<pre><code class="language-text">你在 OpenJatoBID 项目中实施一轮 v1.8.2 发布后的局部体验修复。
+
+本地项目：D:\Documents\OpenJatobid
+本轮资料：docs/image-studio-skill/prompt-ui-optimization/
+基线参考：main 提交 401199121ca57ba30d622af31829e9ffccb59230。
+它仅用于对照，不允许为匹配该提交而回退我的当前代码。
+
+先阅读：
+1. 根目录 AGENTS.md、开发说明.md，以及相关目录内更近的开发约束。
+2. 本轮 README.md。
+3. 01-完整优化规格.md。
+4. 02-UI-Handoff.md 和 ui/ 中两张用户最后确认的设计图。
+5. 04-验收测试用例.md 与 05-现状核查与来源.md。
+
+目标：
+仅优化“提示词优化与对比”和“查看实际提供的案例”两页。
+把窄长弹窗、大 checkbox、方向下拉、小 textarea 大空白修好；
+使本次案例能看真实图片、完整中文、原文以及准确的已发送片段。
+不重新设计全站，不用新布局替代已确认的两图。
+
+必须遵守：
+- 本轮未指定新的软件版本；不要自行修改 package 版本或重新发布 v1.8.2。
+- 图片中的固定条数、样例文案、模型名和 2000 字上限不是代码常量。
+- 主创作页的反推按钮、模型后面的优化按钮、独立生成按钮保持现状。
+- 六模型范围、金龙连接、Key、全局默认模型不变。
+- 不恢复已经取消的图像生成预检风险评估；不绕过供应商安全机制。
+- 不增加多轮 Agent、Embedding、Rerank、全量自动付费翻译。
+- 案例读取、图片下载和翻译不能成为优化完成的前置等待步骤。
+- 优化本身最多一次改写模型请求；翻译是用户主动的独立请求。
+- 保留人工应用、撤销、来源、操作记录和私密数据保护。
+- 不运行外部案例中的指令，不为了显示图片关闭 Electron 安全配置。
+- 保留我的未提交修改，不执行 pull/reset/merge/rebase，不擅自提交、推送、打标签、发布。
+- 不未经授权执行真实付费模型测试或外部部署。
+
+先输出本轮真实现状复现、拟修改文件、分步计划和测试基线，
+再按本文件“二、分步任务”连续实施；遇到不可逆操作或收费事项才停止请求授权。
+不要再要求我重新选择已经确认的布局。
+
+输出放到：
+docs/image-studio-skill/prompt-ui-optimization/implementation/
+包括实施记录、配置/迁移/回滚说明、代码审查、分层测试和真实界面截图。
+每个未执行测试明确标注，不把 mock 成功写成真实服务通过。
+完成后解释哪些代码做了什么、修改了哪些文件、还缺什么、如何验证。
+</code></pre>
+<h2>二、分步任务</h2>
+<p>下面步骤是一次完整交付的执行顺序，不是产品分期。每步需要检查输出后再继续，不能只写计划就宣称实施完成。</p>
+<h3>步骤 1：复现问题、核对差异</h3>
+<p>**输入：**当前工作区、开发约束、evidence 原页面截图、固定基线的核查结论。</p>
+<p>**操作：**先运行只读 git status/branch/remote 查询，检查当前版本与未提交修改。阅读 ImageStudioCreate、ImageStudioPage、样式、preload、ipc.ts、imageStudioService、Knowledge/Worker 和个人提示词库。运行项目已有非付费检查。复现弹窗并查看计算样式和尺寸，确认大 checkbox、窄长框与 textarea 高度根因。</p>
+<p><strong>输出：</strong><code>implementation/00-现状与计划.md</code>；包含实际代码基线、复现截图、准确文件/符号、既有失败与拟改范围。</p>
+<p>**约束：**不根据截图凭空认定 CSS 根因；不回退到本文件的参考提交；不顺手更改模型说明等无关内容。</p>
+<p>**退出条件：**能指出真实状态传递、样式冲突和案例数据缺口，而不只是笼统说“UI 有问题”。</p>
+<h3>步骤 2：定义并实现会话/案例快照</h3>
+<p>**输入：**现有 optimizePrompt、旧参考库条目、YouMind 完整知识行与服务存储。</p>
+<p>**操作：**定义父会话、原始输入指纹、原文、完整优化结果、人工稿、来源版本和案例快照。为最终选中至多三条案例保存完整原文、媒体信息、来源与内容哈希。Knowledge Worker 增加按版本/ID获取详情或一次性带回选中条目的能力；旧参考库必须同样支持。</p>
+<p>**输出：**局部 store/数据库迁移、类型定义、快照构建函数和单元测试。</p>
+<p>**约束：**不在 Main 重复同步解压整库；不让 frontend 直接传 URL 任意下载；签名包保持不可变；迁移幂等，不丢草稿、收藏、作品。权限绑定本窗口会话。</p>
+<p>**退出条件：**旧来源和知识包都能从本轮 caseSnapshotId 读出同一版本完整详情；更新或停用来源后不会错换当前案例。</p>
+<h3>步骤 3：记录实际提供给 AI 的内容</h3>
+<p>**输入：**最终请求体、匹配案例和单次模型调用链。</p>
+<p>**操作：**在所有单项/整体截短完成后，记录真正拼进请求的 sentExcerpt、sentContext、顺序和哈希。区分仅组装、已提交请求与历史缓存；排队取消时不得宣称已经提供给模型。把真实案例计数传给 UI。</p>
+<p>**输出：**可复核的引用记录、结果缓存快照、上下文一致性测试。</p>
+<p>**约束：**不能把 450 字符 card 当成最终已发送的 360 字符片段；不调用新模型写“参考理由”；UI 展示完整中文和图片不代表模型看过它们。</p>
+<p>**退出条件：**测试捕获的实际 HTTP messages 中案例文本，和详情页“实际提供”逐字一致；条数与非空真实提交资料一致。</p>
+<h3>步骤 4：实现 H01 宽幅优化对比</h3>
+<p>**输入：**已确认 H01、Handoff、当前组件/样式、会话状态。</p>
+<p>**操作：**拆出专用优化 Dialog，局部类名隔离；移除裸 checkbox，变为案例信息栏；将方向换成同式单选按钮，常用四项优先、原有模式后置换行；新增包装设计/电商主图的后端模式和规则；右编辑区填满、左右等高、页脚固定。</p>
+<p>**输出：**H01 组件、scoped CSS、可访问性与尺寸测试、各状态截图。</p>
+<p>**约束：**不改反推共用样式；不能删除旧方向；点击方向不自动请求；“停止”仅运行中可用；字数上限保留 10,000。保留图中的两个同名案例入口，共用一个处理函数。</p>
+<p>**退出条件：**1440×900、1280×800 以及规定缩放下无小文本框/大空白，无巨大对勾，底部按钮可见且可用。</p>
+<h3>步骤 5：实现 H02 案例图文详情</h3>
+<p>**输入：**已确认 H02 和本轮快照接口。</p>
+<p>**操作：**独立案例 Dialog：顶部卡片切案例、左大图、右完整中文/原文、下实际引用、底部操作。返回时恢复原 H01 会话。案例页关闭、大图关闭分别只回退一层。适配真实 0/1/2/3 条，媒体为空或缺失情况。</p>
+<p>**输出：**H02、案例卡、图片/文字阅读组件、返回路径测试。</p>
+<p>**约束：**不做内联长列表、不改变主页面布局；不新查一组相似案例冒充本次引用；切换期间晚响应不得写错对象；原文缺失不能用摘要代替。</p>
+<p>**退出条件：**可以从本轮实际两种来源各打开真实案例；图文、原文、实际片段和来源身份一致。</p>
+<h3>步骤 6：补齐图片与中文显示</h3>
+<p>**输入：**caseSnapshotId、当前媒体、原文、来源中文或译文缓存。</p>
+<p>**操作：**复用下载缓存和查看器；按当前案例加载真实图。新增独立中文缓存，优先中文全文，缺失时在 H02 阅读区提供“翻译为中文”及费用说明，用户主动点击才用现有 aiService 翻译当前条；重复点击在途合并。</p>
+<p>**输出：**可信媒体读取、单条翻译/取消、内容哈希缓存和错误状态。</p>
+<p>**约束：**不全库翻译；不带用户私有提示词和参考图进入案例翻译请求；单击最多一次模型请求、不自动修复重试；不把混有汉字的英文误判为完整中文；译文保持变量和原样上屏文字；不伪造案例图。</p>
+<p>**退出条件：**打开 H01 不下载案例图也不翻译；H02 已有中文立即读本地；缺中文明确可操作；失败保留原文；缓存复用不重复收费。</p>
+<h3>步骤 7：完善复制、保存、应用和冲突保护</h3>
+<p>**输入：**页面一优化稿、页面二当前显示语言文本、主创作输入修订号与个人库。</p>
+<p>**操作：**分别实现优化稿与案例的动作语义。案例应用前确认将替换创作输入、不添加图片；确认后保留撤销及本轮人工稿快照。复制当前明确显示的全文，保存携带来源/译文标记并避免重复收藏。</p>
+<p>**输出：**动作处理函数、输入指纹检查、幂等记录和测试。</p>
+<p>**约束：**不把案例文本偷偷写入优化稿；不改变模型和参考图；不自动生成；主输入已经变化则拒绝静默覆盖；超 10,000 字不截断应用；停止或中断稿不能当完成稿。</p>
+<p>**退出条件：**每个按钮的对象都能在测试中逐字确认；保存不应用、应用不生图、返回不丢稿、撤销可恢复。</p>
+<h3>步骤 8：完成缓存、生命周期与安全检查</h3>
+<p>**输入：**在途请求、多个窗口、知识更新、已存在缓存、当前安全约束。</p>
+<p>**操作：**处理乱序 chunk、旧请求完成、快速切案例、返回/关闭、更新换 Worker、缓存命中及历史缺字段。验证 IPC sender 和会话权限；外部媒体只走可信 Main 层及既有安全校验。为完成会话增加明确保留/清理策略，不清活动和收藏数据。</p>
+<p>**输出：**生命周期与安全测试、数据留存说明、可回滚迁移说明。</p>
+<p>**约束：**不关闭 CSP、webSecurity 或签名验证；不在日志记录 Key/图片 Base64；不把私人文本上传统计；不恢复取消的图像预检。</p>
+<p>**退出条件：**无会话串写、无隐藏重试计费、无删除/升级后错误显示另一版案例、无内存监听泄漏。</p>
+<h3>步骤 9：分层验收和设计对照</h3>
+<p>**输入：**04-验收测试用例.md、现有测试命令、实际可运行环境。</p>
+<p>**操作：**执行单元/组件/IPC/数据库迁移/非付费集成和 UI 测试，分别报告；在规定尺寸与 DPI 截图，逐组件对照 H01/H02。需要真实模型时先说明测试计划和预算请求授权。</p>
+<p><strong>输出：</strong><code>implementation/03-测试报告.md</code>、<code>implementation/screenshots/</code>、性能记录、未执行/失败项。</p>
+<p>**约束：**禁止用设计 PNG 作背景假装实现；没有实际 Chromium/Electron 验证不能标视觉通过；mock 译文/图片成功不能冒充真实公网服务验证。</p>
+<p>**退出条件：**每项需求可追踪到测试和证据；阻塞问题不被“build 通过”掩盖。</p>
+<h3>步骤 10：交付与说明</h3>
+<p>**输入：**本轮改动、测试证据和剩余问题。</p>
+<p><strong>输出：</strong><code>implementation/01-实施记录.md</code>、<code>02-配置迁移与回滚.md</code>、<code>04-审查与遗留项.md</code>；简短交付摘要说明文件、功能和验证方式。</p>
+<p>**约束：**不自行 bump 版本、不提交/推送/合并/打标签/发布。数据库回滚不能要求用户直接删除整个 userData。对已写入新表采用保留式回退/兼容读取，不清空用户收藏和作品。</p>
+<p>**退出条件：**用户可按路径复现操作并判断结果，知道什么已经完成、什么尚未测，不需要理解全部代码才能验收。</p>
+</article><article id="doc4"><div class="label">04-验收测试用例.md</div><h1>验收测试用例｜提示词优化对比与案例图文详情</h1>
+<p><strong>基线：v1.8.2｜所有下列表项均为待执行测试，不是已经通过的报告。</strong></p>
+<h2>执行规则</h2>
+<p>每条记录实际环境、输入数据来源、步骤、实测结果、状态与截图/日志。状态仅使用「通过 / 失败 / 未执行 / 阻塞」。真实外部模型或网络未测时不能用 mock 结果替代。付费联调须先取得用户授权。</p>
+<p>布局至少覆盖 1440×900、1280×800、1024×768 及 Windows 100%/125%/150% 缩放。两图示例仅作为视觉参考；功能测试使用中性素材与真实来源样本，不把设计图片的提示词硬编码成生产默认。</p>
+<h2>布局与可访问性</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>输入/前置条件</th>
+<th>操作</th>
+<th>预期结果</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-001</td>
+<td>R01</td>
+<td>1440×900，正常稿</td>
+<td>打开 H01</td>
+<td>标题、方向、对比正文和页脚同时可达，宽幅非窄长条</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-002</td>
+<td>R01</td>
+<td>1280×800，长稿</td>
+<td>打开并滚动左右正文</td>
+<td>两侧同高，页脚固定，不出现外卡大空白与内部小输入框</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-003</td>
+<td>R01</td>
+<td>1024×768及125%/150%缩放</td>
+<td>逐项点击/键盘访问</td>
+<td>无控件截断、不可达按钮或窗口外横向溢出</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-004</td>
+<td>R04</td>
+<td>短原文、长优化稿</td>
+<td>查看编辑器底边与滚动</td>
+<td>编辑器填满右栏剩余高度，不受左侧短文字限制</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-005</td>
+<td>R04</td>
+<td>长原文、短优化稿</td>
+<td>滚动左栏</td>
+<td>两卡外高一致，不强制联动右侧滚动</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-006</td>
+<td>R04</td>
+<td>优化稿含空行及长URL</td>
+<td>查看并编辑</td>
+<td>保留段落，URL可换行，不撑破弹窗</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-007</td>
+<td>R04</td>
+<td>10,000字符和超限稿</td>
+<td>输入、复制、尝试应用</td>
+<td>准确计数；超限仍可读，无静默截断，应用给出明确限制</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-008</td>
+<td>R04</td>
+<td>中文输入法组合输入</td>
+<td>连续输入并提交候选字</td>
+<td>不误触应用、不丢候选文字、不截断组合输入</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-009</td>
+<td>R02</td>
+<td>原checkbox放大复现环境</td>
+<td>打开修复页</td>
+<td>孤立大对勾消失，信息图标不是可切换checkbox</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-010</td>
+<td>R02</td>
+<td>用户已关闭知识/来源</td>
+<td>打开并优化</td>
+<td>尊重已有停用状态，不因去掉checkbox强制恢复</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-011</td>
+<td>R01</td>
+<td>页面一/页面二/大图</td>
+<td>用Tab、Shift+Tab、Esc操作</td>
+<td>仅当前层接收焦点；逐层返回，不关错层</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-012</td>
+<td>R01</td>
+<td>高DPI与窄窗口</td>
+<td>切换页面并滚动</td>
+<td>必要时正文上下排布；底部按钮换行可达，不靠缩小字体</td>
+<td>待执行</td>
+</tr>
+</tbody>
+</table>
+<h2>方向与优化状态</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>输入/前置条件</th>
+<th>操作</th>
+<th>预期结果</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-013</td>
+<td>R03</td>
+<td>四个常用方向</td>
+<td>分别点击</td>
+<td>按钮单选明确；包装设计/电商主图后端接受并有真实对应规则</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-014</td>
+<td>R03</td>
+<td>既有九种模式</td>
+<td>检查并逐一调用mock</td>
+<td>旧模式仍可选且语义保留，不因图示删除</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-015</td>
+<td>R03</td>
+<td>已完成且有人工稿</td>
+<td>只切方向</td>
+<td>不新增AI请求；旧结果标旧方向并提示重新优化生效</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-016</td>
+<td>R03</td>
+<td>正在流式输出</td>
+<td>尝试改变方向</td>
+<td>按规格禁用，结果与方向不会混淆</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-017</td>
+<td>R03</td>
+<td>重新优化有人工编辑稿</td>
+<td>点击重新优化</td>
+<td>明确提示覆盖候选；保留当前稿，确认后新建请求</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-018</td>
+<td>R04</td>
+<td>模型正常流式</td>
+<td>发送多个chunk</td>
+<td>真实逐段显示，生成中只读，完整结束后可编辑</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-019</td>
+<td>R04</td>
+<td>用户流式时向上滚动</td>
+<td>继续返回chunk</td>
+<td>不强拉回底部，结束后当前阅读位置保持</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-020</td>
+<td>R04</td>
+<td>流中断但含所有必留词</td>
+<td>尝试应用</td>
+<td>仍属不完整流，不能用字面检查冒充成功</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-021</td>
+<td>R04</td>
+<td>必留变量或原样画面文字缺失</td>
+<td>完成后手工修正</td>
+<td>明确指出需核对项；完整流稿修正合格后才可应用</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-022</td>
+<td>R04</td>
+<td>排队/生成时停止</td>
+<td>点击停止后收到晚响应</td>
+<td>标已停止，不自动重试，晚响应不写入新候选</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-023</td>
+<td>R08</td>
+<td>开启知识但检索超时</td>
+<td>点击优化</td>
+<td>在总预算内降级，无额外模型分析请求，UI说明原因</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-024</td>
+<td>R08</td>
+<td>用户未点击查看案例</td>
+<td>执行一次优化</td>
+<td>案例图片下载0次、案例翻译0次、改写最多1次</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-025</td>
+<td>R08</td>
+<td>成功结果缓存</td>
+<td>再次同输入优化</td>
+<td>恢复原结果和同批快照，缓存标记真实，改写0次</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-026</td>
+<td>R08</td>
+<td>关闭知识/更换方向/画幅/模型</td>
+<td>请求优化</td>
+<td>缓存键更新，不错误复用上一组合结果</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-027</td>
+<td>R08</td>
+<td>图片顺序/用途/内容变化</td>
+<td>请求优化</td>
+<td>输入指纹变化，不能复用不匹配缓存</td>
+<td>待执行</td>
+</tr>
+</tbody>
+</table>
+<h2>案例详情与真实引用</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>输入/前置条件</th>
+<th>操作</th>
+<th>预期结果</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-028</td>
+<td>R05</td>
+<td>0条有效案例</td>
+<td>打开H01</td>
+<td>显示真实0条；两个案例入口禁用，不展示演示卡</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-029</td>
+<td>R05</td>
+<td>分别1、2、3条案例</td>
+<td>进入H02</td>
+<td>卡片数量/顺序完全匹配，不凑三张</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-030</td>
+<td>R05</td>
+<td>来自旧参考库的案例</td>
+<td>打开详情</td>
+<td>正确读取该来源完整正文、已有中文、图片与出处</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-031</td>
+<td>R05</td>
+<td>来自YouMind包的案例</td>
+<td>打开详情</td>
+<td>通过快照读取完整prompt/sourceMedia，不只显示card</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-032</td>
+<td>R05</td>
+<td>两个来源具有相同itemId</td>
+<td>切换详情</td>
+<td>sourceId+itemId+hash区分，不串图/串文本</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-033</td>
+<td>R06</td>
+<td>原文远超450字符</td>
+<td>对照来源原文</td>
+<td>显示完整正文，尾部条款不缺，不把摘要标全文</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-034</td>
+<td>R06</td>
+<td>原card450而实际只提交360</td>
+<td>捕获实际messages并查看B06</td>
+<td>已提供内容与最终消息逐字一致，不多显示未发送部分</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-035</td>
+<td>R06</td>
+<td>整体上下文总预算发生裁切</td>
+<td>捕获请求并检查条数</td>
+<td>只有实际非空提交案例被计数；片段记录体现最终裁切</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-036</td>
+<td>R06</td>
+<td>仅提供文字摘要未发案例图</td>
+<td>查看详情说明</td>
+<td>完整案例/中文/图片只作阅读，不宣称模型已看图</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-037</td>
+<td>R06</td>
+<td>当前优化不分析用户图片</td>
+<td>打开状态/说明</td>
+<td>保留真实未分析标记，不因H02出现图片而改成已识图</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-038</td>
+<td>R06</td>
+<td>排队期间取消未发送</td>
+<td>检查日志与案例标签</td>
+<td>仅说明待提供/已选资料，不宣称已给AI</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-039</td>
+<td>R06</td>
+<td>模型收到请求后返回错误</td>
+<td>检查记录</td>
+<td>保留真实已提交证据与失败状态，不伪造完成</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-040</td>
+<td>R05</td>
+<td>源条目更新或删除</td>
+<td>完成优化后再进H02</td>
+<td>仍显示该轮冻结内容，不能换成最新同ID内容</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-041</td>
+<td>R05</td>
+<td>知识更新切换Worker</td>
+<td>会话仍打开时进入案例</td>
+<td>旧会话详情可读，不依赖被终止的最新检索线程</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-042</td>
+<td>R05</td>
+<td>来源被停用</td>
+<td>查看历史并新优化</td>
+<td>历史如实显示原引用；新请求不继续引用停用源</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-043</td>
+<td>R05</td>
+<td>旧缓存没有完整快照</td>
+<td>打开历史案例</td>
+<td>说明历史详情未保存，可读旧摘要，不编造中文或图片</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-044</td>
+<td>R05</td>
+<td>快速A→B→C切换，A最晚返回</td>
+<td>等待全部响应</td>
+<td>仅C渲染当前区；A数据只可写回A缓存</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-045</td>
+<td>R06</td>
+<td>条目缺tags/原模型/条目URL</td>
+<td>查看卡片来源</td>
+<td>缺失字段隐藏或标未知，不按标题推断模型或伪造链接</td>
+<td>待执行</td>
+</tr>
+</tbody>
+</table>
+<h2>图片与中文全文</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>输入/前置条件</th>
+<th>操作</th>
+<th>预期结果</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-046</td>
+<td>R05</td>
+<td>横图/竖图/方图</td>
+<td>切换并放大</td>
+<td>完整contain，不裁切边界；文字区无跳变</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-047</td>
+<td>R05</td>
+<td>同案例三张图</td>
+<td>点击大图左右箭头</td>
+<td>只切当前案例图片，计数正确，不切案例</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-048</td>
+<td>R05</td>
+<td>单图案例</td>
+<td>查看1/1状态</td>
+<td>箭头不可用或隐藏，不假装有其他图</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-049</td>
+<td>R05</td>
+<td>sourceMedia为空</td>
+<td>查看详情</td>
+<td>明确无样例图，不产生下载请求，不生成替代图</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-050</td>
+<td>R05</td>
+<td>媒体404/超时/格式不合法</td>
+<td>打开并重试</td>
+<td>固定占位与清楚错误，不阻断中文阅读，不循环重试</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-051</td>
+<td>R05</td>
+<td>离线但已有缓存</td>
+<td>打开详情</td>
+<td>缓存图和已缓存中文可读，不能被错误状态清空</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-052</td>
+<td>R05</td>
+<td>两会话请求同一媒体</td>
+<td>并发打开</td>
+<td>复用安全缓存/在途请求；会话授权仍独立验证</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-053</td>
+<td>R06</td>
+<td>原始中文全文</td>
+<td>打开详情</td>
+<td>标原始中文，直接显示，不额外翻译</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-054</td>
+<td>R06</td>
+<td>可信来源中文/已有AI译文</td>
+<td>打开详情</td>
+<td>按原文hash复用，标译文来源和状态</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-055</td>
+<td>R06</td>
+<td>英文里仅含一个中文品牌词</td>
+<td>打开详情</td>
+<td>不误判完整中文；可查看原文和主动翻译</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-056</td>
+<td>R06</td>
+<td>没有中文且未授权付费</td>
+<td>打开详情</td>
+<td>无静默翻译；同布局内提示和翻译按钮，原文可读</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-057</td>
+<td>R06</td>
+<td>用户主动翻译当前案例</td>
+<td>连续点击两次</td>
+<td>最多一次在途请求，费用提示清楚，其他案例不批量翻译</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-058</td>
+<td>R06</td>
+<td>翻译含变量、数值、否定与上屏文字</td>
+<td>对照原文</td>
+<td>变量与文字按约定保留，无额外创意或遗漏</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-059</td>
+<td>R06</td>
+<td>译文截断/无效/接口失败</td>
+<td>查看中文区</td>
+<td>不得标为完整；保留原文，允许明确重试</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-060</td>
+<td>R06</td>
+<td>切换到B后A译文回来</td>
+<td>查看当前B</td>
+<td>不覆盖B，只写A匹配hash的缓存</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-061</td>
+<td>R06</td>
+<td>原文版本变化</td>
+<td>再次读取中文</td>
+<td>旧hash译文不套在新原文；历史会话旧译文仍正确</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-062</td>
+<td>R06</td>
+<td>已缓存中文重复进入</td>
+<td>统计模型请求</td>
+<td>无重复翻译请求，滚动位置和语言可恢复</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-063</td>
+<td>R06</td>
+<td>中文/原文切换后复制</td>
+<td>检查剪贴板</td>
+<td>复制当前明确显示语言的完整正文，不附状态栏/出处</td>
+<td>待执行</td>
+</tr>
+</tbody>
+</table>
+<h2>动作、数据保护与回归</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>输入/前置条件</th>
+<th>操作</th>
+<th>预期结果</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-064</td>
+<td>R07</td>
+<td>H01人工编辑后进入H02</td>
+<td>返回/关闭案例页</td>
+<td>优化稿、方向、滚动与选中案例全部保留</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-065</td>
+<td>R07</td>
+<td>H01点击保存</td>
+<td>查看个人库与主输入</td>
+<td>保存优化稿；不替换创作输入，不触发生图</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-066</td>
+<td>R07</td>
+<td>H02显示中文并保存</td>
+<td>查看个人库记录</td>
+<td>保存当前案例中文及正确来源，不保存H01优化稿</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-067</td>
+<td>R07</td>
+<td>H02显示原文并保存</td>
+<td>查看个人库记录</td>
+<td>保存原文，语言标记正确；重复收藏不无故复制多条</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-068</td>
+<td>R07</td>
+<td>H02点击应用再取消确认</td>
+<td>返回各页面</td>
+<td>主输入/候选/图片/模型都不变</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-069</td>
+<td>R07</td>
+<td>H02确认应用</td>
+<td>返回主创作并撤销</td>
+<td>替换的是当前案例正文，不套用图片/模型；撤销恢复前输入</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-070</td>
+<td>R07</td>
+<td>H02案例应用前主输入被另窗口更新</td>
+<td>确认应用</td>
+<td>检测修订冲突，拒绝静默覆盖新稿</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-071</td>
+<td>R07</td>
+<td>H01完成后模型/参考图变化</td>
+<td>点击应用</td>
+<td>提示不匹配，不能覆盖新任务；完整旧稿仍可阅读复制</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-072</td>
+<td>R07</td>
+<td>案例全文超过10,000字符</td>
+<td>查看、复制、尝试应用</td>
+<td>全文可见可复制；应用禁用并说明，未静默裁切</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-073</td>
+<td>R08</td>
+<td>关闭优化窗口后旧chunk到达</td>
+<td>重开优化</td>
+<td>晚响应不写新会话，监听已清理，取消有真实效果</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-074</td>
+<td>R09</td>
+<td>使用反推、作品查看、生成和PSD</td>
+<td>运行既有回归</td>
+<td>共用CSS/IPC未破坏，按钮位置和原有功能保留</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-075</td>
+<td>R09</td>
+<td>检查六模型/连接/全局配置</td>
+<td>对照改动前后</td>
+<td>未经本轮授权的配置和版本号不变化</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-076</td>
+<td>R10</td>
+<td>文本/图像供应商拒绝、参数不合法</td>
+<td>执行mock请求</td>
+<td>真实错误被呈现；不自动换模型或绕过安全措施</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-077</td>
+<td>R10</td>
+<td>搜索代码/抓取请求</td>
+<td>执行生成主流程mock</td>
+<td>无恢复本地风险预检及隐藏审核模型请求</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-078</td>
+<td>R10</td>
+<td>伪造caseSnapshotId或其他窗口会话</td>
+<td>直接调用IPC</td>
+<td>拒绝越权，不能读任意本地文件或其他会话</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-079</td>
+<td>R10</td>
+<td>恶意媒体URL/重定向到内网</td>
+<td>请求图片</td>
+<td>安全校验拒绝，不关闭CSP/webSecurity来绕过</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-080</td>
+<td>R10</td>
+<td>案例文本含命令/HTML脚本</td>
+<td>展示、翻译、优化mock</td>
+<td>只当文字资料，不执行脚本、不改变系统规则</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-081</td>
+<td>R10</td>
+<td>数据库升级重复运行与中途失败</td>
+<td>升级和兼容回退</td>
+<td>迁移幂等，旧草稿/收藏/作品不丢，失败保持可恢复状态</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-082</td>
+<td>R10</td>
+<td>会话清理时有活动会话/已收藏案例</td>
+<td>触发清理</td>
+<td>活动/收藏受保护，过期普通缓存按策略回收</td>
+<td>待执行</td>
+</tr>
+<tr>
+<td>TC-083</td>
+<td>R10</td>
+<td>检查日志、埋点和输出报告</td>
+<td>执行正常操作</td>
+<td>不泄漏Key、图片Base64、私有提示词和本地绝对路径</td>
+<td>待执行</td>
+</tr>
+</tbody>
+</table>
+<h2>性能对照与证据</h2>
+<p>固定同一测试环境、模型、输入长度、图片数量和输出范围，分别跑无知识、知识命中、无匹配、超时、详情热缓存、图片慢网络和首次中文翻译。计时从用户点击开始，区分本地准备、队列、首段与总耗时。</p>
+<p>建议为不收费的本地检索/热详情至少采样 50 次并报告 P50/P95；外部模型样本量由授权费用决定，少量样本只报告单次值与范围，不冒充稳定的 P95。</p>
+<p>核心指标：不开案例时媒体下载/翻译均为0；本次优化改写请求≤1；热详情P95目标≤200ms；检索与快照总等待预算500ms；返回不重复调用模型。时间目标均须实测。</p>
+<h2>提交结果模板</h2>
+<table>
+<thead>
+<tr>
+<th>用例</th>
+<th>实际结果</th>
+<th>状态</th>
+<th>环境/数据版本</th>
+<th>证据路径</th>
+<th>遗留/原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC-xxx</td>
+<td>填实际观察，不复制预期文本</td>
+<td>未执行</td>
+<td>填实际环境</td>
+<td>implementation/...</td>
+<td>未验证原因</td>
+</tr>
+</tbody>
+</table>
+<p>本表共 <strong>83 条</strong>用例；实施者应补充发现的新回归，不允许删除失败用例来提高通过率。</p>
+<h2>发布前阻塞条件</h2>
+<p>任一应用对象错误、图文错配、全文伪装摘要、截断稿可应用、隐藏计费、历史来源漂移、用户稿丢失、跨窗口越权、基础布局不可用，均阻塞本轮宣称完成。仅外部费用未授权等事项可以作为明确未执行项移交，但不能宣称端到端全部验收通过。</p>
+</article><article id="doc5"><div class="label">05-现状核查与来源.md</div><h1>现状核查、来源与不确定项</h1>
+<p>**核查日期：2026-09-29。**本轮通过已连接 GitHub 只读读取 main 及相关代码，基线为 <code>401199121ca57ba30d622af31829e9ffccb59230</code>。未使用用户 API Key、未在其 Windows 电脑运行应用，未修改或推送仓库。</p>
+<h2>1. 代码证据索引</h2>
+<h3>S01｜实施基线</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/commit/401199121ca57ba30d622af31829e9ffccb59230">main 对应提交</a></p>
+<p>读取到的提交说明为 <code>chore: update release notice for v1.8.2</code>。该事实仅作为本轮核查锚点，不代表 Codex 工作区一定停在此提交。</p>
+<h3>S02｜页面显示与布局入口</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/src/features/image-studio/pages/ImageStudioCreate.tsx">ImageStudioCreate.tsx</a></p>
+<p>重点为候选状态和文件末尾 candidate 弹窗：方向通过 select 提供，使用裸 checkbox，案例 details 只循环渲染 <code>title/sourceId/card</code>，没有完整图文阅读组件。优化稿 textarea 与原文共用比较容器。文件中主按钮仍包含反推和模型后的优化入口，本轮保护这两个入口。</p>
+<p>**未确认：**导致用户电脑上巨型勾选框/窄长弹窗的具体 CSS 计算链。需要实际浏览器或 Electron 复现，不把静态代码推断当运行测试。</p>
+<h3>S03｜知识搜索输出字段</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioKnowledgeWorker.cjs">imageStudioKnowledgeWorker.cjs</a></p>
+<p>工作线程校验包后读取所有原始行，建内存全文索引；选中结果 map 含 itemId、title、card、categories、sourceMedia、needReferenceImages、sourceId、version，没有完整 prompt。card 再截为 450 字符。不是上游绝对没有图片，而是详情展示链路没有接通。</p>
+<h3>S04｜知识构建中的完整原文</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/scripts/build-image-studio-knowledge.cjs">build-image-studio-knowledge.cjs</a></p>
+<p>每条规范化行含完整 <code>prompt</code>、<code>sourceMedia</code>、分类与变量；<code>card</code> 由标题、描述与正文前 360 字符组成。本次读取的构建脚本没有单独产生完整中文译文的步骤。构建结果带内容校验与签名，不应被客户端翻译直接修改。</p>
+<p>**边界：**这里证明完整原文保留，不证明每条原文是中文，也不证明任一远端图片现在仍能下载。</p>
+<h3>S05｜优化上下文与流式行为</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioService.cjs">imageStudioService.cjs</a></p>
+<p>重点 <code>optimizePrompt()</code>：</p>
+<ul>
+<li>模式白名单为优化、扩写、简化、英文、双语、商业海报、产品摄影、写实、插画。</li>
+<li>从旧参考库及知识包合并候选，最终最多三条；旧库候选只留 itemId/title/card/sourceId。</li>
+<li>发送上下文使用 <code>card.slice(0, 360)</code> 拼接，最后再做总长度约束；所以 sources 的 card 不必等于模型最终收到的内容。</li>
+<li>请求一次 <code>aiService.chat</code>，支持 onDelta、signal 与 noRetry；结果标 <code>referencesAnalyzed:false</code>。</li>
+<li>返回 complete 主要由文字/变量是否包含判定；本轮要求结合流式完整性，避免把半段稿当成功。</li>
+</ul>
+<p>这些是局部代码事实，不是整个应用性能、视觉能力或外部服务可用性的全面结论。</p>
+<h3>S06｜版本更新与 Worker 生命周期</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioKnowledge.cjs">imageStudioKnowledge.cjs</a></p>
+<p>有 500ms 搜索等待预算；导入新知识包后终止旧 Worker、启用新的活动目录。本轮不能让已经生成的案例详情只依赖“最新活动目录”，因此要求本轮快照冻结和兼容历史数据。</p>
+<h3>S07｜媒体读取与旧参考库</h3>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioService.cjs">imageStudioService.cjs / loadCover</a></p>
+<p>当前 loadCover 已处理图片 URL、缓存、并发、失败与文件验证。知识包不在旧参考库表中；复用下载底层时仍需做好可信案例与媒体的适配，不能把不存在的 itemId 直接查旧表就认定没有图片。</p>
+<p><a href="https://github.com/migrant1124/OpenJatoBID/blob/401199121ca57ba30d622af31829e9ffccb59230/client/electron/services/imageStudioSources.cjs">imageStudioSources.cjs</a></p>
+<p>旧参考库的来源、中文化、封面和内容哈希继续兼容。本轮不重做来源管理或国内更新基础设施。</p>
+<h2>2. 官方实现参考</h2>
+<h3>S08｜W3C APG 模态对话框</h3>
+<p><a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/">Dialog Modal Pattern</a></p>
+<p>用于焦点进入、Tab 限制、Esc 关闭和返回焦点。本文对页面一、案例页、大图的逐层关闭，是结合本产品交互作出的实现要求，不是要求复制官网示例的外观。</p>
+<h3>S09｜Electron 安全建议</h3>
+<p><a href="https://www.electronjs.org/docs/latest/tutorial/security">Electron Security</a></p>
+<p>用于 HTTPS、上下文隔离、避免禁用 webSecurity、验证 IPC sender 和谨慎使用 openExternal 等实现边界。案例查看不得因为网络图片不显示而放松整站安全策略。</p>
+<h2>3. 已确认设计资产</h2>
+<ul>
+<li><code>ui/H01-已确认-提示词优化与对比.png</code>：用户最后确认的页面一。</li>
+<li><code>ui/H02-已确认-案例图文详情.png</code>：用户最后确认的页面二。</li>
+<li><code>evidence/原页面问题截图.png</code>：用户提供的旧界面问题截图。</li>
+</ul>
+<p>以上原图原样复制，分辨率与 SHA-256 见 <code>assets-manifest.json</code>。此前多页概念拼图和被用户拒绝的方案不纳入本包，不作为开发基线。</p>
+<h2>4. 尚未实测的事项</h2>
+<table>
+<thead>
+<tr>
+<th>事项</th>
+<th>状态</th>
+<th>后续验证</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户本机 CSS 和 DPI 根因</td>
+<td>未复现</td>
+<td>实际 Electron 计算样式与截图</td>
+</tr>
+<tr>
+<td>远端案例图片国内网络可达性</td>
+<td>未测</td>
+<td>授权环境按真实 URL 验证；失败要有缓存/占位</td>
+</tr>
+<tr>
+<td>所有案例的中文覆盖率</td>
+<td>未统计</td>
+<td>对实际安装知识包和旧库统计，不能宣称全库已中文化</td>
+</tr>
+<tr>
+<td>用户文本模型的翻译质量和费用</td>
+<td>未测</td>
+<td>先授权再做少量真实样本</td>
+</tr>
+<tr>
+<td>新 UI 端到端功能</td>
+<td>尚未开发</td>
+<td>Codex 按测试表逐项执行</td>
+</tr>
+<tr>
+<td>下一软件版本号</td>
+<td>未指定</td>
+<td>不自行 bump 或发布</td>
+</tr>
+</tbody>
+</table>
+<h2>5. 本交付包自身的检查边界</h2>
+<p>本包可验证：文档/图片实际存在，图片与用户批准原文件哈希一致，文件内引用可解析，ZIP 可正常解压，文档目录与 Codex 指令一致。</p>
+<p>上述检查不等于产品代码已经实现、不等于付费模型跑通，也不等于用户电脑上的视觉验收通过。开发者必须另行提交真实实施证据。</p>
+</article></main></div></body></html>

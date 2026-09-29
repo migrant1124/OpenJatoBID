@@ -14,7 +14,7 @@ PRAGMA busy_timeout = 5000;
 
 -- 目标完整结构版本。
 -- 运行时代码应通过 PRAGMA user_version 判断是否需要自动升级。
-PRAGMA user_version = 36;
+PRAGMA user_version = 40;
 
 -- ============================================================================
 -- 技术方案 technical_plan_*（v1 已落地）
@@ -984,6 +984,26 @@ CREATE TABLE IF NOT EXISTS image_studio_requests (
   task_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   PRIMARY KEY (feature, request_id)
+);
+
+CREATE TABLE IF NOT EXISTS image_studio_optimization_sessions (
+  session_id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, status TEXT NOT NULL,
+  input_fingerprint TEXT NOT NULL, input_snapshot TEXT NOT NULL DEFAULT '',
+  recoverable INTEGER NOT NULL DEFAULT 0, original_prompt TEXT NOT NULL,
+  candidate_text TEXT NOT NULL DEFAULT '', edited_text TEXT NOT NULL DEFAULT '',
+  requested_mode TEXT NOT NULL, completed_mode TEXT NOT NULL DEFAULT '',
+  model_key TEXT NOT NULL, model_name TEXT NOT NULL, source_status TEXT NOT NULL DEFAULT '',
+  sent_context TEXT NOT NULL DEFAULT '', sent_at TEXT, cache_hit INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS image_studio_optimization_cases (
+  case_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, position INTEGER NOT NULL,
+  detail_json TEXT NOT NULL, FOREIGN KEY(session_id) REFERENCES image_studio_optimization_sessions(session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_image_studio_optimization_cases_session
+  ON image_studio_optimization_cases(session_id, position);
+CREATE TABLE IF NOT EXISTS image_studio_case_translations (
+  content_hash TEXT PRIMARY KEY, prompt_zh TEXT NOT NULL, created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS image_studio_works (

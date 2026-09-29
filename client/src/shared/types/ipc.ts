@@ -667,6 +667,34 @@ export interface PromptItem {
   updatedAt: string;
 }
 
+export interface ImageStudioOptimizationCaseSummary {
+  caseSnapshotId: string;
+  sourceId: string;
+  itemId: string;
+  title: string;
+  tags: string[];
+  hasImage: boolean;
+}
+
+export interface ImageStudioOptimizationCase extends ImageStudioOptimizationCaseSummary {
+  sourceKind: string;
+  sourceVersion: string;
+  contentHash: string;
+  titleOriginal: string;
+  promptOriginal: string;
+  promptZh: string;
+  translationStatus: 'original' | 'source' | 'ai' | 'missing';
+  media: string[];
+  sourceUrl: string;
+  attribution: string;
+  sentText: string;
+  sentExcerpt: string;
+  sentOrder: number;
+  sentHash: string;
+  sentStatus: 'pending' | 'submitted' | 'historical' | 'unknown';
+  detailAvailability: 'available' | 'missing';
+}
+
 export interface ImageStudioWork {
   workId: string;
   taskId: string;
@@ -918,8 +946,18 @@ export interface YibiaoBridge {
     importAsset: () => Promise<{ canceled: boolean; asset?: ImageStudioAsset }>;
     readManagedImage: (input: { workId?: string; assetId?: string; layerId?: string }) => Promise<{ dataUrl: string; width: number; height: number; sourceSha256: string }>;
     invertImage: (input: { assetId?: string; workId?: string }) => Promise<{ prompt: string; assetId: string | null; workId: string | null }>;
-    optimizePrompt: (input: { prompt: string; mode?: string; modelKey: string; size: string; references: Array<{ assetId?: string; workId?: string; role: string }>; useKnowledge?: boolean; force?: boolean; requestId: string }) => Promise<{ original: string; optimized: string; mode: string; complete: boolean; sourceStatus: string; sources: Array<{ itemId: string; title: string; card: string; sourceId: string }>; knowledgeVersion: string; referencesAnalyzed: boolean; elapsedMs: number; cacheHit: boolean; requestId: string }>;
+    optimizePrompt: (input: { prompt: string; mode?: string; modelKey: string; size: string; references: Array<{ assetId?: string; workId?: string; role: string }>; useKnowledge?: boolean; force?: boolean; requestId: string }) => Promise<{ original: string; optimized: string; mode: string; complete: boolean; sourceStatus: string; sources: ImageStudioOptimizationCaseSummary[]; knowledgeVersion: string; referencesAnalyzed: boolean; elapsedMs: number; cacheHit: boolean; sessionId: string; requestId: string }>;
     cancelOptimization: (requestId: string) => Promise<void>;
+    optimizationCase: (input: { sessionId: string; caseSnapshotId: string }) => Promise<ImageStudioOptimizationCase>;
+    optimizationCases: (sessionId: string) => Promise<{ sources: ImageStudioOptimizationCaseSummary[]; sourceStatus: string; cacheHit: boolean; sentStatus: string }>;
+    latestOptimization: () => Promise<{ sessionId: string; original: string; optimized: string; edited: string;
+      snapshotKey: string; mode: string; completedMode: string; modelKey: string; modelName: string;
+      status: string; sourceStatus: string; sources: ImageStudioOptimizationCaseSummary[];
+      sentStatus: 'pending' | 'submitted' | 'historical' | 'unknown'; cacheHit: boolean } | null>;
+    saveOptimizationEdit: (input: { sessionId: string; text: string; recoverable?: boolean }) => Promise<void>;
+    optimizationCaseImage: (input: { sessionId: string; caseSnapshotId: string; imageIndex: number; retry?: boolean }) => Promise<{ assetUrl: string }>;
+    translateOptimizationCase: (input: { sessionId: string; caseSnapshotId: string }) => Promise<{ promptZh: string; translationStatus: 'original' | 'source' | 'ai' }>;
+    cancelCaseTranslation: (input: { sessionId: string; caseSnapshotId: string }) => Promise<void>;
     knowledgeStatus: () => Promise<{ ready: boolean; version: string; error: string; enabled: boolean }>;
     setKnowledgeEnabled: (enabled: boolean) => Promise<{ ready: boolean; version: string; error: string; enabled: boolean }>;
     importKnowledgePackage: () => Promise<{ canceled?: boolean; unchanged?: boolean; version?: string; count?: number }>;

@@ -142,7 +142,7 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
   const source = path.join(directory, 'source.png');
   const generated = path.join(directory, 'generated.png');
   await sharp({ create: { width: 8, height: 6, channels: 4, background: '#ff0000' } }).png().toFile(source);
-  await sharp({ create: { width: 8, height: 6, channels: 4, background: '#0000ff' } }).png().toFile(generated);
+  await sharp({ create: { width: 11, height: 8, channels: 4, background: '#0000ff' } }).png().toFile(generated);
   const masks = await Promise.all([4, 5, 6].map(async (x) => {
     const pixels = Buffer.alloc(8 * 6 * 4, 255);
     pixels[(3 * 8 + x) * 4 + 3] = 0;
@@ -193,6 +193,8 @@ test('局部编辑以标注图请求，并逐像素保留选区外原图', async
   assert.equal(snapshot.regions.every((region) => region.maskAssetUrl && region.maskSha256), true);
   assert.equal(fs.existsSync(path.join(directory, 'workspace', 'generated-images', path.basename(snapshot.regions[0].maskAssetUrl))), true);
   const workPath = db.prepare('SELECT file_path AS filePath FROM image_studio_works').get().filePath;
+  const workSize = await sharp(workPath).metadata();
+  assert.deepEqual([workSize.width, workSize.height], [8, 6]);
   const pixels = await sharp(workPath).ensureAlpha().raw().toBuffer();
   assert.deepEqual([...pixels.subarray(0, 4)], [255, 0, 0, 255]);
   assert.deepEqual([...pixels.subarray((3 * 8 + 4) * 4, (3 * 8 + 4) * 4 + 4)], [0, 0, 255, 255]);
