@@ -1,10 +1,10 @@
 const MODELS = Object.freeze([
-  { key: 'gpt2', name: 'GPT Image 2', requestModelId: 'gpt-image-2', protocol: 'jinlong-image', profile: 'gpt-image', actions: ['generate', 'reference', 'edit'] },
-  { key: 'gpt2_1k', name: 'GPT Image 2 · 1K 渠道版', requestModelId: 'gpt-image-2-1k', protocol: null, profile: 'gpt-image', actions: [] },
-  { key: 'sunburst', name: 'GPT Image 2.5 Sunburst', requestModelId: 'gpt-image-2.5-sunburst', protocol: 'jinlong-image', profile: 'gpt-image-sunburst', actions: ['generate'] },
-  { key: 'flare', name: 'GPT Image 2.5 Flare', requestModelId: 'gpt-image-2.5-flare', protocol: 'jinlong-image', profile: 'gpt-image-flare', actions: ['generate'] },
-  { key: 'banana_pro', name: 'Nano Banana Pro', requestModelId: 'Nano Banana Pro', protocol: null, profile: 'nano-banana-pro', actions: [] },
-  { key: 'banana2', name: 'Nano Banana 2', requestModelId: 'Nano Banana 2', protocol: null, profile: 'nano-banana-2', actions: [] },
+  { key: 'gpt2', name: 'GPT Image 2', requestModelId: 'gpt-image-2', profile: 'gpt-image', actions: ['generate', 'reference', 'edit'] },
+  { key: 'gpt2_1k', name: 'GPT Image 2 · 1K 渠道版', requestModelId: 'gpt-image-2-1k', profile: 'gpt-image', actions: ['generate', 'reference'] },
+  { key: 'sunburst', name: 'GPT Image 2.5 Sunburst', requestModelId: 'gpt-image-2.5-sunburst', profile: 'gpt-image-sunburst', actions: ['generate', 'reference'] },
+  { key: 'flare', name: 'GPT Image 2.5 Flare', requestModelId: 'gpt-image-2.5-flare', profile: 'gpt-image-flare', actions: ['generate', 'reference'] },
+  { key: 'banana_pro', name: 'Nano Banana Pro', requestModelId: 'Nano Banana Pro', profile: 'nano-banana-pro', actions: ['generate', 'reference'] },
+  { key: 'banana2', name: 'Nano Banana 2', requestModelId: 'Nano Banana 2', profile: 'nano-banana-2', actions: ['generate', 'reference'] },
 ]);
 
 function getModel(key) {

@@ -145,7 +145,6 @@ const bridge = {
     saveDraft: (input) => ipcRenderer.invoke('image-studio:save-draft', input),
     start: (input) => ipcRenderer.invoke('image-studio:start', input),
     connectionStatus: () => ipcRenderer.invoke('image-studio:connection-status'),
-    saveConnectionKey: (input) => ipcRenderer.invoke('image-studio:save-connection-key', input),
     segmentObject: (input) => ipcRenderer.invoke('image-studio:segment-object', input),
     cancelTask: (input) => ipcRenderer.invoke('image-studio:cancel-task', input),
     setFavorite: (input) => ipcRenderer.invoke('image-studio:set-favorite', input),

@@ -38,7 +38,6 @@ interface Props {
   edit: (regions: StudioEditRegion[], sourceWorkId: string, sourceSha256: string, requestId: string) => Promise<string | void>;
   savePrompt: (text: string, originKind?: string) => Promise<void>;
   startBusy: boolean;
-  refresh: () => Promise<void>;
 }
 
 export function ImageStudioCreate(props: Props) {
@@ -55,8 +54,6 @@ export function ImageStudioCreate(props: Props) {
   const editTriggerRef = useRef<HTMLButtonElement>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [modelHelp, setModelHelp] = useState(false);
-  const [keyOpen, setKeyOpen] = useState(false);
-  const [apiKey, setApiKey] = useState('');
   const requestSerial = useRef(0);
   const optimizationRef = useRef<{ requestId: string; unsubscribe: () => void; cancelled: boolean } | null>(null);
   const selectedSourceKey = props.references[0]?.assetId || props.references[0]?.workId || props.selectedWork?.workId || '';
@@ -67,15 +64,6 @@ export function ImageStudioCreate(props: Props) {
   const selectedModel = props.state.models.find((model) => model.key === props.modelKey);
   const action = props.references.length ? 'reference' : 'generate';
   const canGenerate = Boolean(props.state.connection.configured && selectedModel?.actions.includes(action));
-
-  async function saveKey() {
-    try {
-      await window.yibiao!.imageStudio.saveConnectionKey({ apiKey });
-      setApiKey(''); setKeyOpen(false);
-      await props.refresh();
-      showToast('金龙密钥已保存', 'success');
-    } catch (error) { showToast(String(error), 'error'); }
-  }
 
   useEffect(() => () => {
     requestSerial.current += 1;
@@ -189,7 +177,7 @@ export function ImageStudioCreate(props: Props) {
     candidateValid && (candidate.kind === 'optimize' ? snapshotKey === candidate.snapshotKey : selectedSourceKey === candidate.sourceKey);
 
   return <div className="image-studio-create-shell">
-    <div className="image-studio-model-line">文本：{props.state.textModelName || '未配置'} <span>生图连接：金龙中转站 · {props.state.connection.configured ? '密钥已填写，连通未验证' : '未填写密钥'}</span></div>
+    <div className="image-studio-model-line">文本：{props.state.textModelName || '未配置'} <span>生图连接：金龙中转站 · {props.state.connection.configured ? '已配置 Key' : '未配置 Key'}</span></div>
     <div className="image-studio-workspace">
       <section className="image-studio-compose" aria-label="创作输入">
         <div className="image-studio-compose-fields">
@@ -211,17 +199,13 @@ export function ImageStudioCreate(props: Props) {
           </div>)}
           {props.references.length < 4 && <button type="button" className="image-studio-add-reference" onClick={() => void importImage()} disabled={busy === 'import'} title="添加参考图片"><ImagePlus size={20} /><span>添加</span></button>}
         </div>
-        <div className="image-studio-model-help"><strong>模型选择说明</strong><p>精细修图可考虑 Sunburst；日常快速出图可考虑 Flare 或 Nano Banana 2；复杂图文与多图创作可考虑 Nano Banana Pro。</p><small>根据官网定位整理，实际功能、费用和速度以金龙接口为准。</small><button type="button" onClick={() => setModelHelp(true)}>查看对比</button></div>
-        <div className="image-studio-model-action"><label>本次生图模型<select value={props.modelKey} onChange={(event) => props.setModelKey(event.target.value)}>{props.state.models.map((model) => <option value={model.key} key={model.key}>{model.name} · {model.requestModelId}</option>)}</select></label><button type="button" onClick={() => void optimize()} disabled={!props.prompt.trim() || Boolean(busy)}><WandSparkles size={16} /> 优化提示词</button></div>
-        <small>已自动匹配模型优化规则</small>
+        <div className="image-studio-model-action"><label>本次生图模型<select value={props.modelKey} onChange={(event) => props.setModelKey(event.target.value)}>{props.state.models.map((model) => <option value={model.key} key={model.key}>{model.requestModelId}</option>)}</select></label><button type="button" onClick={() => void optimize()} disabled={!props.prompt.trim() || Boolean(busy)}><WandSparkles size={16} /> 优化提示词</button></div>
+        <div className="image-studio-model-rule"><small>已自动匹配模型优化规则</small><button type="button" onClick={() => setModelHelp(true)}>模型选择说明</button></div>
         <div className="image-studio-two-fields"><label>生成张数<select value={props.count} onChange={(event) => props.setCount(Number(event.target.value))}><option value={1}>1 张</option><option value={2}>2 张</option><option value={4}>4 张</option></select></label><label>图片画幅<select value={props.size} onChange={(event) => props.setSize(event.target.value)}>
           {!imageSizes.some(([value]) => value === props.size) && props.size && <option value={props.size}>{props.size.replace('x', ' × ')} · 当前设置</option>}
           {imageSizes.map(([value, ratio]) => <option key={value} value={value}>{value.replace('x', ' × ')} · {ratio}</option>)}
         </select></label></div>
-        {!props.state.connection.configured && <p className="image-studio-warning">请先填写金龙中转站密钥。</p>}
-        {props.state.connection.configured && !selectedModel?.protocolVerified && <p className="image-studio-warning">该模型金龙调用方式尚未核实，暂不能生成。</p>}
-        {props.state.connection.configured && selectedModel?.protocolVerified && !selectedModel.actions.includes(action) && <p className="image-studio-warning">该模型的当前生成方式尚未通过金龙渠道适配验证。</p>}
-        <button type="button" className="image-studio-key-link" onClick={() => setKeyOpen(true)}>金龙中转站 · 配置密钥</button>
+        {!props.state.connection.configured && <p className="image-studio-warning">请先在设置中填写金龙中转站的生图模型 API Key。</p>}
         </div>
         <button type="button" className="image-studio-primary image-studio-generate" onClick={() => void props.start()} disabled={!canGenerate || !props.prompt.trim() || props.prompt.length > 10000 || running || props.startBusy}><Sparkles size={17} /> {running || props.startBusy ? '生成中' : '生成图片'}</button>
       </section>
@@ -250,8 +234,7 @@ export function ImageStudioCreate(props: Props) {
       {!applyAllowed && candidate.status !== 'searching' && candidate.status !== 'queued' && candidate.status !== 'streaming' && <p className="image-studio-warning">输入、参考图片、模型或画幅已变化，或指定文字/模板变量需要核对；请重新优化或修正候选。</p>}
       <footer><button type="button" onClick={closeCandidate}>取消</button>{candidate.kind === 'optimize' && <><button type="button" disabled={busy !== 'optimize'} onClick={() => { if (optimizationRef.current) { optimizationRef.current.cancelled = true; void window.yibiao!.imageStudio.cancelOptimization(optimizationRef.current.requestId); } }}>停止</button><button type="button" disabled={busy === 'optimize'} onClick={() => void optimize(true)}>重新优化</button></>}<button type="button" disabled={!applyAllowed} onClick={() => void props.savePrompt(candidateText, candidate.kind)}>保存到我的提示词</button><button type="button" className="image-studio-primary" disabled={!applyAllowed} onClick={() => { props.applyPrompt(candidateText); closeCandidate(); }}>应用到输入框</button></footer>
     </section></div>}
-    {modelHelp && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="模型选择说明" className="image-studio-dialog"><div className="image-studio-panel-head"><h2>模型选择说明</h2><button type="button" onClick={() => setModelHelp(false)}>×</button></div><p>以下为官网定位整理；金龙渠道协议、权限和实际效果尚需分别验证。</p><div className="image-studio-model-comparison">{props.state.models.map((model) => <div key={model.key}><strong>{model.name}</strong><small>{model.requestModelId}</small><p>{model.key === 'sunburst' ? '精细编辑与高精度视觉工作；具体编辑方式以金龙接口为准。' : model.key === 'flare' ? '日常快速生图与迭代；实际速度以金龙接口为准。' : model.key === 'banana_pro' ? '复杂图文、多图和品牌一致性；金龙调用方式待核实。' : model.key === 'banana2' ? '日常配图与快速迭代；金龙调用方式待核实。' : model.key === 'gpt2_1k' ? '渠道版 ID 已确认，独立能力与限制尚待核实。' : '通用图像生成与编辑；具体渠道能力待核实。'}</p></div>)}</div><p>资料核实日期：2026-09-29。来源：<button type="button" onClick={() => void window.yibiao?.openExternal('https://developers.openai.com/api/docs/guides/image-generation')}>OpenAI</button>、<button type="button" onClick={() => void window.yibiao?.openExternal('https://ai.google.dev/gemini-api/docs/image-generation')}>Google</button>。</p><footer><button type="button" onClick={() => setModelHelp(false)}>返回创作</button></footer></section></div>}
-    {keyOpen && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="金龙密钥设置" className="image-studio-dialog"><h2>金龙中转站 · 配置密钥</h2><p>Base URL：{props.state.connection.baseUrl}</p><p>状态：{props.state.connection.configured ? '已填写，连通未验证' : '未填写'}</p><label>API Key<input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} /></label><footer><button type="button" onClick={() => { setApiKey(''); setKeyOpen(false); }}>取消</button><button type="button" disabled={!apiKey.trim()} onClick={() => void saveKey()}>保存</button></footer></section></div>}
+    {modelHelp && <div className="image-studio-overlay"><section role="dialog" aria-modal="true" aria-label="模型选择说明" className="image-studio-dialog"><div className="image-studio-panel-head"><h2>模型选择说明</h2><button type="button" onClick={() => setModelHelp(false)}>×</button></div><div className="image-studio-model-comparison">{props.state.models.map((model) => <div key={model.key}><strong>{model.name}</strong><small>{model.key === 'banana2' ? '上一版生图模型' : model.requestModelId}</small><p>{model.key === 'sunburst' ? '精细编辑与高精度视觉工作。' : model.key === 'flare' ? '日常快速生图与迭代。' : model.key === 'banana_pro' ? '复杂图文、多图和品牌一致性。' : model.key === 'banana2' ? '日常配图与快速迭代。' : model.key === 'gpt2_1k' ? '价格便宜速度快。' : '通用图像生成与编辑。'}</p></div>)}</div><p>资料核实日期：2026-09-29。来源：<button type="button" onClick={() => void window.yibiao?.openExternal('https://developers.openai.com/api/docs/guides/image-generation')}>OpenAI</button>、<button type="button" onClick={() => void window.yibiao?.openExternal('https://ai.google.dev/gemini-api/docs/image-generation')}>Google</button>。</p><footer><button type="button" onClick={() => setModelHelp(false)}>返回创作</button></footer></section></div>}
     {viewer && <ImageStudioViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />}
     {editingSource && <ImageStudioRegionEditor source={editingSource} onClose={() => { setEditingSource(null); requestAnimationFrame(() => editTriggerRef.current?.focus()); }} onSubmit={props.edit} />}
     {layersOpen && props.selectedWork && <ImageStudioLayers source={{ workId: props.selectedWork.workId }} modelKey={props.modelKey} onClose={() => setLayersOpen(false)} />}

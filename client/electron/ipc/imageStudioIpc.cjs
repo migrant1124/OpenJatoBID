@@ -5,7 +5,6 @@ function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:save-draft', (_event, input) => service.saveDraft(input));
   ipcMain.handle('image-studio:start', (_event, input) => service.submit(input));
   ipcMain.handle('image-studio:connection-status', () => service.connectionStatus());
-  ipcMain.handle('image-studio:save-connection-key', (_event, input) => service.saveConnectionKey(input));
   ipcMain.handle('image-studio:segment-object', (_event, input) => service.segmentObject(input));
   ipcMain.handle('image-studio:cancel-task', (_event, input) => service.cancelTask(input));
   ipcMain.handle('image-studio:set-favorite', (_event, input) => service.setFavorite(input));

@@ -26,9 +26,7 @@ function hasSubstantiveOverlap(first, second, width, height) {
 
 function createImageStudioService({ app, db, aiService, configStore, promptLibraryStore, dialogApi = dialog, connection: suppliedConnection }) {
   createImageStudioRequestSchema(db);
-  const connection = suppliedConnection || (app?.getPath ? createImageStudioConnection(app) : {
-    readKey: () => '', status: () => ({ provider: 'jinlong', baseUrl: BASE_URL, configured: false, channelVerified: false }),
-  });
+  const connection = suppliedConnection || createImageStudioConnection(configStore);
   const knowledge = createImageStudioKnowledge(app, dialogApi);
   if (app?.getPath) knowledge.status();
   const optimizationControllers = new Map();
@@ -98,12 +96,12 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
       assets: db.prepare(`SELECT asset_id AS assetId, asset_url AS assetUrl, mime_type AS mimeType,
         width, height, created_at AS createdAt FROM image_studio_assets ORDER BY created_at DESC LIMIT 30`).all(),
       imageModel: {
-        available: Boolean(connectionStatus.configured && model.protocol),
+        available: Boolean(connectionStatus.configured && model.actions.includes('generate')),
         size: config.image_model?.image_size || '',
         name: model.name,
       },
-      models: MODELS.map(({ key, name, requestModelId, protocol, actions }) => ({
-        key, name, requestModelId, requestIdConfirmed: true, protocolVerified: Boolean(protocol), actions,
+      models: MODELS.map(({ key, name, requestModelId, actions }) => ({
+        key, name, requestModelId, requestIdConfirmed: true, actions,
       })),
       selectedModelKey: model.key,
       connection: connectionStatus,
@@ -147,7 +145,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   function submit(input = {}) {
     const model = getModel(input.modelKey || currentModelKey());
     const action = input.kind === 'edit' ? 'edit' : input.references?.length ? 'reference' : 'generate';
-    if (!model.actions.includes(action)) throw new Error('该模型的当前生成方式尚未通过金龙渠道适配验证。');
+    if (!model.actions.includes(action)) throw new Error('该模型暂不支持当前操作。');
     if (typeof input.requestId !== 'string' || !input.requestId.trim()) throw new Error('生成请求缺少 requestId。');
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ ...input, modelKey: model.key,
       requestId: undefined, model: model.requestModelId, baseUrl: BASE_URL,
@@ -162,9 +160,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   }
 
   function generationConfig(model) {
-    if (!model.protocol) throw new Error('该模型金龙调用方式尚未核实，暂不能生成。');
     const apiKey = connection.readKey();
-    if (!apiKey) throw new Error('请先在生图模式设置中填写金龙 API Key。');
+    if (!apiKey) throw new Error('请先在设置中填写金龙中转站的生图模型 API Key。');
     const base = configStore.load();
     return { ...base, image_model: { ...base.image_model,
       provider: 'jinlong', base_url: BASE_URL, api_key: apiKey,
@@ -907,7 +904,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   }
 
   return {
-    getState, saveDraft, start, submit, connectionStatus: connection.status, saveConnectionKey: connection.saveKey,
+    getState, saveDraft, start, submit, connectionStatus: connection.status,
     cancelTask, setFavorite, deleteWork, exportImage,
     importAsset, readManagedImage, invertImage, optimizePrompt, cancelOptimization,
     knowledgeStatus: knowledge.status, setKnowledgeEnabled: knowledge.setEnabled, importKnowledgePackage: knowledge.importPackage,

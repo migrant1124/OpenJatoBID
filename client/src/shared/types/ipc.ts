@@ -703,7 +703,7 @@ export interface ImageStudioState {
   tasks: ImageStudioTask[];
   assets: ImageStudioAsset[];
   imageModel: { available: boolean; size: string; name: string };
-  models: Array<{ key: string; name: string; requestModelId: string; requestIdConfirmed: boolean; protocolVerified: boolean; actions: string[] }>;
+  models: Array<{ key: string; name: string; requestModelId: string; requestIdConfirmed: boolean; actions: string[] }>;
   selectedModelKey: string;
   connection: { provider: string; baseUrl: string; configured: boolean; channelVerified: boolean };
   textModelName: string;
@@ -910,7 +910,6 @@ export interface YibiaoBridge {
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
     start: (input: ImageStudioStartInput) => Promise<{ taskId: string }>;
     connectionStatus: () => Promise<ImageStudioState['connection']>;
-    saveConnectionKey: (input: { apiKey: string }) => Promise<ImageStudioState['connection']>;
     segmentObject: (input: { assetId?: string; workId?: string; point: { x: number; y: number } }) => Promise<{ maskDataUrl: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;

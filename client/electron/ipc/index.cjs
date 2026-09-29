@@ -104,7 +104,6 @@ const workspaceDatabaseChannels = [
   'image-studio:save-draft',
   'image-studio:start',
   'image-studio:connection-status',
-  'image-studio:save-connection-key',
   'image-studio:cancel-optimization',
   'image-studio:knowledge-status',
   'image-studio:import-knowledge-package',
