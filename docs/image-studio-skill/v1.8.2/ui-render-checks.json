@@ -1,0 +1,749 @@
+{
+  "date": "2026-09-29",
+  "softwareVersion": "1.8.2",
+  "method": "system Chromium, set_content with embedded local assets; static UI only",
+  "results": [
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H01-创作主界面.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H02-模型选择说明.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": {
+        "x": 49,
+        "y": 312.421875,
+        "width": 404,
+        "height": 416,
+        "top": 312.421875,
+        "right": 453,
+        "bottom": 728.421875,
+        "left": 49
+      },
+      "nanoOptions": [
+        {
+          "text": "Nano Banana ProID：Nano Banana Pro",
+          "disabled": false
+        },
+        {
+          "text": "Nano Banana 2ID：Nano Banana 2",
+          "disabled": false
+        }
+      ],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H03-模型选择列表.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H04-提示词优化对比.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H05-技能知识更新.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H06-金龙密钥设置.html",
+      "javascriptErrors": []
+    },
+    {
+      "images": [
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        },
+        {
+          "loaded": true
+        }
+      ],
+      "screen": {
+        "x": 0,
+        "y": 0,
+        "width": 1680,
+        "height": 1050,
+        "top": 0,
+        "right": 1680,
+        "bottom": 1050,
+        "left": 0
+      },
+      "menu": null,
+      "nanoOptions": [],
+      "foregroundActions": [
+        {
+          "text": "反推提示词",
+          "box": {
+            "x": 49,
+            "y": 400,
+            "width": 105.015625,
+            "height": 31,
+            "top": 400,
+            "right": 154.015625,
+            "bottom": 431,
+            "left": 49
+          }
+        },
+        {
+          "text": "保存",
+          "box": {
+            "x": 159.015625,
+            "y": 400,
+            "width": 69.015625,
+            "height": 31,
+            "top": 400,
+            "right": 228.03125,
+            "bottom": 431,
+            "left": 159.015625
+          }
+        },
+        {
+          "text": "撤销应用",
+          "box": {
+            "x": 233.03125,
+            "y": 400,
+            "width": 91.015625,
+            "height": 31,
+            "top": 400,
+            "right": 324.046875,
+            "bottom": 431,
+            "left": 233.03125
+          }
+        },
+        {
+          "text": "优化提示词",
+          "box": {
+            "x": 341.984375,
+            "y": 736.421875,
+            "width": 111.015625,
+            "height": 40,
+            "top": 736.421875,
+            "right": 453,
+            "bottom": 776.421875,
+            "left": 341.984375
+          }
+        },
+        {
+          "text": "生成图片",
+          "box": {
+            "x": 49,
+            "y": 913.109375,
+            "width": 404,
+            "height": 45,
+            "top": 913.109375,
+            "right": 453,
+            "bottom": 958.109375,
+            "left": 49
+          }
+        }
+      ],
+      "file": "H07-反推提示词.html",
+      "javascriptErrors": []
+    }
+  ]
+}

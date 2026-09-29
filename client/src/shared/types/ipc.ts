@@ -703,19 +703,13 @@ export interface ImageStudioState {
   tasks: ImageStudioTask[];
   assets: ImageStudioAsset[];
   imageModel: { available: boolean; size: string; name: string };
+  models: Array<{ key: string; name: string; requestModelId: string; requestIdConfirmed: boolean; protocolVerified: boolean; actions: string[] }>;
+  selectedModelKey: string;
+  connection: { provider: string; baseUrl: string; configured: boolean; channelVerified: boolean };
   textModelName: string;
 }
 
-export interface ImageStudioRiskResult {
-  risk_level: 'normal' | 'transformable' | 'blocked';
-  categories: string[];
-  reason: string;
-  original_intent: string;
-  safe_alternative: string;
-  can_generate: boolean;
-}
-
-export type ImageStudioStartInput = { prompt: string; count?: number; size?: string; ratio?: string; references?: Array<{ assetId?: string; workId?: string; role: string; description?: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ regionId?: number; tool?: 'brush' | 'rectangle' | 'magic'; prompt: string; maskDataUrl: string }>; parentWorkId?: string; requestId?: string; expectedSourceSha256?: string };
+export type ImageStudioStartInput = { prompt: string; count?: number; size?: string; ratio?: string; modelKey: string; references?: Array<{ assetId?: string; workId?: string; role: string; description?: string }>; kind?: string; maskDataUrl?: string; regions?: Array<{ regionId?: number; tool?: 'brush' | 'rectangle' | 'magic'; prompt: string; maskDataUrl: string }>; parentWorkId?: string; requestId: string; expectedSourceSha256?: string };
 
 export interface ImageStudioAsset {
   assetId: string;
@@ -914,9 +908,9 @@ export interface YibiaoBridge {
   imageStudio: {
     getState: () => Promise<ImageStudioState>;
     saveDraft: (input: { prompt: string; revision: number; state?: Record<string, unknown> }) => Promise<{ conflict: boolean; draft: ImageStudioState['draft'] }>;
-    preflight: (input: ImageStudioStartInput) => Promise<{ checkId: string; risk_result: ImageStudioRiskResult; transformed_prompt: string }>;
-    decideRisk: (input: { checkId: string; confirmed: boolean }) => Promise<void>;
-    start: (input: ImageStudioStartInput & { riskCheckId: string }) => Promise<{ taskId: string }>;
+    start: (input: ImageStudioStartInput) => Promise<{ taskId: string }>;
+    connectionStatus: () => Promise<ImageStudioState['connection']>;
+    saveConnectionKey: (input: { apiKey: string }) => Promise<ImageStudioState['connection']>;
     segmentObject: (input: { assetId?: string; workId?: string; point: { x: number; y: number } }) => Promise<{ maskDataUrl: string }>;
     cancelTask: (input: { taskId: string }) => Promise<ImageStudioTask[]>;
     setFavorite: (input: { workId: string; isFavorite: boolean }) => Promise<ImageStudioWork[]>;
@@ -925,7 +919,13 @@ export interface YibiaoBridge {
     importAsset: () => Promise<{ canceled: boolean; asset?: ImageStudioAsset }>;
     readManagedImage: (input: { workId?: string; assetId?: string; layerId?: string }) => Promise<{ dataUrl: string; width: number; height: number; sourceSha256: string }>;
     invertImage: (input: { assetId?: string; workId?: string }) => Promise<{ prompt: string; assetId: string | null; workId: string | null }>;
-    optimizePrompt: (input: { prompt: string; mode?: string }) => Promise<{ original: string; optimized: string; mode: string }>;
+    optimizePrompt: (input: { prompt: string; mode?: string; modelKey: string; size: string; references: Array<{ assetId?: string; workId?: string; role: string }>; useKnowledge?: boolean; force?: boolean; requestId: string }) => Promise<{ original: string; optimized: string; mode: string; complete: boolean; sourceStatus: string; sources: Array<{ itemId: string; title: string; card: string; sourceId: string }>; knowledgeVersion: string; referencesAnalyzed: boolean; elapsedMs: number; cacheHit: boolean; requestId: string }>;
+    cancelOptimization: (requestId: string) => Promise<void>;
+    knowledgeStatus: () => Promise<{ ready: boolean; version: string; error: string; enabled: boolean }>;
+    setKnowledgeEnabled: (enabled: boolean) => Promise<{ ready: boolean; version: string; error: string; enabled: boolean }>;
+    importKnowledgePackage: () => Promise<{ canceled?: boolean; unchanged?: boolean; version?: string; count?: number }>;
+    checkKnowledgeUpdates: () => Promise<{ available: boolean; status: string }>;
+    onOptimizationEvent: (callback: (event: { requestId: string; sequence: number; status: string; delta: string }) => void) => () => void;
     listMyPrompts: () => Promise<ImageStudioMyPrompt[]>;
     saveMyPrompt: (input: { promptId?: string; groupId?: string; title: string; contentMarkdown: string; tags?: string[]; notes?: string; ratio?: string; originKind?: string; originSourceId?: string; originItemId?: string; originVersion?: string; coverUrl?: string }) => Promise<PromptItem>;
     listStyles: () => Promise<ImageStudioStyle[]>;
@@ -942,7 +942,7 @@ export interface YibiaoBridge {
     loadCover: (input: string | { itemId: string; coverUrl: string; retry?: boolean }) => Promise<{ assetUrl: string }>;
     toggleReferenceFavorite: (input: { sourceId: string; itemId: string; isFavorite: boolean }) => Promise<{ promptId: string | null; isFavorite: boolean }>;
     listLayerSets: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet[]>;
-    createLayerSet: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet>;
+    createLayerSet: (input: { workId?: string; assetId?: string; modelKey?: string; requestId: string }) => Promise<ImageStudioLayerSet>;
     updateLayer: (input: { setId: string; layerId: string; name?: string; visible?: boolean; sortOrder?: number }) => Promise<ImageStudioLayerSet>;
     deleteLayer: (input: { setId: string; layerId: string }) => Promise<ImageStudioLayerSet>;
     refineLayerSet: (input: { setId: string; layerId?: string; maskDataUrl: string }) => Promise<ImageStudioLayerSet>;

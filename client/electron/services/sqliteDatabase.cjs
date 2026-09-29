@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 38;
+const schemaVersion = 39;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1171,6 +1171,17 @@ function createImageStudioRiskSchema(db) {
   )`);
 }
 
+function createImageStudioRequestSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS image_studio_requests (
+    feature TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    input_fingerprint TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (feature, request_id)
+  )`);
+}
+
 function extendImageStudioSchema(db) {
   addColumnIfMissing(db, 'image_studio_draft', 'state_json', "TEXT NOT NULL DEFAULT '{}'");
   for (const [name, type] of Object.entries({
@@ -1443,6 +1454,11 @@ const schemaHealthTableGroups = [
     version: 38,
     tables: ['image_studio_risk_checks'],
     repair: createImageStudioRiskSchema,
+  },
+  {
+    version: 39,
+    tables: ['image_studio_requests'],
+    repair: createImageStudioRequestSchema,
   },
 ];
 
@@ -1972,6 +1988,11 @@ const migrations = [
     description: '生图提示词风险预检留痕',
     up: createImageStudioRiskSchema,
   },
+  {
+    version: 39,
+    description: '生图请求独立幂等记录',
+    up: createImageStudioRequestSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -2081,6 +2102,7 @@ module.exports = {
   createPromptLibrarySchema,
   createImageStudioSchema,
   createImageStudioRiskSchema,
+  createImageStudioRequestSchema,
   extendImageStudioSchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,

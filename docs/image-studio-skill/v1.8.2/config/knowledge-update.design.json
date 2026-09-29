@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "purpose": "设计参数；无真实密钥、签名或伪造镜像",
+  "checkIntervalHours": 168,
+  "manualCheckIgnoresInterval": true,
+  "managedManifestUrl": null,
+  "upstreamRepository": "YouMind-OpenLab/ai-image-prompts-skill",
+  "pinCommitForAllFiles": true,
+  "offlineImport": true,
+  "executableUpdatesAllowed": false,
+  "sourceLimits": "由适配器分别配置，不全局放开",
+  "lastKnownGoodRequired": true,
+  "atomicPromotion": true,
+  "updaterRunsDuringOptimization": false
+}

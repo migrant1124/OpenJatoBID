@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "youmind-2026-09-28-c8072428",
+  "upstreamCommit": "c807242867c45d3f8f37319e3b11c24d2662bc01",
+  "upstreamUrl": "https://github.com/YouMind-OpenLab/ai-image-prompts-skill",
+  "sourceId": "youmind-image-prompts",
+  "generatedAt": "2026-09-29T02:46:29.162Z",
+  "license": "MIT",
+  "rawEntryCount": 22822,
+  "upstreamReportedTotal": 15710,
+  "deduplicatedCount": 15167,
+  "categoryCount": 11,
+  "files": {
+    "knowledge.jsonl.gz": {
+      "size": 9703338,
+      "sha256": "8d06e51b091a784449ffaada7392602e20cace4aaa3ae5bb60f79c72489b638b"
+    },
+    "upstream-c8072428.zip": {
+      "size": 13914845,
+      "sha256": "f42b5de2fd21e1f746481d8bcac7267815cfb231a79dedbf578b6513de67b23e"
+    }
+  }
+}

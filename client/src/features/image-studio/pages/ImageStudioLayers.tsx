@@ -4,8 +4,8 @@ import type { ImageStudioLayerSet } from '../../../shared/types/ipc';
 import { useToast } from '../../../shared/ui';
 import { ImageStudioMaskEditor } from './ImageStudioMaskEditor';
 
-export function ImageStudioLayers({ source, onClose }: {
-  source: { workId?: string; assetId?: string }; onClose: () => void;
+export function ImageStudioLayers({ source, modelKey, onClose }: {
+  source: { workId?: string; assetId?: string }; modelKey?: string; onClose: () => void;
 }) {
   const { showToast } = useToast();
   const [sessions, setSessions] = useState<ImageStudioLayerSet[]>([]);
@@ -26,7 +26,7 @@ export function ImageStudioLayers({ source, onClose }: {
   async function create() {
     setBusy(true);
     try {
-      const session = await window.yibiao!.imageStudio.createLayerSet(source);
+      const session = await window.yibiao!.imageStudio.createLayerSet({ ...source, modelKey, requestId: crypto.randomUUID() });
       setSessions((items) => [session, ...items]); setSelectedId(session.setId);
     } catch (error) { showToast(String(error), 'error'); }
     finally { setBusy(false); }

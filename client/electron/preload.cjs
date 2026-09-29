@@ -143,9 +143,9 @@ const bridge = {
   imageStudio: {
     getState: () => ipcRenderer.invoke('image-studio:get-state'),
     saveDraft: (input) => ipcRenderer.invoke('image-studio:save-draft', input),
-    preflight: (input) => ipcRenderer.invoke('image-studio:preflight', input),
-    decideRisk: (input) => ipcRenderer.invoke('image-studio:decide-risk', input),
     start: (input) => ipcRenderer.invoke('image-studio:start', input),
+    connectionStatus: () => ipcRenderer.invoke('image-studio:connection-status'),
+    saveConnectionKey: (input) => ipcRenderer.invoke('image-studio:save-connection-key', input),
     segmentObject: (input) => ipcRenderer.invoke('image-studio:segment-object', input),
     cancelTask: (input) => ipcRenderer.invoke('image-studio:cancel-task', input),
     setFavorite: (input) => ipcRenderer.invoke('image-studio:set-favorite', input),
@@ -155,6 +155,16 @@ const bridge = {
     readManagedImage: (input) => ipcRenderer.invoke('image-studio:read-managed-image', input),
     invertImage: (input) => ipcRenderer.invoke('image-studio:invert-image', input),
     optimizePrompt: (input) => ipcRenderer.invoke('image-studio:optimize-prompt', input),
+    cancelOptimization: (requestId) => ipcRenderer.invoke('image-studio:cancel-optimization', requestId),
+    knowledgeStatus: () => ipcRenderer.invoke('image-studio:knowledge-status'),
+    setKnowledgeEnabled: (enabled) => ipcRenderer.invoke('image-studio:set-knowledge-enabled', enabled),
+    importKnowledgePackage: () => ipcRenderer.invoke('image-studio:import-knowledge-package'),
+    checkKnowledgeUpdates: () => ipcRenderer.invoke('image-studio:check-knowledge-updates'),
+    onOptimizationEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('image-studio:optimization', listener);
+      return () => ipcRenderer.removeListener('image-studio:optimization', listener);
+    },
     listMyPrompts: () => ipcRenderer.invoke('image-studio:list-my-prompts'),
     saveMyPrompt: (input) => ipcRenderer.invoke('image-studio:save-my-prompt', input),
     listStyles: () => ipcRenderer.invoke('image-studio:list-styles'),

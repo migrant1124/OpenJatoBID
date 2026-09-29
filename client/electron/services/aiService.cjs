@@ -833,6 +833,9 @@ function createChatRequestBody(config, request, options = {}) {
   if (options.stream) {
     body.stream = true;
   }
+  if (Number.isInteger(request.max_completion_tokens) && request.max_completion_tokens > 0) {
+    body.max_completion_tokens = request.max_completion_tokens;
+  }
 
   if (request.response_format && !options.omitResponseFormat) {
     body.response_format = request.response_format;
@@ -1000,12 +1003,13 @@ async function readSseJsonStream(response, options = {}) {
       }
     }
   }
+  return state.done;
 }
 
-async function readOpenAIChatStream(response) {
-  const state = { usage: null, contentParts: [] };
+async function readOpenAIChatStream(response, options = {}) {
+  const state = { usage: null, contentParts: [], finishReason: '' };
 
-  await readSseJsonStream(response, {
+  const done = await readSseJsonStream(response, {
     unreadableMessage: 'AI 流式响应不可读',
     parseErrorMessage: 'AI 流式响应解析失败',
     failureMessage: 'AI 流式请求失败',
@@ -1015,13 +1019,19 @@ async function readOpenAIChatStream(response) {
       }
 
       const choices = Array.isArray(payload?.choices) ? payload.choices : [];
-      choices.forEach((choice) => appendStreamChoiceContent(choice, state.contentParts));
+      choices.forEach((choice) => {
+        if (choice.finish_reason) state.finishReason = choice.finish_reason;
+        const before = state.contentParts.length;
+        appendStreamChoiceContent(choice, state.contentParts);
+        if (state.contentParts.length > before) options.onDelta?.(state.contentParts.at(-1));
+      });
     },
   });
 
   const content = state.contentParts.join('');
   return {
     content,
+    complete: done && state.finishReason === 'stop',
     usage: state.usage,
     responseData: {
       stream: true,
@@ -1050,7 +1060,7 @@ async function requestTextAiNormal(app, config, requestBody, options = {}) {
 async function requestTextAiStream(app, config, requestBody, options = {}) {
   const response = await fetchChatCompletion(app, config, requestBody, { signal: options.signal });
   await ensureTextAiResponseOk(response, 'AI 请求失败');
-  return readOpenAIChatStream(response);
+  return readOpenAIChatStream(response, options);
 }
 
 async function requestTextAi(app, config, requestBody, options = {}) {
@@ -1306,9 +1316,10 @@ async function chatWithConfig(app, config, request, analyticsService) {
 
   const requestId = createRequestId();
   const logTitle = resolveAiLogTitle(request, '文本请求');
-  const requestMode = normalizeTextRequestMode(config);
+  const requestMode = request.stream === true ? 'stream' : normalizeTextRequestMode(config);
   let requestBody = createChatRequestBody(config, request, { stream: requestMode === 'stream' });
-  const logRequestBody = () => request.sensitiveImage ? safeVisionRequest(requestBody) : requestBody;
+  const logRequestBody = () => request.sensitivePrompt ? '[提示词已隐藏]'
+    : request.sensitiveImage ? safeVisionRequest(requestBody) : requestBody;
   let responseData = null;
   let errorMessage = '';
   let analyticsTracked = false;
@@ -1329,18 +1340,21 @@ async function chatWithConfig(app, config, request, analyticsService) {
     result = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(async (timeoutSignal) => {
       const signal = request.signal ? AbortSignal.any([timeoutSignal, request.signal]) : timeoutSignal;
       try {
-        return await requestTextAi(app, config, requestBody, { signal, requestMode });
+        return await requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta });
       } catch (error) {
         if (!request.response_format || !error.responseFormatUnsupported || request.noRetry) {
           throw error;
         }
 
         requestBody = createChatRequestBody(config, request, { omitResponseFormat: true, stream: requestMode === 'stream' });
-        return requestTextAi(app, config, requestBody, { signal, requestMode });
+        return requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta });
       }
     }, timeoutMs), { signal: request.signal });
 
     responseData = result.responseData;
+    if (request.requireCompleteStream && (!result.complete || !String(result.content || '').trim())) {
+      throw new Error('模型输出中断或为空，结果未完成。');
+    }
     recordTextTokenStats(config, result.usage);
     trackAiRequest(app, config, { ai_request_type: 'text', usage: result.usage }, analyticsService);
     analyticsTracked = true;
@@ -1352,8 +1366,8 @@ async function chatWithConfig(app, config, request, analyticsService) {
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
       request: logRequestBody(),
-      response: responseData,
-      content,
+      response: request.sensitivePrompt ? '[响应已隐藏]' : responseData,
+      content: request.sensitivePrompt ? '[响应已隐藏]' : content,
       created_at: new Date().toISOString(),
     });
     return content;
@@ -1375,8 +1389,8 @@ async function chatWithConfig(app, config, request, analyticsService) {
       request_mode: requestMode,
       url: `${trimBaseUrl(config.base_url)}/chat/completions`,
       request: logRequestBody(),
-      response: getAiErrorLogResponse(error, responseData),
-      error: getAiErrorLogError(error, errorMessage),
+      response: request.sensitivePrompt ? '[响应已隐藏]' : getAiErrorLogResponse(error, responseData),
+      error: request.sensitivePrompt ? String(errorMessage || 'AI 请求失败') : getAiErrorLogError(error, errorMessage),
       created_at: new Date().toISOString(),
     });
     const wrappedError = new Error(errorMessage || 'AI 请求失败');
