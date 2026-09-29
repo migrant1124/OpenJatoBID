@@ -890,12 +890,16 @@ async function fetchChatCompletion(app, config, body, options = {}) {
   const timer = controller ? setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS) : null;
   const baseUrl = requireBaseUrl(config.base_url, '请先在设置中配置文本模型 Base URL');
   try {
-    return await fetch(`${baseUrl}/chat/completions`, {
+    if (options.signal?.aborted) throw options.signal.reason || new Error('请求已取消。');
+    options.onAttempt?.();
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: createHeaders(config.api_key),
       body: JSON.stringify(body),
       signal: options.signal || controller.signal,
     });
+    options.onResponse?.();
+    return response;
   } catch (error) {
     throw markAiRequestError(error, { retryable: true });
   } finally {
@@ -1060,7 +1064,7 @@ async function readOpenAIChatStream(response, options = {}) {
 }
 
 async function requestTextAiNormal(app, config, requestBody, options = {}) {
-  const response = await fetchChatCompletion(app, config, requestBody, { signal: options.signal });
+  const response = await fetchChatCompletion(app, config, requestBody, { signal: options.signal, onAttempt: options.onAttempt, onResponse: options.onResponse });
   await ensureTextAiResponseOk(response, 'AI 请求失败');
   let responseData = null;
   try {
@@ -1076,7 +1080,7 @@ async function requestTextAiNormal(app, config, requestBody, options = {}) {
 }
 
 async function requestTextAiStream(app, config, requestBody, options = {}) {
-  const response = await fetchChatCompletion(app, config, requestBody, { signal: options.signal });
+  const response = await fetchChatCompletion(app, config, requestBody, { signal: options.signal, onAttempt: options.onAttempt, onResponse: options.onResponse });
   await ensureTextAiResponseOk(response, 'AI 请求失败');
   return readOpenAIChatStream(response, options);
 }
@@ -1369,14 +1373,14 @@ async function chatWithConfig(app, config, request, analyticsService) {
     result = await (request.noRetry ? (runner) => runner() : runWithAiRetry)(() => runWithOperationTimeout(async (timeoutSignal) => {
       const signal = request.signal ? AbortSignal.any([timeoutSignal, request.signal]) : timeoutSignal;
       try {
-        return await requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta });
+        return await requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta, onAttempt: request.onAttempt, onResponse: request.onResponse });
       } catch (error) {
         if (!request.response_format || !error.responseFormatUnsupported || request.noRetry) {
           throw error;
         }
 
         requestBody = createChatRequestBody(config, request, { omitResponseFormat: true, stream: requestMode === 'stream' });
-        return requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta });
+        return requestTextAi(app, config, requestBody, { signal, requestMode, onDelta: request.onDelta, onAttempt: request.onAttempt, onResponse: request.onResponse });
       }
     }, timeoutMs), { signal: request.signal });
 

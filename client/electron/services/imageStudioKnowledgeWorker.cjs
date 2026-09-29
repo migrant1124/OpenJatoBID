@@ -46,8 +46,8 @@ try {
       const negatives = [...String(query).matchAll(/(?:不要|避免|禁止|不含)([\u3400-\u9fffA-Za-z]{1,8})/g)].map((match) => match[1].toLowerCase());
       const items = candidates.map(({ rowid }) => rows[Number(rowid) - 1]).filter((item) =>
         !negatives.some((word) => item.card.toLowerCase().includes(word))).slice(0, 3)
-        .map(({ id: itemId, title, card, categories, sourceMedia, needReferenceImages }) => ({
-          itemId, title, card: card.slice(0, 450), categories, sourceMedia, needReferenceImages,
+        .map(({ id: itemId, title, card, prompt, description, categories, sourceMedia, needReferenceImages }) => ({
+          itemId, title, card: card.slice(0, 450), prompt, description, categories, sourceMedia, needReferenceImages,
           sourceId: manifest.sourceId, version: manifest.packageVersion,
         }));
       parentPort.postMessage({ id, items });

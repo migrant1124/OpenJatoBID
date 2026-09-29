@@ -9,9 +9,10 @@ type Picture = { dataUrl: string; width: number; height: number; sourceSha256: s
 const COLORS = ['#ef3947', '#2867ee', '#49bd4a', '#b15de0', '#e89022', '#0eaaaf'];
 const MAGIC_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="m3 21 12-12m-2-6 1 3m6 0-3 1m2 7-3-1M9 3 8 6" fill="none" stroke="#2165e8" stroke-width="2" stroke-linecap="round"/><path d="m2 19 3 3" stroke="#fff" stroke-width="3"/></svg>')}") 2 21, crosshair`;
 
-export function ImageStudioRegionEditor({ source, onClose, onSubmit }: {
+export function ImageStudioRegionEditor({ source, onClose, onComplete, onSubmit }: {
   source: { workId: string; width: number; height: number };
   onClose: () => void;
+  onComplete: (workId: string) => void;
   onSubmit: (regions: StudioEditRegion[], sourceWorkId: string, sourceSha256: string, requestId: string) => Promise<string | void>;
 }) {
   const { showToast } = useToast();
@@ -43,6 +44,7 @@ export function ImageStudioRegionEditor({ source, onClose, onSubmit }: {
   const miniDragging = useRef(false);
   const magicSerial = useRef(0);
   const submitLock = useRef(false);
+  const completed = useRef(false);
   const live = useRef(true);
 
   const refresh = () => {
@@ -78,18 +80,24 @@ export function ImageStudioRegionEditor({ source, onClose, onSubmit }: {
   useEffect(() => {
     if (!taskId) return;
     let active = true;
-    const inspect = (tasks: Array<{ taskId: string; status: string; error: string | null }>) => {
+    const inspect = (tasks: Array<{ taskId: string; status: string; error: string | null }>, works: Array<{ taskId: string; workId: string }>) => {
       if (!active) return;
       const task = tasks.find((item) => item.taskId === taskId);
-      if (task?.status === 'completed') onClose();
+      if (task?.status === 'completed' && !completed.current) {
+        const work = works.find((item) => item.taskId === taskId);
+        if (!work) { setError('任务已完成，但作品尚未读取到，请到「我的作品」检查。'); return; }
+        completed.current = true;
+        onComplete(work.workId);
+        onClose();
+      }
       if (task && ['failed', 'partial', 'unknown', 'cancelled', 'stopped_waiting'].includes(task.status)) {
         submitLock.current = false; setTaskId(''); setError(task.error || '局部修改未完成，选区和意见已保留。');
       }
     };
-    const unsubscribe = window.yibiao!.imageStudio.onEvent((event) => inspect(event.tasks));
-    void window.yibiao!.imageStudio.getState().then((state) => inspect(state.tasks));
+    const unsubscribe = window.yibiao!.imageStudio.onEvent((event) => inspect(event.tasks, event.works));
+    void window.yibiao!.imageStudio.getState().then((state) => inspect(state.tasks, state.works));
     return () => { active = false; unsubscribe(); };
-  }, [taskId, onClose]);
+  }, [taskId, onClose, onComplete]);
 
   function syncViewport() {
     const stage = stageRef.current;

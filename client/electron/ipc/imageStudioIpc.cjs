@@ -1,6 +1,10 @@
 const { ipcMain } = require('electron');
 
 function registerImageStudioIpc({ service, mainWindow }) {
+  const ownerId = (event) => {
+    if (event.sender !== mainWindow.webContents) throw new Error('当前窗口无权访问该优化会话。');
+    return event.sender.id;
+  };
   ipcMain.handle('image-studio:get-state', () => service.getState());
   ipcMain.handle('image-studio:save-draft', (_event, input) => service.saveDraft(input));
   ipcMain.handle('image-studio:start', (_event, input) => service.submit(input));
@@ -13,10 +17,23 @@ function registerImageStudioIpc({ service, mainWindow }) {
   ipcMain.handle('image-studio:import-asset', () => service.importAsset());
   ipcMain.handle('image-studio:read-managed-image', (_event, input) => service.readManagedImage(input));
   ipcMain.handle('image-studio:invert-image', (_event, input) => service.invertImage(input));
-  ipcMain.handle('image-studio:optimize-prompt', (event, input) => service.optimizePrompt({ ...input,
+  ipcMain.handle('image-studio:optimize-prompt', (event, input) => service.optimizePrompt({ ...input, ownerId: ownerId(event),
     onEvent(update) { if (!event.sender.isDestroyed()) event.sender.send('image-studio:optimization', update); },
   }));
-  ipcMain.handle('image-studio:cancel-optimization', (_event, requestId) => service.cancelOptimization(requestId));
+  ipcMain.handle('image-studio:cancel-optimization', (event, requestId) => service.cancelOptimization(requestId, ownerId(event)));
+  ipcMain.handle('image-studio:optimization-case', (event, input) =>
+    service.optimizationCase(input.sessionId, input.caseSnapshotId, ownerId(event)));
+  ipcMain.handle('image-studio:optimization-cases', (event, sessionId) =>
+    service.optimizationCases(sessionId, ownerId(event)));
+  ipcMain.handle('image-studio:latest-optimization', (event) => service.latestOptimization(ownerId(event)));
+  ipcMain.handle('image-studio:save-optimization-edit', (event, input) =>
+    service.saveOptimizationEdit({ ...input, ownerId: ownerId(event) }));
+  ipcMain.handle('image-studio:optimization-case-image', (event, input) =>
+    service.loadOptimizationCaseImage({ ...input, ownerId: ownerId(event) }));
+  ipcMain.handle('image-studio:translate-optimization-case', (event, input) =>
+    service.translateOptimizationCase({ ...input, ownerId: ownerId(event) }));
+  ipcMain.handle('image-studio:cancel-case-translation', (event, input) =>
+    service.cancelCaseTranslation({ ...input, ownerId: ownerId(event) }));
   ipcMain.handle('image-studio:knowledge-status', () => service.knowledgeStatus());
   ipcMain.handle('image-studio:set-knowledge-enabled', (_event, enabled) => service.setKnowledgeEnabled(enabled));
   ipcMain.handle('image-studio:import-knowledge-package', () => service.importKnowledgePackage());

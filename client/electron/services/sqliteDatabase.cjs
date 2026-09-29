@@ -3,7 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
 
-const schemaVersion = 39;
+const schemaVersion = 40;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -1182,6 +1182,30 @@ function createImageStudioRequestSchema(db) {
   )`);
 }
 
+function createImageStudioOptimizationSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS image_studio_optimization_sessions (
+    session_id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, status TEXT NOT NULL,
+    input_fingerprint TEXT NOT NULL, input_snapshot TEXT NOT NULL DEFAULT '',
+    recoverable INTEGER NOT NULL DEFAULT 0, original_prompt TEXT NOT NULL,
+    candidate_text TEXT NOT NULL DEFAULT '', edited_text TEXT NOT NULL DEFAULT '',
+    requested_mode TEXT NOT NULL, completed_mode TEXT NOT NULL DEFAULT '',
+    model_key TEXT NOT NULL, model_name TEXT NOT NULL, source_status TEXT NOT NULL DEFAULT '',
+    sent_context TEXT NOT NULL DEFAULT '', sent_at TEXT, cache_hit INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS image_studio_optimization_cases (
+    case_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, position INTEGER NOT NULL,
+    detail_json TEXT NOT NULL, FOREIGN KEY(session_id) REFERENCES image_studio_optimization_sessions(session_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_image_studio_optimization_cases_session
+    ON image_studio_optimization_cases(session_id, position);
+  CREATE TABLE IF NOT EXISTS image_studio_case_translations (
+    content_hash TEXT PRIMARY KEY, prompt_zh TEXT NOT NULL, created_at TEXT NOT NULL
+  )`);
+  addColumnIfMissing(db, 'image_studio_optimization_sessions', 'input_snapshot', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'image_studio_optimization_sessions', 'recoverable', 'INTEGER NOT NULL DEFAULT 0');
+}
+
 function extendImageStudioSchema(db) {
   addColumnIfMissing(db, 'image_studio_draft', 'state_json', "TEXT NOT NULL DEFAULT '{}'");
   for (const [name, type] of Object.entries({
@@ -1460,9 +1484,18 @@ const schemaHealthTableGroups = [
     tables: ['image_studio_requests'],
     repair: createImageStudioRequestSchema,
   },
+  {
+    version: 40,
+    tables: ['image_studio_optimization_sessions', 'image_studio_optimization_cases',
+      'image_studio_case_translations'],
+    repair: createImageStudioOptimizationSchema,
+  },
 ];
 
 const schemaHealthColumnGroups = [
+  { version: 40, table: 'image_studio_optimization_sessions', columns: {
+    input_snapshot: "TEXT NOT NULL DEFAULT ''", recoverable: 'INTEGER NOT NULL DEFAULT 0',
+  } },
   { version: 38, table: 'image_studio_risk_checks', columns: { confirmation_at: 'TEXT' } },
   { version: 34, table: 'image_studio_draft', columns: { state_json: "TEXT NOT NULL DEFAULT '{}'" } },
   { version: 34, table: 'image_studio_tasks', columns: {
@@ -1993,6 +2026,11 @@ const migrations = [
     description: '生图请求独立幂等记录',
     up: createImageStudioRequestSchema,
   },
+  {
+    version: 40,
+    description: '提示词优化会话、案例快照与中文译文缓存',
+    up: createImageStudioOptimizationSchema,
+  },
 ];
 
 function timestampForFileName() {
@@ -2103,6 +2141,7 @@ module.exports = {
   createImageStudioSchema,
   createImageStudioRiskSchema,
   createImageStudioRequestSchema,
+  createImageStudioOptimizationSchema,
   extendImageStudioSchema,
   seedBundledPromptLibrary,
   createSqliteDatabase,
