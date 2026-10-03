@@ -1,0 +1,29 @@
+{
+  "recordedAt": "2026-10-03T12:11:01.512Z",
+  "source": "本会话 exec_command / write_stdin 实际返回的退出码",
+  "commands": [
+    {
+      "command": "node scripts/feature-pruning-electron-smoke.cjs ../docs/secondary-development/test-reports/v1.8.4-feature-pruning-evidence/final-full-navigation",
+      "exitCode": 0,
+      "stdout": "",
+      "evidence": "final-full-navigation/electron-evidence.json"
+    },
+    {
+      "command": "node scripts/feature-pruning-electron-smoke.cjs ../docs/secondary-development/test-reports/v1.8.4-feature-pruning-evidence/login-version --login",
+      "exitCode": 0,
+      "stdout": "",
+      "evidence": "login-version/electron-evidence.json"
+    },
+    {
+      "command": "node --check scripts/feature-pruning.test.cjs / harness.cjs / smoke.cjs（分别执行）",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/feature-pruning-electron-smoke.cjs ../docs/secondary-development/test-reports/v1.8.4-feature-pruning-evidence/review-final-verified",
+      "exitCode": 0,
+      "stdout": "",
+      "evidence": "review-final-verified/electron-evidence.json",
+      "note": "可见错误断言及真实同会话模式开关/保存；原 final-full-navigation 仅作为被审查纠正的历史证据"
+    }
+  ]
+}

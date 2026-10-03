@@ -53,18 +53,6 @@ body :is(
   .workspace-database-gate,
   .developer-expansion-replace-hero,
   .developer-expansion-replace-metrics article,
-  .developer-secondary-hero,
-  .developer-secondary-accent-card,
-  .developer-secondary-metrics article,
-  .developer-secondary-steps article,
-  .developer-secondary-preview-list span,
-  .demo-hero-card,
-  .business-bid-demo .demo-hero-card,
-  .opportunity-hero-card,
-  .demo-step-list article,
-  .demo-table-list article,
-  .opportunity-card-list article,
-  .opportunity-radar-card,
   .duplicate-upload-row,
   .duplicate-empty-upload,
   .duplicate-dimension-grid article,
@@ -83,8 +71,6 @@ body :is(
   .rejection-check-result-content,
   .rejection-finding-group-head,
   .rejection-finding-detail-block,
-  .resources-shelf-panel,
-  .resource-book-row,
   .parser-card-primary,
   .parser-card-accent,
   .about-update-card,
@@ -281,11 +267,6 @@ body tbody tr:hover td { background: var(--yb-fill-quaternary); }
 
 .markdown-viewer code { font-family: var(--yb-font-mono); }
 
-/* Decorative book covers remain differentiated, but use a flat Ant palette. */
-.resource-book-cover.is-blue { background: #1677ff; }
-.resource-book-cover.is-violet { background: #722ed1; }
-.resource-book-cover.is-cyan { background: #13c2c2; }
-.resource-book-cover.is-slate { background: #597ef7; }
 
 /* Settings keeps its existing tab placement and row density, with Ant surfaces. */
 .settings-page-section {
@@ -351,10 +332,7 @@ body :is(
   [class*='knowledge-'],
   [class*='export-'],
   [class*='template-'],
-  [class*='resource-'],
   [class*='developer-'],
-  [class*='demo-'],
-  [class*='opportunity-'],
   [class*='settings-'],
   [class*='parser-'],
   [class*='privacy-']
@@ -375,7 +353,6 @@ body :is(
   [class*='knowledge-'],
   [class*='export-'],
   [class*='template-'],
-  [class*='resource-'],
   [class*='developer-'],
   [class*='settings-']
 ) button {

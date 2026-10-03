@@ -1,17 +1,5 @@
 import type { AppMenuItem, SectionId } from '../shared/types/navigation';
 
-const phaseOneUnavailableNotice = {
-  message: '该功能在第一阶段暂未开放。',
-};
-
-const phaseOneHiddenSectionIds = new Set<SectionId>([
-  'business-bid',
-  'image-knowledge-base',
-  'ai-evaluation',
-  'bid-opportunity',
-  'resources',
-]);
-
 export const appMenuItems: AppMenuItem[] = [
   {
     id: 'bid-generation',
@@ -29,13 +17,6 @@ export const appMenuItems: AppMenuItem[] = [
         label: '已有方案扩写',
         description: '解决人写技术方案太薄的问题，上传写好的方案，进行优化和扩充，遵从原方案真实可落地，又能扩写出厚厚的标书',
         icon: 'expand',
-      },
-      {
-        id: 'business-bid',
-        label: '商务标',
-        description: '整理商务响应、报价口径和合同偏离材料。',
-        icon: 'briefcase',
-        notice: phaseOneUnavailableNotice,
       },
     ],
   },
@@ -84,13 +65,6 @@ export const appMenuItems: AppMenuItem[] = [
         description: '管理文档资料、案例素材和可复用知识条目',
         icon: 'document',
       },
-      {
-        id: 'image-knowledge-base',
-        label: '图片知识库',
-        description: '管理图片素材、图示和视觉参考资料',
-        icon: 'file',
-        notice: phaseOneUnavailableNotice,
-      },
     ],
   },
   {
@@ -110,25 +84,7 @@ export const appMenuItems: AppMenuItem[] = [
         description: '硬性条款与响应完整性',
         icon: 'shield',
       },
-      {
-        id: 'ai-evaluation',
-        label: 'AI评标',
-        description: '模拟AI评标，对标书进行打分，出具评标报告',
-        icon: 'tool',
-        notice: phaseOneUnavailableNotice,
-      },
     ],
-  },
-  {
-    id: 'bid-opportunity',
-    label: '投标机会',
-    description: '机会发现与线索跟踪',
-    notice: phaseOneUnavailableNotice,
-  },
-  {
-    id: 'resources',
-    label: '资源下载',
-    description: '投标相关资料、工具下载',
   },
 ];
 
@@ -143,24 +99,6 @@ const developerMenuItems: AppMenuItem[] = [
         label: 'Json请求测试',
         description: '复用项目真实目录生成链路，验证模型 JSON 响应和修复流程。',
         icon: 'code',
-      },
-      {
-        id: 'developer-prompt-lab',
-        label: 'Prompt调试台',
-        description: '集中观察 Prompt 版本、变量注入和输出约束，便于后续调参。',
-        icon: 'prompt',
-      },
-      {
-        id: 'developer-parser-sandbox',
-        label: '文件解析沙盘',
-        description: '模拟本地解析、MinerU 解析和图片资产入库的调试入口。',
-        icon: 'file',
-      },
-      {
-        id: 'developer-export-preview',
-        label: '导出链路预演',
-        description: '预览 Word、Markdown 和图片导出的检查路径。',
-        icon: 'export',
       },
       {
         id: 'developer-expansion-replace-test',
@@ -185,13 +123,7 @@ const developerMenuItems: AppMenuItem[] = [
 ];
 
 export function getAppMenuItems(developerMode: boolean): AppMenuItem[] {
-  const menuItems = developerMode ? [...appMenuItems, ...developerMenuItems] : appMenuItems;
-  return menuItems
-    .filter((item) => !phaseOneHiddenSectionIds.has(item.id))
-    .map((item) => item.children ? {
-      ...item,
-      children: item.children.filter((child) => !phaseOneHiddenSectionIds.has(child.id)),
-    } : item);
+  return developerMode ? [...appMenuItems, ...developerMenuItems] : appMenuItems;
 }
 
 export function getSectionOrder(developerMode: boolean): SectionId[] {
