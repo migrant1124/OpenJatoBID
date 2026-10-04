@@ -4,6 +4,8 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { PI_RETRY_ERROR_NORMALIZER_PATH } = require('./piRetryErrorNormalizer.cjs');
+const piDependencies = require('../../../package.json').dependencies;
 const {
   BUNDLED_COMMANDS,
   SHIM_COMMANDS,
@@ -871,10 +873,14 @@ function validatePiSessionSnapshot(snapshot = {}) {
     && snapshot.context_files[0] === '<yibiao-agent-workspace>'
     && !snapshot.skills?.length
     && !snapshot.prompts?.length
-    && !snapshot.extensions?.length;
+    && snapshot.extensions?.length === 1
+    && snapshot.extensions[0] === PI_RETRY_ERROR_NORMALIZER_PATH;
   const toolsValid = activeTools.length === EXPECTED_PI_TOOLS.length
     && EXPECTED_PI_TOOLS.every((tool) => activeTools.includes(tool));
-  return { resourcesValid, toolsValid };
+  const configurationValid = snapshot.sdk_version === piDependencies['@earendil-works/pi-coding-agent']
+    && snapshot.pi_ai_version === piDependencies['@earendil-works/pi-ai']
+    && snapshot.cache_warming === 'off';
+  return { resourcesValid, toolsValid, configurationValid };
 }
 
 // 将 Pi 自检信息转换为 Renderer 使用的公共诊断区。
@@ -887,10 +893,12 @@ function createPiDiagnosticSections({ layout, sdkVersion, sessionSnapshot = {}, 
     {
       id: 'pi-runtime',
       title: 'Pi 运行环境',
-      status: sdkVersion ? 'success' : 'error',
+      status: validation.configurationValid && sdkVersion === sessionSnapshot.sdk_version ? 'success' : 'error',
       summary: 'Pi 使用应用专用目录和内存 Session',
       details: [
         { label: 'SDK 版本', value: sdkVersion || '-' },
+        { label: 'pi-ai 版本', value: sessionSnapshot.pi_ai_version || '-' },
+        { label: '缓存保温', value: sessionSnapshot.cache_warming || '-' },
         { label: '运行目录', value: layout.runtimeRoot },
         { label: 'Agent 配置目录', value: layout.agentDir },
         { label: '工作区', value: layout.workspaceDir },

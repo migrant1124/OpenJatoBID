@@ -1856,3 +1856,56 @@ Build 开始、每批和交付前复查实际分支/HEAD/用户改动。第一�
 - Verify：`docs/secondary-development/test-reports/v1.8.4-feature-pruning-test-report.md`，关联 AC01—14、TC01—27；包含时间、cwd、分支/HEAD/差异标识、工具版本、命令退出码、截图/日志/导出/包证据和覆盖深度。每用例用通过/失败/未执行/环境阻塞；失败另分本轮引入/既有/环境/暂未判定。
 - Review：`docs/secondary-development/reviews/v1.8.4-feature-pruning-review.md`。到该阶段再读 review reference，并调用可用的 openjatobid_reviewer 独立只读审查；不可用就披露非独立上下文，不冒称调用。
 - 交付分别给“代码实现”“测试完成”“可发布验收”三项结论，以及删改文件、保留残留理由、版本/分支/用户修改保护证据、未测/阻塞。当前只交付 Plan，三项均不预先判完成。
+
+## 27. v1.8.4 Pi SDK 1.0.0 独立升级计划（2026-10-03）
+
+本轮权威输入是 Pi 升级规格与配套指令。用户已授权计划后连续实施，无需重复确认。沿用项目 Skill 的 Plan → Build → Verify → 独立只读 Review；审查修复返回 Build。上一轮第 26 节及 FP 历史逐字保留。
+
+### 27.1 基线与边界
+
+实际分支 `v1.8.4-架构优化`，HEAD `23e05a543c8834045e76c045b61337c7f62ca16e`；tracked/staged 无差异，原有未跟踪文件仅两份本轮升级输入，保留原文。应用 1.8.4、Pi 两包 0.80.10；Windows x64，Node v26.1.0/npm 11.13.0、Electron 41.5.0。只发现根 AGENTS。开发说明的旧 OpenCode 描述属历史差异，按实际 Pi 调用保留接口，不恢复旧 runtime 或重写宪法。
+
+保留精简八入口删除、C01/C02、runtime_id=pi、yibiao/default/openai-completions、本地 Proxy/独立队列、IPC、内存会话与业务存储/输出协议。禁止修改管理端、analytics、数据库、菜单/页面、写作 Prompt、授权或发布链路。基线备份/哈希/原状态位于忽略目录 `client/.tmp/pi184-upgrade/baseline/`，不含生产配置；原定向 21/21，原 audit 退出 1，逐项与升级后比较。
+
+### 27.2 契约审计与文件计划
+
+固定 v1.0.0 官方 SDK 文档及 npm 发布实物/shrinkwrap，不追踪 main。公开 ESM 导入、ModelRuntime.create/registerProvider/setRuntimeApiKey/getModel、SettingsManager.inMemory、SessionManager.inMemory、createAgentSession、defineTool/ToolDefinition 工厂均保留；安装后真实调用再核验。
+
+| 当前行为 | 新版证据与决定 | 文件/验证 |
+| --- | --- | --- |
+| CJS 动态 import | 继续公开入口；真实 VERSION/支持的元数据，不硬编码；失败不永久缓存 | 工厂；T02/T05 |
+| 内存模型与状态 | 继续原配置；实际思考读取 session.thinkingLevel | 工厂；T06 |
+| noExtensions=false | 新 loader 文件发现与命名内联工厂独立；改 true，以哨兵/真实重试证明归一化扩展保留 | 工厂、自检；T07/T08/T13 |
+| cacheWarming 默认 streaming | 显式 off；Pi 遥测 false、模型目录网络 false、trust never 保持；检查实际策略/计时器路径 | 工厂；T09/T30 |
+| 两种工具集合 | 对话 read/find/ls，任务原 8 工具；真正执行中文/空格/越界/junction，禁止扩权 | 工厂默认保留，只修真实契约故障；T07/T14/T15 |
+| prompt 与 agent_end | 原 runtime 已 await prompt 再校验，保持；验证自动恢复后唯一 task_end | runtime 默认保留；T11/T12/T21 |
+| abort/dispose/finally | 新 abort 等待 idle，dispose 同步；清空目录前 await abort，避免迟到写入 | runtime 最小生命周期修补；T17-T22 |
+| message_end 错误归一化 | 保留扩展，实测进入真实重试判断，命中差异再适配 | normalizer 默认保留；T13 |
+| 自检 extensions 空断言 | 与命名内联扩展冲突，改精确白名单并验证实际版本/off；真实 read/bash/write/json 校验不放宽 | 自检与必要 runtime 断言；T23 |
+| TypeBox/JSON/ask-user | 接受真实发布树，验证 schema 和 JSON details，不强 dedupe、不放宽 required | 原工具默认保留；T10/T19 |
+
+允许 package.json 仅两依赖精确版本与必要 test/smoke 脚本、npm 生成 lockfile、工厂/runtime/自检最小适配及对应测试/client scripts。piEnvironment、归一化、JSON/提问工具、Agent/Proxy/对话业务默认只读，存在真实故障证据才按规格最小修复。不得升级 Electron/Vite/TypeScript 或工具体系；包内资源缺失仅按报错局部适配。
+
+### 27.3 顺序、分层验证与阻断
+
+PI184-01 基线 → 02 审计/计划 → 03 精确 install/npm ci/audit/树/engines → 04 最小适配 → 05 真实 SDK 离线 → 06 Electron/业务/Windows → 07 独立审查及范围内修复重验 → 08 交付。
+
+L0：CJS/build、版本/树、npm ci 前后 lock 哈希、audit 前后。L1：原 Pi/Agent/对话测试、精简/守卫/更新回归。L2：真实 SDK + 项目工厂/实际 Proxy + loopback 模拟供应商，仅模拟最外层；Windows 合成路径/资源哨兵，精确工具/严格 JSON、分片参数、429/503/认证、取消/问答/压缩与至少 10 次释放。沿用 node:test/现有 Playwright，不新增框架；脚本必须超时、失败非零。
+
+L3：业务服务/Store 加载前显式 app.setPath(userData, 本轮绝对隔离目录)，记录真实 Electron Node/ABI、工具 Node、自检与监视事件，复用精简 UI/IPC 合成项目/模板/Word，补对话历史。无 Chrome DevTools MCP 时披露并复用可重复 Playwright。L4：新独立输出 `client/release/v184-pi100-validation`，builder 明确 `--win nsis --publish never`；包内 SDK/资源工具加载、正常授权安装分别记录。无独立环境/有效授权则安装 BLOCKED。L5：无明确获准模型配置则 BLOCKED，不读取正式密钥/发收费请求。T01—T30 逐项记 PASS/FAIL/BLOCKED/NOT_RUN，不用 build 替代运行。
+
+### 27.4 回退与交付
+
+经用户另行批准后逐文件恢复本轮基线 package/lock 和实际适配文件、撤销本轮新增测试/脚本入口，再旧锁 npm ci/旧 Pi 定向验证/精简回归。保护后来用户修改；不得 reset 到精简前提交。无数据迁移，不删除/恢复业务数据。
+
+交付 `docs/secondary-development/changes/v1.8.4-pi-1.0.0-upgrade-implementation.md`、`testing/v1.8.4-pi-1.0.0-upgrade-test-report.md`、`reviews/v1.8.4-pi-1.0.0-upgrade-review.md`，记录兼容矩阵、命令退出码、依赖差异、证据/风险/人工项。唯一状态源 tasks/todo.md；禁止任何 Git 写入、上传或发布。
+
+### 27.5 范围内实施与审查修正
+
+T14真实PNG暴露既有read操作遗漏，补公开MIME检测且复用realpath防护；无证据将其归因于新版引入。独立审查后主代理返回Build补强工具独有事实压缩证明、保留安全压缩失败诊断，并以运行中close改前失败/改后通过支持任务结算等待。修改文件仍限定三个Pi服务、清单/锁、测试及本轮文档；不改UI/IPC/数据库/业务控制层。
+
+Chrome DevTools MCP实际可用，已检查隔离浏览器登录预览；多步真实Electron回归复用现有Playwright。Main及包内harness实际运行和正常授权解包/安装分开记录；监视器Renderer通用压缩标签不在本轮范围，报告保留限制。实际命令/偏差/依赖及回退依据均见指定三份报告，执行状态只在todo中维护。
+
+### 27.6 用户授权续验（2026-10-03）
+
+用户要求继续执行并更新证据，沿用 PI184-06，不扩大生产源码/依赖/授权范围。先核对隔离环境，再完成最新断言后的完整离线测试、正常 Main 的 before-quit/窗口关闭清理、精简基线合成项目/模板/对话附件副本兼容和 Word/WPS 实际打开/只读导出验证。每项分开记录技术证据与人工确认；不可用 VM/有效测试许可/获准真实模型配置的部分保持阻断。正式安装或模型测试不读取正式配置，不提高 Hyper-V 权限、不启用 Sandbox、不更改生产数据。证据放 client/.tmp/pi184-upgrade/continued-20261003，报告增量更新现有三份。

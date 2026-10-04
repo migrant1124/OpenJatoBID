@@ -246,6 +246,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
   let closePromise = null;
   let activeTask = null;
   let activeController = null;
+  let activeTaskSettlement = null;
   let statusTimer = null;
   let sdkVersion = '';
 
@@ -531,7 +532,18 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         });
         return;
       }
-      if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'compaction_start', 'compaction_end'].includes(event.type)) {
+      if (event.type === 'compaction_start' || event.type === 'compaction_end') {
+        // 只保留状态与 HTTP 状态码，不复制压缩摘要或上游可能回显的材料。
+        const failed = Boolean(event.errorMessage);
+        const httpStatus = String(event.errorMessage || '').match(/\b[45]\d{2}\b/)?.[0];
+        const error = failed ? `上下文压缩失败${httpStatus ? `（HTTP ${httpStatus}）` : ''}` : '';
+        const meta = { reason: event.reason, aborted: Boolean(event.aborted), will_retry: Boolean(event.willRetry), success: Boolean(event.result), error };
+        const progress = error || (event.aborted ? '上下文压缩已取消' : event.type === 'compaction_start' ? '正在压缩上下文' : '上下文压缩已完成');
+        if (monitorAllowed && isMonitorActive?.()) emitMonitorEvent({ type: event.type, message: progress, is_error: failed, success: meta.success, result: meta });
+        touchActivity({ task_token: taskToken, stage: event.type, message: progress, source: `pi.${event.type}`, visible: true, activity: true, meta });
+        return;
+      }
+      if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end'].includes(event.type)) {
         if (monitorAllowed && isMonitorActive?.()) emitMonitorEvent({ type: event.type });
         touchActivity({ task_token: taskToken, stage: event.type, message: '', source: `pi.${event.type}`, visible: false, activity: true });
       }
@@ -641,6 +653,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       user_question_answers: [],
     };
     activeController = new AbortController();
+    let settleTask;
+    activeTaskSettlement = new Promise((resolve) => { settleTask = resolve; });
     setPhase('running', activeTask.progress_text);
     let session = null;
     let sessionSnapshot = null;
@@ -880,6 +894,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       trackAgentRuntime(app, configStore, analyticsService, runtimeId, 'failed', { retryCount: retryAttempts.length, includeModelEndpoint: mode !== 'conversation' });
       throw error;
     } finally {
+      // 等待请求、工具与自动恢复结算后再释放会话和清空工作区。
+      try { await session?.abort?.(); } catch {}
       unsubscribe?.();
       session?.dispose?.();
       cleanupAbort();
@@ -897,6 +913,8 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
           setPhase(proxy ? 'idle' : 'unhealthy', proxy ? `${runtimeName} 空闲` : `${runtimeName} 异常`);
         }
       }
+      activeTaskSettlement = null;
+      settleTask();
     }
   }
 
@@ -921,11 +939,10 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       });
       const sessionSnapshot = result.diagnostics?.session || {};
       const snapshotValidation = validatePiSessionSnapshot(sessionSnapshot);
-      const validationToolSucceeded = (result.diagnostics?.events || []).some((event) => (
-        (event.event === 'pi.tool.end' || event.source === 'pi.tool.end')
-        && event.meta?.tool === 'json-validation'
-        && event.meta?.is_error === false
-      ));
+      const completedTools = new Set((result.diagnostics?.events || [])
+        .filter((event) => (event.event === 'pi.tool.end' || event.source === 'pi.tool.end') && event.meta?.is_error === false)
+        .map((event) => event.meta?.tool));
+      const validationToolSucceeded = ['read', 'bash', 'write', 'json-validation'].every((tool) => completedTools.has(tool));
       let output = null;
       let outputValid = false;
       let outputMessage = '';
@@ -938,7 +955,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       } catch (error) {
         outputMessage = `Pi Agent 自检输出不是合法 JSON：${error?.message || String(error)}`;
       }
-      const success = snapshotValidation.resourcesValid && snapshotValidation.toolsValid && validationToolSucceeded && outputValid;
+      const success = snapshotValidation.resourcesValid && snapshotValidation.toolsValid && snapshotValidation.configurationValid && validationToolSucceeded && outputValid;
       return {
         success,
         task_completed: true,
@@ -946,7 +963,9 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         duration_ms: Date.now() - taskStartedAt,
         message: success
           ? 'Pi Agent 极简任务执行成功'
-          : !validationToolSucceeded ? 'Pi Agent 未成功执行 json-validation 工具' : outputMessage || 'Pi Agent 极简任务未通过校验',
+          : !snapshotValidation.configurationValid ? 'Pi Agent 实际版本或缓存保温设置不符合配置'
+            : !snapshotValidation.resourcesValid || !snapshotValidation.toolsValid ? 'Pi Agent 资源或工具集合不符合配置'
+              : !validationToolSucceeded ? 'Pi Agent 未完整执行 read、bash、write 和 json-validation 工具链' : outputMessage || 'Pi Agent 极简任务未通过校验',
         session_id: result.session_id || '',
         workspace_dir: result.workspace_dir || layout.workspaceDir,
         output_file: SELF_CHECK_OUTPUT_FILE,
@@ -1479,6 +1498,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
       setPhase('closing', `正在关闭 ${runtimeName}`);
       if (activeController && !activeController.signal.aborted) activeController.abort(new Error('Agent 服务正在关闭'));
       if (startPromise) await startPromise.catch(() => undefined);
+      if (activeTaskSettlement) await activeTaskSettlement;
       await proxy?.close?.();
       proxy = null;
       proxyInfo = null;

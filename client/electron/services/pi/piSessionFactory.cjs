@@ -1,5 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { findPackageJSON } = require('node:module');
+const { pathToFileURL } = require('node:url');
 const { createPiJsonValidationTool } = require('./piJsonValidationTool.cjs');
 const { createPiRetryErrorNormalizer } = require('./piRetryErrorNormalizer.cjs');
 const { createPiUserQuestionTool } = require('./piUserQuestionTool.cjs');
@@ -22,6 +24,7 @@ function createConversationReadOnlyTools(codingAgent, workspaceDir) {
   const readOperations = {
     access: async (targetPath) => fs.access(await guardedPath(targetPath)),
     readFile: async (targetPath) => fs.readFile(await guardedPath(targetPath)),
+    detectImageMimeType: async (targetPath) => codingAgent.detectSupportedImageMimeTypeFromFile(await guardedPath(targetPath)),
   };
   const lsOperations = {
     exists: async (targetPath) => guardedPath(targetPath).then(() => true, () => false),
@@ -61,7 +64,14 @@ function loadPiModules() {
       import('@earendil-works/pi-coding-agent'),
       import('@earendil-works/pi-ai'),
       import('typebox'),
-    ]).then(([codingAgent, piAi, typebox]) => ({ codingAgent, piAi, typebox }));
+    ]).then(async ([codingAgent, piAi, typebox]) => {
+      const metadataPath = findPackageJSON('@earendil-works/pi-ai', pathToFileURL(__filename));
+      const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
+      return { codingAgent, piAi, typebox, piAiVersion: metadata.version };
+    }).catch((error) => {
+      piModulesPromise = null;
+      throw error;
+    });
   }
   return piModulesPromise;
 }
@@ -78,7 +88,7 @@ function normalizeOutputLimit(contextLength) {
 
 // 创建完全内存化的 Pi Session，不读取外部配置或上下文文件。
 async function createPiSession({ workspaceDir, environment, proxyInfo, config, timeoutMs, jsonValidationSchemas, requestUserQuestion, mode = 'task', requestedThinkingLevel = 'off', sessionInstructions }) {
-  const { codingAgent, piAi, typebox } = await loadPiModules();
+  const { codingAgent, piAi, typebox, piAiVersion } = await loadPiModules();
   const credentials = new piAi.InMemoryCredentialStore();
   const modelsStore = new piAi.InMemoryModelsStore();
   const modelRuntime = await codingAgent.ModelRuntime.create({
@@ -118,6 +128,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     defaultProjectTrust: 'never',
     retry: { enabled: true, provider: { maxRetries: 0, timeoutMs } },
     compaction: { enabled: true },
+    cacheWarming: 'off',
     images: { autoResize: false, blockImages: mode !== 'conversation' },
     enableInstallTelemetry: false,
     enableAnalytics: false,
@@ -129,7 +140,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     agentDir: environment.layout.agentDir,
     settingsManager,
     noContextFiles: true,
-    noExtensions: false,
+    noExtensions: true,
     extensionFactories: [createPiRetryErrorNormalizer()],
     noSkills: true,
     noPromptTemplates: true,
@@ -177,6 +188,8 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     session,
     snapshot: {
       sdk_version: codingAgent.VERSION || '',
+      pi_ai_version: piAiVersion,
+      cache_warming: settingsManager.getCacheWarmingMode(),
       model: {
         provider: model.provider || '',
         id: model.id || '',
@@ -198,7 +211,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
       active_tools: session.getActiveToolNames(),
       mode,
       requested_thinking_level: requestedThinkingLevel,
-      effective_thinking_level: requestedThinkingLevel,
+      effective_thinking_level: session.thinkingLevel,
     },
   };
 }

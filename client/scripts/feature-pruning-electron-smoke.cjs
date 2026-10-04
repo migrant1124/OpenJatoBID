@@ -29,10 +29,14 @@ async function main() {
     assert.equal(path.resolve(evidence.runtime.userData), path.resolve(userData));
     assert.equal(evidence.runtime.version, packageJson.version);
     const win = await electron.firstWindow();
+    // 合成回归不依赖公网公告，避免已确认的远程弹窗挡住菜单操作。
+    await win.context().route('**/remote-notice.json?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
     win.setDefaultTimeout(10000);
     win.on('pageerror', (error) => evidence.errors.push(error.message));
     win.on('request', (request) => evidence.requests.push(request.url()));
     const snapshot = async (name) => {
+      const notice = win.getByRole('button', { name: '知道了', exact: true });
+      if (await notice.isVisible()) await notice.click();
       const visibleErrors = await win.locator('.app-toast.is-error').allTextContents();
       evidence.visibleErrors.push(...visibleErrors.map((message) => ({ page: name, message })));
       await win.screenshot({ path: path.join(outputDir, `${name}.png`) });
@@ -191,6 +195,14 @@ async function main() {
     assert.deepEqual(evidence.retiredRequests, []);
     assert.deepEqual(evidence.errors, []);
     assert.deepEqual(evidence.visibleErrors, []);
+    // 空模型配置下调用真实 IPC；错误必须可诊断且不影响既有页面。
+    evidence.agentConfigFailure = await win.evaluate(async () => {
+      try { await window.yibiao.agent.run({ mode: 'conversation', max_retries: 0 }); return ''; }
+      catch (error) { return String(error?.message || error); }
+    });
+    assert.match(evidence.agentConfigFailure, /配置|API|模型/i);
+    await win.getByRole('button', { name: '知识库', exact: true }).click();
+    await snapshot('agent-config-failure-recovered');
   } finally {
     fs.writeFileSync(path.join(outputDir, 'electron-evidence.json'), JSON.stringify(evidence, null, 2), 'utf8');
     await electron?.close();
