@@ -76,7 +76,7 @@
 - 每名员工最多同时绑定 3 台有效设备；管理员可以续期、拒绝或撤销。
 - 授权保存在客户端本地，离线可继续使用；但至少每 30 天必须连接一次局域网管理端完成校验。
 - 授权申请、登录校验和运维埋点只连接局域网管理端；不再向旧公网 `analytics.agnet.top` 发送授权或埋点请求。
-- 公告、资源列表和 GitHub 软件更新仍为独立公共内容能力，不经过管理端。
+- 公告和 GitHub 软件更新仍为独立公共内容能力，不经过管理端。
 - 管理端撤销授权后，客户端下次连接管理端时立即暂停使用；超过 30 天未校验也会暂停使用。
 - 授权实现位于 `client/electron/services/licenseService.cjs` 和 `lanManagementClient.cjs`；管理端实现位于 `management/electron/services/authorizationService.cjs` 和 `signingService.cjs`。
 

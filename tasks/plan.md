@@ -1679,3 +1679,233 @@ T173 → T174 → T175 → T176
 2. 在 `ImageStudioRegionEditor.tsx` 和局部作用域 CSS 中实现 LE-01 布局、自由闭合圈选/矩形/SAM、右侧卡片、导航图、单一视图比例及键鼠规则。复用既有 IPC 和 SAM；不改 PSD refine。
 3. 在 `ImageStudioCreate.tsx`/`ImageStudioPage.tsx` 冻结编辑源并让每项意见进入既有 Main 一次提交。仅在实际合同缺口处修改 Main。
 4. 聚焦逻辑与服务测试、构建、隔离 Electron 多尺寸截图、真实 SAM/已授权中转、PSD refine 相邻回归；LE-T01—48 分层记录于 `tasks/todo.md` 和测试报告，最后只读审查。无新费用授权的调用标未执行；不操作 Git 状态或发布。
+
+## 26. v1.8.4 功能精简：文件级技术计划（2026-10-03）
+
+### 26.1 权威输入与阶段边界
+
+- 规格：`docs/secondary-development/prd/v1.8.4-feature-pruning-spec.md`；实施指令：`docs/secondary-development/v1.8.4-feature-pruning-codex-instructions.md`。
+- 已读根 `AGENTS.md`、根 `开发说明.md`、`.agents/skills/openjatobid-secondary-development/SKILL.md`、Plan reference 和 verification matrix。包含隐藏目录的本地检索只找到根 `AGENTS.md`，未发现受影响目录另有指令。
+- 用户确认的是 D01—D08、C01/C02、客户端目标版本及现有实施分支。核对既有 `tasks/plan.md`、`tasks/todo.md` 未找到本轮计划、FP-01—FP-08 冲突或本轮技术计划确认记录；上方其他版本的批准和历史分支记录不作为本轮批准。
+- 当前只执行 FP-01/FP-02；本节供用户确认，**尚未批准进入 Build**。仅追加计划和唯一任务状态，不修改源码、测试、版本字段；不安装依赖、不构建、不打包、不启动 Electron、不调用模型。
+- 本节是执行计划，不另写 PRD、ADR、API 合同或并行状态文件。没有架构、IPC、数据库和视觉布局变更。测试/审查报告由后续真实执行产生，不预写通过结论。
+
+### 26.2 本地基线与原有改动保护
+
+| 项目 | 本次只读核验结果 |
+| --- | --- |
+| 实际仓库 | `D:\Documents\OpenJatobid` |
+| 实际实施分支 | `v1.8.4-架构优化`；正常分支，不是 main/master 或 detached HEAD |
+| HEAD | `7d5c26d1117f41071396818a0ed721081aca10db`，与规格历史快照相同；没有回退操作 |
+| 原始 `git status --short` | 只有 `?? docs/secondary-development/prd/v1.8.4-feature-pruning-spec.md` 和 `?? docs/secondary-development/v1.8.4-feature-pruning-codex-instructions.md` |
+| 已跟踪候选文件 | 原始 `git diff --stat` / `git diff --cached --stat` 均无差异；无原有源码/计划重叠修改 |
+| origin | `git@github.com:migrant1124/OpenJatoBID.git` |
+| upstream | `https://github.com/FB208/OpenBidKit_Yibiao.git` |
+| 其他 remote | `Anna755zyp` → `git@github.com:Anna755zyp/OpenJatoBID` |
+| 原有计划/任务 | 逐字保留既有内容；只在末尾追加本轮章节。没有本轮已批准计划与当前分支的冲突 |
+| 旧精简文档 | `rg --files` 未找到旧 `feature-pruning-spec.md` 或旧配套指令；无需迁移或覆盖旧文档 |
+| 安装工具只读清点 | Windows x64；Node `v26.1.0`、npm `11.13.0`；当前已安装 TypeScript `5.9.3`、Electron `41.5.0`、electron-builder `26.8.1`、Vite `7.3.2`。只是版本读取，不是运行时或 ABI 验证 |
+
+原始两份未跟踪输入的 SHA-256：
+
+- 规格：`F0BDBF41A1C5B6C530AA55B8E73E6311D8CAE736B94A7E7D6701186D2DD789A6`。
+- 指令：`5C573D77360B72CF784BF245A2BAE8F84685467F9852C1DA716081BFC2F7B167`。
+
+原始计划/任务 SHA-256：`tasks/plan.md` 为 `EDA98B321079D472CB59816D66242C1785139D5D3FF4A177FC96C9302770D3D7`；`tasks/todo.md` 为 `F10152DF395C541FF78870BC43E33BDA8274E6123DBCB89F472D830E173194AB`。写入采用末尾追加，原有字节保持不变。后续每阶段开始先核对分支、HEAD、工作区；出现新重叠修改先列明保护方案，不覆盖、不 stash。分支与本节不一致或 HEAD 意外变化时先说明并停止受影响修改。
+
+### 26.3 八个目标入口的实际调用清单
+
+| 项 | ID | 菜单、类型、图标 | 实际页面/路由 | Main、测试与统计边界 |
+| --- | --- | --- | --- | --- |
+| D01 | `bid-opportunity` | menuConfig 顶级声明/隐藏集合、SectionId、Sidebar 的 RadarIcon | AppRouter lazy + case → BidOpportunityPage；静态演示 | client Main/IPC/preload 和现有测试未发现专属 ID/页面引用；保留看板历史映射 |
+| D02 | `resources` | menuConfig 顶级声明/隐藏集合、SectionId、Sidebar 的 ResourcesIcon | AppRouter lazy + case → ResourcesPage；真实列表/搜索/详情页 | 页面 fetch 到 `https://analytics.agnet.top/resources`，搜索仅增加 `q`；点击调用共享 trackResourceClick。页面和局部 helper 删除，共享 Analytics/服务/接口/历史记录保留 |
+| D03 | `business-bid` | menuConfig 子项/隐藏集合、SectionId、Sidebar 的 BriefcaseIcon | AppRouter lazy + case → BusinessBidPage；静态演示 | 不触碰商务正文、承诺函、报价、表格或评分逻辑；保留历史映射 |
+| D04 | `image-knowledge-base` | menuConfig 子项/隐藏集合、SectionId、Sidebar 的 ArchiveIcon 映射 | 当前无页面或路由 | 仅删占位声明；ArchiveIcon 仍被文档知识库使用，不删除图像、生图或知识库能力 |
+| D05 | `ai-evaluation` | menuConfig 子项/隐藏集合、SectionId、Sidebar 的 BidCheckIcon 映射 | 当前无页面或路由 | 仅删占位声明；BidCheckIcon 仍被标书检查使用，不触碰评分反查、查重、废标等逻辑 |
+| D06 | `developer-prompt-lab` | developerMenuItems 子项、SectionId、Sidebar 的 FlaskIcon 映射 | isDeveloperDemoSection → DeveloperDemoPage 的 demoConfigs | 仅静态演示，无真实 Prompt 调试执行；保留历史映射及真实 Prompt 能力 |
+| D07 | `developer-parser-sandbox` | 同 D06 | 同上，独立 demoConfigs 条目 | 仅静态演示；保留真实解析、MinerU、图片导入 |
+| D08 | `developer-export-preview` | 同 D06 | 同上，独立 demoConfigs 条目 | 仅静态演示；保留真实 Word/Markdown/图片导出 |
+
+引用核验覆盖 `client/src`、`client/electron`、`client/scripts`，并只读分类 `management/`、`analytics/` 的历史统计命中。没有发现需为本轮删改的 Main 独占实现，不修改 Main、IPC、preload 或桥接类型。检查后台不等于授权清理后台。
+
+### 26.4 文件级删除与局部修改清单
+
+以下均是待确认、待 Build 的处理，不代表已删除。行号用于本基线定位，Build 前按实际内容再次核对。
+
+| 文件/符号 | D/C 项与当前引用方 | 独占/共享证据及拟处理 | 保护对象与验证 |
+| --- | --- | --- | --- |
+| `client/src/features/bid-opportunity/pages/BidOpportunityPage.tsx` | D01；AppRouter:7、82 | feature 只有此文件；只展示静态 opportunities/signals，拟删除整文件 | 不按“投标”字样删除业务；静态连接/产物检查 |
+| `client/src/features/business-bid/pages/BusinessBidPage.tsx` | D03；AppRouter:8、62 | feature 只有此静态演示页，拟删除整文件 | 不删除商务正文/承诺函；业务回归 |
+| `client/src/features/resources/pages/ResourcesPage.tsx` | D02；AppRouter:21、68 | feature 只有此文件；ResourceItem、ResourceCover、normalizeResource 等只在本页，拟删除整文件 | 共享 trackResourceClick、Markdown/Dialog/Toast 保留；精确接口网络核验 |
+| `client/src/features/developer/pages/DeveloperDemoPage.tsx` | D06—D08；AppRouter:12、53 | demoConfigs 只包含三个目标演示页，无保留页消费，拟删除整文件 | 保留其他 developer 页面、监视器子窗口及 Token 统计窗口 |
+| `client/src/features/developer/developerDemoSections.ts` | D06—D08；AppRouter:5、53、DeveloperDemoPage 类型导入 | 只给目标演示页提供类型/判断，拟删除整文件 | 不删除 developer 目录 |
+| `client/src/styles/feature-resources.css` | D02；styles.css:19 | 各规则均被 resources-/resource-book-/resource-detail- 祖先限定；唯一共有 primary-action 也受资源祖先限定。is-${tone} 动态变体来自本页，拟删除整文件 | 只移除资源限定规则；共享 primary-action 定义不动 |
+| `client/src/app/menuConfig.ts` | D01—D08；Sidebar、AppRouter、SecondaryMenuPage、菜单辅助函数 | 局部删除八项、phaseOneUnavailableNotice、phaseOneHiddenSectionIds 及专用过滤。剩余 getAppMenuItems 沿用现有数组组合，不引入新接口或就地修改共享数组 | 普通六项顺序、子菜单和开发者四项顺序；反复调用/开关行为测试 |
+| `client/src/shared/types/navigation.ts` | D01—D08、C02；所有导航消费者 | 仅删八项及旧 export-format 的 SectionId 分支 | AppMenuNotice、子菜单通用接口/图标联合类型保持；编译检查 |
+| `client/src/components/Sidebar.tsx` | D01—D08、C01/C02 | 删九个目标导航映射；BriefcaseIcon、ResourcesIcon、RadarIcon 仅由目标映射消费，拟删局部函数；删 SHOW_USER_GUIDE、USER_GUIDE_URL、footer 中文档按钮表达式、renderUserGuideButton 和仅它消费的 BookIcon | DocumentIcon、ArchiveIcon、BidCheckIcon、FlaskIcon 等仍使用；保留 openExternalUrl、Toast/notice、设置、Tooltip、折叠、高亮、Logo 和几何布局 |
+| `client/src/app/AppRouter.tsx` | D01—D03、D06—D08、C02 | 删四个 lazy 页面声明、三个页面 case、演示模块 import/判断分支、旧 export-format case | ExportFormatPage/MyTemplatesPage、editingTemplateId、离开守卫、共用技术方案 props、生图专用路由、知识库二级页保持 |
+| `client/src/styles.css` | D02 | 只删 feature-resources.css 的 import | 其他 CSS 顺序不变 |
+| `client/src/styles/feature-developer.css` | D01/D03/D06—D08；多个保留开发者页面 | 删除本基线 246—791 行中的 developer-secondary-*、demo-*、opportunity-* 独占块及对应响应式选择器；demo-dev-badge 仅在该演示块内已有孤立定义，一并删除。保留 938/966 附近混合 media 中 developer-test-* 部分，不重排其他块 | 保留 developer-test-*、developer-expansion-replace-*、token-stats-*、agent-monitor-* 及其响应式规则 |
+| `client/src/styles/ant-v6-overrides.css` | D01/D02/D03/D06—D08 | 从混合 :is() 列表只移除 developer-secondary-*、demo-*、business-bid-demo、opportunity-*、resources-shelf-panel、resource-book-row；删除 285—288 行资源封面四种颜色专用覆盖及直接对应注释；经全 src 核验无其他消费者，移除资源/demo/opportunity 专属属性通配分支 | 保留同一规则其他 selectors/声明，以及 developer-/export-/template- 等共享通配和 Ant 样式；不整段删除混合规则 |
+| `client/src/styles/shared-markdown.css` | D02；ResourcesPage:138 | 454、555 行混合选择器列表只删 resource-detail-markdown 分支，保持逗号语法；规则本身共享 | markdown-viewer、remote-notice-content 和全屏能力保持 |
+| `client/package.json` | 版本同步；应用版本来源 | 只改顶层 version，详见 26.7；不新增 npm 测试脚本 | scripts、dependencies、devDependencies、build、appId、publish 原样 |
+| `client/package-lock.json` | 版本同步 | 只改顶层 version 与 packages[""].version，实际格式 v3 | 第三方版本/resolved/integrity/树/格式原样；结构差异核验 |
+| 根 `开发说明.md` | 本轮现行模块说明 | 删除 resources 与 bid-opportunity/business-bid 模块条目；资源列表不再是客户端公共页面能力，最小移除此处陈述中的资源列表 | export-format 模块保留，通用架构/流程/Git/统计/发布不改，不补无关遗漏 |
+| 根 `README.md` | 本轮直接过时入口说明 | 仅更新“入口隐藏、源码未删除”那段，说明本轮八项/隐藏文档入口下线，真实业务/模板保留；不改无关的历史更新/开发路径描述 | README、手册、历史资料与外链仍保留 |
+| 根 `AGENTS.md` | 本轮资源页能力描述 | 只把“公告、资源列表和 GitHub 软件更新仍为独立公共内容能力”改为“公告和 GitHub 软件更新仍为独立公共内容能力”，使客户端现状说明一致 | 其余授权、Analytics 降级、Git、模块、统计和发布保护条款保持原字句 |
+| `client/scripts/feature-pruning.test.cjs`（新） | AC01—06、12—14；TC01—04、07、09、25—27 | Node 内置 test + 已安装 TypeScript 在内存编译真实 menuConfig 并调用导出函数；补导航/CSS残留及版本白名单核验 | 不增加框架、依赖、调试入口或生产兼容代码；版本/范围检查不能替代运行时 |
+| `client/scripts/feature-pruning-electron-harness.cjs`（新） | TC05—19、21；隔离运行入口 | 在加载 bootstrap/Main 或任何 Store 前显式 app.setPath('userData', 专用绝对目录)，复用现有 Store 构造合成夹具；必要模型/解析响应仅在测试进程替换 | 不读正式 userData/正式密钥；测试限定的受控响应不宣称真实模型通过 |
+| `client/scripts/feature-pruning-electron-smoke.cjs`（新） | 可重复 Electron/IPC/模板证据 | 复用已安装 playwright-core 的 _electron 与前述 harness，从真实保留入口导航，保存证据/合成导出；不将旧目标页注入生产导航 | 不增加生产开关；包的正式启动和授权另列验收 |
+
+预计整文件删除 **6 份**（五份 TS/TSX + 一份资源 CSS）；目录只会因这些精确文件删除成为空目录，不执行递归目录清理。后续测试证据产物不算源码删除数量。Shared 的 SubMenuIcon 中 briefcase/prompt 等通用图标分支和图标类型联合仍属共享菜单接口，本轮保留，不借删除页面改造公共接口。
+
+### 26.5 必须保留的文件/能力及残留理由
+
+- `client/src/features/export-format/` 全目录、ExportFormatPage、MyTemplatesPage、TemplatePreview；`feature-export-format.css`、`shared/types/exportFormat.ts`、`shared/utils/exportFormatCss.ts`；模板 Store/IPC 和 Word 导出服务完整保留。TechnicalPlanHome 仍导入 TemplatePreview、ContentEditPage 仍使用 export-format-preview 类名。
+- `client/src/features/developer/pages/DeveloperTestPage.tsx`、`ContentExpansionReplaceTestPage.tsx`、`PiAgentMonitorPage.tsx`、`SystemDiagnosticsPage.tsx` 以及 `PiAgentMonitorWindow.tsx`、`DeveloperTokenStatsWindow.tsx` 保留；相关 developerIpc/服务/统计与 Agent runtime 保留。
+- `feature-technical-plan.css:4432` 的 feature-under-development-overlay 仍被 `TechnicalPlanHome.tsx:1128` 使用，不删除、不修改；panel、section-kicker、Dialog、Toast、布局和 Markdown 共享样式保留。
+- `client/src/shared/analytics/analytics.ts:248` 的 trackResourceClick 和 resource_click/resources 契约保持，即使页面下线后无新调用；`client/electron/services/analyticsService.cjs`、analyticsQueueStore/analyticsIpc/preload 及模型统计保持。
+- `analytics/dashboard/public/src/pages/traffic.js` 中 resources、business-bid、bid-opportunity、开发者演示 ID 和 export-format 的历史标签保留，Worker 资源接口、事件字段、统计数据与管理端看板也保留。字符串命中是历史解释，不是活动页面。
+- 技术方案与扩写共用页、conversation/prompt-library、image-studio/作品、knowledge-base、duplicate-check、rejection-check、auth/settings、App.tsx、AppShell、SecondaryMenuPage、版本读取模块均不列为源码修改对象。
+- `management/`（当前版本 1.4.2）、`analytics/`、`sql/`、所有数据库 migration、更新/发布脚本、`.github/workflows/`、vendor/SAM/Agent 工具及第三方依赖冻结。所有历史业务数据和正式缓存保留。
+
+### 26.6 C02 决策：选择 A，不新增兼容层
+
+完成包含隐藏目录、排除 .git/node_modules/dist/release/vendor 的源码检索，并对 576 个 TS/TSX/CJS/MJS/JS/JSON/SQL/HTML 文件核对单引号、双引号、模板字符串中的精确旧 ID：
+
+1. 活动客户端仅三处精确旧值：`navigation.ts:22` 类型、`Sidebar.tsx:35` 图标映射、`AppRouter.tsx:80` 路由 case。没有 menuConfig 声明或现行导航调用。
+2. 当前创建入口：AppRouter 的 MyTemplatesPage 回调 → new-template（:77）；TechnicalPlanHome 的模板跳转也是 new-template（:890）。编辑通过 editingTemplateId 和 mode="edit"，无需旧导航。
+3. `App.tsx:19` 当前页为内存 useState('bid-generation')；用户操作经 requestSectionChange/离开守卫更新，登出重置，关闭开发者模式沿现有 effect 返回 bid-generation。未持久化或恢复旧 SectionId。
+4. `main.tsx` 只解析 window=token-stats/agent-monitor，BrowserDebugPreview 只解析 preview=about；Main 协议为 yibiao-asset，不产生旧页面导航；preload/IPC 无旧 ID 消费边界。其余 localStorage 读取为公告关闭/旧统计客户端 ID 等，非当前页面恢复。
+5. 全仓另一处精确旧 ID 为 traffic.js:52 的历史统计映射，保留；模板路径、样式前缀、日志名及历史文档不等同于活动导航。
+
+因此按规格 7.3 **A** 删除类型、图标映射和重复路由，仅保留 new-template 作为新建模板导航。备选 B 适用于有内部调用，本基线没有；C 适用于实际旧值读取边界，本基线没有。不给八个退役页新增通用恢复系统。Build 前若出现新证据须返回计划说明，不能静默改为兼容框架。
+
+### 26.7 客户端版本白名单与读取链路
+
+| 文件/字段 | 实际原值 | 批准后拟值 |
+| --- | --- | --- |
+| `client/package.json` 顶层 version | 1.8.3 | 1.8.4 |
+| `client/package-lock.json` 顶层 version | 1.8.3 | 1.8.4 |
+| `client/package-lock.json` packages[""].version | 1.8.3 | 1.8.4 |
+| `management/package.json` version | 1.4.2 | 保持 1.4.2 |
+
+没有其他客户端根项目版本字段需要补造。使用最小文本编辑，禁止 npm version、全仓版本替换、锁文件重新解析。测试调用直接用 `node --test scripts/feature-pruning.test.cjs`，**不新增 test:feature-pruning 脚本**。对比原清单/锁文件，归一上述三个字段后深比较其余结构，人工确认文本 diff 只有允许字段。
+
+版本链路已经存在：Electron `app.getVersion()` → `ipc/index.cjs:443` 的 app:get-version → preload.getVersion → `shared/runtime/appVersion.ts` 的 getAppVersion → StartupAuthPage / SettingsPage。保留 window.jatoaibid/window.yibiao 回退与缓存，不硬编码 1.8.4、不改 API。TC26 分别核对静态字段、登录页、设置/关于及本地验证包内应用版本/原命名模板生成的文件名，缺一层证据就分层标记，不以静态元数据代替完整验收。
+
+### 26.8 实施顺序、决策门与成功标准
+
+执行状态只见 `tasks/todo.md` 本轮章节，下表只描述任务顺序和验收，不作为第二套状态表。
+
+| 任务 | 前置与范围 | 成功标准/检查 |
+| --- | --- | --- |
+| FP-01 基线核验 | 读取本轮输入/规则/现代码，源码只读 | 分支/HEAD/原有差异、版本、独占/共享引用和 C02 A/B/C 证据具备 |
+| FP-02 Plan 与用户确认 | FP-01；本节和任务文件 | 文件范围、C02=A、三个版本字段、隔离验证方案可复核；**用户明确确认本技术计划后**才开始 FP-03 |
+| FP-03 导航/独占页删除 | FP-02 明确批准；四个入口文件和五个独占 TS/TSX | 八项从导航/类型/图标/页面连接真正删除；普通六主菜单不变、开发者四子项；菜单行为测试及 build |
+| FP-04 样式/C01 | FP-03；本节 CSS 和 Sidebar 精确局部 | 删除独占资源 CSS/演示样式/文档按钮，保留混合规则其他分支；CSS 解析/残留检查及 build |
+| FP-05 C02 收口 | FP-02 已批准 A；可与 FP-03 的类型/Sidebar/AppRouter 编辑一并完成 | 旧三处活动值移除；模板新建/编辑路由和保留目录完整，专项测试 |
+| FP-06 版本/测试/说明 | FP-03—05；三个字段、三个测试文件、直接过时说明 | 根版本一致 1.8.4、依赖树不变；测试真实调用菜单函数；说明与最终代码一致；build/聚焦回归 |
+| FP-07 Verify | 完整差异、测试夹具；必要时返回 Build 修复 | TC01—27 分层证据、产物与隔离 Electron/导出记录，失败/未测/环境阻塞明示 |
+| FP-08 Review/交付 | 规格、本节、唯一任务状态、差异和 FP-07 证据 | 用可用 openjatobid_reviewer 独立只读审查；报告后范围内问题返回 Build→Verify→Review，不在 Review 改源 |
+
+Build 开始、每批和交付前复查实际分支/HEAD/用户改动。第一批前先执行相关既有测试与构建取得本机改前基线；本轮新测试应能在旧代码上揭示开发者七子项/目标连接仍在的差异，不将预期失败误记环境问题。以导航/页面、样式/辅助收口、版本/说明三个有意义增量验证；分批可用 Node 的 test-name-pattern 只运行当前增量适用用例，最后运行完整本轮测试，不弱化最终断言。
+
+普通主菜单顺序固定：bid-generation、conversation、image-studio、template-settings、knowledge-base、bid-check，设置仍在 footer。开发者仅额外 developer-test，子项顺序固定 developer-json-test、developer-expansion-replace-test、developer-pi-agent-monitor、developer-system-diagnostics。知识库仍进现有二级页，生图仍走专用路由；不更名、不下沉、不加空卡片。
+
+### 26.9 验证计划及证据深度
+
+**自动化、编译与范围检查（以下尚未执行）：**
+
+- client 内 `node --test scripts/feature-pruning.test.cjs`：TC01—04/07/09，真实执行菜单函数并检验精确 ID/中文名称/顺序、子项和 getSectionOrder/getAppMenuItemById/getParentMenuItemBySection；多次 true/false 切换前后不改变共享数组。补 TS AST/导入连接检查、独占 CSS/混合选择器检查；TC25/26/27 核对版本、保护目录、初始工作区与分支。历史统计/模板目录/测试文本按明确白名单分类。
+- 每个有意义增量及最终 `npm.cmd run build`（实际脚本为 tsc --noEmit && vite build）；记录退出码/新增错误/既有 chunk 提示。Plan 不运行。
+- 已确认存在：`npm.cmd run test:technical-plan-guards`、`npm.cmd run test:update`；直接运行 `node --test scripts/package-build-config.test.cjs`。
+- 既有聚焦回归：`technicalPlanExport.test.cjs`、`technicalPlanSnapshotExport.test.cjs`、`exportStandaloneMarkdown.test.cjs`；授权组 `licenseService.test.cjs`、`lanManagementClient.test.cjs`、`licenseIpc.test.cjs`；统计组 `analyticsService.test.cjs`、`analyticsQueueStore.test.cjs`；对话/附件/提示词、知识库、扩写/生图根据 TC13—18 最小场景选现有对应测试。仅运行受控夹具，不运行自动读正式 Key 的 live-smoke。原生 Store 若 Node ABI 不符，用现有 Electron 运行时和隔离目录验证；不能删除测试或把 ABI 阻塞写成业务通过。
+- 没有计划修改 Main/preload，因此不机械添加全 Main 语法扫描；新测试 harness/smoke 的 CJS 做 node --check，并执行真实 Electron 原生加载。若出现需改生产 Main/IPC 的发现，先记录进入 Change。
+- 构建由现有 Vite 输出本轮新产物，保留/分类已有 dist，不执行 git clean 或清理工作区。核验生成 JS 依赖图/模块名称与 CSS 解析结果：没有四个删除页面的可执行模块、演示 helper 或资源/演示独占规则。不得仅对全部产物字符串作零命中断言。
+- `git diff --check`、`git diff --stat`、文件级差异与未跟踪测试清点；不执行 git add。起止分支/HEAD 与本节对照，输入文档哈希不变，锁文件依赖和受保护目录无越界改动。
+
+**Electron、网络、导出与数据（TC05—19/21/24/26）：**
+
+1. 在系统临时目录建立唯一合成测试 userData；harness 先 app.setPath，再加载正常 bootstrap/Main/SQLite。只改 APPDATA 或追加 --user-data-dir 不作为已证明隔离。既有 v175 harness 可复用 seeding 思路，但其随后直接启动 "." 的测试方式不直接照搬。
+2. 使用真实 Electron/preload/IPC 和保留入口完成普通六主菜单+设置、展开/折叠/高亮、开发者四页及开关回退；记录截图、console/network、配置持久化和窗口尺寸（至少普通宽窗及 1024×768），对照改前同夹具基线。Chrome DevTools MCP 工具可用，适合一次性界面核验；可重复多步覆盖使用已装 playwright-core，连接不可用时按实际原因记录。
+3. 模板新建→保存→列表→编辑→返回、复读模板 Store；合成正文含中文标题/表格/图片，通过现有真实导出生成 DOCX，检查包内 document/styles/media 内容并实际打开文件。Word/WPS 不可用时“应用中打开”层标环境阻塞，不能以 ZIP 结构替代该层通过。
+4. 技术方案/追加资料/事实/正文/导出、已有方案扩写、对话附件/提示词/导出、生图三页/受控作品、文档知识库引用、查重/废标/错别字/逻辑分支逐项最小合成回归。自动化 mock、真实 Electron/IPC、真实模型明确分层；没有对应场景就记未执行，不把文件未改当通过。
+5. 对退役具体 `/resources` 和 `/resources?q=...` 记录请求，验证所有保留入口导航不产生资源页请求；不封域名、不屏蔽授权/公告/更新/模型请求。统计用本地受控接收方或现有夹具证明访问字段/队列/历史映射保留，禁止上传测试正文或伪造资源点击。
+6. TC19 优先用本轮改前程序生成的隔离合成工作区，退出相关进程后取一致副本，再用改后程序打开并比较稳定字段/数量/内容哈希/引用关系。正式员工旧数据没有授权，不自动复制或试验；合成旧库不能冒充正式员工升级验收。无需改变 schema/migration；若数据异常停止并保全证据。
+7. 登录页版本可用隔离启动的既有授权要求模式检查；开发业务导航按既有开发启动授权行为验证，不能新增生产授权绕过。包的授权/登录单列，不以开发 debug_disabled 的导航验证替代正式包授权。
+
+**本地包（TC22/23/26）：**
+
+- 源码/构建验证后才执行 `npm.cmd exec -- electron-builder --win nsis --publish never`，使用本地现有 builder，不修改 publish/build 模板，不读发布私钥或触发 Actions。
+- 如已有同名验证资产，保留它们并在本轮独立输出目录生成；将实际输出路径和产物 SHA-256、app.asar 版本/文件/资源检查写入报告。目标 EXE 名字沿模板应对应 `Jato-AI-BID-1.8.4-win-x64.exe`，当前没有该次打包证据。
+- 本基线正常启动没有显式 userData 测试隔离入口，不为包装测试新增生产开关。验证包的正常安装/启动/导航/模板导出使用独立 Windows 用户、Sandbox 或虚拟环境，不能在正式员工环境安装/启动试验。若本机无合格隔离环境或测试授权，包结构核验可执行，TC23 的实际启动/安装层记环境阻塞；不能用外置 harness 启动冒充正式包启动。
+- 没有同环境/配置的前后安装包实测时，体积变化填未测；不作启动、内存或性能收益承诺。
+
+### 26.10 风险、范围内修复和回滚
+
+- CSS 在共享文件中混合：限定删除选择器/分支，保持其他声明和原顺序；解析、构建和保留页截图共同验证。
+- 菜单去除隐藏过滤：验证剩余数组构造和 repeated calls，不引入 mutation；保留通用 notice/Toast/图标接口。
+- 原生 ABI、文件占用、外部 Word/WPS、包装隔离/授权可能阻塞部分验证，目前只列风险，未执行前不判为实际失败。
+- Verify/Review 发现本轮范围内问题时，写明问题分类和最小修复，返回 Build 再重验；既有问题/环境阻塞不靠删除测试或业务逻辑解决。需要新产品决策的删除、依赖、Main/IPC、布局/授权/更新变化先停受影响项进入 Change。
+- 撤销只针对本轮独立文件 diff/新增测试，先与开始时用户修改比较；撤销本身需要用户明确授权，不执行 git reset/clean/stash。无数据库迁移和数据删除，无需设计数据库回滚；数据异常不删库。
+- 始终禁止暂存/提交/推送/拉取/fetch/合并/变基/重置/清理/stash/分支创建切换重命名删除/tag/发布/部署和 npm version，复用已建分支。
+
+### 26.11 后续报告与交付
+
+- Verify：`docs/secondary-development/test-reports/v1.8.4-feature-pruning-test-report.md`，关联 AC01—14、TC01—27；包含时间、cwd、分支/HEAD/差异标识、工具版本、命令退出码、截图/日志/导出/包证据和覆盖深度。每用例用通过/失败/未执行/环境阻塞；失败另分本轮引入/既有/环境/暂未判定。
+- Review：`docs/secondary-development/reviews/v1.8.4-feature-pruning-review.md`。到该阶段再读 review reference，并调用可用的 openjatobid_reviewer 独立只读审查；不可用就披露非独立上下文，不冒称调用。
+- 交付分别给“代码实现”“测试完成”“可发布验收”三项结论，以及删改文件、保留残留理由、版本/分支/用户修改保护证据、未测/阻塞。当前只交付 Plan，三项均不预先判完成。
+
+## 27. v1.8.4 Pi SDK 1.0.0 独立升级计划（2026-10-03）
+
+本轮权威输入是 Pi 升级规格与配套指令。用户已授权计划后连续实施，无需重复确认。沿用项目 Skill 的 Plan → Build → Verify → 独立只读 Review；审查修复返回 Build。上一轮第 26 节及 FP 历史逐字保留。
+
+### 27.1 基线与边界
+
+实际分支 `v1.8.4-架构优化`，HEAD `23e05a543c8834045e76c045b61337c7f62ca16e`；tracked/staged 无差异，原有未跟踪文件仅两份本轮升级输入，保留原文。应用 1.8.4、Pi 两包 0.80.10；Windows x64，Node v26.1.0/npm 11.13.0、Electron 41.5.0。只发现根 AGENTS。开发说明的旧 OpenCode 描述属历史差异，按实际 Pi 调用保留接口，不恢复旧 runtime 或重写宪法。
+
+保留精简八入口删除、C01/C02、runtime_id=pi、yibiao/default/openai-completions、本地 Proxy/独立队列、IPC、内存会话与业务存储/输出协议。禁止修改管理端、analytics、数据库、菜单/页面、写作 Prompt、授权或发布链路。基线备份/哈希/原状态位于忽略目录 `client/.tmp/pi184-upgrade/baseline/`，不含生产配置；原定向 21/21，原 audit 退出 1，逐项与升级后比较。
+
+### 27.2 契约审计与文件计划
+
+固定 v1.0.0 官方 SDK 文档及 npm 发布实物/shrinkwrap，不追踪 main。公开 ESM 导入、ModelRuntime.create/registerProvider/setRuntimeApiKey/getModel、SettingsManager.inMemory、SessionManager.inMemory、createAgentSession、defineTool/ToolDefinition 工厂均保留；安装后真实调用再核验。
+
+| 当前行为 | 新版证据与决定 | 文件/验证 |
+| --- | --- | --- |
+| CJS 动态 import | 继续公开入口；真实 VERSION/支持的元数据，不硬编码；失败不永久缓存 | 工厂；T02/T05 |
+| 内存模型与状态 | 继续原配置；实际思考读取 session.thinkingLevel | 工厂；T06 |
+| noExtensions=false | 新 loader 文件发现与命名内联工厂独立；改 true，以哨兵/真实重试证明归一化扩展保留 | 工厂、自检；T07/T08/T13 |
+| cacheWarming 默认 streaming | 显式 off；Pi 遥测 false、模型目录网络 false、trust never 保持；检查实际策略/计时器路径 | 工厂；T09/T30 |
+| 两种工具集合 | 对话 read/find/ls，任务原 8 工具；真正执行中文/空格/越界/junction，禁止扩权 | 工厂默认保留，只修真实契约故障；T07/T14/T15 |
+| prompt 与 agent_end | 原 runtime 已 await prompt 再校验，保持；验证自动恢复后唯一 task_end | runtime 默认保留；T11/T12/T21 |
+| abort/dispose/finally | 新 abort 等待 idle，dispose 同步；清空目录前 await abort，避免迟到写入 | runtime 最小生命周期修补；T17-T22 |
+| message_end 错误归一化 | 保留扩展，实测进入真实重试判断，命中差异再适配 | normalizer 默认保留；T13 |
+| 自检 extensions 空断言 | 与命名内联扩展冲突，改精确白名单并验证实际版本/off；真实 read/bash/write/json 校验不放宽 | 自检与必要 runtime 断言；T23 |
+| TypeBox/JSON/ask-user | 接受真实发布树，验证 schema 和 JSON details，不强 dedupe、不放宽 required | 原工具默认保留；T10/T19 |
+
+允许 package.json 仅两依赖精确版本与必要 test/smoke 脚本、npm 生成 lockfile、工厂/runtime/自检最小适配及对应测试/client scripts。piEnvironment、归一化、JSON/提问工具、Agent/Proxy/对话业务默认只读，存在真实故障证据才按规格最小修复。不得升级 Electron/Vite/TypeScript 或工具体系；包内资源缺失仅按报错局部适配。
+
+### 27.3 顺序、分层验证与阻断
+
+PI184-01 基线 → 02 审计/计划 → 03 精确 install/npm ci/audit/树/engines → 04 最小适配 → 05 真实 SDK 离线 → 06 Electron/业务/Windows → 07 独立审查及范围内修复重验 → 08 交付。
+
+L0：CJS/build、版本/树、npm ci 前后 lock 哈希、audit 前后。L1：原 Pi/Agent/对话测试、精简/守卫/更新回归。L2：真实 SDK + 项目工厂/实际 Proxy + loopback 模拟供应商，仅模拟最外层；Windows 合成路径/资源哨兵，精确工具/严格 JSON、分片参数、429/503/认证、取消/问答/压缩与至少 10 次释放。沿用 node:test/现有 Playwright，不新增框架；脚本必须超时、失败非零。
+
+L3：业务服务/Store 加载前显式 app.setPath(userData, 本轮绝对隔离目录)，记录真实 Electron Node/ABI、工具 Node、自检与监视事件，复用精简 UI/IPC 合成项目/模板/Word，补对话历史。无 Chrome DevTools MCP 时披露并复用可重复 Playwright。L4：新独立输出 `client/release/v184-pi100-validation`，builder 明确 `--win nsis --publish never`；包内 SDK/资源工具加载、正常授权安装分别记录。无独立环境/有效授权则安装 BLOCKED。L5：无明确获准模型配置则 BLOCKED，不读取正式密钥/发收费请求。T01—T30 逐项记 PASS/FAIL/BLOCKED/NOT_RUN，不用 build 替代运行。
+
+### 27.4 回退与交付
+
+经用户另行批准后逐文件恢复本轮基线 package/lock 和实际适配文件、撤销本轮新增测试/脚本入口，再旧锁 npm ci/旧 Pi 定向验证/精简回归。保护后来用户修改；不得 reset 到精简前提交。无数据迁移，不删除/恢复业务数据。
+
+交付 `docs/secondary-development/changes/v1.8.4-pi-1.0.0-upgrade-implementation.md`、`testing/v1.8.4-pi-1.0.0-upgrade-test-report.md`、`reviews/v1.8.4-pi-1.0.0-upgrade-review.md`，记录兼容矩阵、命令退出码、依赖差异、证据/风险/人工项。唯一状态源 tasks/todo.md；禁止任何 Git 写入、上传或发布。
+
+### 27.5 范围内实施与审查修正
+
+T14真实PNG暴露既有read操作遗漏，补公开MIME检测且复用realpath防护；无证据将其归因于新版引入。独立审查后主代理返回Build补强工具独有事实压缩证明、保留安全压缩失败诊断，并以运行中close改前失败/改后通过支持任务结算等待。修改文件仍限定三个Pi服务、清单/锁、测试及本轮文档；不改UI/IPC/数据库/业务控制层。
+
+Chrome DevTools MCP实际可用，已检查隔离浏览器登录预览；多步真实Electron回归复用现有Playwright。Main及包内harness实际运行和正常授权解包/安装分开记录；监视器Renderer通用压缩标签不在本轮范围，报告保留限制。实际命令/偏差/依赖及回退依据均见指定三份报告，执行状态只在todo中维护。
+
+### 27.6 用户授权续验（2026-10-03）
+
+用户要求继续执行并更新证据，沿用 PI184-06，不扩大生产源码/依赖/授权范围。先核对隔离环境，再完成最新断言后的完整离线测试、正常 Main 的 before-quit/窗口关闭清理、精简基线合成项目/模板/对话附件副本兼容和 Word/WPS 实际打开/只读导出验证。每项分开记录技术证据与人工确认；不可用 VM/有效测试许可/获准真实模型配置的部分保持阻断。正式安装或模型测试不读取正式配置，不提高 Hyper-V 权限、不启用 Sandbox、不更改生产数据。证据放 client/.tmp/pi184-upgrade/continued-20261003，报告增量更新现有三份。

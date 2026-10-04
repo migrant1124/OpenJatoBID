@@ -15,7 +15,6 @@ const navigationIcons: Record<SectionId, ComponentType<SVGProps<SVGSVGElement>>>
   'bid-generation': BidGenerationIcon,
   'technical-plan': DocumentIcon,
   'existing-plan-expansion': DocumentIcon,
-  'business-bid': BriefcaseIcon,
   conversation: ConversationIcon,
   'image-studio': ImageStudioIcon,
   'image-studio-create': ImageStudioIcon,
@@ -23,30 +22,20 @@ const navigationIcons: Record<SectionId, ComponentType<SVGProps<SVGSVGElement>>>
   'image-studio-works': ImageStudioIcon,
   'knowledge-base': ArchiveIcon,
   'document-knowledge-base': ArchiveIcon,
-  'image-knowledge-base': ArchiveIcon,
-  resources: ResourcesIcon,
   'bid-check': BidCheckIcon,
   'duplicate-check': CompareIcon,
   'rejection-check': ShieldIcon,
-  'ai-evaluation': BidCheckIcon,
   'template-settings': DocumentIcon,
   'my-templates': DocumentIcon,
   'new-template': DocumentIcon,
-  'export-format': DocumentIcon,
-  'bid-opportunity': RadarIcon,
   'developer-test': FlaskIcon,
   'developer-json-test': FlaskIcon,
-  'developer-prompt-lab': FlaskIcon,
-  'developer-parser-sandbox': FlaskIcon,
-  'developer-export-preview': FlaskIcon,
   'developer-expansion-replace-test': FlaskIcon,
   'developer-pi-agent-monitor': FlaskIcon,
   'developer-system-diagnostics': FlaskIcon,
   settings: GearIcon,
 };
 
-const SHOW_USER_GUIDE = false;
-const USER_GUIDE_URL = 'https://github.com/migrant1124/OpenJatoBID#使用说明';
 
 function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -122,7 +111,6 @@ function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps
       </nav>
 
       <div className="sidebar-footer">
-        {SHOW_USER_GUIDE && (collapsed ? wrapTooltip('使用文档', renderUserGuideButton()) : renderUserGuideButton())}
         {collapsed ? wrapTooltip('设置', renderSettingsButton(activeSection, onSectionChange)) : renderSettingsButton(activeSection, onSectionChange)}
       </div>
     </aside>
@@ -157,25 +145,6 @@ function renderSettingsButton(activeSection: SectionId, onSectionChange: (sectio
       <span className="settings-copy">
         <strong>设置</strong>
         <small>模型与解析配置</small>
-      </span>
-    </button>
-  );
-}
-
-function renderUserGuideButton() {
-  return (
-    <button
-      type="button"
-      className="settings-trigger"
-      onClick={() => void openExternalUrl(USER_GUIDE_URL)}
-      aria-label="使用文档"
-    >
-      <span className="nav-icon" aria-hidden="true">
-        <BookIcon />
-      </span>
-      <span className="settings-copy">
-        <strong>使用文档</strong>
-        <small>教程与功能共创</small>
       </span>
     </button>
   );
@@ -218,17 +187,6 @@ function DocumentIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function BriefcaseIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <path d="M5 8h14v11.5H5z" />
-      <path d="M9 8V5.5h6V8" />
-      <path d="M5 12.5h14" />
-      <path d="M10.5 12.5v2h3v-2" />
-    </svg>
-  );
-}
-
 function ConversationIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -254,17 +212,6 @@ function ArchiveIcon(props: SVGProps<SVGSVGElement>) {
       <path d="M5 7.5h14v12H5z" />
       <path d="M4 4.5h16v3H4z" />
       <path d="M9 11.2h6" />
-    </svg>
-  );
-}
-
-function ResourcesIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <path d="M4.8 6.4h4v12.2h-4z" />
-      <path d="M10.1 4.8h4.2v13.8h-4.2z" />
-      <path d="m15.4 7.1 3.4-.9 2.7 10.8-3.4.85z" />
-      <path d="M4 19.3h16.8" />
     </svg>
   );
 }
@@ -305,17 +252,6 @@ function ShieldIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function RadarIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <path d="M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17Z" />
-      <path d="M12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z" />
-      <path d="M12 12 18 6" />
-      <path d="M12 12h.01" />
-    </svg>
-  );
-}
-
 function FlaskIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
@@ -332,17 +268,6 @@ function GearIcon(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
       <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
       <path d="m19.1 13.5.1-1.5-.1-1.5 2-1.5-2-3.4-2.45.95a8.2 8.2 0 0 0-2.55-1.45L13.75 2h-3.5L9.9 5.1a8.2 8.2 0 0 0-2.55 1.45L4.9 5.6l-2 3.4 2 1.5L4.8 12l.1 1.5-2 1.5 2 3.4 2.45-.95A8.2 8.2 0 0 0 9.9 18.9l.35 3.1h3.5l.35-3.1a8.2 8.2 0 0 0 2.55-1.45l2.45.95 2-3.4z" />
-    </svg>
-  );
-}
-
-function BookIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <path d="M5.5 4.5h5.2c1.25 0 2.3 1.05 2.3 2.3v12.7c-.45-.8-1.25-1.3-2.3-1.3H5.5z" />
-      <path d="M18.5 4.5h-5.2C12.05 4.5 11 5.55 11 6.8v12.7c.45-.8 1.25-1.3 2.3-1.3h5.2z" />
-      <path d="M8 8h2" />
-      <path d="M14 8h2" />
     </svg>
   );
 }

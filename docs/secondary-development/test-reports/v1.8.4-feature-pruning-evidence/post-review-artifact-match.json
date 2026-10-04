@@ -1,0 +1,7 @@
+{
+  "time": "2026-10-03T12:18:23.997Z",
+  "matchedFiles": 22,
+  "productionDiffUnchanged": true,
+  "reason": "只改三份测试中的两份；脚本不进入 build.files。重建客户端 JS/CSS/HTML 与现有 ASAR 字节一致",
+  "changeSha256": "dca0d8f577c26ab61ed68027c0bb513fce4dd2d6758b010f5a11b2d01410ab7f"
+}

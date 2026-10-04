@@ -1,0 +1,168 @@
+{
+  "baseline": true,
+  "userData": "C:\\Users\\MiG\\AppData\\Local\\Temp\\jato-fp-userdata-4sGdzV",
+  "packageVersion": "1.8.3",
+  "pages": [
+    {
+      "name": "ordinary-wide",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n\n技术方案编制与已有方案扩写\n\n生成技术方案\n根据招标文件重头编写一份标书\n已有方案扩写\n解决人写技术方案太薄的问题，上传写好的方案，进行优化和扩充，遵从原方案真实可落地，又能扩写出厚厚的标书",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-标书生成",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n\n技术方案编制与已有方案扩写\n\n生成技术方案\n根据招标文件重头编写一份标书\n已有方案扩写\n解决人写技术方案太薄的问题，上传写好的方案，进行优化和扩充，遵从原方案真实可落地，又能扩写出厚厚的标书\nJato AI BID v1.8.3 正式发布\n公告时间：2026-09-29 22:42:32\n\n远程公告\n\n更新内容\n版本更新：将项目版本号从 1.8.2 更新至 1.8.3，修改相关发布通知内容，并删除过时的目标文档。\n新增功能： 添加了用于图像工作室优化会话、案例和翻译的新表，以支持增强的功能。 修复了一些bug。 优化了局部改图的SOP。\n全屏查看\n知道了",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-对话模式",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n对话智能体工作台\n\n通过多轮对话生成内容、整理方案并导出 Word\n\n＋ 新建对话\n会话列表\n⚙\n今天\n新对话\n•••\n新对话\n•••\n共 2 个会话\n新对话\nJato Agent\n•••\n开始与 Jato Agent 对话\n\n输入问题，或上传文档后围绕材料继续提问。\n\n添加附件\n提示词库\n0 / 10000\n发送",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-生图模式",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n生图模式\n\n从想法到图片，简单创作与修改\n\nAI 生图\n提示词中心\n我的作品\n文本：未配置\n生图连接：金龙中转站 · 未配置 Key\n创作输入\n新建\n自动保存草稿\n图片需求\n0 / 10,000\n反推提示词\n保存\n参考图片 可选\n0 / 4\n添加\n本次生图模型\ngpt-image-2\ngpt-image-2-1k\ngpt-image-2.5-sunburst\ngpt-image-2.5-flare\nNano Banana Pro\nNano Banana 2\n 优化提示词\n已自动匹配模型优化规则\n模型选择说明\n生成张数\n1 张\n2 张\n4 张\n图片画幅\n1024 × 1024 · 1:1\n1024 × 2048 · 1:2\n2048 × 1024 · 2:1\n1536 × 2048 · 3:4\n2048 × 1536 · 4:3\n2048 × 1152 · 16:9\n1152 × 2048 · 9:16\n1536 × 1024 · 3:2\n\n请先在设置中填写金龙中转站的生图模型 API Key。\n\n生成图片\n生成结果\n作品将在这里显示\nPNG\nJPG\nWEBP\n下载\n局部修改\n分层 PSD\n当前图片信息\n\n选择图片后显示详情。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-模板设置",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n模板设置\n\n标书导出模板与排版配置\n\n我的模板\n管理已保存的标书导出模板\n新建模板\n配置 Word 文档排版与编号格式",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-知识库",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n知识库\n\n素材、模板和案例资产\n\n文档知识库\n管理文档资料、案例素材和可复用知识条目",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-标书检查",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书检查\n\n查重、废标项与合规检查\n\n标书查重\n相似度与重复表达检测\n废标项检查\n硬性条款与响应完整性",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "collapsed",
+      "text": "标书检查\n\n查重、废标项与合规检查\n\n标书查重\n相似度与重复表达检测\n废标项检查\n硬性条款与响应完整性",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "http://127.0.0.1:5173/@vite/client",
+    "http://127.0.0.1:5173/src/main.tsx",
+    "http://127.0.0.1:5173/@react-refresh",
+    "http://127.0.0.1:5173/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=198675b4",
+    "http://127.0.0.1:5173/src/App.tsx",
+    "http://127.0.0.1:5173/src/app/providers/AppProviders.tsx",
+    "http://127.0.0.1:5173/src/app/BrowserDebugPreview.tsx",
+    "http://127.0.0.1:5173/src/app/WorkspaceDatabaseGate.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/DeveloperTokenStatsWindow.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/PiAgentMonitorWindow.tsx",
+    "http://127.0.0.1:5173/src/styles.css",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-BPGYRLWZ.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-G3PMV62Z.js?v=198675b4",
+    "http://127.0.0.1:5173/src/app/AppRouter.tsx",
+    "http://127.0.0.1:5173/src/app/GpuHardwareAccelerationPrompt.tsx",
+    "http://127.0.0.1:5173/src/app/UpdateNotifier.tsx",
+    "http://127.0.0.1:5173/src/components/AppShell.tsx",
+    "http://127.0.0.1:5173/src/features/auth/StartupAuthPage.tsx",
+    "http://127.0.0.1:5173/src/shared/analytics/analytics.ts",
+    "http://127.0.0.1:5173/src/shared/ui/index.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-LOG2ZSQO.js?v=198675b4",
+    "http://127.0.0.1:5173/src/app/menuConfig.ts",
+    "http://127.0.0.1:5173/src/shared/ui/SecondaryMenuPage.tsx",
+    "http://127.0.0.1:5173/src/features/developer/developerDemoSections.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-dialog.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/remoteNotice.ts",
+    "http://127.0.0.1:5173/src/shared/updateToast.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=198675b4",
+    "http://127.0.0.1:5173/src/app/AgentRuntimeStatusBar.tsx",
+    "http://127.0.0.1:5173/src/components/Sidebar.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/FloatingToolbar.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/DetailHelpLink.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/InputWithAction.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownEditor.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownFullscreenViewer.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/ToastProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/AiHttpErrorDialogProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/AgentQuestionDialogProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/DocumentParseNoticeProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownRenderer.tsx",
+    "http://127.0.0.1:5173/assets/logo.png?import",
+    "http://127.0.0.1:5173/src/shared/runtime/appVersion.ts",
+    "http://127.0.0.1:5173/src/features/auth/AuthorizationRequestDialog.tsx",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-7SKXL6W7.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-BGJCS33O.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-2P46B77D.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-IEEMBUPN.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-SZINW6JV.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-6WX5LEJL.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-FE46SWZK.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-27TIZI4F.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-toast.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/markdown/renderMarkdownHtml.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it-cjk-friendly.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it-task-lists.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-ZBWAQSS3.js?v=198675b4",
+    "https://raw.githubusercontent.com/migrant1124/OpenJatoBID/main/remote-notice.json?projectName=yibiao-client",
+    "https://raw.githubusercontent.com/migrant1124/OpenJatoBID/main/remote-notice.json?projectName=yibiao-client",
+    "http://127.0.0.1:5173/assets/logo.png",
+    "http://127.0.0.1:5173/src/features/conversation/pages/ConversationPage.tsx",
+    "http://127.0.0.1:5173/assets/icon_64.png?import",
+    "http://127.0.0.1:5173/src/features/prompt-library/components/PromptLibraryDialog.tsx",
+    "http://127.0.0.1:5173/src/features/conversation/hooks/useConversationWorkspace.ts",
+    "http://127.0.0.1:5173/src/features/conversation/utils/promptInsertion.ts",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioPage.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioCreate.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioPrompts.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioWorks.tsx",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/lucide-react.js?v=198675b4",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioViewer.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioRegionEditor.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioLayers.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioOptimizationDialog.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioCaseDialog.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioMaskEditor.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioEditSession.ts",
+    "http://127.0.0.1:5173/src/features/settings/pages/SettingsPage.tsx"
+  ],
+  "runtime": {
+    "version": "1.8.3",
+    "userData": "C:\\Users\\MiG\\AppData\\Local\\Temp\\jato-fp-userdata-4sGdzV",
+    "electron": "41.5.0"
+  }
+}

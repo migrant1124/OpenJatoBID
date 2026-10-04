@@ -1,0 +1,43 @@
+{
+  "time": "2026-10-03T12:06:23.020Z",
+  "archive": "D:\\Documents\\OpenJatobid\\client\\release\\v184-feature-pruning-validation\\win-unpacked\\resources\\app.asar",
+  "packageVersion": "1.8.4",
+  "cssFiles": [
+    "/dist/assets/index-4wFuNaHg.css"
+  ],
+  "deletedModuleChecks": [
+    "BidOpportunityPage",
+    "BusinessBidPage",
+    "ResourcesPage",
+    "DeveloperDemoPage",
+    "developerDemoSections",
+    "feature-resources"
+  ],
+  "rootVersionOnly": true,
+  "exe": "D:\\Documents\\OpenJatobid\\client\\release\\v184-feature-pruning-validation\\Jato-AI-BID-1.8.4-win-x64.exe",
+  "bytes": 359028665,
+  "sha256": "deca0c5f65f8e234fb96ca844f0574691d9adf1378aa31c9ccae221b1490c95a",
+  "normalPackageLaunch": "尚未执行：缺少独立 Windows 环境及测试授权",
+  "clientAssets": [
+    "/dist/assets/ContentExpansionReplaceTestPage-CtqADio_.js",
+    "/dist/assets/ConversationPage-_kOe9wB3.js",
+    "/dist/assets/DeveloperTestPage-DmwfRqwI.js",
+    "/dist/assets/DuplicateCheckPage-DEdc0Ayh.js",
+    "/dist/assets/ExportFormatPage-DU7vFayW.js",
+    "/dist/assets/FloatingToolbar-BfJqTlEp.js",
+    "/dist/assets/ImageStudioPage-BpYeB7B3.js",
+    "/dist/assets/KnowledgeBasePage-DJdXOnLA.js",
+    "/dist/assets/MyTemplatesPage-GbRc_pWX.js",
+    "/dist/assets/PiAgentMonitorPage-CrOAiz_L.js",
+    "/dist/assets/RejectionCheckPage-laO_7M7r.js",
+    "/dist/assets/SettingsPage-BdWKVA-t.js",
+    "/dist/assets/SystemDiagnosticsPage-f6PqCDJE.js",
+    "/dist/assets/TechnicalPlanHome-Cmtz9ke5.js",
+    "/dist/assets/TemplatePreview-D1o3QhMj.js",
+    "/dist/assets/index-BFw7iRek.js",
+    "/dist/assets/index-CvDq5bI2.js",
+    "/dist/assets/index-aAUTpXQX.js",
+    "/dist/assets/vendor-markdown-BNFmUPvg.js",
+    "/dist/assets/vendor-react-CoipHRNl.js"
+  ]
+}

@@ -2,14 +2,10 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import type { SectionId } from '../shared/types/navigation';
 import { getAppMenuItemById } from './menuConfig';
 import SecondaryMenuPage from '../shared/ui/SecondaryMenuPage';
-import { isDeveloperDemoSection } from '../features/developer/developerDemoSections';
 
-const BidOpportunityPage = lazy(() => import('../features/bid-opportunity/pages/BidOpportunityPage'));
-const BusinessBidPage = lazy(() => import('../features/business-bid/pages/BusinessBidPage'));
 const ConversationPage = lazy(() => import('../features/conversation/pages/ConversationPage'));
 const ImageStudioPage = lazy(() => import('../features/image-studio/pages/ImageStudioPage'));
 const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
-const DeveloperDemoPage = lazy(() => import('../features/developer/pages/DeveloperDemoPage'));
 const PiAgentMonitorPage = lazy(() => import('../features/developer/pages/PiAgentMonitorPage'));
 const DeveloperTestPage = lazy(() => import('../features/developer/pages/DeveloperTestPage'));
 const SystemDiagnosticsPage = lazy(() => import('../features/developer/pages/SystemDiagnosticsPage'));
@@ -18,7 +14,6 @@ const MyTemplatesPage = lazy(() => import('../features/export-format/pages/MyTem
 const DuplicateCheckPage = lazy(() => import('../features/duplicate-check/pages/DuplicateCheckPage'));
 const KnowledgeBasePage = lazy(() => import('../features/knowledge-base/pages/KnowledgeBasePage'));
 const RejectionCheckPage = lazy(() => import('../features/rejection-check/pages/RejectionCheckPage'));
-const ResourcesPage = lazy(() => import('../features/resources/pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('../features/settings/pages/SettingsPage'));
 const TechnicalPlanHome = lazy(() => import('../features/technical-plan/pages/TechnicalPlanHome'));
 
@@ -50,23 +45,15 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
     return <SecondaryMenuPage menuItem={activeMenuItem} onNavigate={onSectionChange} />;
   }
 
-  if (isDeveloperDemoSection(activeSection)) {
-    return <Suspense fallback={null}><DeveloperDemoPage sectionId={activeSection} /></Suspense>;
-  }
-
   switch (activeSection) {
     case 'technical-plan':
       return <Suspense fallback={null}><TechnicalPlanHome workflowKind="technical-plan" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
     case 'existing-plan-expansion':
       return <Suspense fallback={null}><TechnicalPlanHome workflowKind="existing-plan-expansion" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
-    case 'business-bid':
-      return <Suspense fallback={null}><BusinessBidPage /></Suspense>;
     case 'conversation':
       return <Suspense fallback={null}><ConversationPage /></Suspense>;
     case 'document-knowledge-base':
       return <Suspense fallback={null}><KnowledgeBasePage /></Suspense>;
-    case 'resources':
-      return <Suspense fallback={null}><ResourcesPage /></Suspense>;
     case 'duplicate-check':
       return <Suspense fallback={null}><DuplicateCheckPage /></Suspense>;
     case 'rejection-check':
@@ -77,10 +64,6 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
         : <Suspense fallback={null}><MyTemplatesPage onCreateTemplate={() => onSectionChange('new-template')} onEditTemplate={setEditingTemplateId} /></Suspense>;
     case 'new-template':
       return <Suspense fallback={null}><ExportFormatPage mode="create" /></Suspense>;
-    case 'export-format':
-      return <Suspense fallback={null}><ExportFormatPage mode="create" /></Suspense>;
-    case 'bid-opportunity':
-      return <Suspense fallback={null}><BidOpportunityPage /></Suspense>;
     case 'developer-test':
       return null;
     case 'developer-json-test':

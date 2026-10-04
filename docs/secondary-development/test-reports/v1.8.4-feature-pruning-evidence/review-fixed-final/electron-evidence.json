@@ -1,0 +1,559 @@
+{
+  "baseline": false,
+  "login": false,
+  "userData": "C:\\Users\\MiG\\AppData\\Local\\Temp\\jato-fp-userdata-4sGdzV",
+  "packageVersion": "1.8.4",
+  "pages": [
+    {
+      "name": "ordinary-wide",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n\n技术方案编制与已有方案扩写\n\n生成技术方案\n根据招标文件重头编写一份标书\n已有方案扩写\n解决人写技术方案太薄的问题，上传写好的方案，进行优化和扩充，遵从原方案真实可落地，又能扩写出厚厚的标书",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-标书生成",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n\n技术方案编制与已有方案扩写\n\n生成技术方案\n根据招标文件重头编写一份标书\n已有方案扩写\n解决人写技术方案太薄的问题，上传写好的方案，进行优化和扩充，遵从原方案真实可落地，又能扩写出厚厚的标书",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-对话模式",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n对话智能体工作台\n\n通过多轮对话生成内容、整理方案并导出 Word\n\n＋ 新建对话\n会话列表\n⚙\n今天\n新对话\n•••\n新对话\n•••\n共 2 个会话\n新对话\nJato Agent\n•••\n开始与 Jato Agent 对话\n\n输入问题，或上传文档后围绕材料继续提问。\n\n添加附件\n提示词库\n0 / 10000\n发送",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-生图模式",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n生图模式\n\n从想法到图片，简单创作与修改\n\nAI 生图\n提示词中心\n我的作品\n文本：未配置\n生图连接：金龙中转站 · 未配置 Key\n创作输入\n新建\n自动保存草稿\n图片需求\n0 / 10,000\n反推提示词\n保存\n参考图片 可选\n0 / 4\n添加\n本次生图模型\ngpt-image-2\ngpt-image-2-1k\ngpt-image-2.5-sunburst\ngpt-image-2.5-flare\nNano Banana Pro\nNano Banana 2\n 优化提示词\n已自动匹配模型优化规则\n模型选择说明\n生成张数\n1 张\n2 张\n4 张\n图片画幅\n1024 × 1024 · 1:1\n1024 × 2048 · 1:2\n2048 × 1024 · 2:1\n1536 × 2048 · 3:4\n2048 × 1536 · 4:3\n2048 × 1152 · 16:9\n1152 × 2048 · 9:16\n1536 × 1024 · 3:2\n\n请先在设置中填写金龙中转站的生图模型 API Key。\n\n生成图片\n生成结果\n作品将在这里显示\nPNG\nJPG\nWEBP\n下载\n局部修改\n分层 PSD\n当前图片信息\n\n选择图片后显示详情。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-模板设置",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n模板设置\n\n标书导出模板与排版配置\n\n我的模板\n管理已保存的标书导出模板\n新建模板\n配置 Word 文档排版与编号格式",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-知识库",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n知识库\n\n素材、模板和案例资产\n\n文档知识库\n管理文档资料、案例素材和可复用知识条目",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "page-标书检查",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书检查\n\n查重、废标项与合规检查\n\n标书查重\n相似度与重复表达检测\n废标项检查\n硬性条款与响应完整性",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-生成技术方案",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n项目列表\n\n选择项目继续，或新建一个项目。\n\n新建项目\n项目名称\t招标人／标包信息\t当前阶段\t最近保存时间\t操作\n合成开发者正文\t—\t招标资料\t2026/10/3 20:17:05\t删除\n\n定期清理不用的项目，项目资料会占用C盘空间。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-已有方案扩写",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n标书生成\n项目列表\n\n选择项目继续，或新建一个项目。\n\n新建项目\n项目名称\t招标人／标包信息\t当前阶段\t最近保存时间\t操作\n合成开发者正文\t—\t招标资料\t2026/10/3 20:17:05\t删除\n\n定期清理不用的项目，项目资料会占用C盘空间。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-文档知识库",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n知识库\n未选择文件夹\n0 个文件夹 / 0 个文档\n新建文件夹\n上传文档\n文件夹\n0 个\n还没有文件夹\n\n先创建一个文件夹，再上传历史资料。\n\n未选择文件夹\n0 个文档\n当前文件夹暂无文档\n\n支持上传 .doc、.docx、.wps、.pdf、.md、.xls、.xlsx 文档。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-标书查重",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\nSTEP 01\n选择标书\n未上传招标文件\n2 份投标文件\n21.9 KB\n01\n招标文件\n可选，可多份\n上传\n02\n投标文件\n必选，可多份\nDOCX\n合成模板正文.docx\n10.9 KB · 2026/10/3 20:17:09\n删除\nDOCX\n合成查重副本.docx\n10.9 KB · 2026/10/3 20:17:09\n删除\n上传\n多维度筛查重复项\n元数据\n\n检查设备、账号、编辑时间、作者等隐藏信息。\n\n目录\n\n比对章节结构和标题顺序，识别模板化复制。\n\n正文\n\n筛查段落、表格和关键描述的重复内容。\n\n图片\n\n对原图做哈希校验，定位完全一致的图片。\n\n同设备、同用户、同一个 WPS 账号、时间相近等问题，一秒锁定。\n可选上传招标文件，多份投标文件都引用了招标文件中的内容，不算重复。\n图片基于哈希校验，只能识别同一张图片，截图、压缩等相似图片筛不出来。\n重置\n首页\n上一步\n下一步",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-废标项检查",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\nSTEP 01\n选择标书\n01\n招标文件\n等待招标文件\n用于识别废标条款、响应格式和强制性要求。\n从技术方案读取\n上传\n02\n投标文件\n必选，可多份\n等待投标文件\n可一次选择多份，也可以后续继续追加上传。\n上传\n招标文件\n招标文件正文\n等待上传\n尚未准备招标文件\n\n可从技术方案读取招标文件，也可以直接上传并解析成 Markdown。\n\n重置\n首页\n上一步\n下一步",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-提示词中心",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n生图模式\n\n从想法到图片，简单创作与修改\n\nAI 生图\n提示词中心\n我的作品\n提示词中心\n\n参考、个人积累与常用风格\n\n参考提示词\n我的提示词\n常用风格\n来源\n全部参考\nAwesome GPT Image\n53\nAwesome GPT-4o\n76\nBanana Prompt Quicker\n323\nDavidWu GPT Image 2\n494\nFreestylefly GPT Image 2\n541\nYouMind GPT Image 2\n126\nYouMind Nano Banana Pro\n129\n创作起步\n8\n管理来源\n核心角色关系图\n\n请为“XXX”生成一张核心角色关系图。\n\nAwesome GPT Image · 中文\n详情\n用于生成\n米粒微型文字\n\n一大堆米，其中有一粒米上写着极小的文字“wOw”\n\nAwesome GPT Image · 中文\n详情\n用于生成\n宠物品牌联名海报\n\n主题：“77（猫的名字）X KFC” 联名海报。生成一张联名海报，主角是同一只宠物（外观与毛色必须绝对一致），并融入 KFC 品牌识别元素（红白配色、经典 Logo、餐厅场景等）。让这只猫穿着 KFC 员工制服、员工帽和名牌，站在柜台前售卖炸鸡、汉堡和套餐，并与全家桶、薯条、可乐等品牌元素互动。整体风格应活泼有趣，具有商业联名感，适合线上宣传和活动海报。海报文案中的中文内容可以自由发挥添加。\n\nAwesome GPT Image · 中文\n详情\n用于生成\n博物馆图录风中文拆解信息图\n\n请围绕 [主题] 自动生成一张“博物馆图录风中文拆解信息图”。 整张图需要把真实主体主视觉、结构拆解、中文标注、材质说明、纹样寓意、色彩寓意和核心特征总结融合在一起。你要根据 [主题] 自动判断最合适的主体对象、服饰体系、器物结构、时代风格、关键部件、材质工艺、色彩方案和版式结构，用户无需提供其他信息。 整体风格应偏向国家级博物馆展板、历史服饰图录和文化博物馆专题信息图，而不是普通海报、古风人像、电商详情页或动漫插画。背景使用米白、丝白、浅茶色等纸张纹理，让整体显得高级、克制、专业且具有收藏感。 固定布局为： - 顶部：中文主标题 + 副标题 + 简介 - 左侧：结构拆解区，用中文引线标注关键部件，并配合局部细节特写 - 右上：材质 / 工艺 / 肌理区，展示真实纹理样本与说明 - 右中：纹样 / 色彩 / 寓意区，展示主要配色、纹样样本与文化解释 - 底部：穿戴顺序 / 构成流程图 + 核心特征总结 如果主题适合展示人物，就以真实人物全身站姿作为中心主体；如果更适合器物或单体结构，就改为中心主体拆解图，但整体形式仍然必须是一张完整的中文信息图。所有文字必须为简体中文，清晰、整洁、可读，不能出现乱码、错字、英文或拼音。重点突出真实结构、材料差异、文化解读和图录氛围。 避免：海报感、影棚人像感、电商感、动漫感、cosplay 感、随机标注、结构错误、文字模糊、假材质、过度装饰。\n\nAwesome GPT Image · 中文\n详情\n用于生成",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "business-我的作品",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n生图模式\n\n从想法到图片，简单创作与修改\n\nAI 生图\n提示词中心\n我的作品\n我的作品\n\n0 张作品 · 原图和版本独立保留\n\n只看收藏\n作品将在首次生成后出现在这里",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "collapsed",
+      "text": "生图模式\n\n从想法到图片，简单创作与修改\n\nAI 生图\n提示词中心\n我的作品\n我的作品\n\n0 张作品 · 原图和版本独立保留\n\n只看收藏\n作品将在首次生成后出现在这里",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "about-version",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n设置\n模型与解析配置\n通用\n文本模型\n生图模型\n组件设置\n智能体配置\n关于\n关于\n自动更新\n当前版本 1.8.4\n\n启动后自动检查，每 30 分钟轮询\n\n检查更新\nJato AI BID\n佳图智能投标助手\n\n本软件用于公司内部投标文件制作、资料复用、文档生成与导出管理。\n\n版本号\n1.8.4\n版权所有\n佳图数字科技有限公司\nCompany\nJato Digital Technology Co., Ltd.\n客户端授权状态\n开发调试模式\n登录账号\n未登录\n\n当前客户端会话使用的员工账号与设备授权信息。\n\n用户名\n未读取\n授权期限\n未读取\n授权状态\n开发调试模式\n退出登录\nPRIVACY\n隐私声明\n\n本软件为佳图数科内部专属工具，仅限公司内部员工使用，禁止对外分发、外传、商用。软件尽可能将业务数据处理留存于本地设备，仅采集运营运维必需的最小范围信息，严格区分业务涉密数据与后台运维统计数据。\n\n01\n业务涉密数据零集中收集\n\n应用不会向佳图数科局域网管理端上传、集中收集或存储任何业务涉密信息，包含但不限于：\n\n你自行配置的 API Key、本地导入的招标文件、解析后的全文文档、AI 生成的投标方案正文、本地导出文件、项目业务资料及所有业务产出结果；\n\n全部业务文件、密钥、项目内容仅保存在员工本地设备；调用员工自行配置的第三方 AI 服务时，仅将完成当前任务所必需的内容直接发送给该服务商，不发送到佳图数科局域网管理端。\n\n02\nAI 请求直连服务商，无中间中转留存\n\n使用 OpenAI 兼容接口、MinerU 或其他自行配置的线上 API 时：\n\n完成文档解析、内容生成、模型调用所需的业务内容，仅从员工本地设备直接发送至员工自行配置的大模型服务商；\n\nAPI 密钥仅在员工本地设备持久化保存，调用时作为鉴权信息直接发送给员工配置的第三方服务商；项目文档、方案文本除完成当前 AI/MinerU 任务所必需的直连传输外，不经过佳图数科局域网管理端，公司管理端不会截留、缓存或留存请求原文和模型返回内容。\n\n03\n后台运维统计信息收集说明\n\n为保障软件稳定运维、合理管控 AI 资源消耗、优化产品功能，软件后台会采集无业务涉密属性的运维统计数据，仅用于内部运营分析，具体收集内容如下：\n\n客户端基础统计：软件活跃使用频次、在线客户端总数量、客户端版本、操作系统平台、系统架构、局域网来源 IP 地址；\n\n功能使用统计：页面与功能标识、非业务内容的配置项取值分布、最近事件类型和活跃/留存趋势；\n\nAI 资源消耗统计：全局 AI 请求总次数、各类模型 Token 消耗总量、模型服务商、接口域名和模型名称；\n\nAgent 运行统计：执行成功或失败状态、重试次数和重试后成功率；失败信息只保留不可还原业务内容的错误类别和计数；\n\n授权状态统计：授权状态、授权到期时间和最近一次校验时间；姓名、手机号和设备指纹的用途及边界见“04 个人信息说明”；\n\n统计范围限制：以上运维数据不附带任何文档原文、文件名、本地文件路径、API 密钥、用户输入文本、投标方案、业务产出等可",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "developer-menu",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n测试页\n开发者验证与问题复现\n设置\n模型与解析配置\n测试页\n\n开发者验证与问题复现\n\nJson请求测试\n复用项目真实目录生成链路，验证模型 JSON 响应和修复流程。\n扩写替换测试\n使用真实扩写 patch 应用逻辑，复现 replace 锚点未命中后的追加问题。\nPi Agent监视器\n查看 Pi Agent 运行状态、自检结果、实时事件流和任务工作区。\n系统诊断\n检查运行时、本地转图、DSL、存储和外部能力状态。\n完成\n配置已保存\n×\nNotification 完成配置已保存",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "developer-Json请求测试",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n测试页\n开发者验证与问题复现\n设置\n模型与解析配置\nJSON Request Lab\nJson请求测试\n\n这里验证 response_format 兼容问题：文本按钮使用独立连通性输入，Json 按钮使用目录生成请求。\n\n测试文本请求\n测试 JSON 请求\n独立文本入口\n{\n  \"service\": \"aiClient.chat\",\n  \"test\": \"independent-text-connectivity\",\n  \"sample\": \"# Jato AI BID 测试项目招标文件\\n\\n项目名称：Jato AI BID 测试项目。\\n项目编号：YB-TEST-001。\\n项目类型：软件服务。\\n项目预算：100 万元。\\n项目地址：北京市海淀区。\\n\\n技术评分要求：\\n1. 技术方案完整性，满分 30 分，要求章节完整、实施路径清晰。\\n2. 项目实施计划，满分 20 分，要求进度安排合理、风险控制明确。\\n3. 运维服务能力，满分 15 分，要求说明响应时效和服务保障。\"\n}\nJSON 复用入口\n{\n  \"service\": \"requestOutlineGeneration\",\n  \"input\": {\n    \"overview\": \"Jato AI BID 测试项目，软件服务类采购，预算 100 万元，实施地点北京市海淀区。\",\n    \"requirements\": \"技术方案完整性 30 分；项目实施计划 20 分；运维服务能力 15 分。\"\n  }\n}\n事件日志\n尚未开始请求。\n返回内容\n暂无内容。\n完成\n配置已保存\n×\nNotification 完成配置已保存",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "developer-扩写替换测试",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n测试页\n开发者验证与问题复现\n设置\n模型与解析配置\nDEVELOPER PATCH LAB\n扩写替换测试\n\n这是开发者专用局部测试页：直接复用当前正式正文扩写 patch 解析、校验、修复和 applyContentExpansionPatch 应用逻辑。 测试只做模拟应用，不保存正文，也不修改数据库。\n\n重新读取正文\n运行正式替换逻辑测试\n测试输入\n正文小节\n合成开发者章节\n待替换目标块\n1. 合成当前正文，用于开发者读取与精确替换测试，不调用模型。\n目标块原文，可手动调整\n数据来源\n只读取 window.yibiao.technicalPlan.loadState() 返回的 outlineData.outline[*].content。\n诊断结果\n状态\n尚未运行\n逻辑模式\n正式业务逻辑\n匹配策略\n-\n小节数\n1\n段落数\n1\ntarget_text 命中\n-\n候选命中数\n-\n字数变化\n-\n运行后展示 target_text 命中、正式匹配策略和字数变化。\n模型原始 replace patch\n暂无 patch。\n实际应用 patch\n这里会显示传入正式 applyContentExpansionPatch 的 patch。\ntarget_text 命中的原文块\ntarget_text 未命中时这里为空。\n模拟应用后的正文\n测试结果只在这里预览，不会写入真实正文。\n完成\n配置已保存\n×\n已读取正文\n找到 1 个有正文的小节。\n×\n已读取正文\n找到 1 个有正文的小节。\n×\nNotification 已读取正文找到 1 个有正文的小节。\nNotification 已读取正文找到 1 个有正文的小节。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "developer-Pi Agent监视器",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n测试页\n开发者验证与问题复现\n设置\n模型与解析配置\nPi Agent 链路测试\n\n检查 Pi Agent 的运行状态、自检、任务输出和诊断，不写入业务数据库。\n\n目标智能体\nPi Agent\n\n客户端唯一的智能体执行引擎。\n\n运行状态\n智能体：Pi Agent\n阶段：idle\n健康：true\n模型队列：0/0/10\n等待重启：false\n\nPi Agent 空闲\n\n打开执行监视器\n运行自检\n手动重启\n测试任务\n运行完整链路测试\n测试步骤\n读取当前文本模型配置：idle\n调用 Pi Agent：idle\n校验 agent-result.md 输出：idle\n完成\n配置已保存\n×\n已读取正文\n找到 1 个有正文的小节。\n×\n已读取正文\n找到 1 个有正文的小节。\n×\nNotification 已读取正文找到 1 个有正文的小节。\nNotification 已读取正文找到 1 个有正文的小节。",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    },
+    {
+      "name": "developer-系统诊断",
+      "text": "Jato AI BID\n标书生成\n技术方案编制与已有方案扩写\n对话模式\n实时对话生成方案或优化\n生图模式\n图片创作与作品管理\n模板设置\n标书导出模板与排版配置\n知识库\n素材、模板和案例资产\n标书检查\n查重、废标项与合规检查\n测试页\n开发者验证与问题复现\n设置\n模型与解析配置\nSYSTEM DIAGNOSTICS\n系统诊断\n\n仅用于开发者排查运行时、本地转图、DSL、存储和外部能力状态；不会展示 API Key、许可证正文或业务正文。\n\n总体状态：未执行\n快速诊断不会调用收费模型；完整诊断会标注需要配置或人工确认的能力。\n0 项\n快速诊断\n检查运行时版本、本地转图、DSL、存储和已配置的本地能力。\n开始\n完整诊断\n额外列出需要配置、授权或人工确认的外部能力，不自动消耗模型额度。\n执行\n导出报告\n报告只包含安全状态、耗时和建议动作，不包含 API Key、许可证正文或业务正文。\nJSONMarkdown\n已读取正文\n找到 1 个有正文的小节。\n×\n已读取正文\n找到 1 个有正文的小节。\n×",
+      "metrics": {
+        "width": 1424,
+        "height": 881,
+        "scrollWidth": 1424
+      }
+    }
+  ],
+  "errors": [],
+  "visibleErrors": [],
+  "requests": [
+    "http://127.0.0.1:5173/@vite/client",
+    "http://127.0.0.1:5173/src/main.tsx",
+    "http://127.0.0.1:5173/@react-refresh",
+    "http://127.0.0.1:5173/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=198675b4",
+    "http://127.0.0.1:5173/src/App.tsx",
+    "http://127.0.0.1:5173/src/app/providers/AppProviders.tsx",
+    "http://127.0.0.1:5173/src/app/BrowserDebugPreview.tsx",
+    "http://127.0.0.1:5173/src/app/WorkspaceDatabaseGate.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/DeveloperTokenStatsWindow.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/PiAgentMonitorWindow.tsx",
+    "http://127.0.0.1:5173/src/styles.css",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-BPGYRLWZ.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-G3PMV62Z.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/ui/index.ts",
+    "http://127.0.0.1:5173/src/features/auth/StartupAuthPage.tsx",
+    "http://127.0.0.1:5173/src/app/AppRouter.tsx",
+    "http://127.0.0.1:5173/src/app/GpuHardwareAccelerationPrompt.tsx",
+    "http://127.0.0.1:5173/src/app/UpdateNotifier.tsx",
+    "http://127.0.0.1:5173/src/components/AppShell.tsx",
+    "http://127.0.0.1:5173/src/shared/analytics/analytics.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-LOG2ZSQO.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/ui/FloatingToolbar.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/DetailHelpLink.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/InputWithAction.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownEditor.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownFullscreenViewer.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/ToastProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/AiHttpErrorDialogProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/AgentQuestionDialogProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/DocumentParseNoticeProvider.tsx",
+    "http://127.0.0.1:5173/src/shared/ui/MarkdownRenderer.tsx",
+    "http://127.0.0.1:5173/assets/logo.png?import",
+    "http://127.0.0.1:5173/src/shared/runtime/appVersion.ts",
+    "http://127.0.0.1:5173/src/features/auth/AuthorizationRequestDialog.tsx",
+    "http://127.0.0.1:5173/src/app/menuConfig.ts",
+    "http://127.0.0.1:5173/src/shared/ui/SecondaryMenuPage.tsx",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-dialog.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=198675b4",
+    "http://127.0.0.1:5173/src/app/AgentRuntimeStatusBar.tsx",
+    "http://127.0.0.1:5173/src/components/Sidebar.tsx",
+    "http://127.0.0.1:5173/src/shared/remoteNotice.ts",
+    "http://127.0.0.1:5173/src/shared/updateToast.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-6WX5LEJL.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-FE46SWZK.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-27TIZI4F.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-BGJCS33O.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-2P46B77D.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-IEEMBUPN.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-SZINW6JV.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-7SKXL6W7.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-toast.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/markdown/renderMarkdownHtml.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it-cjk-friendly.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/markdown-it-task-lists.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-ZBWAQSS3.js?v=198675b4",
+    "https://raw.githubusercontent.com/migrant1124/OpenJatoBID/main/remote-notice.json?projectName=yibiao-client",
+    "https://raw.githubusercontent.com/migrant1124/OpenJatoBID/main/remote-notice.json?projectName=yibiao-client",
+    "http://127.0.0.1:5173/assets/logo.png",
+    "http://127.0.0.1:5173/src/features/conversation/pages/ConversationPage.tsx",
+    "http://127.0.0.1:5173/assets/icon_64.png?import",
+    "http://127.0.0.1:5173/src/features/prompt-library/components/PromptLibraryDialog.tsx",
+    "http://127.0.0.1:5173/src/features/conversation/hooks/useConversationWorkspace.ts",
+    "http://127.0.0.1:5173/src/features/conversation/utils/promptInsertion.ts",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioPage.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioCreate.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioPrompts.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioWorks.tsx",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/lucide-react.js?v=198675b4",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioLayers.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioViewer.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioRegionEditor.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioOptimizationDialog.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioCaseDialog.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioMaskEditor.tsx",
+    "http://127.0.0.1:5173/src/features/image-studio/pages/ImageStudioEditSession.ts",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/TechnicalPlanHome.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/DocumentAnalysisPage.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/ProjectListPage.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/BidAnalysisPage.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/OutlineEditPage.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/GlobalFactsPage.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/pages/ContentEditPage.tsx",
+    "http://127.0.0.1:5173/src/features/export-format/components/TemplatePreview.tsx",
+    "http://127.0.0.1:5173/src/features/technical-plan/hooks/useTechnicalPlanWorkflow.ts",
+    "http://127.0.0.1:5173/src/features/technical-plan/services/bidAnalysisWorkflow.ts",
+    "http://127.0.0.1:5173/src/shared/types/index.ts",
+    "http://127.0.0.1:5173/src/shared/types/exportFormat.ts",
+    "http://127.0.0.1:5173/src/shared/utils/exportFormatCss.ts",
+    "http://127.0.0.1:5173/src/shared/types/outline.ts",
+    "http://127.0.0.1:5173/src/features/technical-plan/services/technicalPlanStorage.ts",
+    "http://127.0.0.1:5173/src/features/technical-plan/components/BidSectionSelectorDialog.tsx",
+    "http://127.0.0.1:5173/src/shared/utils/outlineNumbering.ts",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-popover.js?v=198675b4",
+    "http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-switch.js?v=198675b4",
+    "http://127.0.0.1:5173/src/shared/utils/wordCount.ts",
+    "http://127.0.0.1:5173/assets/generate_img_example/ai.png?import",
+    "http://127.0.0.1:5173/assets/generate_img_example/html.png?import",
+    "http://127.0.0.1:5173/src/features/knowledge-base/pages/KnowledgeBasePage.tsx",
+    "http://127.0.0.1:5173/src/features/duplicate-check/pages/DuplicateCheckPage.tsx",
+    "http://127.0.0.1:5173/src/features/rejection-check/pages/RejectionCheckPage.tsx",
+    "yibiao-asset://generated-images/studio-cover-ffd6a73a67b4c25e-ab6578a5eb97b477.png",
+    "yibiao-asset://generated-images/studio-cover-ad852fe81a239475-c6c817b0bb47dd47.png",
+    "yibiao-asset://generated-images/studio-cover-cd3360d91423aa7c-2ce1c0cb72bc096a.png",
+    "yibiao-asset://generated-images/studio-cover-22e321cd9b2c1b68-0399e3ef3ce9f577.png",
+    "yibiao-asset://generated-images/studio-cover-98c23fb9b49e2745-9a38f8770afe5751.png",
+    "yibiao-asset://generated-images/studio-cover-983b369b005b18f6-c1c6c2e0b1ae4d1d.png",
+    "http://127.0.0.1:5173/src/features/settings/pages/SettingsPage.tsx",
+    "http://127.0.0.1:5173/assets/logo.png",
+    "http://127.0.0.1:5173/src/features/developer/pages/DeveloperTestPage.tsx",
+    "http://127.0.0.1:5173/src/shared/ai/aiClient.ts",
+    "http://127.0.0.1:5173/src/features/technical-plan/services/outlineWorkflow.ts",
+    "http://127.0.0.1:5173/src/shared/prompts/index.ts",
+    "http://127.0.0.1:5173/src/shared/ai/index.ts",
+    "http://127.0.0.1:5173/src/shared/prompts/analysisPrompts.ts",
+    "http://127.0.0.1:5173/src/shared/prompts/jsonRepairPrompts.ts",
+    "http://127.0.0.1:5173/src/shared/prompts/outlinePrompts.ts",
+    "http://127.0.0.1:5173/src/shared/prompts/rejectionPrompts.ts",
+    "http://127.0.0.1:5173/src/features/developer/pages/ContentExpansionReplaceTestPage.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/PiAgentMonitorPage.tsx",
+    "http://127.0.0.1:5173/src/features/developer/pages/SystemDiagnosticsPage.tsx"
+  ],
+  "runtime": {
+    "version": "1.8.4",
+    "userData": "C:\\Users\\MiG\\AppData\\Local\\Temp\\jato-fp-userdata-4sGdzV",
+    "electron": "41.5.0"
+  },
+  "developerFixture": {
+    "projectId": "e6e069b7-44e7-4f49-b8ad-d6c83f207da9",
+    "state": {
+      "workflowKind": "technical-plan",
+      "step": "document-analysis",
+      "tenderFile": null,
+      "tenderFiles": [],
+      "originalPlanFile": null,
+      "projectOverview": "",
+      "techRequirements": "",
+      "bidAnalysisMode": "key",
+      "bidAnalysisSelectedTaskIds": [
+        "projectOverview",
+        "techRequirements",
+        "responseFileRequirements",
+        "procurementList",
+        "projectInfo",
+        "partAInfo",
+        "deliveryAndServiceRequirements"
+      ],
+      "bidAnalysisTaskDefinitions": [
+        {
+          "id": "projectOverview",
+          "label": "项目概述",
+          "required": true,
+          "output": "markdown",
+          "description": "提取项目基本信息、背景目的、规模预算、时间安排、实施内容和技术特点等。",
+          "group": "key"
+        },
+        {
+          "id": "techRequirements",
+          "label": "技术评分要求",
+          "required": true,
+          "output": "markdown",
+          "description": "提取技术评分项、权重分值、评分标准和招标文件中的位置。",
+          "group": "key"
+        },
+        {
+          "id": "responseFileRequirements",
+          "label": "格式要求",
+          "required": true,
+          "output": "markdown",
+          "description": "技术文件目录、固定表格、承诺函、签章和编排要求。",
+          "group": "key"
+        },
+        {
+          "id": "procurementList",
+          "label": "采购与报价",
+          "required": true,
+          "output": "json",
+          "schema_version": 2,
+          "description": "采购范围、报价规则和报价表概况。",
+          "group": "key"
+        },
+        {
+          "id": "projectInfo",
+          "label": "项目信息",
+          "required": true,
+          "output": "json",
+          "description": "项目名称、编号、类型、预算和地址。",
+          "group": "key",
+          "schema_version": 1
+        },
+        {
+          "id": "partAInfo",
+          "label": "甲方信息",
+          "required": true,
+          "output": "json",
+          "description": "招标人公司、地址、联系人和电话。",
+          "group": "key",
+          "schema_version": 1
+        },
+        {
+          "id": "deliveryAndServiceRequirements",
+          "label": "交货和服务要求",
+          "required": true,
+          "output": "json",
+          "description": "实施周期、交付范围、地点、验收、质保、售后、响应、培训和文档要求。",
+          "group": "key",
+          "schema_version": 1
+        },
+        {
+          "id": "agentInfo",
+          "label": "代理机构信息",
+          "required": false,
+          "output": "json",
+          "description": "代理机构联系方式和账户信息。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "keyInfo",
+          "label": "投标关键节点",
+          "required": false,
+          "output": "json",
+          "description": "公告、获取文件、递交、截止和开标信息。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "marginInfo",
+          "label": "投标保证金",
+          "required": false,
+          "output": "json",
+          "description": "保证金金额、方式、截止和退还条件。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "qualificationReview",
+          "label": "资格性审查",
+          "required": false,
+          "output": "markdown",
+          "description": "投标人资格条件和资格审查要求。",
+          "group": "optional"
+        },
+        {
+          "id": "complianceCheck",
+          "label": "符合性检查",
+          "required": false,
+          "output": "markdown",
+          "description": "文件完整性、有效性、规范和偏差处理要求。",
+          "group": "optional"
+        },
+        {
+          "id": "openBid",
+          "label": "开标要求",
+          "required": false,
+          "output": "json",
+          "description": "开标时间地点、参与要求、无效标和流程。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "evaluationBid",
+          "label": "评标要求",
+          "required": false,
+          "output": "json",
+          "description": "评标委员会、评分构成、方法和原则。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "businessScoring",
+          "label": "商务评分要求",
+          "required": false,
+          "output": "markdown",
+          "description": "商务评分因素，为商务方案准备。",
+          "group": "optional"
+        },
+        {
+          "id": "discardedBids",
+          "label": "无效标与废标项",
+          "required": false,
+          "output": "markdown",
+          "description": "投标无效、废标相关风险项。",
+          "group": "optional"
+        },
+        {
+          "id": "signingProcess",
+          "label": "合同授予与签订",
+          "required": false,
+          "output": "json",
+          "description": "中标公示、合同签订、履约保证金和合同文本。",
+          "group": "optional",
+          "schema_version": 1
+        },
+        {
+          "id": "terminationCondition",
+          "label": "合同解除和终止",
+          "required": false,
+          "output": "json",
+          "description": "违约解除、不可抗力、合同终止和争议解决。",
+          "group": "optional",
+          "schema_version": 1
+        }
+      ],
+      "bidAnalysisTasks": {},
+      "bidAnalysisProgress": 0,
+      "bidSectionMode": "multiple",
+      "bidSections": [],
+      "bidSectionExtractionStatus": "idle",
+      "outlineMode": "aligned",
+      "outlineExpansionMode": "ai-complement",
+      "outlineWordControlOptions": {
+        "enabled": true,
+        "minimumWords": 0,
+        "maximumWords": 0,
+        "sectionWords": 0,
+        "strictSectionWords": false
+      },
+      "referenceKnowledgeDocumentIds": [],
+      "globalFacts": [],
+      "contentGenerationSections": {
+        "1": {
+          "id": "1",
+          "title": "合成开发者章节",
+          "status": "success",
+          "content": "合成当前正文，用于开发者读取与精确替换测试，不调用模型。",
+          "updated_at": "2026-10-03T12:18:02.009Z"
+        }
+      },
+      "contentGenerationPlans": {},
+      "outlineData": {
+        "outline": [
+          {
+            "id": "1",
+            "title": "合成开发者章节",
+            "description": "",
+            "content": "合成当前正文，用于开发者读取与精确替换测试，不调用模型。",
+            "manual_input_required": false,
+            "numbering_policy": "auto",
+            "required_in_outline": false,
+            "response_required": true,
+            "title_locked": false,
+            "order_locked": false,
+            "level_locked": false,
+            "response_mode": "freeform-markdown",
+            "allow_ai_children": true,
+            "mapped_requirement_ids": [],
+            "response_status": "responded-substantive",
+            "compliance_risk": "none"
+          }
+        ]
+      },
+      "analysisStale": false,
+      "downstreamReviewRequired": false
+    }
+  }
+}

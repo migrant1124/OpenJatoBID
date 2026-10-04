@@ -1,0 +1,26 @@
+{
+  "time": "2026-10-03T12:24:01.364Z",
+  "branch": "v1.8.4-架构优化",
+  "head": "7d5c26d1117f41071396818a0ed721081aca10db",
+  "changeSha256": "dca0d8f577c26ab61ed68027c0bb513fce4dd2d6758b010f5a11b2d01410ab7f",
+  "tests": [
+    {
+      "file": "client/scripts/feature-pruning.test.cjs",
+      "sha256": "0483c04cfa7c7054e9781371fc4af50e3426446b6d6fe31c389d3e3b634c658c"
+    },
+    {
+      "file": "client/scripts/feature-pruning-electron-harness.cjs",
+      "sha256": "a2851bb332441afd91c1abbac22425d57a17ab39871c6cec8a7c8beb33470805"
+    },
+    {
+      "file": "client/scripts/feature-pruning-electron-smoke.cjs",
+      "sha256": "d3b9881c09016b2eb11296bf339c68cef0671e8e99341cd331af26cdfc7d3999"
+    }
+  ],
+  "preservedTasks": [
+    "tasks/plan.md",
+    "tasks/todo.md"
+  ],
+  "protectedDiff": "",
+  "stagedDiff": ""
+}
