@@ -87,7 +87,7 @@ function normalizeOutputLimit(contextLength) {
 }
 
 // 创建完全内存化的 Pi Session，不读取外部配置或上下文文件。
-async function createPiSession({ workspaceDir, environment, proxyInfo, config, timeoutMs, jsonValidationSchemas, requestUserQuestion, mode = 'task', requestedThinkingLevel = 'off', sessionInstructions }) {
+async function createPiSession({ workspaceDir, environment, proxyInfo, config, timeoutMs, jsonValidationSchemas, requestUserQuestion, mode = 'task', requestedThinkingLevel = 'off', sessionInstructions, pptTools }) {
   const { codingAgent, piAi, typebox, piAiVersion } = await loadPiModules();
   const credentials = new piAi.InMemoryCredentialStore();
   const modelsStore = new piAi.InMemoryModelsStore();
@@ -105,7 +105,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
       id: 'default',
       name: 'Yibiao Current Text Model',
       reasoning: mode === 'conversation',
-      input: mode === 'conversation' ? ['text', 'image'] : ['text'],
+      input: ['conversation', 'ppt'].includes(mode) ? ['text', 'image'] : ['text'],
       contextWindow: normalizeContextLimit(config.context_length_limit),
       maxTokens: normalizeOutputLimit(config.context_length_limit),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -129,7 +129,7 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
     retry: { enabled: true, provider: { maxRetries: 0, timeoutMs } },
     compaction: { enabled: true },
     cacheWarming: 'off',
-    images: { autoResize: false, blockImages: mode !== 'conversation' },
+    images: { autoResize: false, blockImages: !['conversation', 'ppt'].includes(mode) },
     enableInstallTelemetry: false,
     enableAnalytics: false,
     shellPath: environment.shellPath,
@@ -172,14 +172,18 @@ async function createPiSession({ workspaceDir, environment, proxyInfo, config, t
   }));
   const conversationMode = mode === 'conversation';
   const conversationReadOnlyTools = conversationMode ? createConversationReadOnlyTools(codingAgent, workspaceDir) : [];
+  const pptMode = mode === 'ppt';
+  const pptDefinitions = pptMode && typeof pptTools === 'function'
+    ? await pptTools({ Type: typebox.Type, codingAgent, requestUserQuestion }) : [];
+  if (pptMode && !pptDefinitions.length) throw new Error('PPT 专用工具未提供，拒绝退回普通任务权限');
   const { session } = await codingAgent.createAgentSession({
     cwd: workspaceDir,
     agentDir: environment.layout.agentDir,
     model,
     modelRuntime,
     thinkingLevel: requestedThinkingLevel,
-    tools: conversationMode ? ['read', 'find', 'ls'] : ['read', 'bash', 'edit', 'write', 'find', 'ls', 'json-validation', 'ask-user'],
-    customTools: conversationMode ? conversationReadOnlyTools : [bashTool, jsonValidationTool, userQuestionTool],
+    tools: pptMode ? pptDefinitions.map((tool) => tool.name) : conversationMode ? ['read', 'find', 'ls'] : ['read', 'bash', 'edit', 'write', 'find', 'ls', 'json-validation', 'ask-user'],
+    customTools: pptMode ? pptDefinitions : conversationMode ? conversationReadOnlyTools : [bashTool, jsonValidationTool, userQuestionTool],
     resourceLoader,
     settingsManager,
     sessionManager: codingAgent.SessionManager.inMemory(workspaceDir),

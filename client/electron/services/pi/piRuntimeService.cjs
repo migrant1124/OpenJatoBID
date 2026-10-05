@@ -629,7 +629,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
     if (activeTask) throw new Error(`${runtimeName} 正在执行其他任务`);
     const taskId = payload.task_id || crypto.randomUUID();
     const title = payload.title || '易标智能体任务';
-    const mode = payload.mode === 'conversation' ? 'conversation' : 'task';
+    const mode = payload.mode === 'conversation' ? 'conversation' : payload.mode === 'ppt' ? 'ppt' : 'task';
     const archiveWorkspaceEnabled = mode === 'task' && payload.archive_workspace !== false;
     const outputFile = payload.output_file || 'agent-result.md';
     const timeoutMs = normalizeTimeoutMs(payload.timeout_ms);
@@ -703,6 +703,7 @@ function createPiRuntimeService({ app, configStore, aiService, analyticsService,
         mode,
         requestedThinkingLevel: mode === 'conversation' ? payload.requested_thinking_level || 'high' : 'off',
         sessionInstructions: payload.session_instructions,
+        pptTools: payload.ppt_tools,
       });
       session = created.session;
       sessionSnapshot = created.snapshot;

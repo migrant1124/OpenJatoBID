@@ -263,6 +263,10 @@ cython_debug/
 # Cloudflare Wrangler local state
 .wrangler/
 
+# PPT 固定运行组件由校验脚本生成，锁定清单保存在 Electron 源码。
+client/vendor/ppt-runtime/
+management/vendor/ppt-runtime/
+
 # PyPI configuration file
 .pypirc
 

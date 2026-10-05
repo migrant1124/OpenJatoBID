@@ -53,9 +53,10 @@ function readBearerToken(request) {
   return match ? match[1].trim() : '';
 }
 
-function createHttpRouter({ getServiceInfo, authorizationService, analyticsIngestService, now = () => new Date() }) {
+function createHttpRouter({ getServiceInfo, authorizationService, analyticsIngestService, resourceRouter, now = () => new Date() }) {
   return async (request, response) => {
     const url = new URL(request.url, 'http://management.local');
+    if (resourceRouter && await resourceRouter(request, response, url)) return;
     if (request.method === 'GET' && url.pathname === '/api/v1/health') {
       sendJson(response, 200, {
         data: {

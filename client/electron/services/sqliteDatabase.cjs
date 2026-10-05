@@ -2,8 +2,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 const { getWorkspaceDatabasePath } = require('../utils/paths.cjs');
+const { createResourceCacheSchema } = require('./resourceCacheStore.cjs');
+const { createPptSchema } = require('./pptProjectStore.cjs');
 
-const schemaVersion = 40;
+const schemaVersion = 41;
 
 function createTechnicalPlanProjectsSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS technical_plan_projects (
@@ -2031,6 +2033,7 @@ const migrations = [
     description: '提示词优化会话、案例快照与中文译文缓存',
     up: createImageStudioOptimizationSchema,
   },
+  { version: 41, description: '管理端受管资源目录、展示游标、PPT项目与技能版本', up: (db) => { createResourceCacheSchema(db); createPptSchema(db); } },
 ];
 
 function timestampForFileName() {

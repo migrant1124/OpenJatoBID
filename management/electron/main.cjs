@@ -1,4 +1,7 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Tray } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Tray, session, powerMonitor } = require('electron');
+const { createResourceCenterService } = require('./services/resourceCenterService.cjs');
+const { createResourcePreviewService } = require('./services/resourcePreviewService.cjs');
+const { registerResourceIpc } = require('./ipc/resourceIpc.cjs');
 const path = require('node:path');
 const initialAdminCredential = require('./generated/initialAdminCredential.cjs');
 const { registerAdminIpc } = require('./ipc/adminIpc.cjs');
@@ -29,6 +32,9 @@ let authorizationService = null;
 let analyticsIngestService = null;
 let analyticsQueryService = null;
 let revocationCleanupTimer = null;
+let resourceCenter = null;
+let shutdownPromise = null;
+let shutdownComplete = false;
 
 function readServerConfig() {
   const row = databaseService?.database.prepare('SELECT value_json FROM settings WHERE key = ?').get('server_config');
@@ -42,6 +48,7 @@ async function startLanServer(config) {
       getServiceInfo: () => ({ managementVersion: app.getVersion() }),
       authorizationService,
       analyticsIngestService,
+      resourceRouter: (...args) => resourceCenter.route(...args),
     }),
   });
   try {
@@ -145,13 +152,24 @@ if (!hasSingleInstanceLock) {
 } else {
   if (process.platform === 'win32') app.setAppUserModelId('com.jiatu.aibid.management');
   app.on('second-instance', showMainWindow);
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
     isQuitting = true;
+    if (shutdownComplete) return;
+    event.preventDefault();
+    if (shutdownPromise) return;
     if (revocationCleanupTimer) clearInterval(revocationCleanupTimer);
     revocationCleanupTimer = null;
-    void httpServerService?.stop();
-    databaseService?.close();
-    databaseService = null;
+    shutdownPromise = (async () => {
+      await resourceCenter?.stop();
+      await httpServerService?.stop();
+      databaseService?.close();
+      databaseService = null;
+      shutdownComplete = true;
+      app.quit();
+    })().catch((error) => {
+      shutdownPromise = null;
+      dialog.showErrorBox('服务退出失败', `后台任务尚未安全停止，数据库保持打开。\n${error.message}`);
+    });
   });
   app.on('window-all-closed', () => {});
   app.whenReady().then(async () => {
@@ -170,9 +188,10 @@ if (!hasSingleInstanceLock) {
         initialCredential: initialAdminCredential,
         allowInitialBootstrap: databaseService.isNewDatabase,
       });
+      const signingService = createSigningService({ database: databaseService.database });
       authorizationService = createAuthorizationService({
         database: databaseService.database,
-        signingService: createSigningService({ database: databaseService.database }),
+        signingService,
       });
       authorizationService.cleanupRevocations();
       revocationCleanupTimer = setInterval(
@@ -181,7 +200,7 @@ if (!hasSingleInstanceLock) {
       );
       analyticsIngestService = createAnalyticsIngestService({ database: databaseService.database });
       analyticsQueryService = createAnalyticsQueryService({ database: databaseService.database });
-      registerAdminIpc({
+      const adminAccess = registerAdminIpc({
         ipcMain,
         database: databaseService.database,
         authService,
@@ -189,6 +208,20 @@ if (!hasSingleInstanceLock) {
         analyticsQueryService,
         onSetupComplete: startLanServer,
       });
+      const resourceSession = session.fromPartition('persist:management-resources');
+      resourceCenter = createResourceCenterService({
+        database: databaseService.database, signingService,
+        defaultRoot: path.join(preparedData.databasePath, '..', 'resources'),
+        fetchImpl: (...args) => resourceSession.fetch(...args),
+        validateImage: (buffer) => { const image = nativeImage.createFromBuffer(buffer); if (image.isEmpty()) throw new Error('真实图片解码失败'); return image.getSize(); },
+        preparePreview: createResourcePreviewService({ app, BrowserWindow, nativeImage, session }),
+        configureNetwork: (config) => resourceSession.setProxy(config.networkMode === 'proxy'
+          ? { mode: 'fixed_servers', proxyRules: config.proxyRules, proxyBypassRules: '<local>' }
+          : { mode: 'system' }),
+      });
+      registerResourceIpc({ ipcMain, service: resourceCenter, requireBusinessAccess: adminAccess.requireBusinessAccess, dialog, getWindow: () => mainWindow });
+      await resourceCenter.start();
+      powerMonitor.on('resume', () => void resourceCenter?.sync.runDue());
       registerAppIpc();
       const serverConfig = readServerConfig();
       if (serverConfig) {
@@ -199,6 +232,7 @@ if (!hasSingleInstanceLock) {
     } catch (error) {
       if (revocationCleanupTimer) clearInterval(revocationCleanupTimer);
       revocationCleanupTimer = null;
+      await resourceCenter?.stop();
       await httpServerService?.stop().catch(() => {});
       httpServerService = null;
       databaseService?.close();

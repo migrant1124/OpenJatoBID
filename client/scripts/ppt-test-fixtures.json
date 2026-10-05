@@ -1,0 +1,14 @@
+[
+  {
+    "file": "wuhua-original.pptx",
+    "url": "https://raw.githubusercontent.com/wuhua2026/ppt-templates/f0e14a5621764c605d0c5027bfab172ef1d1eb0f/templates/static/cover/split_screen_ocean_blue.pptx",
+    "sha256": "b9aba8b5f25abc9ea80c9713f073660a1639f47c0ed73320a7e6c6fe4360b698",
+    "source": "wuhua 固定提交的公开原生封面，测试结论仅限此页"
+  },
+  {
+    "file": "free-original.pptx",
+    "url": "https://cdn.ppttemplate.ai/templates/4m-cause-analysis-diagram-slides/v3/4m-cause-analysis-diagram-slides.pptx",
+    "sha256": "71d59139caf441e9b226ed985238bf754f5ba35d16156ad25d27da9284d9bae0",
+    "source": "free 索引79d9ac6a472b4c4cddac056c675fb7e2f33f581d所指公开v3四页样本；CDN文件变化必须失败，不能外推全库"
+  }
+]

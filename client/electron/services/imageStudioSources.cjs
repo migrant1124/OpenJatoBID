@@ -77,18 +77,29 @@ function normalizeItems(sourceId, items) {
   });
 }
 
-function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPublicUrl, clock = () => new Date(), translateBatch }) {
+function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPublicUrl, clock = () => new Date(), translateBatch, resourceClient }) {
   const inflight = new Map();
   const at = () => clock().toISOString();
   for (const preset of defaultSources) {
+    const previous = db.prepare('SELECT url, fallback_url, overrides_json FROM image_studio_sources WHERE source_id = ?').get(preset.id);
+    if (resourceClient && previous && !previous.url.startsWith('managed:')) db.prepare('INSERT OR IGNORE INTO resource_client_settings(key, value_json) VALUES (?, ?)')
+      .run(`legacy_source_config:${preset.id}`, JSON.stringify(previous));
+    const seedUrl = resourceClient ? `managed:${preset.id}` : preset.url;
     db.prepare(`INSERT OR IGNORE INTO image_studio_sources
       (source_id, name, url, homepage, built_in, updated_at) VALUES (?, ?, ?, ?, 1, ?)`)
-      .run(preset.id, preset.name, preset.url, preset.homepage, at());
+      .run(preset.id, preset.name, seedUrl, preset.homepage, at());
     const row = db.prepare('SELECT overrides_json FROM image_studio_sources WHERE source_id = ?').get(preset.id);
     const overrides = JSON.parse(row.overrides_json || '{}');
-    for (const [column, value] of [['name', preset.name], ['url', preset.url], ['homepage', preset.homepage]]) {
+    for (const [column, value] of [['name', preset.name], ['url', seedUrl], ['homepage', preset.homepage]]) {
       if (!overrides[column]) db.prepare(`UPDATE image_studio_sources SET ${column} = ? WHERE source_id = ?`).run(value, preset.id);
     }
+    if (resourceClient) {
+      db.prepare("UPDATE image_studio_sources SET url = ?, fallback_url = '' WHERE source_id = ?").run(seedUrl, preset.id);
+    }
+  }
+  if (resourceClient) for (const original of db.prepare("SELECT source_id, url, fallback_url, overrides_json FROM image_studio_sources WHERE url LIKE 'https:%'").all()) {
+    db.prepare('INSERT OR IGNORE INTO resource_client_settings(key, value_json) VALUES (?, ?)').run(`legacy_source_config:${original.source_id}`, JSON.stringify(original));
+    db.prepare("UPDATE image_studio_sources SET url = ?, fallback_url = '' WHERE source_id = ?").run(`managed:${original.source_id}`, original.source_id);
   }
   const starterId = 'openjatobid-starter';
   const starterHash = crypto.createHash('sha256').update(JSON.stringify(starterPrompts)).digest('hex');
@@ -122,12 +133,13 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
   function saveSource(input = {}) {
     const sourceId = String(input.sourceId || `custom-${crypto.randomUUID()}`);
     const current = get(sourceId);
+    if (resourceClient && (input.url !== undefined || input.fallbackUrl !== undefined || !current)) throw new Error('公共来源由管理端统一维护；员工端不能保存上游地址');
     if (current?.deleted_at) throw new Error('已删除来源须先明确恢复。');
     const name = String(input.name ?? current?.name ?? '').trim();
     const url = String(input.url ?? current?.url ?? '').trim();
     if (!name || name.length > 80 || !url) throw new Error('来源名称须为 1–80 字且地址不能为空。');
     const parsed = new URL(url);
-    if (parsed.protocol !== 'https:' && !(sourceId === starterId && url === 'local:image-studio-starter')) {
+    if (parsed.protocol !== 'https:' && !(resourceClient && parsed.protocol === 'managed:') && !(sourceId === starterId && url === 'local:image-studio-starter')) {
       throw new Error('来源地址必须使用 HTTPS。');
     }
     const homepage = String(input.homepage ?? current?.homepage ?? '').trim();
@@ -170,9 +182,14 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
     return listSources();
   }
 
-  function listItems({ sourceId = '', query = '', limit = 50, offset = 0 } = {}) {
+  function listItems(input = {}) {
+    return resourceClient ? resourceClient.promptIds().then((ids) => queryItems(input, ids)) : queryItems(input);
+  }
+  function queryItems({ sourceId = '', query = '', itemIds, limit = 50, offset = 0 } = {}, allowedIds) {
     const clauses = ['s.enabled = 1', 's.deleted_at IS NULL'];
     const args = [];
+    if (resourceClient) { clauses.push('(s.built_in = 0 OR i.item_id IN (SELECT value FROM json_each(?)))'); args.push(JSON.stringify(allowedIds)); }
+    if (itemIds?.length) { clauses.push('i.item_id IN (SELECT value FROM json_each(?))'); args.push(JSON.stringify(itemIds)); }
     if (sourceId) { clauses.push('i.source_id = ?'); args.push(sourceId); }
     if (query) { clauses.push('(i.title_zh LIKE ? OR i.prompt_zh LIKE ?)'); args.push(`%${query}%`, `%${query}%`); }
     const where = clauses.join(' AND ');
@@ -196,6 +213,10 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
     const source = get(sourceId);
     if (!source || source.deleted_at) throw new Error('来源不存在或已删除。');
     if (source.url === 'local:image-studio-starter') return { count: source.item_count, unchanged: true, local: true };
+    if (resourceClient) {
+      const result = await resourceClient.sync();
+      return { count: get(sourceId)?.item_count || 0, unchanged: !result.digest.changes.some((item) => item.sourceId === sourceId), managed: true };
+    }
     if (!checkOnly) db.prepare('UPDATE image_studio_sources SET last_attempt_at = ? WHERE source_id = ?').run(at(), sourceId);
     let payload;
     try { payload = await readSourceJson(source.url, fetcher, urlValidator, source.content_version || ''); }
@@ -287,6 +308,7 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
   }
 
   async function runDue() {
+    if (resourceClient) { const result = await resourceClient.sync(); return { checked: true, updatedSourceIds: [...new Set(result.digest.changes.map((item) => item.sourceId))] }; }
     const now = clock().getTime();
     const updatedSourceIds = [];
     const due = listSources().filter((source) => source.builtIn && source.enabled &&
@@ -306,6 +328,7 @@ function createImageStudioSources({ db, fetcher = fetch, urlValidator = assertPu
   }
 
   async function checkSourceUrl(url) {
+    if (resourceClient) throw new Error('公共来源检查由管理端执行');
     const payload = await readSourceJson(url, fetcher, urlValidator);
     return { count: normalizeItems('candidate', payload.items).length };
   }

@@ -32,6 +32,8 @@ try {
   const result = spawnSync(process.execPath, [
     builderCli,
     '--win',
+    '--publish',
+    'never',
     `--config.directories.output=${temporaryOutput}`,
   ], {
     cwd: projectRoot,

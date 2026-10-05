@@ -653,6 +653,16 @@ function createLicenseService({
 
   return {
     getLicenseFilePath: () => licenseFile,
+    async getResourceIdentity() {
+      const context = buildContext();
+      const status = await evaluateLocalLicense();
+      const envelope = normalizeEnvelope(readJson(licenseFile));
+      if (status.status !== 'active' || !envelope || context.managementPublicKeyConflict || !context.lan.management_public_key) {
+        throw new Error('请先完成可信管理端授权，再同步公共资源');
+      }
+      return { serverAddress: context.lan.server_address, publicKey: context.lan.management_public_key,
+        license: envelope, ...deviceIdentityPayload(context), employeeId: envelope.payload.employeeId };
+    },
     getStatus: () => evaluateLocalLicense(),
     getCurrentStatus: () => currentStatus,
     getApplicationStatus,

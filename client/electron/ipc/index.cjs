@@ -1,4 +1,4 @@
-const { clipboard, ipcMain, shell } = require('electron');
+const { clipboard, ipcMain, shell, dialog, BrowserWindow } = require('electron');
 const path = require('node:path');
 const { registerAnalyticsIpc } = require('./analyticsIpc.cjs');
 const { registerAgentIpc } = require('./agentIpc.cjs');
@@ -12,6 +12,15 @@ const { registerExportIpc } = require('./exportIpc.cjs');
 const { registerFileIpc } = require('./fileIpc.cjs');
 const { registerKnowledgeBaseIpc } = require('./knowledgeBaseIpc.cjs');
 const { registerImageStudioIpc } = require('./imageStudioIpc.cjs');
+const { registerResourceIpc } = require('./resourceIpc.cjs');
+const { createResourceCacheStore } = require('../services/resourceCacheStore.cjs');
+const { createResourceClientService } = require('../services/resourceClientService.cjs');
+const { registerPptIpc, PPT_CHANNELS } = require('./pptIpc.cjs');
+const { createPptProjectStore } = require('../services/pptProjectStore.cjs');
+const { createPptRuntimeService } = require('../services/pptRuntimeService.cjs');
+const { createPptSkillService } = require('../services/pptSkillService.cjs');
+const { createPptExportService } = require('../services/pptExportService.cjs');
+const { createPptService } = require('../services/pptService.cjs');
 const { registerPromptLibraryIpc } = require('./promptLibraryIpc.cjs');
 const { registerLicenseIpc } = require('./licenseIpc.cjs');
 const { registerRejectionCheckIpc } = require('./rejectionCheckIpc.cjs');
@@ -76,6 +85,8 @@ function sendToWebContents(webContents, channel, payload) {
 }
 
 const workspaceDatabaseChannels = [
+  ...PPT_CHANNELS,
+  ...['sync', 'list', 'digest', 'shown', 'asset', 'history', 'legacy-sources', 'cache-status', 'cache-configure', 'repository-request', 'repository-status'].map((name) => `resources:${name}`),
   'conversation:list-threads',
   'conversation:create-thread',
   'conversation:get-thread',
@@ -231,7 +242,7 @@ function registerWorkspaceDatabaseStatusIpc({ mainWindow }) {
   };
 }
 
-function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus }) {
+function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, licenseService, updateStatus }) {
   const sqliteDatabase = createSqliteDatabase(app, { onStatus: updateStatus });
   const knowledgeBaseStore = createKnowledgeBaseStore({ app, db: sqliteDatabase.db });
   const knowledgeBaseService = createKnowledgeBaseService({ app, aiService, configStore, knowledgeBaseStore });
@@ -244,7 +255,12 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const conversationStore = createConversationStore({ db: sqliteDatabase.db });
   const promptLibraryStore = createPromptLibraryStore({ db: sqliteDatabase.db });
   const promptLibraryService = createPromptLibraryService({ app, configStore, store: promptLibraryStore });
-  const imageStudioService = createImageStudioService({ app, db: sqliteDatabase.db, aiService, configStore, promptLibraryStore });
+  const resourceClient = createResourceClientService({ app, store: createResourceCacheStore({ db: sqliteDatabase.db }), licenseService });
+  const imageStudioService = createImageStudioService({ app, db: sqliteDatabase.db, aiService, configStore, promptLibraryStore, resourceClient });
+  const pptRuntime = createPptRuntimeService({ app });
+  const pptSkills = createPptSkillService({ db: sqliteDatabase.db, root: path.join(app.getPath('userData'), 'workspace', 'ppt-skills'), runtime: pptRuntime, resources: resourceClient });
+  const pptService = createPptService({ app, store: createPptProjectStore({ db: sqliteDatabase.db }), resources: resourceClient,
+    runtime: pptRuntime, skills: pptSkills, exporter: createPptExportService({ runtime: pptRuntime, BrowserWindow }), agentService, configStore, imageStudioService, dialog, shell });
   let conversationService = null;
   const conversationAttachmentService = createConversationAttachmentService({
     app,
@@ -278,9 +294,11 @@ function registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiSer
   const unregisterConversationIpc = registerConversationIpc({ conversationService, mainWindow });
   registerPromptLibraryIpc({ promptLibraryService });
   const unregisterImageStudioIpc = registerImageStudioIpc({ service: imageStudioService, mainWindow });
+  const unregisterResourceIpc = registerResourceIpc({ ipcMain, service: resourceClient });
+  const unregisterPptIpc = registerPptIpc({ ipcMain, service: pptService });
   exportService?.setTechnicalPlanStore?.(technicalPlanStore);
   updateStatus({ phase: 'ready', ready: true, message: '本地数据库已就绪' });
-  return { sqliteDatabase, technicalPlanProjects, conversationService, unregisterConversationIpc, unregisterImageStudioIpc };
+  return { sqliteDatabase, technicalPlanProjects, conversationService, unregisterConversationIpc, unregisterImageStudioIpc, unregisterResourceIpc, unregisterPptIpc, pptService, resourceClient };
 }
 
 function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerUpdateDownload, quitAndInstall, getLatestVersion, getUpdateDownloadUrl, gpuStartupState = {}, gpuTrialArg = '--yibiao-trial-hardware-acceleration', forceDisableGpuArgs = [], openDeveloperTokenStatsWindow, closeDeveloperTokenStatsWindow, openDeveloperAgentMonitorWindow, closeDeveloperAgentMonitorWindow }) {
@@ -306,6 +324,8 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
   let technicalPlanProjects = null;
   let unregisterConversationIpc = null;
   let unregisterImageStudioIpc = null;
+  let unregisterResourceIpc = null;
+  let unregisterPptIpc = null, pptService = null, resourceClient = null;
   const systemFontService = createSystemFontService();
   const databaseStatus = registerWorkspaceDatabaseStatusIpc({ mainWindow });
   let workspaceDatabaseStarted = false;
@@ -316,6 +336,10 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     unregisterLicenseIpc?.();
     unregisterConversationIpc?.();
     unregisterImageStudioIpc?.();
+    unregisterResourceIpc?.();
+    unregisterPptIpc?.();
+    await pptService?.close?.();
+    await resourceClient?.close?.();
     technicalPlanProjects?.close?.();
     await conversationService?.close?.();
     localImageRenderService.dispose?.();
@@ -414,11 +438,15 @@ function registerIpcHandlers({ app, mainWindow, checkAndDownloadUpdate, triggerU
     databaseStatus.updateStatus({ phase: 'checking', ready: false, message: '正在检查本地数据库' });
     setTimeout(() => {
       try {
-        const workspaceServices = registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, updateStatus: databaseStatus.updateStatus });
+        const workspaceServices = registerWorkspaceDatabaseServices({ app, mainWindow, configStore, aiService, agentService, fileService, exportService, localImageRenderService, licenseService, updateStatus: databaseStatus.updateStatus });
         conversationService = workspaceServices.conversationService;
         technicalPlanProjects = workspaceServices.technicalPlanProjects;
         unregisterConversationIpc = workspaceServices.unregisterConversationIpc;
         unregisterImageStudioIpc = workspaceServices.unregisterImageStudioIpc;
+        unregisterResourceIpc = workspaceServices.unregisterResourceIpc;
+        unregisterPptIpc = workspaceServices.unregisterPptIpc;
+        pptService = workspaceServices.pptService;
+        resourceClient = workspaceServices.resourceClient;
       } catch (error) {
         databaseStatus.updateStatus({
           phase: 'error',

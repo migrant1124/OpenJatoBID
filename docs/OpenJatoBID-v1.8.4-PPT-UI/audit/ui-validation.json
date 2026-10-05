@@ -1,0 +1,64 @@
+[
+  {
+    "screen": "flow",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "management",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "update",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "prompts",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "templates",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "preview",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "workspace",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "skills",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "screen": "location",
+    "viewport": "1600x1000",
+    "missing_images": [],
+    "js_errors": []
+  },
+  {
+    "interaction_test": "template thumbnail modal opens; Escape closes; search filters",
+    "passed": true
+  },
+  {
+    "responsive_test": "1366x900",
+    "horizontal_document_overflow": false
+  }
+]

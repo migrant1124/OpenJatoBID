@@ -36,6 +36,9 @@ export const appMenuItems: AppMenuItem[] = [
     ],
   },
   {
+    id: 'ppt', label: 'PPT 模式', description: '项目制作、模板与技能管理',
+  },
+  {
     id: 'template-settings',
     label: '模板设置',
     description: '标书导出模板与排版配置',

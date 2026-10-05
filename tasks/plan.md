@@ -1909,3 +1909,109 @@ Chrome DevTools MCP实际可用，已检查隔离浏览器登录预览；多步�
 ### 27.6 用户授权续验（2026-10-03）
 
 用户要求继续执行并更新证据，沿用 PI184-06，不扩大生产源码/依赖/授权范围。先核对隔离环境，再完成最新断言后的完整离线测试、正常 Main 的 before-quit/窗口关闭清理、精简基线合成项目/模板/对话附件副本兼容和 Word/WPS 实际打开/只读导出验证。每项分开记录技术证据与人工确认；不可用 VM/有效测试许可/获准真实模型配置的部分保持阻断。正式安装或模型测试不读取正式配置，不提高 Hyper-V 权限、不启用 Sandbox、不更改生产数据。证据放 client/.tmp/pi184-upgrade/continued-20261003，报告增量更新现有三份。
+
+## 28. v1.8.4 PPT、管理端资源与两中心 UI 计划（2026-10-04）
+
+本节只实施用户提供的 `docs/OpenJatoBID-v1.8.4-PPT-UI/OpenJatoBID-v1.8.4-PPT-Resource-Center-Spec-D1.2.md` 与 `UI-Handoff.md`，不新增相互冲突的产品规格。用户要求五步完整交付；任务切分是同一版技术依赖顺序，不是多期发布。旧第26/27节、FP/PI执行记录不覆盖、不当成本轮计划或UI确认。
+
+### 28.1 基线、授权与确认点
+
+真实分支 `v1.8.4-架构优化`、HEAD `6bad081ba9bc49158338c620297b9080cd02ce00`；原tracked/staged为空，原未跟踪只有46文件的用户UI输入包。客户端manifest/lock根均1.8.4、Pi两包精确1.0.0；管理端1.4.2。基线、真实代码/九图差异、复用清单及本轮少量公开样本审计见 `docs/secondary-development/design/v1.8.4-ppt-resource-center-baseline.md`；原文件hash和固定公开来源输入在忽略目录 `client/.tmp/ppt184-resource-center/baseline/`。
+
+2026-10-04用户在本节计划交付后明确回复“确认”，本节技术计划及UI-Handoff/九图实施基线已获批准。当前进入Build，同版连续执行RC184-02至08，不逐任务重复等待确认。模型/新敏感动作仍按产品真实确认与获准配置执行；参考原型不作为软件验收。
+
+始终保持版本、分支、精简成果、四开发者入口、普通侧栏、Jato控制层、runtime_id=pi、off、普通对话只读/原任务工具、Provider/Proxy/队列/IPC/统计/存储和输出约定。管理端资源周检查不修改其原六小时授权撤销清理。禁止所有用户列出的Git写入、发布/部署/PR/上传/R2/Worker/Secret/npm version。
+
+### 28.2 文件范围与复用决定
+
+以下新增路径是待实施文件归属，非已有能力声明；具体模块只随真实职责需要拆分，不建立第二套编辑器、状态模型或通知系统。
+
+| 归属 | 现有文件 / 计划新增 | 最小变化及保留 |
+| --- | --- | --- |
+| 管理端资源Main | 新 `management/electron/services/resourceStore.cjs`、`resourceSourceAdapters.cjs`、`resourceDownloadService.cjs`、`resourceSyncService.cjs`、`resourceHttpRouter.cjs`；原 main/httpRouter/migrations | 来源、固定周计划、下载校验、快照/差异/审计、资源票据和分发；原授权/统计路由与托盘语义保持 |
+| 管理端IPC/UI | 原 adminIpc/preload/shared/ipc/App/app.css；新 `electron/ipc/resourceIpc.cjs`、`src/features/resources/ResourceCenterPage.tsx` | 管理员来源启停、只读计划、立即检查、运行/发布/文件状态、独立网络/存储；使用现有表格/面板样式 |
+| 客户端资源 | 新 `electron/services/resourceClientService.cjs`、`resourceCacheStore.cjs`、`resourceUpdateService.cjs` 与 `electron/ipc/resourceIpc.cjs`；原 sqliteDatabase/preload/ipc/index/main/IPC类型 | 独立可信LAN、已发布目录事务应用、票据/文件hash、本地asset、applied/shown与摘要；公共资源无外网回退 |
+| 提示词迁移 | 原 imageStudioSources/imageStudioService/内置源配置/ImageStudioPrompts/Viewer/生图CSS；SQL阅读schema | 七源稳定ID/译文/收藏/个人/启停/tombstone保留；停止员工公网扫描和constructor改回旧公网；实际参考图版本缓存、contain和模态可达性 |
+| PPT业务 | 新 `electron/services/pptProjectStore.cjs`、`pptService.cjs`、`pptTemplateService.cjs`、`pptRuntimeService.cjs`、`pptSkillService.cjs`、`pptExportService.cjs`、`electron/ipc/pptIpc.cjs`；现有task/file/AI服务只接必要入口 | 文件权威、稳定页/元素、revision/候选/锁、规划/确认/生成/局部/原生/重制/媒体、Skill、项目路径与恢复；不将业务塞IPC |
+| PPT/Pi适配 | 原 agentService/piSessionFactory/piRuntimeService与agentToolEnvironment按真实缺口最小接入；新PPT限定工具/worker | 只给PPT profile批准Skill和脚本；不全局改noSkills/noExtensions/普通工具集合，不绕过原Proxy与统计 |
+| PPT/更新UI | 新 `src/features/ppt/`、shared资源图片模态和 `app/ResourceUpdateDialog.tsx`、必要feature CSS；原App/menu/router/navigation/Sidebar | 图稿确认后PPT一个一级入口、三个页内视图、C07两个分区/真实图；原软件UpdateNotifier、旧对话布局、标书Word模板保持 |
+| 统计映射 | 原 `analytics/dashboard/public/src/pages/traffic.js`、管理端中文页面映射及现有白名单 | 加稳定低基数PPT页面映射与必要公共资源计数；不修改Worker部署/原采集字段，不上传敏感文本/路径 |
+| 运行包/测试 | 两端必要package/lock/build文件、client/vendor受管PPT runtime、固定Skill包及许可；各自已有node:test/scripts | 不全量升级依赖或运行环境；新增依赖仅路由实际需要、精确锁与许可证/包体审计。管理端版本不随客户端同步 |
+
+资源协议、身份、状态、周锚点/发布、缓存/更新游标、IPC及权威文件草案见 `docs/secondary-development/api/v1.8.4-ppt-resource-center.md`，不在本节复制维护另一份合同。
+
+### 28.3 同版可执行顺序与验收门
+
+| ID | 对应用户步骤 / 规格 | 产物、依赖与验收 |
+| --- | --- | --- |
+| RC184-01 基线/计划 | 步骤一；D1.2 3、14.10、20 | 完整文档/实际CSS与代码/九图、复用和差异；固定来源样本、保护hash、API及本节计划。技术/UI确认是进入后续实现节点 |
+| RC184-02 管理端周同步/协议 | 步骤二；6、15、T-W01—03、T-R01—10、T-N01/09 | 新SQLite迁移和备份；启用立即、604800000ms锚点、到期一次、手动不挪锚点、单在途、内容等价、不变不发、stage校验/不可变发布、失败旧快照、源范围/配额/代理、审计/只读计划、授权文件服务。定向时间/崩溃/HTTP/大下载并发测试后实际管理端验证 |
+| RC184-03 提示词迁移/两中心摘要 | 步骤三/五；7、14.8、T-I01—04、T-N02—14 | 依赖02。七源和个人数据隔离迁移、所有重启/备用路径无公网；轻量数据原子应用，用户设备流游标、首次基线/去重/最终差异/安全延后/固定弹窗版本/原中心筛选。管理端离线真实缓存可用且不削弱授权规则 |
+| RC184-04 模板/真实预览与两条路由 | 步骤三/四；8—10、14.9、T-TH01—04、T-V01—02、T-P01—07/10 | 依赖02。固定wuhua原包与free实际文件，全页结构/关系/原始比例/风险检测；真实首页/全页图片hash与生成版本。接ppt-master Native roundtrip对象映射替换、visual参考新SVG/原生DrawingML，两条路线各实际导出/渲染/目标环境证据；未验证只待验证，禁止截图叠字/全库放绿 |
+| RC184-05 Skill/受控运行环境 | 步骤四/五；11—12、T-S01—05、T-B01/02 | 固定完整ppt-master与完整性guard/许可证；四入口解析/选择/确认安装、依赖/权限/启停/更新/锁版本/卸载；新GitHub仓库先定位申请/管理员准入/固定commit和子目录/完整候选/签名获取，不限于已有resourceId。Windows随包Node/Python/必要Git/媒体组件。先受限worker与取消/环境测试，再允许其批准工具；缺环境只阻断对应动作，不冒称已兼容Pi |
+| RC184-06 PPT完整业务/存储 | 步骤四/五；9—13、15—17、T-P08—13、T-F01—03 | 依赖04/05。新项目资料解析复用、规划/有效确认、模板和风格、生成/原生编辑/美化/单页/局部/图表表格、人工/Agent写锁、稳定页顺序/备注/关系、历史恢复；预览/PPTX/PDF/图片/讲稿及启用的动画/语音/视频。三目录、真实系统卷/space、迁移与归属回收、崩溃恢复；以实际输出和文件hash验收 |
+| RC184-07 真实UI/统一联调 | 步骤五；14/16.4与handoff；T-UI01、T-TH/T-N交互、T-B03 | 依赖已确认UI及02—06真实服务；两端组件/分辨率/内滚动/缩略图/大图焦点锁与恢复/错误重试；新增PPT入口和映射，C07不顶掉其他确认/离开保护。SVG/HTML/网页预览独立context、无Node/业务preload，CSP/请求阻断/静态内容规范化和受控编辑消息；恶意预览不触发脚本/外网/文件/越界写入。所有按钮连业务，没有示例图/假数字/假Agent成功 |
+| RC184-08 Verify/Review/交付 | 步骤五；18的全部63用例、T-BR01、IM-08 | 各层证据、两端local builder --publish never、解包/正常授权/干净Windows安装分开；独立只读Reviewer。范围内缺陷返回Build修复再复测；报告/手册/迁移与只撤本轮方案，全部强制项未通过时不得宣布验收完成 |
+
+当前已知source输入：wuhua完整封面7 shape/2文字/0 picture、free四页各满页1 picture/0文字；结论范围仅这两个源文件。free目录536 presentation/38 document/21 spreadsheet，不把595个条目全当演示文稿。完整主引擎有13,010文件/84,277,950已知字节，不用Codex安装路径替员工随包工具。RC04/05先检适配与运行依赖，必要的依赖/信任/权限变更写明再确认，不用失败来静默降级承诺。
+
+### 28.4 固定实现规则
+
+管理端每源 anchor、lastScheduledSlot、lastCheck、nextScheduled、当前run独立保存；手动/重试不移动anchor。窗口关入托盘不停计划，app退出取消/结算，重启或resume计算一次补查而非回放每周。语义hash排序稳定、忽略技术字段，实际图片/PPTX变化含文件hash；快照/差异/发布同批事务，只有文件已就绪才可读。无变化只检查审计，资源失败保留上版且不虚假下架。
+
+客户端严格分离公共HTTPS和绑定LAN；资源只经许可管理端或已校验缓存，原自动刷新和cover/知识案例媒体中的公网回退逐项审计。应用/展示独立游标，固定范围差异而非累加日志；首次初始化、跨管理端和历史缺失不编造新增。已读/通知不意味着文件和AI复用完成。
+
+PPT以路由权威文件为准，SQLite记流程/索引/hash/修订。每页/对象ID稳定，候选与baselineRevision校验、写锁、旧稿和无关页保留；图表工作簿/缓存一致，修改后旧检查报告失效。生成/视觉重制与原生roundtrip不混用权威数据。只公开当前条目实际验证状态，不全来源“一键验证”。
+
+PPT限定profile通过Jato业务工具调批准脚本；worker不可继承Main全部环境/密钥，不给自由shell、外网或全盘读写。Windows受限token/AppContainer或等价真实隔离须证明文件/网络/进程限制，workdir不算沙箱。模型和联网资源通过Main原队列/Proxy/管理端代办。隔离/完整性/依赖未证明时该执行动作保留阻断，不把装上Skill当通过。
+
+路径/删除基于realpath、实际系统卷和owned marker；默认目录改变只影响以后新项目。迁移先确认/停写/复制和hash/索引切换，失败保留旧目录；回收自己归属的项目/Skill副本，用户选父目录、源ZIP/文件、已有正式库和旧项目不碰。
+
+### 28.5 分层验证、命令与证据
+
+采用现有node:test、真实Electron与Chrome DevTools；可重复UI回归复用现有Playwright。下面是后续计划命令，不是本轮已通过记录：
+
+- 两端新/改CJS分别 `node --check <实际文件>`；客户端 `npm.cmd run build`；管理端 `npm.cmd test`、`npm.cmd run build`；有新增依赖时两端各自 `npm.cmd audit`，不自动fix。
+- 定向测试文件随实现落在各自已有服务测试目录。周锚点涵盖首次/手动/多个missed slot/clock rollback/并发/来源停启；内容发布涵盖等价字段/图片变更/单项失败/异常空/宕机和部分传输；目录游标涵盖所有T-N；安全来源和ZIP/PPT/Skill边界、真实原包及source变更缓存均有真实输入。
+- 第四种Skill安装用此前未登记仓库，验证准入/固定commit/子目录/完整包/签名/确认/状态，禁止任意URL与员工直连；预览面以恶意SVG/HTML/foreignObject、脚本、file/javascript URL、外部图片/CSS、iframe/重定向、弹窗、伪造编辑消息/越界写入检查网络/文件/IPC副作用，不拿worker隔离结果替代显示面的隔离结果。
+- 迁移用合成七源、收藏、中文译文、个人覆盖、禁用/删除记录；v40和管理端v4隔离副本前后核对并反复启动，不复制真实员工库或清空工作区。ABI记录Node/Electron区别，真实SQLite用对应Electron。
+- 客户端service加载前设置绝对隔离 `app.setPath('userData', ...)`。管理端还须隔离 `getFixedManagementDataRoot()` 对应LOCALAPPDATA固定目录及legacy来源；只改APPDATA/userData不够。测试专用许可/签名/初始管理凭据不写正式配置，不绕过正常启动授权。
+- 真实两端Electron/HTTP/IPC、管理端托盘/resume/exit、客户端断外网取目录+预览+原包、真实文件持久化、1600×1000及1366×900截图/键盘、焦点和关闭恢复；模拟IPC/UI截图只记模拟，不算真实业务联调。
+- 真实SDK+模拟供应商离线证明工具/文件/取消；真实外部模型另记并需获准配置；自动重试不得重复扣费。PPT模型视觉/编辑能力缺失分别BLOCKED。原Pi测试/精简保留菜单/原标书/对话/生图/授权统计/公共更新按实际受影响范围回归。
+- Office与WPS实际打开、可编辑对象/中文排版、备注/图表和导出逐样本记录；COM别名实际指向WPS时不得记Word/PowerPoint。结构CRC/hash通过不等于显示或复用通过。
+- 客户端在build后使用 `npx.cmd electron-builder --win nsis --publish never --config.directories.output=release/v184-ppt-resource-validation`；管理端先检查现有build-win透传明确publish never再在独立输出构建。管理端缺私有初始凭据时只记包装BLOCKED，不造凭据或上传。正常解包、独立安装/升级、未装开发环境Windows、实际包体/缓存分开记录。
+
+证据根 `client/.tmp/ppt184-resource-center/` 和管理端对应`.tmp`，原始日志/请求计数/快照/hash/截图/输出/包均可复核。最终测试报告 `docs/secondary-development/test-reports/v1.8.4-ppt-resource-center-test-report.md` 逐一覆盖D1.2第18节63用例，PASS/FAIL/BLOCKED/NOT_RUN分开，失败另标本轮/基线/环境/待定位；不是编译通过就可发布。
+
+### 28.6 审查和交付
+
+Plan的跨进程契约、迁移、权限和证据先独立只读检查；Build完成后另做完整Review，不能把计划审查当实现审查。按项目Skill使用openjatobid_reviewer；Review不改源码，主代理回Build修复范围内问题再Verify/复审。最终文件范围、新依赖、管理端职责及新增事件全部对照实际diff。
+
+交付同版源码/必要锁差异、协议和迁移/使用说明、容量实际测量、实施记录 `docs/secondary-development/changes/v1.8.4-ppt-resource-center-implementation.md`、上述测试报告及 `reviews/v1.8.4-ppt-resource-center-review.md`。代码实施、自动/离线测试、真实模型、真实Office/WPS、真实Electron、解包、独立Windows安装、人工UI确认各自结论，未执行的不写通过。状态唯一在tasks/todo；不存在并行任务账本。
+
+### 28.7 只撤本轮的保护与恢复
+
+仅在另行授权后按开始时hash/原字节和实际diff撤本轮文件，保留6bad及之后用户提交、精简/Pi成果和输入46文件。既有文件采用局部恢复并核对后续用户编辑；新增文件仅本轮归属且无人后续使用才能移除。不git reset/clean/stash，不回退到历史SHA。
+
+迁移前按现有路径备份库并校验，失败由拥有迁移的层恢复；代码撤销不直接降低schema。新PPT项目/输出/已导入Skill归用户，不随代码撤回删除；公共发布版本撤回产生新的版本/差异，不改已发布旧快照。保持客户端已有缓存/锁版本与旧目录，资源目录迁移失败恢复旧索引，不回退授权/统计库。回退后做旧业务/精简/Pi回归，生产数据仍不作为测试输入。
+
+
+## 29. 同机授权核验与合入 main 后的 CI 修复（2026-10-05）
+
+用户本轮已授权检查两端同机与客户端授权，并优化本地 CI；按已有 CI184 审查修复，直接执行范围内实施。实际分支 v1.8.4-架构优化、HEAD 6bad081ba9bc49158338c620297b9080cd02ce00，客户端1.8.4/Pi两个包1.0.0/管理端源码1.4.2保持；保护原有全部修改，只追加任务文档。
+
+文件范围：.github/workflows/release.yml、新验证workflow及工作流回归测试；客户端固定PPT样本准备/样本测试输入、新同机Electron授权烟测与必要测试命令；现有UI烟测只参数化前置路径；管理端运维文档和本轮实施/测试/审查记录。没有授权协议、业务存储、正式凭据或产品UI改造。
+
+实施：1）静态核验appId/独立userData与管理固定LOCALAPPDATA目录、端口及回环地址；两真实Main/preload/Renderer在隔离目录通过管理员初始登录/改密、员工申请、审批、签名授权登录，保留截图与状态，不写正式数据。2）新增main push/PR及手动触发的只验证workflow，contents read、无生产Secret/发布/产物上传，分别npm ci、离线Pi/PPT/授权回归与两端build；发布仍手动。3）现有release各构建模式打包前prepare/verify固定PPT运行包；管理端仅为准备器安装client工具依赖（npm ci --ignore-scripts，避免改native），两个job独立，不用客户端job产物。4）公开测试PPT来源固定commit/hash，明示失败，不用本机.tmp；UI验收前置目录显式输入，未提供就报缺项。5）回归发布门禁、样本/离线SDK、管理端测试/两端build与隔离真实Electron授权，独立只读复审；GitHub真实runner/独立安装仍待用户执行。
+
+合入方式：用户自行推送分支并合入main，普通CI只验证；正式客户端tag必须包含最终实现/workflow，选择同SHA的workflow ref，继续原精确确认/构建证明/私有资源门禁。管理端ref选已合入main的同一版本源码，发布版本选未占用的独立版本；不自动修改源码版本或覆盖同版本发布。不得降低SHA/可信历史/许可/来源/收费模型授权门禁。
+
+验收：从不含先前.tmp证据的新夹具目录准备并核验真实样本，定向测试与YAML/发布回归退出0；运行包准备步骤存在且位于builder前、resume不重建；同机授权真实Electron active，两个数据根不同；证据区分本地测试、GitHub runner、解包与安装。未运行不写通过；不提交/合并/推送/fetch/tag/发布/部署，不启用线上workflow或改Secret。
+
+### 29.1 PR #31 验证失败修复（2026-10-05）
+
+用户已授权检查并修正验证合并错误。新基线为现有分支 v1.8.4-架构优化 / cbe437e0a4e5889a5d42ee3e19a79fb1596c1993，工作区干净。真实 run 37253320878 的管理端82项和构建通过，客户端 Pi 28/29，coordinator加载Electron失败；runner为Node26.10.0/npm11.19.1。隔离完整安装日志证明Electron postinstall确实运行，但退出0时path.txt和可执行文件仍缺失。不能把allowScripts审核警告当成脚本被阻止；未生效的白名单候选已撤掉。
+
+范围仅verify/release客户端步骤排序、既有CI回归、任务和现有报告追加。不改变package、依赖/锁文件、应用/Pi版本、授权/业务/工具权限或发布门禁。先记录失败与顺序回归红灯，再在隔离源码副本用runner同版本Node/npm重现；复用已有ensure-electron-binary.cjs，以固定版本/checksum下载并用PowerShell解包后校验可执行文件。PR验证在npm ci后调用，发布客户端把原有同一步移到npm ci后，均早于SDK测试，只执行一次。上游JS解包为何提前结束与本项目缺少安装完成门禁分开记录，不无证据宣称已修复上游。
+
+验收使用隔离副本全新npm ci后原失败用例红灯，再执行独立二进制准备、原失败用例、完整test:ci-upgrade、Electron native/Pi/资源及客户端build，并执行完整发布回归。代码不进入正式数据目录；不修改全局Node/npm，不推送/合并/重新触发远端run或发布。线上修复效果等待用户推送后的新PR验证；原失败及后续步骤skipped均如实保留。

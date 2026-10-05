@@ -183,3 +183,11 @@ td span { margin-top: 3px; }
   .analytics-grid { grid-template-columns: 1fr; }
   .analytics-panel.is-wide { grid-column: auto; }
 }
+:root .resource-center-page { display: grid; gap: 20px; min-width: 0; }
+.resource-table-wrap { overflow: auto; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; }
+.resource-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.resource-table th, .resource-table td { text-align: left; padding: 14px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+.resource-table th { background: #fafafa; white-space: nowrap; }
+.resource-table td:nth-child(5) { max-width: 300px; overflow-wrap: anywhere; }
+.resource-settings { display: grid; gap: 12px; max-width: 700px; }
+.resource-settings label { display: grid; gap: 6px; }

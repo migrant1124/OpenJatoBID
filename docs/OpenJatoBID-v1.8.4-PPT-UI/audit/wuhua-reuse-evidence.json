@@ -1,0 +1,32 @@
+{
+  "source": "wuhua2026/ppt-templates/templates/static/cover/split_screen_ocean_blue.pptx",
+  "github_blob_sha": "b0c385dc5780c7a126ca97c623eaaf9e600f088e",
+  "source_base64_lines": [
+    513,
+    537
+  ],
+  "zip_member": "ppt/slides/slide1.xml",
+  "member_crc_verified": true,
+  "member_xml_bytes": 4956,
+  "xml_sha256": "299aa8f209c52b0988c61a1f8cd246695f92dd0998f90ae039dfd69661134986",
+  "native_shapes": 7,
+  "nonempty_text_shapes": 2,
+  "picture_objects": 0,
+  "texts_before": [
+    "分屏封面",
+    "Split Screen Cover"
+  ],
+  "texts_after": [
+    "部门汇报",
+    "内部展示 · 内容替换测试"
+  ],
+  "shape_count_after": 7,
+  "geometry_unchanged": true,
+  "page_repack_edit_reopen_passed": true,
+  "limits": [
+    "仅一个真实原生页面的结构和确定性工具替换验证",
+    "重封装使用干净母版，不声称保留原文件完整母版/主题",
+    "未调用Jato Agent真实模型，未在PowerPoint/WPS验收",
+    "不代表全库全部模板通过"
+  ]
+}

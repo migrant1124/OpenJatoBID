@@ -4,6 +4,7 @@ import AnalyticsPage from './features/analytics/AnalyticsPage';
 import AuthorizationPage from './features/authorization/AuthorizationPage';
 import SetupPage from './features/setup/SetupPage';
 import SystemSettingsPage from './features/settings/SystemSettingsPage';
+import ResourceCenterPage from './features/resources/ResourceCenterPage';
 import type {
   ManagementOperationResult,
   ManagementServerStatus,
@@ -12,12 +13,13 @@ import type {
 } from './shared/ipc';
 
 type AppView = 'loading' | 'setup' | 'login' | 'change-password' | 'dashboard' | 'error';
-type DashboardSection = 'authorization' | 'analytics' | 'settings';
+type DashboardSection = 'authorization' | 'analytics' | 'settings' | 'resources';
 
 const sectionCopy: Record<DashboardSection, { eyebrow: string; title: string }> = {
   authorization: { eyebrow: '局域网授权中心', title: '授权管理' },
   analytics: { eyebrow: '局域网运营中心', title: '运维统计' },
   settings: { eyebrow: '管理端本机设置', title: '系统设置' },
+  resources: { eyebrow: '管理端公共资源', title: '资源中心' },
 };
 const companyLogoUrl = new URL('../assets/company-logo.png', import.meta.url).href;
 
@@ -138,6 +140,7 @@ function App() {
         <nav aria-label="管理端主菜单">
           <button type="button" className={section === 'authorization' ? 'is-active' : ''} onClick={() => setSection('authorization')}>授权管理</button>
           <button type="button" className={section === 'analytics' ? 'is-active' : ''} onClick={() => setSection('analytics')}>运维统计</button>
+          <button type="button" className={section === 'resources' ? 'is-active' : ''} onClick={() => setSection('resources')}>资源中心</button>
           <button type="button" className={section === 'settings' ? 'is-active' : ''} onClick={() => setSection('settings')}>系统设置</button>
         </nav>
         <button
@@ -166,6 +169,7 @@ function App() {
         </header>
         {section === 'authorization' && <AuthorizationPage />}
         {section === 'analytics' && <AnalyticsPage />}
+        {section === 'resources' && <ResourceCenterPage />}
         {section === 'settings' && (
           <SystemSettingsPage username={sessionUsername} onChangePassword={changePassword} />
         )}

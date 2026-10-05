@@ -5,6 +5,7 @@ import { state } from '../state.js';
 const pageLabels = {
   'bid-generation': '标书生成',
   conversation: '对话模式',
+  ppt: 'PPT 模式',
   'image-studio': '生图模式',
   'image-studio-create': '生图模式 - AI 生图',
   'image-studio-prompts': '生图模式 - 提示词中心',

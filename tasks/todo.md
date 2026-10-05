@@ -728,3 +728,38 @@ Plan 交付时产品源码、版本与测试文件均未修改，未安装依赖
 PI184-06 续验（2026-10-03）完成可执行项：最新完整SDK29/29、精简HEAD业务Store合成历史副本一致、正常Main app.quit/窗口close两种真实进程退出0及6500ms无迟到写入、真实WPS一页只读打开/分页/PDF整页检查均PASS。正常解包/NSIS/真实模型仍BLOCKED（Sandbox未启用、Hyper-V访问拒绝、无专用授权/获准配置）；真实Word因COM指向WPS而BLOCKED，复杂版式/输入DPI/问答UI/员工全量旧副本/关机强杀NOT_RUN。生产源码/依赖未新增修改，原文件和精简历史保护；机器证据C=client/.tmp/pi184-upgrade/continued-20261003，现有三报告增量更新。PI184-06仍部分完成，release_ready=false；无Git写入/提权/发布。
 
 PI184-07/08续验复核与交付：独立只读pi_upgrade_review已核对新增原始证据和报告，未发现本次新增P0/P1/P2或错误PASS；现有三报告已增量更新。源码/lock/源DOCX及精简tasks前缀保护核验0，本轮实例已退出；PI184-06保留环境/人工缺口，release_ready=false。
+
+## v1.8.4 PPT、管理端资源与两中心 UI（2026-10-04）
+
+> 权威输入：用户D1.2完整规格、UI-Handoff及九图；实际分支v1.8.4-架构优化、HEAD 6bad081ba9bc49158338c620297b9080cd02ce00。client1.8.4、Pi两个包精确1.0.0、management1.4.2。原46份未跟踪UI输入、旧tasks字节前缀及两个npm锁保护。本轮计划第28节；用户2026-10-04“确认”授权技术与参考UI实施基线，不能作为真实软件UI/功能验收。
+
+- [x] RC184-01 完整读取适用约束/规格/handoff并查看九图，实际分支/HEAD/版本/工作区/CSS/复用组件/工具/来源及文件范围核验；第28节Plan和API契约已确认。只读Plan发现两项P2由主代理在Plan补齐，独立复核关闭；不回退历史提交或用户内容。
+- [x] RC184-02 固定604800000ms周锚点、初始化立即/到期补一次、手动不移、增量完整性、有效变化发布、失败完整旧快照、审计、独立网络/配额/存储及授权HTTP实现完成。management最新82/82与build退出0；物理VPN/休眠/多员工压力及旧版混用仍NOT_RUN，不能由实现完成推导这些验收通过。
+- [x] RC184-03 仅管理LAN资源/缓存、七源归档迁移/私人内容、签名分页105条、applied/shown独立、身份竞态与根迁移/失联/清理实现完成，真实Electron定向r5八项退出0，对七个原ID逐一注入旧配置/条目/收藏/译文/个人改写，重复迁移逐行不变。公开原图经管理端获取、LAN分发与实际员工UI可见；物理外网阻断、完整公共实际变更/自动到达组合仍NOT_RUN。
+- [-] RC184-04 实际两原包五页预览、两中心真实缩略图/大图/失败重试、wuhua原生对象与free视觉参考路线实现完成。模板/关联6/6、原生10/10、双端UI9/9、预览清理均退出0；真实public提示词1072×1278原图已实测。未外推237/595条全库green；真实模型视觉重制BLOCKED、本地旧PPT导入/美化的16:9与4:3差异先确认、取消不写、keep/reflow均有真UI-r25证据；换版本真实预览失效/完整Office与多关联同稿场景NOT_RUN。
+- [-] RC184-05 Skill四入口/确认/依赖/许可/权限/固定版本/启停/卸载、完整受管引用和限定worker实现完成。本地真实SDK8/8、引用2/2；真实GitHub固定包审批/下载r3后隔离接续r7真实LAN识别明确安装3/3退出0。43外层资料/111源与规范化hash独立核验一致；不执行第三方脚本、不自动加载。Windows无审计钩子六边界、最终双端解包guard均通过；在途更新/所有恶意ZIP组合/独立安装仍未验。
+- [-] RC184-06 计划确认/显式Quick、项目目录/页面ID/修订/候选/写锁/journal/取消/历史/编排/讲稿/原生/图表/媒体/导出/个人模板/迁移与回收实现完成。真实Pi/Proxy/SQLite/AppContainer业务10/10（仅外层供应商/问答/配图HTTP模拟）、原生10/10、短旁白/卷联接2/2均0。实际配图images合同/导出原字节、连续八插页/旧页hash和旧sourceHash回归已过；WPS实际PPTX/PNG通过。真实外部模型与Microsoft OfficeBLOCKED，全格式人工查看/六页精确输入/品牌备注/大图压力仍NOT_RUN。
+- [-] RC184-07 两端真实UI与动作、C07单弹窗/两区精选图/变更筛选、窄窗口内部滚动/键盘Esc/焦点/讲稿草稿/普通导航及统计映射实现并联调9/9。截图client/.tmp/ppt184-resource-center/ui-electron/双端-xVe9VE/01–12；实际UI已展示并请求用户审阅，未得到本轮实现UI定稿确认前保持待验。原型不作为软件验收；忙碌期间新发布完整自动展示组合仍NOT_RUN。
+- [x] RC184-08 分层报告已按D1.2全部63项逐项区分PASS/FAIL/NOT_RUN/BLOCKED，原始失败保留且Debug修复后复验。最终双端builder --publish never退出0；最后比例P2修复后client build r4/包r8重新验证，management源未变保持r7，解包自身Electron41.5.0/ABI145/中文SQLite/生产依赖/manifest/AppContainer及client Pi1.0.0探针均0；251/27生产文件与冻结源码一致，合成管理凭据单独对stage核对，运行目录14553/14549文件无差异。最终独立只读Review已闭环，最后两P2（画幅选择/七源证据）真实复验关闭，未发现新增确认P0–P3；报告31 PASS/29 NOT_RUN/3 BLOCKED及54保护项/46输入/两tasks原字节前缀复核一致；独立WindowsBLOCKED、实际UI确认待定，release_ready=false。
+
+最终证据根：client/.tmp/ppt184-resource-center/。最新命令/退出码/精确证据与63验收状态见docs/secondary-development/test-reports/v1.8.4-ppt-resource-center-test-report.md；实施、迁移、许可、最小改动范围及仅撤本轮方案见changes/v1.8.4-ppt-resource-center-implementation.md；最终审查见reviews/v1.8.4-ppt-resource-center-review.md；API实装契约已更新。实际最新客户端包为package/本地-m2JaqM/client/，管理端源码未变保留package/本地-tMi61F/management/，统一最终探针/比对为final-package-B8sH5w/，所有产物本地隔离，管理端仅测试合成初始凭据，正式凭据与开发native未改，不作为正式安装/发布包。
+
+所有已确认只读审查问题由主代理返回Debug修复；Reviewer不直接修改。早期free空白图、ACL/工具/图片合同/Skill依赖/夹具FAIL与中止日志均保留，不能拿构建代替运行验收。公开GitHub间歇403另记网络限制；实际公共图和链接分段链路已经成功，不能继续笼统写全来源BLOCKED。FFmpeg GPLv3公开分发对应源码提供与完整许可审计仍待完成，本轮没有上传/发布/部署。
+
+当前交付是同一版完整实现与可执行分层证据，非多期拆交；未执行或环境阻塞的验收不虚报完成。保留既有精简、普通只读对话/cacheWarming off、runtime_id=pi、Provider/Proxy/队列/IPC/Store/统计及输出协议。没有Git写入、npm依赖升级、生产数据或收费批量测试。真实模型、独立Windows、Microsoft Office和UI人工验收需满足对应条件后继续；不通过reset/checkout/clean/stash/schema降低或删除新业务数据撤回本轮。
+
+
+## v1.8.4 升级后 GitHub CI 只读审查（2026-10-05）
+
+- [x] CI184-01 核验本地/远端分支、版本、三个workflow、运行记录和配置名称；GitHub main 16d8d63已合入当前6bad081精简/Pi，PPT/资源实现仍本地；现有发布七文件42/42退出0，九份YAML解析退出0。独立只读审查确认1项P1（本地PPT合入后缺运行包准备将阻断双端干净runner打包，真实hook空appDir均退出1复现）、2项P2（升级测试未入CI、部分新脚本依赖本机临时夹具）。最后GitHub成功run36585660647是v1.8.3，非本轮通过证据；公告修复/上游审计disabled_manually，未启用。报告docs/secondary-development/reviews/v1.8.4-ci-workflows-review.md；原始证据client/.tmp/ci184-workflow-audit/。本项仅审查完成，发现尚未修复；未修改源码/workflow/依赖/版本/开关/Secret，未触发job或执行Git写入/发布。真实runner、安装、模型与生产发布验证NOT_RUN，原验收与release_ready=false保持。
+
+
+## 同机授权与 CI184 修复（2026-10-05，用户已授权实施）
+
+- [x] CI184-02 按plan第29节核验同机授权、修复main验证与手动发布CI、固定测试输入并执行回归；保护全部已有变更，应用/Pi/管理端源码版本不变。GitHub运行与用户真实安装待推送后执行，本地不做Git写入或发布。
+
+CI184-02实际完成：固定公开样本新目录下载/hash通过；最终发布45/45、真实SDK离线29/29及PPT/关联/Skill/授权34/34、管理82/82、两端build均退出0。同机真实Main/preload/Renderer/HTTP正常初始登录改密→员工申请→管理员批准→签名授权登录active为3/3，证据same-machine/隔离-SFTx4o；临时端口56613，0.0.0.0监听、127.0.0.1客户端、独立数据根。两端runtime prepare/verify、真实Electron SDK4项/native/资源8项均0；新包内wrapper用既有client r8/manager r7产物4/4与3/3均0，不称本轮新包或安装验收。新增main/PR只验证workflow，无生产Secret/上传/发布；手动release准备器、独立management非resume准备、包内上传前验证与全部原门禁保持。独立Reviewer确认旧F01/F02/F03关闭、未发现新增P0–P3；末次专用SDK证据目录和定向3/3复验通过。实施/回退、测试和审查分别为docs/secondary-development/{changes,test-reports,reviews}/v1.8.4-ci-and-local-authorization*.md；完整命令/日志/hash根client/.tmp/ci184-fix。145项旧改动及两tasks原字节前缀保护，未改依赖/锁/版本/授权协议；仍在原分支/HEAD、暂存区为空。本地实现完成，GitHub干净runner/Node22新安装/当前源码新打包、正式同机安装与跨电脑LAN、全部UI/外部模型/Office/许可旧验收NOT_RUN或原BLOCKED；release_ready=false。用户自行推送/PR合main后验证，新verify首次合main才有手动入口；正式发布另行授权。本轮没有任何Git写入、线上触发/开关/Secret、生产数据或发布部署操作。
+
+## PR #31 验证失败续修（2026-10-05）
+
+- [x] CI184-03 用户授权检查并修正run37253320878客户端错误；实际分支v1.8.4-架构优化 / cbe437e，开始工作区干净。远端管理82/82及构建通过，客户端Pi28/29因Electron未安装完整退出1、后续skipped；在同版本Node26.10.0/npm11.19.1隔离全新安装真实复现。postinstall运行却产物缺失，未生效的allowScripts候选撤销。最终verify在npm ci后调用现有独立二进制准备，release客户端同一步前移至SDK测试前，各一次；新顺序回归先红后4/4，原失败用例1/1、发布46/46、完整29+34、真实Electron native/Pi4项/资源8项及client build均退出0。初次样本fetch failed保留，随后新目录原Node准备器下载/hash通过。三份原报告追加CI184-03；只读复审确认候选修复及证据边界。证据client/.tmp/ci184-merge-fix/，精确命令在verified-results.json及continued-results.json。应用1.8.4/Pi两个1.0.0/管理端1.4.2、package/锁文件、业务/权限与既有发布门禁不变；旧tasks记录保留。修复后线上新run、NSIS/正式安装仍NOT_RUN，其他原验收限制和release_ready=false保持。没有暂存、提交、推送、合并/fetch、线上重跑/发布或全局Node/npm升级；用户需推送新修复后检查PR验证，不用旧SHA的Re-run证明修复。

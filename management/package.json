@@ -33,6 +33,7 @@
     "wait-on": "^8.0.4"
   },
   "build": {
+    "beforePack": "scripts/verify-ppt-runtime.cjs",
     "appId": "com.jiatu.aibid.management",
     "productName": "Jato AI BID 管理端",
     "directories": {
@@ -50,6 +51,7 @@
     ],
     "win": {
       "icon": "assets/icon.ico",
+      "extraResources": [{ "from": "vendor/ppt-runtime/win32-${arch}", "to": "ppt-runtime/win32-${arch}", "filter": ["**/*"] }],
       "target": [
         "nsis",
         "zip"

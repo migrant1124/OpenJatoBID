@@ -12,6 +12,7 @@ test('打包 SlimSAM 模型和目标平台的 Agent 工具', () => {
       to: 'agent-tools/win32-${arch}',
       filter: ['**/*'],
     },
+    { from: 'vendor/ppt-runtime/win32-${arch}', to: 'ppt-runtime/win32-${arch}', filter: ['**/*'] },
   ]);
   assert.deepEqual(build.mac.extraResources, [
     { from: 'vendor/slimsam-77-uniform', to: 'sam-model' },
