@@ -5,6 +5,20 @@ import test from 'node:test';
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
+test('客户端两条 CI 都在 SDK 回归前安装并校验真实 Electron 二进制', () => {
+  const verify = read('.github/workflows/verify.yml');
+  const release = read('.github/workflows/release.yml');
+  const workflows = [verify.slice(verify.indexOf('  client:'), verify.indexOf('  management:')),
+    release.slice(release.indexOf('  release-client:'), release.indexOf('  release-management:'))];
+  for (const workflow of workflows) {
+    const installation = workflow.indexOf('run: npm ci');
+    const binary = workflow.indexOf('node scripts/ensure-electron-binary.cjs --platform win32 --arch x64');
+    const sdk = workflow.indexOf('npm run test:ci-upgrade');
+    assert.ok(installation >= 0 && binary > installation && sdk > binary);
+    assert.equal([...workflow.matchAll(/node scripts\/ensure-electron-binary\.cjs/g)].length, 1);
+  }
+});
+
 test('合入main的验证只读且不发布、不注入生产凭据或上传管理端产物', () => {
   const verify = read('.github/workflows/verify.yml');
   assert.match(verify, /push:[\s\S]*branches: \[main\]/);

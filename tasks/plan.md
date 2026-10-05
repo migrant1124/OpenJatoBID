@@ -2007,3 +2007,11 @@ Plan的跨进程契约、迁移、权限和证据先独立只读检查；Build�
 合入方式：用户自行推送分支并合入main，普通CI只验证；正式客户端tag必须包含最终实现/workflow，选择同SHA的workflow ref，继续原精确确认/构建证明/私有资源门禁。管理端ref选已合入main的同一版本源码，发布版本选未占用的独立版本；不自动修改源码版本或覆盖同版本发布。不得降低SHA/可信历史/许可/来源/收费模型授权门禁。
 
 验收：从不含先前.tmp证据的新夹具目录准备并核验真实样本，定向测试与YAML/发布回归退出0；运行包准备步骤存在且位于builder前、resume不重建；同机授权真实Electron active，两个数据根不同；证据区分本地测试、GitHub runner、解包与安装。未运行不写通过；不提交/合并/推送/fetch/tag/发布/部署，不启用线上workflow或改Secret。
+
+### 29.1 PR #31 验证失败修复（2026-10-05）
+
+用户已授权检查并修正验证合并错误。新基线为现有分支 v1.8.4-架构优化 / cbe437e0a4e5889a5d42ee3e19a79fb1596c1993，工作区干净。真实 run 37253320878 的管理端82项和构建通过，客户端 Pi 28/29，coordinator加载Electron失败；runner为Node26.10.0/npm11.19.1。隔离完整安装日志证明Electron postinstall确实运行，但退出0时path.txt和可执行文件仍缺失。不能把allowScripts审核警告当成脚本被阻止；未生效的白名单候选已撤掉。
+
+范围仅verify/release客户端步骤排序、既有CI回归、任务和现有报告追加。不改变package、依赖/锁文件、应用/Pi版本、授权/业务/工具权限或发布门禁。先记录失败与顺序回归红灯，再在隔离源码副本用runner同版本Node/npm重现；复用已有ensure-electron-binary.cjs，以固定版本/checksum下载并用PowerShell解包后校验可执行文件。PR验证在npm ci后调用，发布客户端把原有同一步移到npm ci后，均早于SDK测试，只执行一次。上游JS解包为何提前结束与本项目缺少安装完成门禁分开记录，不无证据宣称已修复上游。
+
+验收使用隔离副本全新npm ci后原失败用例红灯，再执行独立二进制准备、原失败用例、完整test:ci-upgrade、Electron native/Pi/资源及客户端build，并执行完整发布回归。代码不进入正式数据目录；不修改全局Node/npm，不推送/合并/重新触发远端run或发布。线上修复效果等待用户推送后的新PR验证；原失败及后续步骤skipped均如实保留。

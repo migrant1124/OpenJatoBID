@@ -186,6 +186,10 @@ jobs:
         working-directory: client
         run: npm ci
 
+      - name: 准备并校验 Electron 可执行文件
+        working-directory: client
+        run: node scripts/ensure-electron-binary.cjs --platform win32 --arch x64
+
       - name: Test update integrity checks
         working-directory: client
         run: npm run test:update
@@ -222,10 +226,6 @@ jobs:
       - name: Rebuild Electron native dependencies
         working-directory: client
         run: npm run postinstall
-
-      - name: Ensure Electron binary is installed
-        working-directory: client
-        run: node scripts/ensure-electron-binary.cjs --platform win32 --arch x64
 
       - name: Smoke test Electron native dependencies
         working-directory: client

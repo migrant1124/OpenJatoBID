@@ -45,6 +45,9 @@ jobs:
       - name: 安装客户端锁定依赖
         working-directory: client
         run: npm ci
+      - name: 准备并校验 Electron 可执行文件
+        working-directory: client
+        run: node scripts/ensure-electron-binary.cjs --platform win32 --arch x64
       - name: 准备固定来源的公开 PPT 样本
         working-directory: client
         run: npm run prepare-ppt-test-fixtures
