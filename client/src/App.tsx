@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import AppRouter from './app/AppRouter';
 import GpuHardwareAccelerationPrompt from './app/GpuHardwareAccelerationPrompt';
 import UpdateNotifier from './app/UpdateNotifier';
+import ResourceUpdateDialog from './app/ResourceUpdateDialog';
 import AppShell from './components/AppShell';
 import StartupAuthPage from './features/auth/StartupAuthPage';
 import { trackAppOpen, trackConfigUsage, trackPageView } from './shared/analytics/analytics';
@@ -120,6 +121,12 @@ function App() {
     <>
       <GpuHardwareAccelerationPrompt />
       <UpdateNotifier />
+      <ResourceUpdateDialog onView={async (center, ids) => {
+        const section = center === 'prompts' ? 'image-studio-prompts' : 'ppt';
+        const allowed = await (leaveGuardRef.current?.(section) ?? Promise.resolve(true));
+        if (allowed) { sessionStorage.setItem(`resource-updates-${center}`, JSON.stringify(ids)); setActiveSection(section); window.dispatchEvent(new CustomEvent('resource-center-view', { detail: { center, ids } })); }
+        return allowed;
+      }} />
       <AppShell
         activeSection={activeSection}
         developerMode={developerMode}

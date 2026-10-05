@@ -833,7 +833,92 @@ export interface PromptImportItem {
   error?: string;
 }
 
+export interface ResourceAsset {
+  assetId: string; hash: string; bytes: number; mime: string; role: string; page: number; generatorVersion: string;
+}
+export interface ManagedResource {
+  resourceId: string; sourceId: string; upstreamId: string; center: string; kind: string; title: string;
+  description?: string; prompt?: string; tags?: string[]; status: string; capability: string;
+  pageCount?: number; aspectRatio?: number | string; assets: ResourceAsset[]; action?: string;
+}
+export interface ResourceDigest {
+  scope: string; version: number; from?: number; changes: ManagedResource[]; comparable?: boolean;
+  initialized: boolean; lastError: string; autoEligible: boolean;
+}
+export interface PptPlanPage { slideId: string; title: string; content?: string; task?: string; fileName?: string; level?: number; sourceRefs?: string; expression?: string; materialNeeds?: string; }
+export interface PptPlan { pages: PptPlanPage[]; summary?: string; }
+export interface PptPage { slideId: string; position: number; sourcePath: string; hash: string; kind: string; previewUrl?: string; sourceSlide?: number; }
+export interface PptProject {
+  projectId: string; title: string; root: string; revision: number; route: string; status: string;
+  requirements: Record<string, unknown>; plan: PptPlan | null; confirmedRevision: number | null;
+  agentAnswer?: string;
+  resource: { resourceId?: string; sourceHash?: string; nativePath?: string; capability?: string; skillHash?: string } | null;
+  pages: PptPage[]; jobs: Array<{ jobId: string; status: string; phase: string; error?: string }>;
+  runtime: { complete: boolean; message: string; skillVersion: string; pythonVersion: string };
+  history: Array<{ revision: number; createdAt: string }>;
+}
+export interface PptSkill { skillId: string; contentHash: string; name: string; version: string; root: string; enabled: boolean; status: string; description?: string; permissions?: string[]; missing?: string[]; bytes?: number; license?: string; source?: string; metadata?: { description: string; permissions: string[]; executable: boolean; bytes?: number; license?: string; source?: string }; }
 export interface YibiaoBridge {
+  ppt: {
+    preferences(): Promise<{ parent?: string }>;
+    setPreferences(input: { parent: string }): Promise<{ parent: string }>;
+    annotations(input: { projectId: string }): Promise<Array<{ annotationId: string; slideId: string; elementId?: string; sourceHash: string; instruction: string; appliedAt?: string }>>;
+    saveAnnotation(input: { projectId: string; revision: number; slideId: string; elementId?: string; instruction: string }): Promise<{ annotationId: string }>;
+    notes(input: { projectId: string; slideId: string }): Promise<string>;
+    saveNotes(input: { projectId: string; revision: number; slideId: string; content: string }): Promise<{ jobId: string }>;
+    importNarration(input: { projectId: string; revision: number }): Promise<{ jobId?: string; cancelled?: boolean }>;
+    applyAnnotations(input: { projectId: string; revision: number; annotationIds: string[] }): Promise<{ jobId: string }>;
+    personalTemplates(): Promise<Array<{ templateId: string; title: string; root: string; coverUrl: string; aspectRatio: string; pageCount: number }>>;
+    removePersonalTemplate(input: { templateId: string; confirmed: boolean }): Promise<unknown>;
+    nativeObjects(input: { projectId: string }): Promise<{ pages: Array<{ position: number; slideId: string; fileName: string; elements: Array<{ elementId: string; name: string; type: string; text: string; chart: boolean }> }> }>;
+    savePersonalTemplate(input: { projectId: string; revision: number; title: string; parent: string; confirmed: boolean }): Promise<{ jobId: string }>;
+    restore(input: { projectId: string; revision: number; historyRevision: number }): Promise<{ jobId: string }>;
+    relocate(input: { projectId: string; revision: number; parent?: string; root?: string; confirmed: boolean }): Promise<PptProject>;
+    selectSkillVersion(input: { projectId: string; revision: number; contentHash: string }): Promise<PptProject>;
+    list(): Promise<Array<{ projectId: string; title: string; root: string; revision: number; status: string }>>;
+    get(id: string): Promise<PptProject>;
+    create(input: { parent: string; title: string; requirements: Record<string, unknown> }): Promise<PptProject>;
+    setPlan(input: { projectId: string; revision: number; plan: PptPlan; requirements?: Record<string, unknown> }): Promise<PptProject>;
+    confirm(input: { projectId: string; revision: number }): Promise<PptProject>;
+    importMaterials(input: { projectId: string; revision: number; paths: string[] }): Promise<{ jobId: string }>;
+    agent(input: { projectId: string; revision: number; operation: 'plan' | 'generate'; instruction: string; slideIds?: string[] }): Promise<{ jobId: string }>;
+    inspectTemplate(filePath: string): Promise<{ aspectRatio: string; pageCount: number; hash: string }>;
+    prepareTemplate(input: { projectId: string; revision: number; resourceId?: string; templateId?: string; filePath?: string; preserveContent?: boolean; beautify?: boolean; ratioDecision?: 'keep' | 'reflow' }): Promise<{ jobId: string }>;
+    insertLayout(input: { projectId: string; revision: number; resourceId: string }): Promise<{ jobId: string }>;
+    edit(input: { projectId: string; revision: number; slideId: string; elementId: string; text?: string; attributes?: Record<string, string | number> }): Promise<{ jobId: string }>;
+    nativeReplace(input: { projectId: string; revision: number; changes?: Array<{ page: number; slideId?: string; elementId: string; text: string; expectedText?: string }>; chart?: { page: number; slideId?: string; elementId: string; categories: string[]; series: Array<{ name: string; values: number[] }> } }): Promise<{ jobId: string }>;
+    page(input: { projectId: string; slideId: string }): Promise<PptPage & { elements: Array<{ elementId: string; type: string; text: string; attributes: Record<string, string> }> }>;
+    exportProject(input: { projectId: string; revision: number; format: 'pptx' | 'pdf' | 'images' | 'notes' | 'mp4'; slideIds?: string[] }): Promise<{ jobId?: string; cancelled?: boolean }>;
+    rename(input: { projectId: string; revision: number; title: string }): Promise<PptProject>;
+    remove(input: { projectIds: string[]; confirmed: boolean }): Promise<unknown>;
+    deletedProjects(): Promise<Array<{ projectId: string; title: string; root: string; revision: number; deletedAt: string }>>;
+    restoreDeleted(input: { projectId: string; root?: string; confirmed: boolean }): Promise<PptProject>;
+    cancel(id: string): Promise<{ cancelled: boolean }>; busy(): Promise<boolean>;
+    selectDirectory(): Promise<{ path: string; systemVolume: boolean; freeBytes: number } | null>;
+    selectMaterials(): Promise<string[]>; selectPpt(): Promise<string | null>; selectSkill(kind: 'folder' | 'file' | 'zip'): Promise<string | null>;
+    droppedPath(file: File): string;
+    skills: { list(): Promise<PptSkill[]>; identify(input: { path?: string; repositoryUrl?: string; resourceId?: string; requestId?: string; normalize?: { name: string; description: string; confirmed: boolean } }): Promise<{ candidateId?: string; candidates: PptSkill[]; needsNormalization?: boolean; originalPath?: string; repository?: { requestId: string; status: string } }>;
+      install(input: { candidateId: string; hashes: string[]; confirmed: boolean }): Promise<{ skills: PptSkill[] }>;
+      enable(input: { contentHash: string; enabled: boolean }): Promise<PptSkill[]>;
+      remove(input: { hashes: string[]; confirmed: boolean; removeReferenced?: boolean }): Promise<PptSkill[]>;
+      discard(input: { candidateId: string }): Promise<void>;
+      storage(): Promise<{ root: string; bytes: number; projects: Array<{ projectId: string; title: string; contentHash: string }> }>;
+      configure(input: { parent: string; confirmed: boolean }): Promise<{ root: string; retainedOldFiles: boolean }>; };
+  };
+  resources: {
+    sync(): Promise<{ initialized: boolean; version: number; digest: ResourceDigest; count: number }>;
+    list(input?: { center?: string; query?: string; kind?: string; aspectRatio?: string; ids?: string[]; offset?: number; limit?: number }): Promise<{ items: ManagedResource[]; total: number; version: number; lastError: string }>;
+    digest(input?: { version?: number; fromVersion?: number }): Promise<ResourceDigest>;
+    shown(input: { scope: string; version: number }): Promise<ResourceDigest>;
+    asset(input: { resourceId: string; assetId: string; version?: number; retry?: boolean }): Promise<{ assetUrl?: string; filePath: string; assetId: string }>;
+    history(): Promise<Array<{ version: number; createdAt: string }>>;
+    legacySources(): Promise<Array<{ key: string; configJson: string }>>;
+    cacheStatus(): Promise<{ root: string; bytes: number }>;
+    configureCache(input: { parent: string }): Promise<{ root: string; retainedOldFiles: boolean }>;
+    clearCache(input: { resourceId?: string; confirmed: boolean }): Promise<{ releasedBytes: number; root: string; retainedOldFiles: boolean }>;
+    repositoryRequest(input: { repo: string; ref: string; root: string }): Promise<{ requestId: string; status: string }>;
+    repositoryStatus(id: string): Promise<{ requestId: string; status: string; result: unknown }>;
+  };
   appName: string;
   platform: string;
   getVersion: () => Promise<string>;
@@ -975,7 +1060,7 @@ export interface YibiaoBridge {
     checkSource: (sourceId: string) => Promise<{ count: number; hash: string; revision: number }>;
     checkSourceUrl: (url: string) => Promise<{ count: number }>;
     refreshSource: (sourceId: string, options?: { confirmedReplace?: boolean }) => Promise<{ count: number; unchanged?: boolean; untranslated?: number }>;
-    listReferenceItems: (input?: { sourceId?: string; query?: string; limit?: number; offset?: number }) => Promise<{ items: ImageStudioReferenceItem[]; total: number }>;
+    listReferenceItems: (input?: { sourceId?: string; query?: string; itemIds?: string[]; limit?: number; offset?: number }) => Promise<{ items: ImageStudioReferenceItem[]; total: number }>;
     loadCover: (input: string | { itemId: string; coverUrl: string; retry?: boolean }) => Promise<{ assetUrl: string }>;
     toggleReferenceFavorite: (input: { sourceId: string; itemId: string; isFavorite: boolean }) => Promise<{ promptId: string | null; isFavorite: boolean }>;
     listLayerSets: (input: { workId?: string; assetId?: string }) => Promise<ImageStudioLayerSet[]>;

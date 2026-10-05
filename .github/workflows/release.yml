@@ -172,6 +172,7 @@ jobs:
             .github/scripts/verify-worker-release.test.mjs `
             .github/scripts/release-workflow.test.mjs `
             .github/scripts/build-management-workflow.test.mjs `
+            .github/scripts/ci-upgrade-workflow.test.mjs `
             analytics/worker/src/routes/updates.test.js `
             client/scripts/package-build-config.test.cjs
 
@@ -188,6 +189,22 @@ jobs:
       - name: Test update integrity checks
         working-directory: client
         run: npm run test:update
+
+      - name: 准备固定来源的公开 PPT 样本
+        working-directory: client
+        run: npm run prepare-ppt-test-fixtures
+
+      - name: 验证 Pi 与 PPT 离线升级契约
+        working-directory: client
+        run: npm run test:ci-upgrade
+
+      - name: 准备固定 Windows PPT 运行包
+        working-directory: client
+        run: npm run prepare-ppt-runtime
+
+      - name: 校验固定 Windows PPT 运行包
+        working-directory: client
+        run: npm run verify-ppt-runtime
 
       - name: Prepare Agent tools
         working-directory: client
@@ -213,6 +230,14 @@ jobs:
       - name: Smoke test Electron native dependencies
         working-directory: client
         run: npm run smoke:electron-native
+
+      - name: 验证真实 Electron Pi 升级
+        working-directory: client
+        run: npm run smoke:pi-upgrade -- .tmp/ci/pi-electron
+
+      - name: 验证真实 Electron 离线资源协议
+        working-directory: client
+        run: npx electron scripts/resource-client-electron-smoke.cjs
 
       - name: Sync package version from tag
         working-directory: client
@@ -245,6 +270,10 @@ jobs:
       - name: Verify packaged Agent tools
         working-directory: client
         run: node scripts/verify-packaged-agent-tools.cjs --platform win32 --arch x64 --release release
+
+      - name: 验证客户端包内 Pi 与 PPT 运行组件
+        working-directory: client
+        run: node scripts/verify-packaged-ppt-runtime.cjs
 
       - name: Prepare exact release whitelist and manifest
         env:
@@ -580,6 +609,20 @@ jobs:
         working-directory: management
         run: npm test
 
+      - name: 安装 PPT 准备器依赖并跳过原生重建
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        working-directory: client
+        run: npm ci --ignore-scripts
+
+      - name: 准备管理端独立 PPT 预览运行包
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        run: node client/scripts/prepare-ppt-runtime.cjs --management
+
+      - name: 校验管理端独立 PPT 预览运行包
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        working-directory: management
+        run: node scripts/verify-ppt-runtime.cjs
+
       - name: Create temporary initial administrator credential
         if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
@@ -598,6 +641,10 @@ jobs:
         if: ${{ steps.management-state.outputs.mode != 'resume' }}
         working-directory: management
         run: npm run dist:win
+
+      - name: 验证管理端包内独立 PPT 预览组件
+        if: ${{ steps.management-state.outputs.mode != 'resume' }}
+        run: node client/scripts/verify-packaged-ppt-runtime.cjs --management
 
       - name: Prepare exact management Artifact
         if: ${{ steps.management-state.outputs.mode != 'resume' }}

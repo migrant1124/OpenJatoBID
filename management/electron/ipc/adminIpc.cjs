@@ -203,6 +203,7 @@ function registerAdminIpc({
     if (denied) return denied;
     return { success: true, deleted: analyticsQueryService.cleanupOlderThanMonths(months) };
   });
+  return { requireBusinessAccess };
 }
 
 module.exports = { registerAdminIpc };

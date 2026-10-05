@@ -16,6 +16,7 @@ const navigationIcons: Record<SectionId, ComponentType<SVGProps<SVGSVGElement>>>
   'technical-plan': DocumentIcon,
   'existing-plan-expansion': DocumentIcon,
   conversation: ConversationIcon,
+  ppt: DocumentIcon,
   'image-studio': ImageStudioIcon,
   'image-studio-create': ImageStudioIcon,
   'image-studio-prompts': ImageStudioIcon,

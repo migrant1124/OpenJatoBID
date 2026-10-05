@@ -11,7 +11,7 @@ test('creates the phase-two schema and can reopen it idempotently', () => {
   const service = createDatabaseService({ databasePath: ':memory:' });
   const tables = service.database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name);
 
-  assert.equal(service.database.pragma('user_version', { simple: true }), 4);
+  assert.equal(service.database.pragma('user_version', { simple: true }), 5);
   assert.deepEqual(
     ['admin_auth', 'analytics_events', 'authorization_applications', 'authorization_revocations', 'devices', 'employees', 'licenses', 'settings'].filter((name) => !tables.includes(name)),
     [],
@@ -65,7 +65,7 @@ test('migrates legacy administrator data without removing authorization, analyti
   migrateDatabase(database);
   migrateDatabase(database);
 
-  assert.equal(database.pragma('user_version', { simple: true }), 4);
+  assert.equal(database.pragma('user_version', { simple: true }), 5);
   assert.deepEqual(database.prepare('SELECT username, credential_state FROM admin_auth WHERE id = 1').get(), {
     username: '',
     credential_state: 'LEGACY',

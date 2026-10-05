@@ -11,16 +11,24 @@ export function ImageStudioViewer({ images, initialIndex = 0, onClose }: {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [failed, setFailed] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeRef.current();
       if (event.key === 'ArrowLeft') setIndex((current) => (current - 1 + images.length) % images.length);
       if (event.key === 'ArrowRight') setIndex((current) => (current + 1) % images.length);
+      if (event.key === 'Tab') {
+        const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') || []);
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
     window.addEventListener('keydown', keydown);
     return () => { window.removeEventListener('keydown', keydown); previous?.focus(); };
@@ -38,7 +46,7 @@ export function ImageStudioViewer({ images, initialIndex = 0, onClose }: {
     else { setScale(1); setOffset({ x: 0, y: 0 }); }
   }
   const current = images[index];
-  return <div className="image-studio-viewer" role="dialog" aria-modal="true" aria-label="图片预览">
+  return <div ref={dialogRef} className="image-studio-viewer" role="dialog" aria-modal="true" aria-label="图片预览">
     <div className="image-studio-viewer-toolbar">
       <span>{current.label} · {index + 1}/{images.length}</span>
       <button type="button" title="切换原始尺寸与适应窗口" aria-label="切换预览尺寸" onClick={toggleSize}><Maximize2 size={18} /></button>

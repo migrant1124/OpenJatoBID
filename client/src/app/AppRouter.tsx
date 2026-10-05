@@ -5,6 +5,7 @@ import SecondaryMenuPage from '../shared/ui/SecondaryMenuPage';
 
 const ConversationPage = lazy(() => import('../features/conversation/pages/ConversationPage'));
 const ImageStudioPage = lazy(() => import('../features/image-studio/pages/ImageStudioPage'));
+const PptPage = lazy(() => import('../features/ppt/PptPage'));
 const ContentExpansionReplaceTestPage = lazy(() => import('../features/developer/pages/ContentExpansionReplaceTestPage'));
 const PiAgentMonitorPage = lazy(() => import('../features/developer/pages/PiAgentMonitorPage'));
 const DeveloperTestPage = lazy(() => import('../features/developer/pages/DeveloperTestPage'));
@@ -46,6 +47,8 @@ function AppRouter({ activeSection, developerMode, onDeveloperModeChange, onLogo
   }
 
   switch (activeSection) {
+    case 'ppt':
+      return <Suspense fallback={null}><PptPage registerLeaveGuard={registerLeaveGuard} /></Suspense>;
     case 'technical-plan':
       return <Suspense fallback={null}><TechnicalPlanHome workflowKind="technical-plan" registerLeaveGuard={registerLeaveGuard} onSectionChange={onSectionChange} /></Suspense>;
     case 'existing-plan-expansion':

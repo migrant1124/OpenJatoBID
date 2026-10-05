@@ -6,6 +6,16 @@ export interface ManagementAppInfo {
 }
 
 export interface JatoManagementApi {
+  resources: {
+    repositoryDecision(input: { requestId: string; approve: boolean }): Promise<ManagementOperationResult>;
+    status(): Promise<ManagementOperationResult & { data?: ResourceCenterStatus }>;
+    enable(input: { sourceId: string; enabled: boolean }): Promise<ManagementOperationResult>;
+    check(sourceId: string): Promise<ManagementOperationResult>;
+    cancel(sourceId: string): Promise<ManagementOperationResult>;
+    configure(input: ResourceCenterStatus['settings']): Promise<ManagementOperationResult>;
+    cleanup(input: { confirmed: boolean }): Promise<ManagementOperationResult>;
+    chooseDirectory(): Promise<ManagementOperationResult & { data?: { path: string; systemVolume: boolean; freeBytes: number } | null }>;
+  };
   app: {
     getInfo(): Promise<ManagementAppInfo>;
   };
@@ -38,6 +48,16 @@ export interface JatoManagementApi {
     getDashboard(range: AnalyticsRange): Promise<ManagementAnalyticsResult>;
     cleanup(months: number): Promise<ManagementOperationResult & { deleted?: number }>;
   };
+}
+
+export interface ResourceCenterStatus {
+  periodMs: number; periodLabel: string; running: boolean; version: number; count: number; bytes: number; freeBytes: number | null; unavailable: string;
+  settings: { root: string; quotaBytes: number; networkMode: string; proxyRules: string };
+  sources: Array<{ sourceId: string; name: string; enabled: boolean; running: boolean; anchorAt: number | null;
+    nextDueAt: number | null; checkedAt: number | null; successAt: number | null; error: string | null }>;
+  history: Array<{ version: number; createdAt: number; changesJson: string }>;
+  audits: Array<{ sourceId: string; occurredAt: number; status: string; detailJson: string }>;
+  repositories: Array<{ requestId: string; locatorJson: string; status: string }>;
 }
 
 export interface ManagementServerConfig {

@@ -3,6 +3,7 @@ export type SectionId =
   | 'technical-plan'
   | 'existing-plan-expansion'
   | 'conversation'
+  | 'ppt'
   | 'image-studio'
   | 'image-studio-create'
   | 'image-studio-prompts'

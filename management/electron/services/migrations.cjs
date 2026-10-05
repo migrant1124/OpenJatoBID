@@ -186,6 +186,35 @@ const MIGRATIONS = [
         ON authorization_revocations(employee_id, device_code);
     `,
   },
+  {
+    version: 5,
+    sql: `
+      CREATE TABLE resource_sources (
+        source_id TEXT PRIMARY KEY, config_json TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0,
+        anchor_at INTEGER, next_due_at INTEGER, checked_at INTEGER, success_at INTEGER,
+        etag TEXT, error TEXT, running INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE resource_assets (
+        asset_id TEXT PRIMARY KEY, hash TEXT NOT NULL, bytes INTEGER NOT NULL,
+        mime TEXT NOT NULL, relative_path TEXT NOT NULL, created_at INTEGER NOT NULL
+      );
+      CREATE TABLE resource_download_origins (
+        url_hash TEXT PRIMARY KEY, asset_id TEXT NOT NULL REFERENCES resource_assets(asset_id), etag TEXT
+      );
+      CREATE TABLE resource_releases (
+        version INTEGER PRIMARY KEY AUTOINCREMENT, created_at INTEGER NOT NULL,
+        snapshot_json TEXT NOT NULL, changes_json TEXT NOT NULL
+      );
+      CREATE TABLE resource_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT, occurred_at INTEGER NOT NULL,
+        status TEXT NOT NULL, detail_json TEXT NOT NULL
+      );
+      CREATE TABLE resource_repository_requests (
+        request_id TEXT PRIMARY KEY, license_id TEXT NOT NULL, locator_json TEXT NOT NULL,
+        status TEXT NOT NULL, result_json TEXT, created_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
 
 function migrateDatabase(database) {

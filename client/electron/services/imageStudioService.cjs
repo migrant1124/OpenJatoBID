@@ -24,7 +24,7 @@ function hasSubstantiveOverlap(first, second, width, height) {
   return false;
 }
 
-function createImageStudioService({ app, db, aiService, configStore, promptLibraryStore, dialogApi = dialog, connection: suppliedConnection }) {
+function createImageStudioService({ app, db, aiService, configStore, promptLibraryStore, dialogApi = dialog, connection: suppliedConnection, resourceClient }) {
   createImageStudioRequestSchema(db);
   createImageStudioOptimizationSchema(db);
   db.prepare("UPDATE image_studio_optimization_sessions SET status = CASE WHEN status = 'dispatching' THEN 'interrupted_unknown' ELSE 'interrupted' END WHERE status IN ('queued', 'dispatching', 'submitted')").run();
@@ -40,7 +40,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   const coverFailures = new Map();
   const coverWaiters = [];
   let coverActive = 0;
-  const sources = createImageStudioSources({ db, translateBatch: async (rows) => {
+  const sources = createImageStudioSources({ db, resourceClient, translateBatch: async (rows) => {
     const configSnapshot = configStore.load();
     if (!configSnapshot.api_key || !configSnapshot.model_name) return [];
     const answer = await aiService.chat({ configSnapshot, noRetry: true, logTitle: '生图模式-增量中文化',
@@ -51,7 +51,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     try { return JSON.parse(String(answer).replace(/^```(?:json)?\s*|\s*```$/g, '')); }
     catch { return []; }
   } });
-  if (typeof app?.on === 'function' && !process.env.R4_DISABLE_SOURCE_SYNC) {
+  if (!resourceClient && typeof app?.on === 'function' && !process.env.R4_DISABLE_SOURCE_SYNC) {
     const check = () => { void sources.runDue().then((result) => {
       if (result.checked) emit('', { sourcesChecked: true, updatedSourceIds: result.updatedSourceIds });
     }).catch(() => {}); };
@@ -414,7 +414,11 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
       filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
     });
     if (selection.canceled || !selection.filePaths?.[0]) return { canceled: true };
-    const filePath = selection.filePaths[0];
+    return importReferenceFile(selection.filePaths[0]);
+  }
+
+  // PPT 宿主只传自己已校验的项目图片；仍使用相同参考图处理和业务记录。
+  async function importReferenceFile(filePath) {
     if (fs.statSync(filePath).size > 25_000_000) throw new Error('参考图片超过 25 MB。');
     const input = fs.readFileSync(filePath);
     const image = sharp(input, { limitInputPixels: 40_000_000 });
@@ -967,7 +971,8 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
     const cacheId = `${itemId}:${crypto.createHash('sha256').update(coverUrl).digest('hex').slice(0, 16)}`;
     const cached = db.prepare('SELECT * FROM image_studio_cover_cache WHERE item_id = ?').get(cacheId);
     const validCache = cached && fs.existsSync(cached.file_path) ? cached : null;
-    if (validCache && !input?.retry && Date.now() - Date.parse(cached.updated_at) < 86400000) return { assetUrl: cached.asset_url };
+    if (validCache && !input?.retry && (resourceClient || Date.now() - Date.parse(cached.updated_at) < 86400000)) return { assetUrl: cached.asset_url };
+    if (resourceClient) return resourceClient.loadCover({ ...(typeof input === 'object' ? input : {}), itemId, coverUrl });
     const recentFailure = coverFailures.get(cacheId);
     if (recentFailure && Date.now() - recentFailure.at < 30000 && !input?.retry) throw recentFailure.error;
     if (coverInflight.has(cacheId)) return coverInflight.get(cacheId);
@@ -1120,7 +1125,7 @@ function createImageStudioService({ app, db, aiService, configStore, promptLibra
   return {
     getState, saveDraft, start, submit, connectionStatus: connection.status,
     cancelTask, setFavorite, deleteWork, exportImage,
-    importAsset, readManagedImage, invertImage, optimizePrompt, cancelOptimization,
+    importAsset, importReferenceFile, readManagedImage, invertImage, optimizePrompt, cancelOptimization,
     optimizationCase, optimizationCases, saveOptimizationEdit, loadOptimizationCaseImage,
     translateOptimizationCase, cancelCaseTranslation, latestOptimization,
     knowledgeStatus: knowledge.status, setKnowledgeEnabled: knowledge.setEnabled, importKnowledgePackage: knowledge.importPackage,

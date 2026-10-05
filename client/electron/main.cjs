@@ -243,6 +243,11 @@ function registerAssetProtocol() {
   protocol.handle('yibiao-asset', (request) => {
     try {
       const url = new URL(request.url);
+      if (url.hostname === 'managed-resources') {
+        const assetId = url.pathname.slice(1);
+        const file = /^[a-f0-9]{64}$/.test(assetId) ? require('./services/resourceAssets.cjs').resolveResourceAsset(assetId) : null;
+        return file && fs.existsSync(file) ? net.fetch(pathToFileURL(file).toString()) : new Response('Not found', { status: 404 });
+      }
       const assetRoots = {
         'generated-images': getGeneratedImagesDir(app),
         'imported-images': getImportedImagesDir(app),
