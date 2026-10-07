@@ -799,3 +799,9 @@ CI184-02实际完成：固定公开样本新目录下载/hash通过；最终发�
 - [x] RSF-02 新增回归先红灯退出1；初次Camo夹具HTTP头错误修正后，在隔离原下载器补证HTTP403红灯；最小共享下载修复已实施：Electron手动3xx交还逐跳验证、资源session/代理保持、S3/Bibi精确按来源限定、Camo仅403时转已批准原图（有效代理不变）、明确HTTP失败属性；原版本/依赖/周锚点与完整旧资源保留。
 - [x] RSF-03 最终5个CJS语法、同Electron ABI完整管理94/94、build及真实Electron10项均退出0；原112失败项隔离复测，Awesome14/14、Banana77/98恢复（剩余21外部404/403/429/连接关闭），91个可修复ID显式验证；普通npm test退出1为ABI147/145环境失败，未重建在用依赖。证据.tmp/resource-sync-fix-20261006/electron-DrBBdL/result.json，完整分层报告见docs/secondary-development/test-reports/v1.8.4-resource-sync-fix-test-report.md；未写生产资源库。
 - [x] RSF-04 独立只读Reviewer及交付报告核对结束，无确定未修复P0—P3；审查提出的有效Camo代理边界与真实Range缺口已由主代理修复/补证，最终94/94与真实Electron10项复验通过。审查报告docs/secondary-development/reviews/v1.8.4-resource-sync-fix-review.md；原用户暂存/修改及tasks原字节前缀保持。正式管理端重启后同步/客户端获取/全来源与安装NOT_RUN，Banana剩21项外部BLOCKED；无Git写入、生产数据、依赖升级或发布。
+
+## PPT 会话页标题调整（2026-10-07）
+
+- [x] PPT-TITLE-01 按用户截图将红色标题改为 `Jato PPT`，保留副标题和样式；同步既有 UI 脚本的两个标题定位。`cd client; npm.cmd run build`、`node --check client/scripts/opt-ui-electron.cjs` 与 `git diff --check` 均退出 0；完整 Electron UI 回归 NOT_RUN。分支 v1.8.4-OPT、应用版本 1.8.4 保持，未提交。
+
+- [x] PPT-INPUT-01 按用户截图将 PPT 会话输入框默认高度由 110px 调整为 165px（1.5 倍）；保留既有标题修改。`cd client; npm.cmd run build` 与 `git diff --check` 均退出 0；真实 Electron 界面对照 NOT_RUN，未提交或发布。

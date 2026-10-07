@@ -88,7 +88,7 @@ export function PptAgentConversation({ project, onProject, onWorkspace, compact 
   const pending = conversation?.questions.slice().reverse().find((item) => item.status === 'pending');
   const question = pending ? JSON.parse(pending.dataJson) as { question: string; options: Array<{ id: string; label: string; custom: boolean }>; summary?: Record<string, unknown> } : null;
   return <section className={`ppt-conversation ${compact ? 'is-compact' : ''}`}>
-    {!compact && <div className="ppt-agent-welcome"><h1>让你的演示与时代同频共振</h1><p>让你的演示惊艳、制作高效</p></div>}
+    {!compact && <div className="ppt-agent-welcome"><h1>Jato PPT</h1><p>让你的演示惊艳、制作高效</p></div>}
     {compact && <h3>Jato Agent <small>PPT 模式</small></h3>}
     <div className="ppt-conversation-messages" role="log" aria-label="PPT项目会话">
       {conversation?.messages.map((item) => <article className={`ppt-message is-${item.role}`} key={item.messageId}><small>{JSON.parse(item.metadataJson).migrated ? '历史任务摘要' : item.role === 'user' ? '你' : 'Jato Agent'}</small><p>{item.content}</p></article>)}

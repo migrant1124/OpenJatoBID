@@ -37,7 +37,7 @@
 .ppt-confirm-summary { display: grid; gap: 12px; font-size: 13px; margin-top: 12px; }
 .ppt-task-state { margin: 0; font-size: 12px; color: #777; line-height: 1.6; }
 .ppt-conversation-composer { flex: none; padding: 18px; border: 1px solid #dedede; border-radius: 16px; background: #fff; box-shadow: 0 8px 28px #00000006; }
-.ppt-conversation-composer > textarea { width: 100%; min-height: 110px; resize: vertical; max-height: 220px; border: 0; outline: none; padding: 6px; font-size: 15px; line-height: 1.65; background: transparent; }
+.ppt-conversation-composer > textarea { width: 100%; min-height: 165px; resize: vertical; max-height: 220px; border: 0; outline: none; padding: 6px; font-size: 15px; line-height: 1.65; background: transparent; }
 .ppt-composer-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
 .ppt-composer-actions > button, .ppt-composer-actions select { min-height: 32px; padding: 6px 10px; font-size: 13px; }
 .ppt-composer-actions > .image-studio-primary { margin-left: auto; min-width: 58px; }
