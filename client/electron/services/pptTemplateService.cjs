@@ -140,4 +140,27 @@ function replaceNativeChartData({ source, target, sourceHash, page: position, el
   zip.writeZip(target);
   return { ...inspectPptx(target), modifiedMembers: [chartPart, workbookPart], testedOperations: ['native_chart_and_workbook_updated'], capability: 'unverified' };
 }
-module.exports = { inspectPptx, replaceNativeText, replaceNativeChartData, hash };
+function contentFacts(file) {
+  const report=inspectPptx(file),zip=new AdmZip(file),posix=require('node:path').posix;
+  return report.pages.map(page=>{
+    const slide=xml(zip.readAsText(page.member)),relsName=posix.join(posix.dirname(page.member),'_rels',`${posix.basename(page.member)}.rels`),rels=xml(zip.readAsText(relsName)||'<Relationships/>');
+    const part=id=>{const node=rels('Relationship').toArray().find(node=>rels(node).attr('Id')===id),target=node && rels(node).attr('Target');if(!target)throw new Error('原始对象数据关系缺失，无法核验');return posix.normalize(posix.join(posix.dirname(page.member),target));};
+    const charts=slide('c\\:chart').toArray().map(node=>{
+      const chart=xml(zip.readAsText(part(slide(node).attr('r:id'))));
+      const points=selection=>selection.find('c\\:pt').toArray().sort((a,b)=>Number(chart(a).attr('idx'))-Number(chart(b).attr('idx'))).map(node=>chart(node).find('c\\:v').text());
+      return chart('c\\:ser').toArray().map(node=>{const row=chart(node),categories=points(row.find('c\\:cat,c\\:xVal')),values=points(row.find('c\\:val,c\\:yVal'));
+        if(!categories.length || !values.length || values.some(value=>!value.trim() || !Number.isFinite(Number(value)))) throw new Error('原始图表缺少可核对的类别或数值，不能将视觉相似冒充数据保真');
+        return {name:row.find('c\\:tx c\\:v').first().text(),categories,values:values.map(Number),bubble:points(row.find('c\\:bubbleSize')).map(Number)};});
+    });
+    const tables=slide('a\\:tbl').toArray().map(node=>slide(node).find('a\\:tr').toArray().map(row=>slide(row).children('a\\:tc').toArray().map(cell=>({text:slide(cell).find('a\\:t').toArray().map(run=>slide(run).text()).join(''),gridSpan:slide(cell).attr('gridSpan')||'1',rowSpan:slide(cell).attr('rowSpan')||'1'}))));
+    const diagrams=slide('dgm\\:relIds').toArray().map(node=>{const data=xml(zip.readAsText(part(slide(node).attr('r:dm')))),points=data('dgm\\:pt').toArray(),ids=points.map(point=>data(point).attr('modelId'));
+      return {nodes:points.map(point=>({type:data(point).attr('type'),text:data(point).find('a\\:t').toArray().map(run=>data(run).text()).join('')})),connections:data('dgm\\:cxn').toArray().map(edge=>({type:data(edge).attr('type'),source:ids.indexOf(data(edge).attr('srcId')),target:ids.indexOf(data(edge).attr('destId'))}))};});
+    return {charts,tables,diagrams};
+  });
+}
+function auditContentFacts(source,target) {
+  const before=contentFacts(source),after=contentFacts(target);
+  if(JSON.stringify(before)!==JSON.stringify(after)) throw new Error('美化改变了原始图表数值、表格单元格或图形关系，候选未应用');
+  return {pages:before.length,charts:before.reduce((sum,page)=>sum+page.charts.length,0),tables:before.reduce((sum,page)=>sum+page.tables.length,0),diagrams:before.reduce((sum,page)=>sum+page.diagrams.length,0)};
+}
+module.exports = { inspectPptx, replaceNativeText, replaceNativeChartData, hash, contentFacts, auditContentFacts };

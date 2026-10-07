@@ -9,8 +9,11 @@ export interface JatoManagementApi {
   resources: {
     repositoryDecision(input: { requestId: string; approve: boolean }): Promise<ManagementOperationResult>;
     status(): Promise<ManagementOperationResult & { data?: ResourceCenterStatus }>;
-    enable(input: { sourceId: string; enabled: boolean }): Promise<ManagementOperationResult>;
-    check(sourceId: string): Promise<ManagementOperationResult>;
+    applySelection(input: { requestId: string; expectedSettingsRevision: number; enabledSourceIds: string[] }): Promise<ManagementOperationResult>;
+    enqueueChecks(input: { requestId: string; sourceIds: string[]; retryFailed?: boolean }): Promise<ManagementOperationResult>;
+    audits(input: { sourceId?: string; status?: string; since?: number; until?: number; offset?: number; limit?: number }): Promise<ManagementOperationResult & { data?: { total: number; items: ResourceAudit[] } }>;
+    history(): Promise<ManagementOperationResult & { data?: ResourceCenterStatus['history'] }>;
+    repositoryRequests(input: { offset: number; limit: number }): Promise<ManagementOperationResult & { data?: { total: number; items: ResourceCenterStatus['repositories'] } }>;
     cancel(sourceId: string): Promise<ManagementOperationResult>;
     configure(input: ResourceCenterStatus['settings']): Promise<ManagementOperationResult>;
     cleanup(input: { confirmed: boolean }): Promise<ManagementOperationResult>;
@@ -51,14 +54,17 @@ export interface JatoManagementApi {
 }
 
 export interface ResourceCenterStatus {
+  settingsRevision: number;
+  tasks: Array<{ taskId: string; sourceId: string; status: string; resultJson: string | null; updatedAt: number }>;
   periodMs: number; periodLabel: string; running: boolean; version: number; count: number; bytes: number; freeBytes: number | null; unavailable: string;
   settings: { root: string; quotaBytes: number; networkMode: string; proxyRules: string };
   sources: Array<{ sourceId: string; name: string; enabled: boolean; running: boolean; anchorAt: number | null;
-    nextDueAt: number | null; checkedAt: number | null; successAt: number | null; error: string | null }>;
+    nextDueAt: number | null; checkedAt: number | null; successAt: number | null; error: string | null; hasMirror: boolean }>;
   history: Array<{ version: number; createdAt: number; changesJson: string }>;
-  audits: Array<{ sourceId: string; occurredAt: number; status: string; detailJson: string }>;
   repositories: Array<{ requestId: string; locatorJson: string; status: string }>;
+  repositoryPending: number;
 }
+export interface ResourceAudit { id: number; sourceId: string | null; occurredAt: number; status: string; detailJson: string; }
 
 export interface ManagementServerConfig {
   host: string;

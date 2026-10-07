@@ -241,6 +241,7 @@ function createAgentService({ app, configStore, aiService, analyticsService }) {
       question_id: crypto.randomUUID(),
       task_id: safeText(request.task_id),
       task_title: safeText(request.task_title) || 'Pi Agent 任务',
+      surface: request.surface === 'ppt' ? 'ppt' : 'global',
       question: safeText(request.question),
       options: sourceOptions.map((option, index) => ({
         id: `option-${index + 1}`,

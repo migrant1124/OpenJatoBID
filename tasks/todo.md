@@ -763,3 +763,39 @@ CI184-02实际完成：固定公开样本新目录下载/hash通过；最终发�
 ## PR #31 验证失败续修（2026-10-05）
 
 - [x] CI184-03 用户授权检查并修正run37253320878客户端错误；实际分支v1.8.4-架构优化 / cbe437e，开始工作区干净。远端管理82/82及构建通过，客户端Pi28/29因Electron未安装完整退出1、后续skipped；在同版本Node26.10.0/npm11.19.1隔离全新安装真实复现。postinstall运行却产物缺失，未生效的allowScripts候选撤销。最终verify在npm ci后调用现有独立二进制准备，release客户端同一步前移至SDK测试前，各一次；新顺序回归先红后4/4，原失败用例1/1、发布46/46、完整29+34、真实Electron native/Pi4项/资源8项及client build均退出0。初次样本fetch failed保留，随后新目录原Node准备器下载/hash通过。三份原报告追加CI184-03；只读复审确认候选修复及证据边界。证据client/.tmp/ci184-merge-fix/，精确命令在verified-results.json及continued-results.json。应用1.8.4/Pi两个1.0.0/管理端1.4.2、package/锁文件、业务/权限与既有发布门禁不变；旧tasks记录保留。修复后线上新run、NSIS/正式安装仍NOT_RUN，其他原验收限制和release_ready=false保持。没有暂存、提交、推送、合并/fetch、线上重跑/发布或全局Node/npm升级；用户需推送新修复后检查PR验证，不用旧SHA的Re-run证明修复。
+## v1.8.4-OPT（2026-10-05，用户授权十步连续实施）
+
+> 唯一执行状态；权威输入实际在docs/OpenJatoBID-v1.8.4-OPT。分支v1.8.4-OPT、HEAD f866acc1d0be33ecbe73f5831bed21771389eaed；client1.8.4、management1.4.2、Pi两个1.0.0和固定runtime保持。用户十步范围内计划实施连续授权，不另开PRD。原107份暂存输入（93 PNG含用户参考、92状态图）及index逐hash保护；早期125计数描述更正为实际Git清单107，源文件未改。
+
+- [x] OPT-01 分支/HEAD/status/AGENTS、完整规格/UI/原型/图片与现有计划核验；实际目录差异记录，不移动原资料；Plan第30节。
+- [x] OPT-02 需求—源码—UI—114用例—证据逐项对应；完整固定route与工具审计，正式14失败只读取证、四格式真实解码缺口修复。原失败原字节不可取，不宣称全恢复。
+- [x] OPT-03 多选草稿确认后原子保存+排队、持久FIFO、requestId/revision、来源1/文件2、固定每周锚点、取消/去重/恢复实现；管理89/89及真实双端确认链路通过，物理断电/全组合另列NOT_RUN。
+- [x] OPT-04 稳定业务及资产hash比较、同commit失败重试、prepared/unchanged/failed/reusedOld/published拆分、无变化零发布；内部version协议保持，界面版本按钮删除、项目历史保留。
+- [x] OPT-05 资源作用域卡片字号/20px正文内边距统一、审计按钮与按需分页、只读周计划/网络/记录/申请实际查看层；真实computedStyle/三尺寸有证据，不改全局授权和统计样式。
+- [x] OPT-06 首页保留→红标题留白Agent；上传/默认技能/模板/整套单页同页、首次落盘简洁目录确认；SQLite持久草稿/消息/附件/选择/问题与同工作区会话，真实正常授权UI验证。
+- [-] OPT-07 真实Pi/Proxy/固定AppContainer工具两阶段/三方向/question/gate/phase/fingerprint/request/scope绑定、单页Default、显式Quick/模板import等完成并13/13复验；Image-to-PPTX完整route需当前未获准能力而BLOCKED，真实外部模型未执行。
+- [-] OPT-08 三栏工作区、旧稿新Agent原生/美化入口、四类型项目模板、当前页后插入及内部跳转、批注/图表/讲稿/恢复/迁移、当前修订审阅/真实成品回执已实现；旧稿/插页6/6、跳转专项1/1、原生10/10、业务7/7、合同5/5通过；全部辅助UI及复杂对象组合未验。
+- [-] OPT-09 两端build、28个CJS语法、管理89/89、客户端Pi29+业务34、本轮合同5、真实SDK/Electron13、旧稿6、模板类型3、正常双端9全部退出0；本地--publish never与最终包核验0。114验收项81 PASS/29 NOT_RUN/4 BLOCKED；76 UI状态27取得actual，其余与用户定稿未验，Windows全局125%/IME、全部旧库/真实模型/独立安装/Office分层保留。
+- [x] OPT-10 独立只读审查、主代理Debug修复复验和实施/测试/兼容/截图/迁移回退/最终审查报告已交付；源码及任务记录保持本地未暂存，原输入保持原暂存状态，非全部软件验收通过。release_ready=false。
+
+本轮证据根client/.tmp/v184-opt；管理日志在仓库.tmp/v184-opt。最终actual为ui/双端-QYcsAe，真实界面可供用户审阅，未得到UI定稿确认。最终client本地包为client/.tmp/ppt184-resource-center/package/本地-1cAPZx/client，management为本地-p9jmcX/management；字节核对与自身Electron RUN_AS_NODE/ABI145/SQLite/Pi/固定AppContainer探针见final-package-ObFhO4，253/27生产文件与14553/14549运行文件无差异，不能冒称正常GUI或NSIS安装通过。
+
+原始FAIL保留：schema旧断言、早期门禁/解析候选/模板素材、UI r13定位和旧客户端ASAR偏移。冻结源码后重建并逐字节验证关闭包内问题；未删除失败日志或用builder退出0替代验收。完整报告位于docs/OpenJatoBID-v1.8.4-OPT/reports；only本轮撤回方案不回退精简/Pi、不降schema或清库。没有Git写入、依赖版本修改、生产数据、收费请求、上传、Secret/Worker/R2操作、发布或部署。
+
+末次独立复核后补测M03/M14/P05与V07/V08：初始C01/工作区C27/A01各三尺寸；来源表内部scrollTop90→90、打开按钮焦点/草稿恢复、三来源仅检查2项且锚点不变、取消目录零模型/项目。ResourceDialog清理时ref已空导致焦点丢失的实际问题由主代理修复，management build final-r2及新包p9jmcX重新验证；ui-r20正常完整9/9退出0。P10比例冲突完整UI仍NOT_RUN。原r15/r16/r17/r18失败保留，未据旧快照宣称修复。
+
+末次完成隔离补测：正常双端supplement-r7 12/12、实际SDK/Electron-r13 13/13、资源客户端隔离-s01Zfp 10/10退出0，M12/M13/M16/M19/R03/R05/R07/R09/R10/R12/R14/P07共12项闭环；编辑延迟只是R13局部，其余组合仍NOT_RUN。核心UI继续ui/双端-QYcsAe，资源边界与真实更新C53补证ui/双端-egevke；27/76基础状态有actual。只有三份测试脚本继续修改，生产源码/包未改；42份源码/SQL/测试清单及hash已更新，107原输入/index/版本锁保护不变。
+
+最终独立只读复核已完成：无新增或未修复的确定P0/P1/P2，42文件/107原输入/5锁/index及包内生产文件保护一致。可交付本地源码和分层证据；81/29/4、27/76截图及release_ready=false保持。审查未改源码，最终用户UI确认尚未收到。
+
+## VS Code 管理端启动入口（2026-10-05）
+
+- [x] MG-START-01 新增 `start（management）` 启动配置，调用 `management` 的 `npm start`；启动前复用现有 `electron-rebuild -f -w better-sqlite3` 修复实际复现的 Node ABI 147 / Electron ABI 145 不匹配，再调用原 `dev` 流程。配置检查、管理端 89/89 测试及构建退出 0；测试在原生模块切换到 Electron 前执行。隔离数据目录中实际运行 `npm start`，Vite 5174 返回 200、管理端登录窗口可见、preload bridge 正常、Electron 正常退出 0，原生模块复验通过。监督进程因验证结束后终止 Vite 返回 1，不能记为整体命令退出 0。证据 `.tmp/management-start-5DFKr3/runtime.json`；未实际操作 VS Code 的 F5 按钮，未修改既有业务代码、依赖版本、正式业务数据库或执行 Git 写入。
+
+
+## 两个提示词来源同步缺陷（2026-10-06，用户授权修复）
+
+- [x] RSF-01 只读核对 v1.8.4-OPT / f866acc1；诊断和现有任务已读，既有index/修改/本轮可编辑文件原字节保存在.tmp/resource-sync-fix-20261006；技术范围见Plan第31节。
+- [x] RSF-02 新增回归先红灯退出1；初次Camo夹具HTTP头错误修正后，在隔离原下载器补证HTTP403红灯；最小共享下载修复已实施：Electron手动3xx交还逐跳验证、资源session/代理保持、S3/Bibi精确按来源限定、Camo仅403时转已批准原图（有效代理不变）、明确HTTP失败属性；原版本/依赖/周锚点与完整旧资源保留。
+- [x] RSF-03 最终5个CJS语法、同Electron ABI完整管理94/94、build及真实Electron10项均退出0；原112失败项隔离复测，Awesome14/14、Banana77/98恢复（剩余21外部404/403/429/连接关闭），91个可修复ID显式验证；普通npm test退出1为ABI147/145环境失败，未重建在用依赖。证据.tmp/resource-sync-fix-20261006/electron-DrBBdL/result.json，完整分层报告见docs/secondary-development/test-reports/v1.8.4-resource-sync-fix-test-report.md；未写生产资源库。
+- [x] RSF-04 独立只读Reviewer及交付报告核对结束，无确定未修复P0—P3；审查提出的有效Camo代理边界与真实Range缺口已由主代理修复/补证，最终94/94与真实Electron10项复验通过。审查报告docs/secondary-development/reviews/v1.8.4-resource-sync-fix-review.md；原用户暂存/修改及tasks原字节前缀保持。正式管理端重启后同步/客户端获取/全来源与安装NOT_RUN，Banana剩21项外部BLOCKED；无Git写入、生产数据、依赖升级或发布。

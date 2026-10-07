@@ -11,7 +11,7 @@ function resourceChanges(before, after) {
   const meaningful = (item) => ({ title: item.title, prompt: item.prompt, description: item.description, author: item.author,
     license: item.license, category: item.category, translatedTitle: item.translatedTitle, translatedPrompt: item.translatedPrompt, tags: [...(item.tags || [])].sort(),
     kind: item.kind, status: item.status, capability: item.capability, aspectRatio: item.aspectRatio, pageCount: item.pageCount,
-    assets: item.assets?.map(({ assetId, role, page, generatorVersion }) => ({ assetId, role, page, generatorVersion })) });
+    assets: item.assets?.map(({ assetId, hash, role, page }) => ({ hash: hash || assetId, role, page })).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) });
   const old = new Map(before.map((item) => [item.resourceId, item]));
   const next = new Map(after.map((item) => [item.resourceId, item]));
   const changes = [];
@@ -191,7 +191,7 @@ function createResourceClientService({ app, store, licenseService, fetchImpl = l
         && (!query || `${item.title} ${item.description} ${(item.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
       return { items: items.slice(offset, offset + Math.min(100, limit)), total: items.length, version: scope ? store.stream(scope)?.applied_version || 0 : 0, lastError };
     },
-    history: async () => { await refreshIdentity(); return store.db.prepare('SELECT version, created_at AS createdAt FROM resource_client_snapshots WHERE scope_id = ? ORDER BY version DESC LIMIT 50').all(scope); },
+    history: async () => { await refreshIdentity(); return store.db.prepare('SELECT version, created_at AS createdAt FROM resource_client_snapshots WHERE scope_id = ? ORDER BY version DESC LIMIT 50').all(scope).map((row) => { const previous = store.snapshot(scope,row.version-1), changes = previous && resourceChanges(previous,store.snapshot(scope,row.version)); return {...row, summary: changes ? `新增${changes.filter((item) => item.action === 'added').length}项 · 更新${changes.filter((item) => item.action === 'updated').length}项 · 下架${changes.filter((item) => item.action === 'removed').length}项` : '历史不足，已应用资源目录'}; }); },
     legacySources: () => store.db.prepare("SELECT key, value_json AS configJson FROM resource_client_settings WHERE key LIKE 'legacy_source_config:%'").all(),
     cacheStatus: () => ({ root, bytes: store.db.prepare('SELECT COALESCE(SUM(bytes), 0) AS bytes FROM resource_client_assets').get().bytes }),
     async clearCache({ resourceId, confirmed }) {

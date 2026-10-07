@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AdminLoginPage from './features/auth/AdminLoginPage';
 import AnalyticsPage from './features/analytics/AnalyticsPage';
 import AuthorizationPage from './features/authorization/AuthorizationPage';
@@ -30,6 +30,8 @@ function App() {
   const [section, setSection] = useState<DashboardSection>('authorization');
   const [serverStatus, setServerStatus] = useState<ManagementServerStatus | null>(null);
   const [sessionUsername, setSessionUsername] = useState('');
+  const resourceLeaveGuard = useRef<((leave: () => void) => void) | null>(null);
+  const navigate = (leave: () => void) => resourceLeaveGuard.current ? resourceLeaveGuard.current(leave) : leave();
 
   useEffect(() => {
     const api = window.jatoManagement;
@@ -138,27 +140,27 @@ function App() {
           <span>管理端</span>
         </div>
         <nav aria-label="管理端主菜单">
-          <button type="button" className={section === 'authorization' ? 'is-active' : ''} onClick={() => setSection('authorization')}>授权管理</button>
-          <button type="button" className={section === 'analytics' ? 'is-active' : ''} onClick={() => setSection('analytics')}>运维统计</button>
+          <button type="button" className={section === 'authorization' ? 'is-active' : ''} onClick={() => navigate(() => setSection('authorization'))}>授权管理</button>
+          <button type="button" className={section === 'analytics' ? 'is-active' : ''} onClick={() => navigate(() => setSection('analytics'))}>运维统计</button>
           <button type="button" className={section === 'resources' ? 'is-active' : ''} onClick={() => setSection('resources')}>资源中心</button>
-          <button type="button" className={section === 'settings' ? 'is-active' : ''} onClick={() => setSection('settings')}>系统设置</button>
+          <button type="button" className={section === 'settings' ? 'is-active' : ''} onClick={() => navigate(() => setSection('settings'))}>系统设置</button>
         </nav>
         <button
           type="button"
           className="management-logout"
-          onClick={() => {
+          onClick={() => navigate(() => {
             void window.jatoManagement!.auth.logout().then(() => {
               setSection('authorization');
               setSessionUsername('');
               setView('login');
             });
-          }}
+          })}
         >
           退出管理界面
         </button>
       </aside>
       <main className="management-content">
-        <header>
+        {section !== 'resources' && <header>
           <div>
             <span>{currentSectionCopy.eyebrow}</span>
             <h1>{currentSectionCopy.title}</h1>
@@ -166,10 +168,10 @@ function App() {
           <span className={`service-status is-${(serverStatus?.status || 'stopped').toLowerCase()}`}>
             <i />{serverStatus?.status === 'RUNNING' ? `局域网服务运行中 · ${serverStatus.address?.host}:${serverStatus.address?.port}` : (serverStatus?.message || '局域网服务未运行')}
           </span>
-        </header>
+        </header>}
         {section === 'authorization' && <AuthorizationPage />}
         {section === 'analytics' && <AnalyticsPage />}
-        {section === 'resources' && <ResourceCenterPage />}
+        {section === 'resources' && <ResourceCenterPage registerLeaveGuard={(guard) => { resourceLeaveGuard.current = guard; }} />}
         {section === 'settings' && (
           <SystemSettingsPage username={sessionUsername} onChangePassword={changePassword} />
         )}

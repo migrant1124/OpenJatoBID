@@ -1,0 +1,906 @@
+{
+  "readOnly": true,
+  "tablePresent": true,
+  "records": [
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189076697,
+      "status": "PARTIAL",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "",
+      "failures": 14
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189076282,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:5107afee02df1b00",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189076266,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:c5be21c45758a665",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189076261,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:24d9a2d905be827d",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075855,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:b85026a1e7e9c581",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075839,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:686de579cdb5d884",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075822,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:c2e814fc49d42933",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075805,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:7245fe59591d115d",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075779,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:965ee6b863248932",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075763,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:6fa07c2b4bcee8d8",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075746,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:e23d73f4e46f71b1",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075729,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:6710081385160f77",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075713,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:2fed10e5763111ba",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075699,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:3015a887802df4d6",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "awesome-gpt4o-image-prompts",
+      "occurredAt": 1791189075682,
+      "status": "ITEM_FAILED",
+      "resourceId": "awesome-gpt4o-image-prompts:awesome-gpt4o-image-prompts:6cc2c92a02a8897e",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "真实图片解码失败"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189061193,
+      "status": "PARTIAL",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "",
+      "failures": 117
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189061171,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:9c28f946532272a4",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "net::ERR_CONNECTION_CLOSED"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189056764,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:702fad93ca93748f",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189056531,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6bfdc124f6f7e8b7",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189056295,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:d5f6694c58a9ab93",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189055798,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c266db8b6dba515f",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189055553,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:41712ffc77ba0c7e",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189055316,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6bc6b77b29e49326",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189055084,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6cddf1a76825389b",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054996,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:725c491497c52f75",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054848,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:0a00907ed339e8f6",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054761,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:2bccca4ff0555489",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054615,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6dcf4fd19867ff26",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054528,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:127fa9862d4ba7be",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054373,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:71778ac32ca3de87",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054294,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:9ba52feef21fd8e6",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054136,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:740d8ed5e8edeb55",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189054060,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:ffcd3f42a7dec792",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053905,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:8f4a3efb0de02670",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053827,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4b071c5666cce858",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053672,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:5fa18a37ba5f9861",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053589,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4ca38eefda02c353",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053407,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:ee134e2dec6cc4da",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053356,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:e136709610e6f148",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053176,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:77f76b853ccd3f1d",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189053120,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:67c199abae59ee6f",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052941,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6c6e37b68e172d79",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052887,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:0fc126ab845e4a74",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052708,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:8539da72ed023630",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052606,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:31bee4b0c7398788",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052476,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:35c572ae9ef467bb",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052372,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4035fc702361610e",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052244,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:73f7d21fec66a2da",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052140,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:74460d6526652886",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189052010,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:523467ea59ebe757",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051894,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:e0d1c5838b19ee8e",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051776,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:085965e3c0680f64",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051660,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:ace567690651ce00",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051529,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6266fe30a563075c",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051270,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:fc84da7992ce20ec",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051160,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:6741b3fe1bf46f0c",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189051038,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:bf496f869e8494f4",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050924,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c94e46fea77a3186",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050798,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:e5364b831174b4f4",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050692,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:dd8a6cfd5c18c6d9",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050565,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c25fd653c4b78d97",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050459,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:e306533437ed4c66",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050331,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:30ab8d0f480809a5",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189050097,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:1696f5c764d5a997",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049863,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4ea44cec28e84000",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049728,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:762c1802cbb62d2a",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049625,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:f6f301d15467108b",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049494,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c03375fc3edef422",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049342,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:f7552bb40c52e307",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049260,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:d8ad1580788924df",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049110,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4205f6a596c52cd3",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189049023,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:d7af9742c3d6e2a1",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048878,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:04c2a29bd258f494",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048787,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c9e5cc188ffce487",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048643,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:7f1f66d278ef053c",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048553,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:d695694ca620fc16",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048405,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c81f4ca94d7ea5ca",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048296,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:9235bc4e4b445e77",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048167,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:1c15755a8de56af4",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189048060,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:2e4bf2603bfaf9dd",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189047934,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:55c6d8658c7c9388",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189047826,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:c111f26c60805650",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189041473,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:7383005af8d94dc7",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189041350,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:59f2372001f48d1d",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189041237,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:91c79527b1d1ef5c",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189041118,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:fc4cf69a0a5f5953",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "net::ERR_CONNECTION_CLOSED"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189040998,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:1ecacea2b88defae",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189040765,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:3fc917e80e504480",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189040533,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4313da49e52fcdb3",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189040297,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:90393941dec61995",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189040046,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:47e2794129c00657",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 403"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189039592,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:b33be0918c79c756",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "net::ERR_CONNECTION_CLOSED"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189034397,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:39124bf9501cd426",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "net::ERR_CONNECTION_CLOSED"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189033340,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:3e0162270b3f1bf3",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "net::ERR_CONNECTION_CLOSED"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189028374,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:74d7d5dc4eb292d0",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189027599,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:4985129f38c1ddda",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189026851,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:768e364675849b4a",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189026847,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:a948075eb993e619",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "Redirect was cancelled"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189025599,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:666140d2c6ce8ffc",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 404"
+    },
+    {
+      "sourceId": "banana-prompt-quicker",
+      "occurredAt": 1791189016637,
+      "status": "ITEM_FAILED",
+      "resourceId": "banana-prompt-quicker:banana-prompt-quicker:2c26d3edbca71360",
+      "stage": "unknown",
+      "code": "unknown",
+      "message": "资源文件HTTP 429"
+    }
+  ]
+}

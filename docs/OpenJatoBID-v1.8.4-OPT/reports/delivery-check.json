@@ -1,0 +1,14 @@
+{
+  "scope": "delivery_artifact_integrity_only",
+  "states": 76,
+  "base_screens": 76,
+  "responsive_screens": 16,
+  "png_screens_total": 92,
+  "test_cases": 114,
+  "broken_markdown_links": [],
+  "render_js_errors": [],
+  "production_tests": "NOT_RUN",
+  "windows_install_tests": "NOT_RUN",
+  "office_wps_tests": "NOT_RUN",
+  "reference_images_not_production_evidence": true
+}

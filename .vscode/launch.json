@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "start（management）",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm start",
+            "cwd": "${workspaceFolder}/management",
+            "windows": {
+                "command": "npm.cmd start"
+            }
+        },
+        {
             "name": "后端服务 (FastAPI)",
             "type": "python",
             "request": "launch",

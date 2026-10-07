@@ -4,6 +4,35 @@ const dns = require('node:dns/promises');
 const net = require('node:net');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
+const { Readable } = require('node:stream');
+
+function createElectronResourceFetch({ net: electronNet, session }) {
+  return (url, { headers = {}, signal } = {}) => new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const request = electronNet.request({ url, session, redirect: 'manual' });
+    let incoming;
+    const abort = () => { incoming?.destroy(signal.reason); request.abort(); reject(signal.reason); };
+    request.on('error', reject);
+    request.on('close', () => signal?.removeEventListener('abort', abort));
+    // Electron fetch不会返回手动3xx；交还下载器逐跳校验后再发下一次请求。
+    request.on('redirect', (status, _method, location) => {
+      resolve(new Response(null, { status, headers: { location } })); request.abort();
+    });
+    request.on('response', (message) => {
+      incoming = message;
+      message.on('close', () => { if (!message.readableEnded) request.abort(); });
+      const empty = [204, 205, 304].includes(message.statusCode);
+      resolve(new Response(empty ? null : Readable.toWeb(message), { status: message.statusCode, headers: message.headers }));
+      if (empty) message.resume();
+    });
+    signal?.addEventListener('abort', abort, { once: true });
+    for (const [name, value] of Object.entries(headers)) request.setHeader(name, value);
+    request.end();
+  });
+}
+
+const httpError = (status, stage) => Object.assign(new Error(`资源${stage === 'download' ? '文件' : '索引'}HTTP ${status}`),
+  { stage, code: `HTTP_${status}`, retryable: status === 408 || status === 429 || status >= 500 });
 
 function publicAddress(address) {
   const ip = address.toLowerCase().replace(/^::ffff:/, '');
@@ -100,12 +129,20 @@ function createResourceDownloadService({ root, store, fetchImpl = fetch, urlVali
   let reserved = 0;
   let active = 0;
   const waiting = [];
-  async function response(url, { hosts, signal, etag = '', headers = {} }) {
-    let target = url;
+  async function response(url, { hosts, signal, etag = '', headers = {}, image = false }) {
+    let target = url, camoImage = image && new URL(url).hostname === 'camo.githubusercontent.com';
     for (let i = 0; i < 5; i += 1) {
       await urlValidator(target, hosts);
       const result = await fetchImpl(target, { redirect: 'manual', signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(60000)]),
         headers: { 'User-Agent': 'OpenJatoBID-Resources', ...headers, ...(etag ? { 'If-None-Match': etag } : {}) } });
+      if (camoImage && target === url && result.status === 403) {
+        camoImage = false;
+        await result.body?.cancel();
+        const encoded = new URL(url).pathname.split('/').at(-1);
+        if (!/^(?:[a-f0-9]{2})+$/i.test(encoded)) throw new Error('来源图片代理地址无效');
+        target = Buffer.from(encoded, 'hex').toString('utf8');
+        i -= 1; continue;
+      }
       if (result.status >= 300 && result.status < 400 && result.status !== 304) {
         const location = result.headers.get('location');
         await result.body?.cancel();
@@ -118,7 +155,7 @@ function createResourceDownloadService({ root, store, fetchImpl = fetch, urlVali
   async function json(url, options) {
     const result = await response(url, options);
     if (result.status === 304) return { notModified: true, etag: options.etag };
-    if (!result.ok) throw new Error(`资源索引HTTP ${result.status}`);
+    if (!result.ok) { await result.body?.cancel(); throw httpError(result.status, 'index'); }
     let bytes = 0; const chunks = [];
     for await (const chunk of result.body) {
       bytes += chunk.length;
@@ -150,10 +187,10 @@ function createResourceDownloadService({ root, store, fetchImpl = fetch, urlVali
       const part = path.join(root, `${urlHash}.part`), partialMeta = `${part}.json`;
       let partial; try { partial = JSON.parse(fs.readFileSync(partialMeta, 'utf8')); } catch { partial = null; }
       const existing = partial?.etag && fs.existsSync(part) ? fs.statSync(part).size : 0;
-      const result = await response(url, { hosts, signal, etag: !existing && validOld ? origin.etag || '' : '',
+      const result = await response(url, { hosts, signal, image: mime?.startsWith('image/'), etag: !existing && validOld ? origin.etag || '' : '',
         headers: existing ? { Range: `bytes=${existing}-`, 'If-Range': partial.etag } : {} });
       if (result.status === 304 && validOld) return describe(oldAsset);
-      if (!result.ok) throw new Error(`资源文件HTTP ${result.status}`);
+      if (!result.ok) { await result.body?.cancel(); throw httpError(result.status, 'download'); }
       const length = result.headers.get('content-length');
       if (length && Number(length) > maxBytes) throw new Error('资源文件超过下载上限');
       const used = store.database.prepare('SELECT COALESCE(SUM(bytes), 0) AS size FROM resource_assets').get().size;
@@ -211,4 +248,4 @@ function createResourceDownloadService({ root, store, fetchImpl = fetch, urlVali
   return { json, download, root };
 }
 
-module.exports = { createResourceDownloadService, validateUrl, publicAddress, readZip, inspectPptx };
+module.exports = { createResourceDownloadService, createElectronResourceFetch, validateUrl, publicAddress, readZip, inspectPptx };

@@ -2015,3 +2015,27 @@ Plan的跨进程契约、迁移、权限和证据先独立只读检查；Build�
 范围仅verify/release客户端步骤排序、既有CI回归、任务和现有报告追加。不改变package、依赖/锁文件、应用/Pi版本、授权/业务/工具权限或发布门禁。先记录失败与顺序回归红灯，再在隔离源码副本用runner同版本Node/npm重现；复用已有ensure-electron-binary.cjs，以固定版本/checksum下载并用PowerShell解包后校验可执行文件。PR验证在npm ci后调用，发布客户端把原有同一步移到npm ci后，均早于SDK测试，只执行一次。上游JS解包为何提前结束与本项目缺少安装完成门禁分开记录，不无证据宣称已修复上游。
 
 验收使用隔离副本全新npm ci后原失败用例红灯，再执行独立二进制准备、原失败用例、完整test:ci-upgrade、Electron native/Pi/资源及客户端build，并执行完整发布回归。代码不进入正式数据目录；不修改全局Node/npm，不推送/合并/重新触发远端run或发布。线上修复效果等待用户推送后的新PR验证；原失败及后续步骤skipped均如实保留。
+## 30. v1.8.4-OPT 同版优化（2026-10-05，当前用户授权连续实施）
+
+权威输入为 docs/OpenJatoBID-v1.8.4-OPT 中 OPT-D1 规格、UI-Handoff、状态矩阵、114验收用例及 Codex-Run 十步；用户最后确认的单页/整套同页 Agent 流程优先。当前分支 v1.8.4-OPT / f866acc1d0be33ecbe73f5831bed21771389eaed。保护107个既有暂存交接文件；新源码、测试和报告只留工作区。版本、固定依赖、授权/统计、发布流程均不动。目录差异先采用现有目录、不移动原包。
+
+执行切片：OPT-01基线及输入完整性；OPT-02需求/源码/UI/用例追踪、实际失败诊断与锁定ppt-master能力审计；OPT-03管理资源事务批量选择+SQLite持久FIFO（来源1、文件最多2）、requestId去重、取消及重启恢复；OPT-04稳定业务发布/独立统计/员工更新记录去版本化；OPT-05局部统一资源卡片、轻量首页和按需审计/只读周计划；OPT-06首页直接进入Agent、首次落盘位置确认、持久多轮消息/草稿/附件/选择及同工作区会话；OPT-07真实问答控制通道与阶段1/2指纹门禁、三方案选择、单页严格一页，保留原PPT写入保护；OPT-08保留既有编辑/导出/历史/存储并补齐必要状态；OPT-09静态/单元、Renderer/IPC、真实SDK离线、Electron、Windows/成品分层验证与截图对照；OPT-10只读独立审查，回Build修复再验证，交付实际报告。
+
+文件范围：management的resourceStore/resourceSyncService/resourceCenterService、migrations、resourceIpc/preload/shared IPC、ResourceCenterPage及作用域app.css；client的ResourceUpdateDialog、PptPage和最小Agent组件、pptProjectStore/pptService、ppt IPC/preload/types及feature-ppt.css；必要schema阅读文件与隔离回归脚本。扩展既有Store，不另建Agent引擎或资源队列设施。事务仅写SQLite，网络在事务外；已确认任务与UI草稿完全分开。来源周锚点沿用，手动不移动，到期只补一次；取消保留镜像，不将旧复用计新增。asset业务对比按hash/角色/页面标准化，忽略随机标识与临时信息。
+
+PPT持久消息/问题/门禁优先加入原项目Store。项目执行revision与需求fingerprint分开；确认绑定项目/会话/问题/阶段/技能模板hash/范围。等待回答保留写锁，答案经独立控制通道，不走assertIdle。流事件只内存展示，完整答复/阶段结果落盘。默认Generate Default，单页强制1页但保留两阶段；真实工具受原白名单/AppContainer保护，不开放shell、网络或自动安装。需新增权限/依赖的路线单独BLOCKED，继续其余项目。
+
+验证按现有runner：管理npm test/build，客户端build/test:ci-upgrade及新回归；Main/preload node --check；复用真实Electron隔离SQLite/问答及实际固定工具；三个尺寸实际Renderer/真实Electron截图并量字号/溢出；安装/Office/真实模型按实际环境单列，禁止以mock通过代替。所有electron-builder显式--publish never。报告在交接包reports，状态仅tasks/todo；原设计证据不覆盖。
+
+回退：需另行授权才按本轮实际diff局部撤销，保留f866既有精简/Pi/PPT/CI及用户资料，不reset/clean。新表可保留供旧代码忽略，不降schema或删用户项目；迁移事务失败完整回滚。测试使用独立库与目录；真实用户库不作为故障注入输入，原模板/稿件/历史不删除。
+
+
+## 31. 两个提示词来源同步缺陷修复（2026-10-06，用户已授权 Debug 修复）
+
+基线：v1.8.4-OPT / f866acc1d0be33ecbe73f5831bed21771389eaed；现有暂存/未暂存修改按 .tmp/resource-sync-fix-20261006/preflight.json 与原字节保护。诊断报告输入位于 Windows Temp 的 jatobid-resource-diagnosis-5ebrbj1i/diagnosis.md；不回退精简/Pi/OPT成果，版本、依赖、协议和周锚点保持。
+
+最小范围：management/electron/services/resourceDownloadService.cjs 的资源专用 Electron 请求适配及图片 Camo 地址解码、明确HTTP失败属性；main.cjs仅替换资源专用 fetch 注入；resourceSourceAdapters.cjs仅为诊断确认的来源加入精确S3/Bibi图像主机；既有测试补回归，必要隔离 Electron 探针、测试/审查报告和本节任务追加。保持同一 session 的系统/专用代理；手动返回3xx给既有循环，每跳执行HTTPS、精确主机、公共DNS校验，禁止自动跟随任意地址。Camo仅在图像代理返回403后尝试原图，代理与原图地址均须校验，有效代理保持原路径，不让员工客户端直连公网；55个Bibi原图主机仅授予Banana来源，已确认GitHub附件S3主机仅授予涉及的提示词来源，不批准泛S3或任意原图主机。
+
+执行：先新增最小失败回归并记录红灯；实现共享根因；验证取消、拒绝越界重定向/Camo、真实PNG入库、ETag/Range与失败旧快照；真实Electron使用隔离userData与资源目录及合成/公开图片，不加载生产业务入口。真实上游复测优先原失败14项及70+7项，对404/403/网络失败保留诚实状态，不以跳过失败制造complete。用户未授权操作正式资源库或重启正在使用的管理端，本轮不触发正式同步。
+
+检查：受影响CJS语法、管理端完整既有测试/build、真实Electron网络及隔离同步；Node147与当前Electron145原生SQLite不匹配时不重建用户在用node_modules，记录npm test原始环境失败，使用当前Electron Run-As-Node ABI145运行同一完整node:test集。独立只读Reviewer按Skill检查网络边界、当前差异及证据，范围内问题由主代理修复复验。测试报告与审查写入docs/secondary-development指定目录；仅tasks/todo.md记录执行状态。所有代码留本地未暂存，禁止Git写入、打包发布、生产数据、收费模型或权限扩大。

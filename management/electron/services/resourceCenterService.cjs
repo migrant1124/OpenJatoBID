@@ -60,8 +60,9 @@ function createResourceCenterService({ database, signingService, defaultRoot, fe
     try { const stat = fs.statfsSync(settings.root); freeBytes = stat.bavail * stat.bsize; } catch { /* 资源盘失联不关闭授权数据库。 */ }
     return { ...sync.plan(), periodMs: WEEK_MS, version: snapshot.version, count: snapshot.items.length,
       settings: { root: settings.root, quotaBytes: settings.quotaBytes, networkMode: settings.networkMode, proxyRules: settings.proxyRules },
-      bytes, freeBytes, unavailable, history: store.history(), audits: store.audits(),
-      repositories: database.prepare('SELECT request_id AS requestId, locator_json AS locatorJson, status FROM resource_repository_requests ORDER BY created_at DESC').all() };
+      bytes, freeBytes, unavailable, sources: sync.plan().sources.map((source) => ({ ...source, hasMirror: snapshot.items.some((item) => item.sourceId === source.sourceId) })), history: store.history().slice(0, 3),
+      repositoryPending: database.prepare("SELECT COUNT(*) AS count FROM resource_repository_requests WHERE status='pending'").get().count,
+      repositories: database.prepare('SELECT request_id AS requestId, locator_json AS locatorJson, status FROM resource_repository_requests ORDER BY created_at DESC LIMIT 5').all() };
   }
   async function repositoryDecision({ requestId, approve }) {
     const row = database.prepare('SELECT * FROM resource_repository_requests WHERE request_id = ?').get(requestId);
@@ -73,15 +74,20 @@ function createResourceCenterService({ database, signingService, defaultRoot, fe
     database.prepare('INSERT OR IGNORE INTO resource_sources(source_id, config_json) VALUES (?, ?)').run(sourceId, JSON.stringify(source));
     database.prepare("UPDATE resource_repository_requests SET status = 'downloading' WHERE request_id = ?").run(requestId);
     try {
-      await sync.enable(sourceId, true);
+      // 准入只持久排队；结果由后台任务结算，窗口不等待整个仓库下载。
+      const accepted = sync.applySelection({ requestId: `repository:${requestId}:${require('node:crypto').randomUUID()}`, expectedSettingsRevision: store.revision(), enabledSourceIds: [...store.listSources().filter((source) => source.enabled).map((source) => source.sourceId), sourceId] });
+      if (!accepted.tasks.length) sync.enqueueChecks({ requestId: require('node:crypto').randomUUID(), sourceIds: [sourceId], retryFailed: true });
+      void sync.check(sourceId).then(() => {
       const items = store.snapshot().items.filter((item) => item.sourceId === sourceId);
       if (!items.length || items.some((item) => !item.assets.some((asset) => asset.role === 'package'))) throw new Error('技能候选尚未就绪，请检查来源错误后重试');
       database.prepare("UPDATE resource_repository_requests SET status = 'ready', result_json = ? WHERE request_id = ?").run(JSON.stringify({ sourceId, resourceIds: items.map((item) => item.resourceId), commit: items[0].sourceRevision }), requestId);
       store.audit(sourceId, 'REPOSITORY_APPROVED', { requestId });
+      }).catch((error) => { database.prepare("UPDATE resource_repository_requests SET status = 'failed', result_json = ? WHERE request_id = ?").run(JSON.stringify({ error: error.message }), requestId); });
     } catch (error) { database.prepare("UPDATE resource_repository_requests SET status = 'failed', result_json = ? WHERE request_id = ?").run(JSON.stringify({ error: error.message }), requestId); throw error; }
     return status();
   }
-  return { store, sync, status, configure, repositoryDecision,
+  return { store, sync, status, configure, repositoryDecision, audits: (input) => store.audits(input || {}), history: store.history,
+    repositoryRequests({ offset = 0, limit = 20 } = {}) { return { total: database.prepare('SELECT COUNT(*) AS count FROM resource_repository_requests').get().count, items: database.prepare('SELECT request_id AS requestId, locator_json AS locatorJson, status FROM resource_repository_requests ORDER BY created_at DESC LIMIT ? OFFSET ?').all(Math.min(100,Math.max(1,limit)),Math.max(0,offset)) }; },
     inspectDirectory: (directory) => { if (!preparePreview?.inspectDirectory) throw new Error('固定系统卷检查组件未准备'); return preparePreview.inspectDirectory(directory); },
     async cleanup({ confirmed }) {
       if (!confirmed || configuring || store.listSources().some((source) => source.running)) throw new Error('须明确确认并等待同步、迁移结束');

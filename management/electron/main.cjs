@@ -1,6 +1,7 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Tray, session, powerMonitor } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Tray, session, powerMonitor, net } = require('electron');
 const { createResourceCenterService } = require('./services/resourceCenterService.cjs');
-const { createResourcePreviewService } = require('./services/resourcePreviewService.cjs');
+const { createElectronResourceFetch } = require('./services/resourceDownloadService.cjs');
+const { createResourcePreviewService, createResourceImageDecoder } = require('./services/resourcePreviewService.cjs');
 const { registerResourceIpc } = require('./ipc/resourceIpc.cjs');
 const path = require('node:path');
 const initialAdminCredential = require('./generated/initialAdminCredential.cjs');
@@ -212,8 +213,8 @@ if (!hasSingleInstanceLock) {
       resourceCenter = createResourceCenterService({
         database: databaseService.database, signingService,
         defaultRoot: path.join(preparedData.databasePath, '..', 'resources'),
-        fetchImpl: (...args) => resourceSession.fetch(...args),
-        validateImage: (buffer) => { const image = nativeImage.createFromBuffer(buffer); if (image.isEmpty()) throw new Error('真实图片解码失败'); return image.getSize(); },
+        fetchImpl: createElectronResourceFetch({ net, session: resourceSession }),
+        validateImage: createResourceImageDecoder({ BrowserWindow, nativeImage, session }),
         preparePreview: createResourcePreviewService({ app, BrowserWindow, nativeImage, session }),
         configureNetwork: (config) => resourceSession.setProxy(config.networkMode === 'proxy'
           ? { mode: 'fixed_servers', proxyRules: config.proxyRules, proxyBypassRules: '<local>' }

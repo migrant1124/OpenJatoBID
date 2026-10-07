@@ -9,7 +9,7 @@ function createPptExportService({ runtime, BrowserWindow }) {
     for (const page of pages) if (hash(fs.readFileSync(path.join(root, page.sourcePath))) !== page.hash) throw new Error('源页面已变化，旧检查报告不能放行');
     const at = new Date().toISOString();
     await runtime.guard(root, signal);
-    const check = await runtime.run({ script: 'svg_quality_checker.py', args: [working, ...(native ? ['--roundtrip'] : project.requirements.quick ? ['--quick-generate'] : []), '--json'], projectRoot: root, signal });
+    const check = await runtime.run({ script: 'svg_quality_checker.py', args: [working, ...(native ? ['--roundtrip'] : project.requirements.quick ? ['--quick-generate','--canonical-authoring','--stage','final'] : ['--canonical-authoring']), '--json'], projectRoot: root, signal });
     const fingerprint = hash(JSON.stringify(pages.map((page) => [page.slideId, page.hash])));
     fs.writeFileSync(path.join(root, 'reports', 'export-check.json'), JSON.stringify({ at, fingerprint, revision: project.revision, ...check }, null, 2), 'utf8');
     return check;
@@ -39,6 +39,7 @@ function createPptExportService({ runtime, BrowserWindow }) {
       const file = path.join(root, 'exports', 'presentation.pptx');
       await runtime.run({ script: 'svg_to_pptx.py', args: [working, '-o', file, ...(native ? ['--roundtrip'] : project.requirements.quick ? ['--quick-generate'] : []), '--native-charts-and-tables'], projectRoot: root, signal });
       const report = inspectPptx(file); if (report.pageCount !== pages.length) throw new Error('导出页数与当前修订不符');
+      if(project.requirements.preserveContent) {await runtime.run({script:'beautify_inventory.py',args:[path.join(root,'reports/beautify-original-inventory.json'),'--verify',file],projectRoot:root,signal});require('./pptTemplateService.cjs').auditContentFacts(path.join(root,project.resource.nativePath),file);}
       return { file, hash: report.hash, structure: report, warnings: report.warnings };
     }
     if (format === 'notes') {

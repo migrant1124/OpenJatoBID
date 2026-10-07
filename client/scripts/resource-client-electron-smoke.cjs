@@ -43,9 +43,15 @@ async function main() {
     assert.equal(sqlite.db.prepare('SELECT shown_version, applied_version FROM resource_client_streams').get().shown_version, digest.version);
     await client.close(); sqlite.close(); sqlite = require('../electron/services/sqliteDatabase.cjs').createSqliteDatabase(app); client = openClient(); assert.equal((await client.getDigest()).autoEligible, false);
   });
+  await check('OPT无变化反复同步不增发布/未读；异常签名不推进应用与已读游标',async()=>{
+    const before=sqlite.db.prepare('SELECT shown_version, applied_version FROM resource_client_streams').get(),version=publicStore.snapshot().version;for(let n=0;n<3;n++){publicStore.publishSource('s',[...items].reverse());assert.equal(publicStore.snapshot().version,version);await client.sync();assert.equal((await client.getDigest()).autoEligible,false);}assert.deepEqual(sqlite.db.prepare('SELECT shown_version, applied_version FROM resource_client_streams').get(),before);tamper=true;try{await assert.rejects(client.sync(),/签名或内容/);}finally{tamper=false;}assert.deepEqual(sqlite.db.prepare('SELECT shown_version, applied_version FROM resource_client_streams').get(),before);
+  });
   await check('真正图片字节/缓存离线读取；员工无公网兜底', async () => {
     const before = networkCount, firstImage = await client.loadAsset({ resourceId: 's:0', assetId: hash }); assert.equal(require('../electron/services/resourceCacheStore.cjs').digest(fs.readFileSync(firstImage.filePath)), hash);
     offline = true; const cached = await client.loadAsset({ resourceId: 's:0', assetId: hash }); assert.equal(cached.filePath, firstImage.filePath); assert(networkCount > before); const cachedCount = networkCount; await client.loadAsset({ resourceId: 's:0', assetId: hash }); assert.equal(networkCount, cachedCount); offline = false;
+  });
+  await check('OPT管理失联时已有图片副本可读、未缓存真实图片不可用且零公网回退',async()=>{
+    const other=await require('sharp')({create:{width:50,height:40,channels:3,background:'#aabbcc'}}).png().toBuffer(),otherHash=require('../electron/services/resourceCacheStore.cjs').digest(other);fs.writeFileSync(path.join(assetRoot,otherHash),other);publicStore.saveAsset({assetId:otherHash,hash:otherHash,bytes:other.length,mime:'image/png',relativePath:otherHash});items=items.map((value,index)=>index===1?{...value,assets:[{assetId:otherHash,hash:otherHash,bytes:other.length,mime:'image/png',role:'cover',page:0}]}:value);publicStore.publishSource('s',items);await client.sync();const cached=await client.loadAsset({resourceId:'s:0',assetId:hash});offline=true;try{assert.equal((await client.loadAsset({resourceId:'s:0',assetId:hash})).filePath,cached.filePath);await assert.rejects(client.loadAsset({resourceId:'s:1',assetId:otherHash}),/离线/);assert.equal((await client.getItem('s:1')).assets[0].hash,otherHash);}finally{offline=false;}
   });
   await check('签名篡改失败保留旧目录和应用游标', async () => {
     const cursor = (await client.getDigest()).version; tamper = true; await assert.rejects(client.sync(), /签名或内容/); tamper = false; assert.equal((await client.getDigest()).version, cursor); assert.equal((await client.getItem('s:0')).title, '最终修改');

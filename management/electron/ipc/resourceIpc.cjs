@@ -6,8 +6,11 @@ function registerResourceIpc({ ipcMain, service, requireBusinessAccess, dialog, 
     catch (error) { return { success: false, message: String(error.message) }; }
   });
   handle('status', () => service.status());
-  handle('enable', ({ sourceId, enabled }) => service.sync.enable(sourceId, enabled));
-  handle('check', (sourceId) => service.sync.check(sourceId));
+  handle('apply-selection', (input) => service.sync.applySelection(input));
+  handle('enqueue-checks', (input) => service.sync.enqueueChecks(input));
+  handle('audits', (input) => service.audits(input));
+  handle('history', () => service.history());
+  handle('repository-requests', (input) => service.repositoryRequests(input));
   handle('cancel', (sourceId) => service.sync.cancel(sourceId));
   handle('configure', (input) => service.configure(input));
   handle('cleanup', (input) => service.cleanup(input));

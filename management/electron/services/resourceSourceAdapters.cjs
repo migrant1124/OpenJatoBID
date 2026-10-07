@@ -5,8 +5,8 @@ const { hash, businessContent } = require('./resourceStore.cjs');
 const { PREVIEW_VERSION } = require('./resourcePreviewService.cjs');
 
 const promptNames = [
-  ['banana-prompt-quicker', 'Banana Prompt Quicker', ['cdn.jsdelivr.net', 'linux.do', 'pbs.twimg.com', 'i.mji.rip', 'storage.googleapis.com']], ['davidwu-gpt-image2-prompts', 'DavidWu GPT Image 2'],
-  ['freestylefly-gpt-image-2', 'Freestylefly GPT Image 2'], ['awesome-gpt-image', 'Awesome GPT Image', ['pbs.twimg.com']],
+  ['banana-prompt-quicker', 'Banana Prompt Quicker', ['cdn.jsdelivr.net', 'linux.do', 'pbs.twimg.com', 'i.mji.rip', 'storage.googleapis.com', 'bibigpt-apps.chatvid.ai', 'github-production-user-asset-6210df.s3.amazonaws.com']], ['davidwu-gpt-image2-prompts', 'DavidWu GPT Image 2'],
+  ['freestylefly-gpt-image-2', 'Freestylefly GPT Image 2'], ['awesome-gpt-image', 'Awesome GPT Image', ['pbs.twimg.com', 'github-production-user-asset-6210df.s3.amazonaws.com']],
   ['awesome-gpt4o-image-prompts', 'Awesome GPT-4o', ['cdn.imgedify.com']], ['youmind-gpt-image-2', 'YouMind GPT Image 2', ['cms-assets.youmind.com']],
   ['youmind-nano-banana-pro', 'YouMind Nano Banana Pro', ['cms-assets.youmind.com']],
 ];
