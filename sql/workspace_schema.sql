@@ -1101,3 +1101,18 @@ CREATE TABLE IF NOT EXISTS image_studio_psd_layers (
 );
 CREATE INDEX IF NOT EXISTS idx_image_studio_psd_source
 ON image_studio_psd_sessions(source_kind, source_id, created_at DESC);
+
+-- PPT会话为增量表；旧任务报告只迁移为历史摘要，不伪造多轮消息。
+CREATE TABLE IF NOT EXISTS ppt_conversations (
+  conversation_id TEXT PRIMARY KEY, project_id TEXT UNIQUE, draft_json TEXT NOT NULL,
+  checkpoint_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ppt_messages (
+  message_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, role TEXT NOT NULL,
+  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ppt_questions (
+  question_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, task_id TEXT NOT NULL,
+  job_id TEXT NOT NULL, gate_id TEXT, phase TEXT, fingerprint TEXT NOT NULL,
+  data_json TEXT NOT NULL, status TEXT NOT NULL, answer_json TEXT, created_at TEXT NOT NULL
+);

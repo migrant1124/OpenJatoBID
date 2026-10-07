@@ -215,6 +215,20 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE resource_selection_state (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
+      INSERT INTO resource_selection_state VALUES (1, 0);
+      CREATE TABLE resource_operations (request_id TEXT PRIMARY KEY, input_json TEXT NOT NULL, result_json TEXT NOT NULL);
+      CREATE TABLE resource_sync_tasks (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, source_id TEXT NOT NULL,
+        status TEXT NOT NULL, scheduled INTEGER NOT NULL, retry_failed INTEGER NOT NULL DEFAULT 0,
+        cancel_requested INTEGER NOT NULL DEFAULT 0, result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX resource_one_active_source ON resource_sync_tasks(source_id) WHERE status IN ('queued', 'running');
+    `,
+  },
 ];
 
 function migrateDatabase(database) {

@@ -3,6 +3,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { fileURLToPath } = require('node:url');
 const PREVIEW_VERSION = 'ppt-master-6.6.0-electron-2';
+function createResourceImageDecoder({ BrowserWindow, nativeImage, session }) {
+  return async (buffer) => {
+    const image = nativeImage.createFromBuffer(buffer);
+    if (!image.isEmpty()) return image.getSize();
+    const partition = session.fromPartition(`resource-image-${crypto.randomUUID()}`);
+    partition.webRequest.onBeforeRequest((request, callback) => callback({ cancel: !request.url.startsWith('data:') && request.url !== 'about:blank' }));
+    const window = new BrowserWindow({ show: false, webPreferences: { session: partition, sandbox: true, nodeIntegration: false, contextIsolation: true } });
+    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    const deadline = setTimeout(() => { if (!window.isDestroyed()) window.destroy(); }, 15000);
+    try {
+      await window.loadURL('data:text/html,' + encodeURIComponent('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:">'));
+      return await window.webContents.executeJavaScript(`(async () => { const bytes = Uint8Array.from(atob(${JSON.stringify(buffer.toString('base64'))}), c => c.charCodeAt(0)); const bitmap = await createImageBitmap(new Blob([bytes])); const size = {width:bitmap.width,height:bitmap.height}; bitmap.close(); return size; })()`);
+    } catch { throw Object.assign(new Error('真实图片解码失败，文件未标为就绪'), { stage: 'image_decode', code: 'IMAGE_DECODE_FAILED', retryable: true }); }
+    finally { clearTimeout(deadline); if (!window.isDestroyed()) window.destroy(); }
+  };
+}
 function temporaryBytes(directory) {
   if (!fs.existsSync(directory)) return 0;
   return fs.readdirSync(directory, { withFileTypes: true }).reduce((total, item) => {
@@ -85,4 +101,4 @@ function createResourcePreviewService({ app, BrowserWindow, nativeImage, session
   };
   return prepare;
 }
-module.exports = { createResourcePreviewService, PREVIEW_VERSION };
+module.exports = { createResourcePreviewService, createResourceImageDecoder, PREVIEW_VERSION };

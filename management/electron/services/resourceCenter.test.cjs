@@ -7,7 +7,7 @@ const http = require('node:http');
 const { createDatabaseService } = require('./databaseService.cjs');
 const { createResourceStore, changesBetween, WEEK_MS, hash } = require('./resourceStore.cjs');
 const { createResourceSyncService } = require('./resourceSyncService.cjs');
-const { createResourceDownloadService, validateUrl, inspectPptx } = require('./resourceDownloadService.cjs');
+const { createResourceDownloadService, createElectronResourceFetch, validateUrl, inspectPptx } = require('./resourceDownloadService.cjs');
 const { createSigningService } = require('./signingService.cjs');
 const { createAuthorizationService } = require('./authorizationService.cjs');
 const { createResourceHttpRouter } = require('./resourceHttpRouter.cjs');
@@ -19,6 +19,86 @@ test('已批准七源的实际图片域名按来源限定，未知地址仍拒�
   for (const [id, host] of [['banana-prompt-quicker', 'cdn.jsdelivr.net'], ['awesome-gpt-image', 'pbs.twimg.com'], ['awesome-gpt4o-image-prompts', 'cdn.imgedify.com'], ['youmind-gpt-image-2', 'cms-assets.youmind.com'], ['youmind-nano-banana-pro', 'cms-assets.youmind.com']]) assert(DEFAULT_SOURCES.find((entry) => entry.sourceId === id).hosts.includes(host));
   assert(!DEFAULT_SOURCES.find((entry) => entry.sourceId === 'davidwu-gpt-image2-prompts').hosts.includes('cdn.jsdelivr.net'));
   await assert.rejects(validateUrl('https://unknown.example/image.png', DEFAULT_SOURCES[0].hosts), /来源范围/);
+});
+
+test('GitHub附件和Banana原图精确准入，不批准任意S3或其他来源原图', () => {
+  const { DEFAULT_SOURCES } = require('./resourceSourceAdapters.cjs');
+  const banana = DEFAULT_SOURCES.find((entry) => entry.sourceId === 'banana-prompt-quicker');
+  const awesome = DEFAULT_SOURCES.find((entry) => entry.sourceId === 'awesome-gpt-image');
+  assert(banana.hosts.includes('bibigpt-apps.chatvid.ai'));
+  assert(awesome.hosts.includes('github-production-user-asset-6210df.s3.amazonaws.com'));
+  assert(!awesome.hosts.includes('bibigpt-apps.chatvid.ai'));
+  assert(!banana.hosts.includes('s3.amazonaws.com'));
+});
+
+test('Electron资源请求返回手动302并取消原请求，保留专用session和请求头', async () => {
+  const { EventEmitter } = require('node:events');
+  let options, aborted = false; const headers = {}, resourceSession = {};
+  const request = new EventEmitter();
+  request.setHeader = (name, value) => { headers[name] = value; };
+  request.abort = () => { aborted = true; request.emit('error', new Error('Redirect was cancelled')); request.emit('close'); };
+  request.end = () => queueMicrotask(() => request.emit('redirect', 302, 'GET', 'https://approved.test/image.png'));
+  const resourceFetch = createElectronResourceFetch({ net: { request: (value) => { options = value; return request; } }, session: resourceSession });
+  const result = await resourceFetch('https://github.com/user-attachments/assets/test', { headers: { 'If-None-Match': 'previous' } });
+  assert.equal(result.status, 302); assert.equal(result.headers.get('location'), 'https://approved.test/image.png');
+  assert.equal(options.session, resourceSession); assert.equal(options.redirect, 'manual'); assert(aborted); assert.equal(headers['If-None-Match'], 'previous');
+});
+
+test('Electron资源响应保持流式正文和304，取消请求不挂起', async () => {
+  const { EventEmitter } = require('node:events'), { PassThrough } = require('node:stream');
+  const controller = new AbortController(); let pending;
+  const resourceFetch = createElectronResourceFetch({ session: {}, net: { request: ({ url }) => {
+    const request = new EventEmitter(); request.setHeader = () => {};
+    request.abort = () => request.emit('close');
+    request.end = () => {
+      if (url.endsWith('/pending')) { pending = true; return; }
+      queueMicrotask(() => {
+        const incoming = new PassThrough(); incoming.statusCode = url.endsWith('/cached') ? 304 : 200; incoming.headers = { etag: 'stable' };
+        request.emit('response', incoming); incoming.end(incoming.statusCode === 304 ? undefined : '真实流式正文');
+      });
+    };
+    return request;
+  } } });
+  assert.equal(await (await resourceFetch('https://approved.test/body')).text(), '真实流式正文');
+  const cached = await resourceFetch('https://approved.test/cached'); assert.equal(cached.status, 304); assert.equal(cached.body, null);
+  const result = resourceFetch('https://approved.test/pending', { signal: controller.signal }); assert(pending); controller.abort();
+  await assert.rejects(result, { name: 'AbortError' });
+});
+
+test('Camo图像读取已准入原图并沿用原URL缓存键，拒绝未准入和内网原图', async (t) => {
+  const store = fixture(t, Date.now), root = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-camo-test-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const bytes = Buffer.from([137,80,78,71,13,10,26,10,1,2,3,4]), visited = [], fetched = [];
+  const camo = (target) => `https://camo.githubusercontent.com/${'a'.repeat(64)}/${Buffer.from(target).toString('hex')}`;
+  const working = camo('http://unapproved.test/original.png');
+  const downloader = createResourceDownloadService({ root, store, validateImage: () => ({ width: 1, height: 1 }),
+    urlValidator: async (url, hosts) => { visited.push(url); const parsed = new URL(url); if (parsed.protocol !== 'https:' || !hosts.includes(parsed.hostname) || parsed.hostname === '127.0.0.1') throw new Error('拒绝原图地址'); },
+    fetchImpl: async (url, options) => {
+      fetched.push(url);
+      if (url.startsWith('https://camo.githubusercontent.com/') && url !== working) return new Response('Bad Signature', { status: 403 });
+      return options.headers['If-None-Match'] ? new Response(null, { status: 304 }) : new Response(bytes, { headers: { etag: 'stable-original' } });
+    } });
+  const original = 'https://approved.test/image.png', proxy = camo(original), options = { hosts: ['camo.githubusercontent.com', 'approved.test'], mime: 'image/png' };
+  const first = await downloader.download(proxy, options), cached = await downloader.download(proxy, options);
+  assert.equal(first.hash, cached.hash); assert.deepEqual(fetched, [proxy, original, proxy, original]); assert(visited.includes(proxy));
+  await assert.rejects(downloader.download(camo('https://unapproved.test/image.png'), options), /拒绝原图地址/);
+  await assert.rejects(downloader.download(camo('https://127.0.0.1/image.png'), options), /拒绝原图地址/);
+  await assert.rejects(downloader.download(camo(original), { ...options, hosts: ['approved.test'] }), /拒绝原图地址/);
+  const validProxy = await downloader.download(working, options); assert.equal(validProxy.hash, first.hash);
+  assert(!visited.includes('http://unapproved.test/original.png'));
+  assert.equal(fetched.filter((url) => !url.startsWith('https://camo.githubusercontent.com/')).length, 2);
+});
+
+test('HTTP缺失或拒绝为明确不可重试失败，429和服务故障保留重试属性', async (t) => {
+  const store = fixture(t, Date.now), root = fs.mkdtempSync(path.join(os.tmpdir(), 'jato-http-error-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const status of [403, 404, 429, 503]) {
+    const downloader = createResourceDownloadService({ root, store, urlValidator: async () => {}, fetchImpl: async () => new Response(null, { status }) });
+    await assert.rejects(downloader.download('https://approved.test/image.png', { hosts: [] }), (error) => {
+      assert.equal(error.code, `HTTP_${status}`); assert.equal(error.stage, 'download'); assert.equal(error.retryable, status >= 500 || status === 429); return true;
+    });
+  }
+  assert.equal(store.database.prepare('SELECT COUNT(*) AS n FROM resource_assets').get().n, 0);
 });
 test('已登记来源更新图片域名时保留启用、周锚点和成功快照', (t) => {
   const { DEFAULT_SOURCES } = require('./resourceSourceAdapters.cjs'), current = DEFAULT_SOURCES[0];

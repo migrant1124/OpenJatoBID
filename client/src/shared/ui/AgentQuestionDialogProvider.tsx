@@ -63,7 +63,7 @@ export function AgentQuestionDialogProvider({ children }: { children: ReactNode 
   return (
     <>
       {children}
-      <Dialog.Root open={Boolean(question)}>
+      <Dialog.Root open={Boolean(question && question.surface !== 'ppt')}>
         <Dialog.Portal>
           <Dialog.Overlay className="agent-question-modal" />
           <Dialog.Content

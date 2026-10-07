@@ -3,8 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('jatoManagement', {
   resources: {
     status: () => ipcRenderer.invoke('management:resources:status'),
-    enable: (input) => ipcRenderer.invoke('management:resources:enable', input),
-    check: (sourceId) => ipcRenderer.invoke('management:resources:check', sourceId),
+    applySelection: (input) => ipcRenderer.invoke('management:resources:apply-selection', input),
+    enqueueChecks: (input) => ipcRenderer.invoke('management:resources:enqueue-checks', input),
+    audits: (input) => ipcRenderer.invoke('management:resources:audits', input),
+    history: () => ipcRenderer.invoke('management:resources:history'),
+    repositoryRequests: (input) => ipcRenderer.invoke('management:resources:repository-requests', input),
     cancel: (sourceId) => ipcRenderer.invoke('management:resources:cancel', sourceId),
     configure: (input) => ipcRenderer.invoke('management:resources:configure', input),
     cleanup: (input) => ipcRenderer.invoke('management:resources:cleanup', input),

@@ -1,0 +1,558 @@
+{
+  "branch": "v1.8.4-OPT",
+  "head": "f866acc1d0be33ecbe73f5831bed21771389eaed",
+  "branchSame": true,
+  "headSame": true,
+  "userInput": [
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Acceptance-Test-Cases.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Code-Audit.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Codex-Run.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/README.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/UI-Handoff.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/UI-State-Matrix.md",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/delivery-manifest.json",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/references/user-agent-reference.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/delivery-check.json",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/design-render-check.json",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/test-case-catalog.json",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/gallery.html",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/prototype.html",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A03.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A04.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A05.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A07.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A08.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A09.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A10.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A11.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A12.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A13.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C00.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C02.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C03.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C04.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C05.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C06.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C07.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C08.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C09.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C11.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C12.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C13.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C14.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C15.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C16.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C17.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C19.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C20.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C21.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C22.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C23.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C24.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C25.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C26.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C28.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C29.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C30.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C31.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C32.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C33.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C34.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C35.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C36.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37-1280x800.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37-1366x900.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C38.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C39.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C40.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C41.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C42.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C43.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C44.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C45.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C46.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C47.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C48.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C49.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C50.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C51.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C52.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C53.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C54.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C55.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C56.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C57.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C58.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C59.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C60.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C61.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C62.png",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/state-data.json",
+      "same": true
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/v1.8.4-OPT-spec.md",
+      "same": true
+    }
+  ],
+  "versionsAndLocks": [
+    {
+      "path": "management/package.json",
+      "same": true
+    },
+    {
+      "path": "client/package.json",
+      "same": true
+    },
+    {
+      "path": "client/package-lock.json",
+      "same": true
+    },
+    {
+      "path": "management/package-lock.json",
+      "same": true
+    },
+    {
+      "path": "client/electron/services/ppt-runtime-lock.json",
+      "same": true
+    }
+  ],
+  "indexSame": true,
+  "taskOriginalPrefixes": [
+    {
+      "path": "tasks/plan.md",
+      "samePrefix": true
+    },
+    {
+      "path": "tasks/todo.md",
+      "samePrefix": true
+    }
+  ],
+  "sourceFiles": [
+    "client/electron/ipc/pptIpc.cjs",
+    "client/electron/preload.cjs",
+    "client/electron/services/agentService.cjs",
+    "client/electron/services/pptContractAudit.cjs",
+    "client/electron/services/pptConversationStore.cjs",
+    "client/electron/services/pptExportService.cjs",
+    "client/electron/services/pptProjectStore.cjs",
+    "client/electron/services/pptRuntimeService.cjs",
+    "client/electron/services/pptService.cjs",
+    "client/electron/services/pptTemplateService.cjs",
+    "client/electron/services/resourceClientService.cjs",
+    "client/scripts/opt-beautify-electron.cjs",
+    "client/scripts/opt-contract.test.cjs",
+    "client/scripts/opt-electron-smoke.cjs",
+    "client/scripts/opt-ppt-fixture.cjs",
+    "client/scripts/opt-ui-electron.cjs",
+    "client/scripts/ppt-template.test.cjs",
+    "client/scripts/resource-client-electron-smoke.cjs",
+    "client/src/app/ResourceUpdateDialog.tsx",
+    "client/src/features/ppt/PptAgentConversation.tsx",
+    "client/src/features/ppt/PptPage.tsx",
+    "client/src/features/ppt/PptPageEditTools.tsx",
+    "client/src/features/ppt/PptTemplateActions.tsx",
+    "client/src/shared/types/ipc.ts",
+    "client/src/shared/ui/AgentQuestionDialogProvider.tsx",
+    "client/src/styles/feature-ppt.css",
+    "management/electron/ipc/resourceIpc.cjs",
+    "management/electron/main.cjs",
+    "management/electron/preload.cjs",
+    "management/electron/services/databaseService.test.cjs",
+    "management/electron/services/migrations.cjs",
+    "management/electron/services/resourceCenterService.cjs",
+    "management/electron/services/resourceOpt.test.cjs",
+    "management/electron/services/resourcePreviewService.cjs",
+    "management/electron/services/resourceStore.cjs",
+    "management/electron/services/resourceSyncService.cjs",
+    "management/src/App.tsx",
+    "management/src/features/resources/ResourceCenterPage.tsx",
+    "management/src/shared/browserDebugBridge.ts",
+    "management/src/shared/ipc.ts",
+    "management/src/styles/app.css",
+    "sql/workspace_schema.sql"
+  ],
+  "sourceHashes": {
+    "client/electron/ipc/pptIpc.cjs": "C193D48A43C7873034F5E755BE056A7CA399F089D85D918D8A45E8D785825786",
+    "client/electron/preload.cjs": "F71955758ABB589DE407BB0395D4EED6AE94E470A489A737635C404A2266491D",
+    "client/electron/services/agentService.cjs": "E44797C38C6A2B18456930A6AF62279E02E048FE0AC9E1C65B7620EBA538725A",
+    "client/electron/services/pptContractAudit.cjs": "159FD9DCBBD24C6182945CDA6003A5E303BFD86EA11BFCBDCE0D8E909FDEA36A",
+    "client/electron/services/pptConversationStore.cjs": "BC4864ED81F3329F1CD150686A1D77F4A30CFC61636EB0CE28A528AF1F422BA1",
+    "client/electron/services/pptExportService.cjs": "9BA4EC106070EED2991D58C22C03DD85A18CCFE482C122519ABC3B0F7D9149FA",
+    "client/electron/services/pptProjectStore.cjs": "4CA16624E0B6637425581F8B44C63924ABC93D88197CDFD5A6CAD98A8F8A6275",
+    "client/electron/services/pptRuntimeService.cjs": "B8FF4C2CBD9897A58361BE36986F390D36BFE621AB63B854D0B719C15736B3ED",
+    "client/electron/services/pptService.cjs": "05DA095793CEAD0E2B9465B2AA453683288956223179B544764D426C1C660BBE",
+    "client/electron/services/pptTemplateService.cjs": "A55C230CDF47519AC431EB26D45EFD359044A31216ACED6A87DBBBA92ADE754C",
+    "client/electron/services/resourceClientService.cjs": "39446EBA67CA0FABA6E10366265C50351C62F2C59104868CFF1293411C76C456",
+    "client/scripts/opt-beautify-electron.cjs": "1C0D0243D2D99A2430B1E63742B2C53678AB82E53E280277BD5CC0E4DDFB073F",
+    "client/scripts/opt-contract.test.cjs": "E3B8AACFC56622AEC2157DB85CA4273FD6F0E0D57CBC1239BBAE911E58CDA9C1",
+    "client/scripts/opt-electron-smoke.cjs": "08F23684BDE36345B6C2D98A96AF69FB9577790797C613EE58A33AE27DF8559E",
+    "client/scripts/opt-ppt-fixture.cjs": "5024603C0C4B5F7524272F1FBEE50EA3209ADA52CB2EA1E06151BFF1B7786C81",
+    "client/scripts/opt-ui-electron.cjs": "E6B72D235812228716F0CAB0F7C4AC2640AEFFB310759EBF706C42816A8369C6",
+    "client/scripts/ppt-template.test.cjs": "CE981BB97727179B0DD4FBAF7E7E5BE62A3B17D88679484F0EF01AE359FDB828",
+    "client/scripts/resource-client-electron-smoke.cjs": "A8F1B8625B6CB340BCD5B0BE3CED6720FF084DBE9A49A28B4836C62603057926",
+    "client/src/app/ResourceUpdateDialog.tsx": "20FF94BA6DBD65143E492E7E9F4A26C3DA235900D72F9F625251A3D3E055DBF7",
+    "client/src/features/ppt/PptAgentConversation.tsx": "EB211A7ED78175C42C01A2A7D273C7DF407BE64239780C3523C790B952B7B9AE",
+    "client/src/features/ppt/PptPage.tsx": "F8E3E8BFFA7FA5112C71E2CC9E4A8279F1E5005F5B557A1D098BD26E200A7B2F",
+    "client/src/features/ppt/PptPageEditTools.tsx": "0FB31A754360CF3BA4F1E264F48426B8F50217DC792C980D508C81111CEA6FC8",
+    "client/src/features/ppt/PptTemplateActions.tsx": "35CC1E8BFD1C966E5CF0F1EF97B6C37D536D73C4434B232FDBAB3CDF5312AF48",
+    "client/src/shared/types/ipc.ts": "A59B340BAB9AFF8CE569A868FB00E4E9F53A73C9BD1A282FF8AFB79FE249AC5C",
+    "client/src/shared/ui/AgentQuestionDialogProvider.tsx": "288D31774CDE51BB9DFD349FCA9C15D65A84AEF2C2DD4F3A43B1465651C71F00",
+    "client/src/styles/feature-ppt.css": "15AC2FB5F55F301B3C75288A5E0DFF2F5239219DFA69924411DFDB91A15C81AC",
+    "management/electron/ipc/resourceIpc.cjs": "85B9DE7870E5339F43A8303680D39BD5309087254C8525B35D888858D4604C62",
+    "management/electron/main.cjs": "4C1E335E2DAAC1D97BCA4381997F72D2E18774A38022DFA3CD7C171B9427D3D4",
+    "management/electron/preload.cjs": "1203A1A4D6D9009BE428EE81B4148BE56837F578B6B2F44A69B686201E9C0DC0",
+    "management/electron/services/databaseService.test.cjs": "7D701410F49A007A7A9EB3ADFD3158B976B992EBE01BDD25E41047A84877F0AB",
+    "management/electron/services/migrations.cjs": "AA6E9FBD0B464B69000508B31BCB31BD359D7C177C5495FF6A38BF26E9BB0BF7",
+    "management/electron/services/resourceCenterService.cjs": "15279CAB304AAEFB9CA17DFDB29AAFFF9B86A2C241A09D55E507DFE8B75EA6E8",
+    "management/electron/services/resourceOpt.test.cjs": "6C420A8AA720D7C994E9938D088454C9904FBB63FE8688721636EA964840D184",
+    "management/electron/services/resourcePreviewService.cjs": "E7609A95A3E8FC1225E312A79C54AA8406EFD6DEB86C5479FD50E2507817E83A",
+    "management/electron/services/resourceStore.cjs": "1534D640796A556A9A3BAE91E5A15C9E1E25FADFA7BCDB711278128EBB7D0974",
+    "management/electron/services/resourceSyncService.cjs": "0D82596BB3E185F39ED03442CFF1346A679BAC38A5943EAE435C6304CD8B9B64",
+    "management/src/App.tsx": "E4C34F4BD73A1770C4F5209FA43DA66FAEB75D442C712E2D561CC295240320D9",
+    "management/src/features/resources/ResourceCenterPage.tsx": "787938C0539B91392003A7A5E7309F48066A66C5E88CFFC3AE95BA218F7C4A92",
+    "management/src/shared/browserDebugBridge.ts": "D8350AB01406F7D2F11BBCD8BE29575E3771C44CB592A641B5FB692F5EBFAE70",
+    "management/src/shared/ipc.ts": "89C3797CAF85E22657F6B29517F92F793BF4323D7AEC0C4C6926B78A244FF8F2",
+    "management/src/styles/app.css": "EAFD48392B791622C8F715D738856D680F7A01020950BDAFB7836A1CC6CD8C6D",
+    "sql/workspace_schema.sql": "AE9A546C6788D6F273584E894E51043498CEF4A1C5AF5709ED750E875CAFB6A5"
+  },
+  "release_ready": false
+}

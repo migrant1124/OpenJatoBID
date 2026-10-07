@@ -44,7 +44,7 @@ function createPptSchema(db) {
 
 function createPptProjectStore({ db }) {
   createPptSchema(db);
-  db.prepare("UPDATE ppt_jobs SET status = 'interrupted', error = '进程退出时任务未完成，候选保留待恢复' WHERE status IN ('running', 'queued')").run();
+  db.prepare("UPDATE ppt_jobs SET status = 'interrupted', error = '进程退出时任务未完成，候选保留待恢复' WHERE status IN ('running', 'queued', 'waiting_user')").run();
   const project = (id) => {
     const row = db.prepare('SELECT * FROM ppt_projects WHERE project_id = ? AND deleted_at IS NULL').get(id);
     if (!row) throw new Error('PPT项目不存在');
@@ -90,7 +90,7 @@ function createPptProjectStore({ db }) {
   }
   function confirm({ projectId, revision }) {
     const value = owned(projectId);
-    if (value.revision !== revision || !value.plan) throw new Error('计划不存在或确认已失效');
+    if (value.revision !== revision || !value.plan && !(value.route==='generate' && value.requirements.quick && pages(projectId).length)) throw new Error('计划不存在或确认已失效');
     db.prepare('UPDATE ppt_projects SET confirmed_revision = ? WHERE project_id = ?').run(revision, projectId);
     return project(projectId);
   }

@@ -10,7 +10,8 @@ function businessContent(item) {
   return { resourceId, sourceId, upstreamId, center, kind, title: title || '', prompt: prompt || '',
     description: description || '', author: author || '', tags: [...(tags || [])].sort(), category: category || '',
     aspectRatio: aspectRatio || null, pageCount: pageCount ?? null,
-    assets: (assets || []).map(({ assetId, hash: digest, role, page, generatorVersion }) => ({ assetId, hash: digest, role, page, generatorVersion })),
+    assets: (assets || []).map(({ assetId, hash: digest, role, page }) => ({ hash: digest || assetId, role, page: page || 0 }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     capability: capability || 'pending', status: status || 'pending', license: license || '',
     translatedTitle: translatedTitle || '', translatedPrompt: translatedPrompt || '' };
 }
@@ -33,6 +34,7 @@ function changesBetween(before, after) {
 function createResourceStore({ database, sources = [], now = Date.now }) {
   for (const source of sources) database.prepare('INSERT INTO resource_sources(source_id, config_json) VALUES (?, ?) ON CONFLICT(source_id) DO UPDATE SET config_json = excluded.config_json').run(source.sourceId, JSON.stringify(source));
   database.prepare('UPDATE resource_sources SET running = 0 WHERE running = 1').run();
+  database.prepare("UPDATE resource_sync_tasks SET status = CASE WHEN cancel_requested = 1 THEN 'cancelled' ELSE 'queued' END, scheduled = 0 WHERE status = 'running'").run();
   const getSource = (id) => {
     const row = database.prepare('SELECT * FROM resource_sources WHERE source_id = ?').get(id);
     return row ? { ...JSON.parse(row.config_json), enabled: Boolean(row.enabled), anchorAt: row.anchor_at,
@@ -60,7 +62,69 @@ function createResourceStore({ database, sources = [], now = Date.now }) {
       etag = COALESCE(?, etag) WHERE source_id = ?`).run(now(), error, error, now(), etag, id);
   }
   function audit(id, status, detail = {}) {
-    database.prepare('INSERT INTO resource_audit(source_id, occurred_at, status, detail_json) VALUES (?, ?, ?, ?)').run(id, now(), status, JSON.stringify(detail));
+    database.prepare('INSERT INTO resource_audit(source_id, occurred_at, status, detail_json) VALUES (?, ?, ?, ?)').run(id, now(), status, JSON.stringify(detail, (key, value) => /token|api[_-]?key|password|secret/i.test(key) ? '[已脱敏]' : typeof value === 'string' ? redact(value) : value));
+  }
+  const revision = () => database.prepare('SELECT revision FROM resource_selection_state WHERE id = 1').get().revision;
+  const task = (id) => database.prepare('SELECT * FROM resource_sync_tasks WHERE task_id = ?').get(id);
+  const activeTask = (id) => database.prepare("SELECT * FROM resource_sync_tasks WHERE source_id = ? AND status IN ('queued', 'running')").get(id);
+  function enqueue(id, { scheduled = false, retryFailed = false } = {}) {
+    if (!getSource(id)?.enabled) throw new Error('请选择已启用来源');
+    const existing = activeTask(id);
+    if (existing) {
+      if (scheduled) {
+        if (existing.status === 'queued') database.prepare('UPDATE resource_sync_tasks SET scheduled = 1 WHERE task_id = ?').run(existing.task_id);
+        else {
+          const source = getSource(id);
+          const nextDue = source.anchorAt + (Math.floor(Math.max(0, now() - source.anchorAt) / WEEK_MS) + 1) * WEEK_MS;
+          database.prepare('UPDATE resource_sources SET next_due_at = ? WHERE source_id = ?').run(nextDue, id);
+        }
+      }
+      return { taskId: existing.task_id, sourceId: id, status: existing.status, alreadyQueued: true };
+    }
+    const taskId = crypto.randomUUID();
+    database.prepare("INSERT INTO resource_sync_tasks(task_id, source_id, status, scheduled, retry_failed, created_at, updated_at) VALUES (?, ?, 'queued', ?, ?, ?, ?)")
+      .run(taskId, id, Number(scheduled), Number(retryFailed), now(), now());
+    audit(id, 'QUEUED', { taskId, scheduled, retryFailed });
+    return { taskId, sourceId: id, status: 'queued', alreadyQueued: false };
+  }
+  function accept(input, selection = false) {
+    if (!input.requestId || !Array.isArray(selection ? input.enabledSourceIds : input.sourceIds)) throw new Error('缺少批次标识或来源范围');
+    const ids = [...new Set(selection ? input.enabledSourceIds : input.sourceIds)].sort();
+    const payload = JSON.stringify({ selection, ids, retryFailed: Boolean(input.retryFailed), expectedSettingsRevision: input.expectedSettingsRevision });
+    return database.transaction(() => {
+      const prior = database.prepare('SELECT * FROM resource_operations WHERE request_id = ?').get(input.requestId);
+      if (prior) { if (prior.input_json !== payload) throw new Error('同一批次标识不能用于不同操作'); return JSON.parse(prior.result_json); }
+      if (selection && input.expectedSettingsRevision !== revision()) throw new Error('来源设置已变化，请核对最新状态后重新确认；草稿保留');
+      if (ids.some((id) => !getSource(id))) throw new Error('资源来源不存在');
+      const tasks = [], cancelled = [];
+      if (selection) {
+        for (const source of listSources()) {
+          const enabled = ids.includes(source.sourceId);
+          if (enabled === source.enabled) continue;
+          setEnabled(source.sourceId, enabled);
+          if (enabled) tasks.push(enqueue(source.sourceId, { scheduled: getSource(source.sourceId).nextDueAt <= now() }));
+          else {
+            database.prepare("UPDATE resource_sync_tasks SET cancel_requested = 1, status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END, updated_at = ? WHERE source_id = ? AND status IN ('queued', 'running')").run(now(), source.sourceId);
+            cancelled.push(source.sourceId);
+          }
+        }
+        database.prepare('UPDATE resource_selection_state SET revision = revision + 1 WHERE id = 1').run();
+      } else for (const id of ids) tasks.push(enqueue(id, { retryFailed: Boolean(input.retryFailed) }));
+      const result = { accepted: true, requestId: input.requestId, settingsRevision: revision(), tasks, cancelled };
+      audit(null, selection ? 'SELECTION_ACCEPTED' : 'CHECK_ACCEPTED', result);
+      database.prepare('INSERT INTO resource_operations VALUES (?, ?, ?)').run(input.requestId, payload, JSON.stringify(result));
+      return result;
+    })();
+  }
+  function finishTask(id, status, result) { database.prepare('UPDATE resource_sync_tasks SET status = ?, result_json = ?, updated_at = ? WHERE task_id = ?').run(status, JSON.stringify(result), now(), id); }
+  function taskSummary() { return database.prepare('SELECT task_id AS taskId, source_id AS sourceId, status, result_json AS resultJson, updated_at AS updatedAt FROM resource_sync_tasks ORDER BY sequence DESC LIMIT 20').all(); }
+  function audits({ sourceId, status, since, until, offset = 0, limit = 20 } = {}) {
+    const where = [], values = [];
+    for (const [field, value, operator] of [['source_id', sourceId, '='], ['status', status, '='], ['occurred_at', since, '>='], ['occurred_at', until, '<=']]) if (value !== undefined && value !== '') { where.push(`${field} ${operator} ?`); values.push(value); }
+    const filter = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+    const result = { total: database.prepare(`SELECT COUNT(*) AS n FROM resource_audit${filter}`).get(...values).n,
+      items: database.prepare(`SELECT id, source_id AS sourceId, occurred_at AS occurredAt, status, detail_json AS detailJson FROM resource_audit${filter} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...values, Math.min(100, Math.max(1, limit)), Math.max(0, offset)) };
+    return arguments.length ? result : result.items;
   }
   function snapshot(version) {
     const row = version === undefined ? database.prepare('SELECT * FROM resource_releases ORDER BY version DESC LIMIT 1').get()
@@ -87,11 +151,15 @@ function createResourceStore({ database, sources = [], now = Date.now }) {
     database.prepare(`INSERT OR IGNORE INTO resource_assets(asset_id, hash, bytes, mime, relative_path, created_at)
       VALUES (?, ?, ?, ?, ?, ?)`).run(asset.assetId, asset.hash, asset.bytes, asset.mime, asset.relativePath, now());
   }
-  return { database, getSource, listSources, setEnabled, claim, finish, audit, snapshot, publishSource, saveAsset,
+  return { database, getSource, listSources, setEnabled, claim, finish, audit, snapshot, publishSource, saveAsset, revision, task, activeTask, enqueue, accept, finishTask, taskSummary,
     getAsset: (id) => database.prepare('SELECT * FROM resource_assets WHERE asset_id = ?').get(id),
     history: () => database.prepare('SELECT version, created_at AS createdAt, changes_json AS changesJson FROM resource_releases ORDER BY version DESC LIMIT 50').all(),
-    audits: () => database.prepare('SELECT source_id AS sourceId, occurred_at AS occurredAt, status, detail_json AS detailJson FROM resource_audit ORDER BY id DESC LIMIT 100').all(),
+    audits,
   };
 }
 
-module.exports = { WEEK_MS, hash, businessContent, changesBetween, createResourceStore };
+function redact(value) {
+  return value.replace(/(Bearer\s+)[^\s"\\]+/gi, '$1[已脱敏]').replace(/((?:token|api[_-]?key|password|secret)[\s"\\:=]+)[^\s",}]+/gi, '$1[已脱敏]')
+    .replace(/[A-Z]:\\(?:[^\s"<>]|\\)+/gi, '[本地路径]').replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1[已脱敏]@');
+}
+module.exports = { WEEK_MS, hash, businessContent, changesBetween, createResourceStore, redact };

@@ -1,0 +1,1150 @@
+{
+  "status": "SPECIFICATION_NOT_EXECUTED",
+  "count": 114,
+  "priorities": {
+    "P0": 98,
+    "P1": 16
+  },
+  "cases": [
+    {
+      "group": "基线与范围保护",
+      "id": "B01",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "当前分支不是v1.8.4-OPT",
+      "action": "启动本轮Codex执行",
+      "expected": "仅报告分支不符；不创建/切换分支，不写生产文件",
+      "evidence": "执行记录、git status前后对照"
+    },
+    {
+      "group": "基线与范围保护",
+      "id": "B02",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "用户有未提交修改且HEAD比取证提交更新",
+      "action": "读取基线并开始优化",
+      "expected": "保留用户修改；先列相关差异，不reset到取证提交",
+      "evidence": "差异清单、保留项hash"
+    },
+    {
+      "group": "基线与范围保护",
+      "id": "B03",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "客户端1.8.4及独立管理端版本、固定依赖",
+      "action": "完成本轮改动",
+      "expected": "两端版本及Pi/ppt-master/Python锁定不被顺带更改",
+      "evidence": "锁文件与package差异"
+    },
+    {
+      "group": "基线与范围保护",
+      "id": "B04",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "原有授权、埋点、发布与联网限制",
+      "action": "回归核心功能",
+      "expected": "无绕过；不新增公共直连或泄露凭据",
+      "evidence": "权限回归及网络记录"
+    },
+    {
+      "group": "基线与范围保护",
+      "id": "B05",
+      "priority": "P0",
+      "ui": "C00/C27",
+      "pre": "现有首页、一级导航、后续工作区",
+      "action": "对比改动前后",
+      "expected": "首页和导航未重做；工作区保持三栏与原功能",
+      "evidence": "同尺寸前后截图"
+    },
+    {
+      "group": "基线与范围保护",
+      "id": "B06",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "所有代码完成但未获发布授权",
+      "action": "执行交付阶段",
+      "expected": "只保留工作区改动；无暂存提交推送标签部署或正式Actions",
+      "evidence": "Git状态及工具执行记录"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M01",
+      "priority": "P0",
+      "ui": "A01/A02",
+      "pre": "来源均停用，网络/解析spy计数为0",
+      "action": "连续勾选3个来源",
+      "expected": "只出现本地草稿；数据库enabled、下载和解析计数不变",
+      "evidence": "Renderer事件与Main调用计数"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M02",
+      "priority": "P0",
+      "ui": "A02",
+      "pre": "有3项勾选草稿且轮询返回新状态",
+      "action": "等待多次轮询",
+      "expected": "勾选不被覆盖；运行摘要可更新",
+      "evidence": "Renderer测试、草稿快照"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M03",
+      "priority": "P0",
+      "ui": "A02",
+      "pre": "有未提交修改",
+      "action": "点击取消修改或取消确认层",
+      "expected": "恢复已生效选择；无任务和文件写入",
+      "evidence": "队列/DB前后对照"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M04",
+      "priority": "P0",
+      "ui": "A03/A04",
+      "pre": "一次确认3个来源，下载人为挂起",
+      "action": "确认批量提交",
+      "expected": "事务保存启用与任务；立即返回accepted和任务ID，UI不等待下载",
+      "evidence": "IPC结果及事务/任务快照"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M05",
+      "priority": "P0",
+      "ui": "A03",
+      "pre": "同一requestId重复两次及双击",
+      "action": "重复提交",
+      "expected": "返回相同批次/任务，不重复下载",
+      "evidence": "requestId唯一性测试"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M06",
+      "priority": "P0",
+      "ui": "A03/A04",
+      "pre": "不同requestId选中同一在途来源",
+      "action": "再次提交",
+      "expected": "返回已在队列，不并发第二份相同来源任务",
+      "evidence": "任务去重测试"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M07",
+      "priority": "P0",
+      "ui": "A03",
+      "pre": "事务保存来源后注入建任务失败",
+      "action": "提交",
+      "expected": "完整回滚启用与任务；调度器不能抢跑",
+      "evidence": "故障注入、事务一致性"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M08",
+      "priority": "P0",
+      "ui": "A04",
+      "pre": "3个来源各有多个文件",
+      "action": "运行全部任务",
+      "expected": "来源FIFO最大1，当前来源文件准备最大2；无后台无限旁路",
+      "evidence": "全局并发计数峰值"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M09",
+      "priority": "P0",
+      "ui": "A04",
+      "pre": "一批已确认任务含running和queued",
+      "action": "退出重启管理进程",
+      "expected": "可恢复/重新核对任务；不会长期显示假running或丢排队项",
+      "evidence": "SQLite恢复测试"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M10",
+      "priority": "P0",
+      "ui": "A03/A07",
+      "pre": "已启用来源已有周锚点",
+      "action": "手动检查、重试并重启",
+      "expected": "锚点及周周期不变；任务按当前状态去重",
+      "evidence": "伪时钟、锚点断言"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M11",
+      "priority": "P0",
+      "ui": "A07",
+      "pre": "停机跨过3个周周期",
+      "action": "重启",
+      "expected": "只补一次过期检查，不回放3次整库任务",
+      "evidence": "伪时钟任务计数"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M12",
+      "priority": "P0",
+      "ui": "A03",
+      "pre": "正在下载的来源将停用",
+      "action": "查看影响并确认停用",
+      "expected": "取消令牌生效、撤销未开始任务、停后续周计划；旧发布保留",
+      "evidence": "取消/DB/旧镜像hash"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M13",
+      "priority": "P0",
+      "ui": "A04",
+      "pre": "来源仍启用且执行中",
+      "action": "停止本次",
+      "expected": "仅取消当前任务；不是自动停用；不被重试立即重启",
+      "evidence": "状态转换和计划核验"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M14",
+      "priority": "P0",
+      "ui": "A13",
+      "pre": "3个已启用来源",
+      "action": "手动检查确认层仅选2个",
+      "expected": "只队列这2个；不修改enabled，不检查第三个",
+      "evidence": "任务范围/配置快照"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M15",
+      "priority": "P1",
+      "ui": "A02",
+      "pre": "已启用来源未改变，另启用一个来源",
+      "action": "确认新选择",
+      "expected": "不重复下载未改变来源；新来源初始化一次",
+      "evidence": "来源调用计数"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M16",
+      "priority": "P0",
+      "ui": "A04",
+      "pre": "下载中同时处理员工授权与统计",
+      "action": "进行授权校验和统计读取",
+      "expected": "业务仍可响应；资源失败不使两服务退出",
+      "evidence": "真实管理端联调"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M17",
+      "priority": "P1",
+      "ui": "A01/A02",
+      "pre": "设置revision在另一个操作中变化",
+      "action": "提交旧草稿",
+      "expected": "提示刷新/合并差异，不覆盖新配置；原草稿可恢复",
+      "evidence": "乐观并发测试"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M18",
+      "priority": "P0",
+      "ui": "A06",
+      "pre": "失败项中部分已有旧版本，其余成功",
+      "action": "执行失败条目重试",
+      "expected": "优先仅处理失败且未恢复条目；来源已变时重新核对快照，不混版本",
+      "evidence": "适配器计数和资源hash"
+    },
+    {
+      "group": "批量来源与持久队列",
+      "id": "M19",
+      "priority": "P0",
+      "ui": "A04",
+      "pre": "关闭管理窗口，随后退出服务",
+      "action": "先关窗口再退出服务",
+      "expected": "托盘存活时依真实能力运行；退出后停止，不宣称关机继续",
+      "evidence": "Windows进程与任务观察"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R01",
+      "priority": "P0",
+      "ui": "A05/A06",
+      "pre": "一次prepare恰好14项失败",
+      "action": "读取来源结果和审计",
+      "expected": "真实显示partial及14项；不将全部资源判坏，也不猜测原因",
+      "evidence": "可控14失败fixture"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R02",
+      "priority": "P0",
+      "ui": "A05/A06",
+      "pre": "checkedAt有值，successAt为空",
+      "action": "展示时间",
+      "expected": "最近检查有正确时间；完整成功写暂无完整成功记录；不重复尚未检查",
+      "evidence": "格式化/Renderer测试"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R03",
+      "priority": "P0",
+      "ui": "A05",
+      "pre": "失败且没有任何旧资源",
+      "action": "展示来源状态",
+      "expected": "资源暂不可用；不写现有资源可继续使用",
+      "evidence": "空镜像fixture截图"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R04",
+      "priority": "P0",
+      "ui": "A06",
+      "pre": "新准备2、未变3、失败2且旧复用1",
+      "action": "统计任务",
+      "expected": "attempted/prepared/unchanged/failed/reusedOld/published含义独立；复用不计新增",
+      "evidence": "精确计数断言"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R05",
+      "priority": "P0",
+      "ui": "A10/C53",
+      "pre": "源内容与文件完全相同",
+      "action": "检查及多次重试",
+      "expected": "发布ID不增加，客户端未读与更新弹窗不增加",
+      "evidence": "DB版本/通知调用计数"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R06",
+      "priority": "P0",
+      "ui": "A10",
+      "pre": "同一内容只有顺序、检查时间或临时路径变化",
+      "action": "重新准备",
+      "expected": "标准化后无业务差异；随机assetId不制造假变化",
+      "evidence": "稳定性测试及差异摘要"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R07",
+      "priority": "P0",
+      "ui": "A05/A10",
+      "pre": "全部失败且可复用旧条目",
+      "action": "完成任务",
+      "expected": "旧资源可用，不产生空发布或成功更新数",
+      "evidence": "快照及发布计数"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R08",
+      "priority": "P0",
+      "ui": "A05/A10/C53",
+      "pre": "部分成功且有实际新增内容",
+      "action": "完成任务",
+      "expected": "发布真实成功变化；失败项保留旧条目，失败新项不伪装可用",
+      "evidence": "快照/差异/通知一致性"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R09",
+      "priority": "P0",
+      "ui": "A05",
+      "pre": "上游返回异常空清单或骤减",
+      "action": "检查",
+      "expected": "保留旧快照，不将其解释为全部删除",
+      "evidence": "异常列表保护测试"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R10",
+      "priority": "P0",
+      "ui": "C53",
+      "pre": "客户端已应用多次真实更新",
+      "action": "打开更新记录",
+      "expected": "按日期和内容展示；无公共资源版本号或版本选择；不切换已应用目录",
+      "evidence": "DOM/应用游标测试"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R11",
+      "priority": "P0",
+      "ui": "C27/C53",
+      "pre": "在制项目固定旧模板/技能",
+      "action": "公共资源更新",
+      "expected": "项目既有文件和固定选择不变；新目录可用于新选择",
+      "evidence": "项目源文件hash对照"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R12",
+      "priority": "P0",
+      "ui": "C53",
+      "pre": "客户端校验/应用目录失败",
+      "action": "尝试更新",
+      "expected": "不显示已应用/已更新；不推进已读游标",
+      "evidence": "失败注入、游标断言"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R13",
+      "priority": "P1",
+      "ui": "C53",
+      "pre": "用户正在编辑、导出或回答问题",
+      "action": "有新资源摘要待展示",
+      "expected": "延迟且合并；退出忙碌后显示一次，不逐重试弹出",
+      "evidence": "UI时序测试"
+    },
+    {
+      "group": "失败诊断、发布与客户端去版本化",
+      "id": "R14",
+      "priority": "P0",
+      "ui": "C54",
+      "pre": "局域网管理端失联",
+      "action": "访问已缓存和未缓存资源",
+      "expected": "已有副本可用，未缓存明确不可用；无公网绕过",
+      "evidence": "网络拦截/缓存读取"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V01",
+      "priority": "P1",
+      "ui": "A01/A08/A10/A11",
+      "pre": "所有资源卡片",
+      "action": "读取computedStyle并截图",
+      "expected": "标题16px、正文14px、辅助12–13px；同语义一致",
+      "evidence": "样式断言与截图"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V02",
+      "priority": "P1",
+      "ui": "A01",
+      "pre": "公共同步统计卡",
+      "action": "检查镜像体积/可用空间",
+      "expected": "标签12px、数值13px；body20px留白，无贴边裸p",
+      "evidence": "边界和字号测量"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V03",
+      "priority": "P1",
+      "ui": "A01/A06",
+      "pre": "资源中心初次打开",
+      "action": "观察首页再点击审计按钮",
+      "expected": "首页无log/JSON；一个按钮打开记录/周计划查看层",
+      "evidence": "DOM与截图"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V04",
+      "priority": "P0",
+      "ui": "A06/A07",
+      "pre": "打开/切换审计标签",
+      "action": "查询记录和计划",
+      "expected": "只读查询不启动同步/修改周期；无每日/小时编辑",
+      "evidence": "请求调用计数"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V05",
+      "priority": "P1",
+      "ui": "A01/A06",
+      "pre": "审计有大量记录",
+      "action": "首页轮询，再打开详情分页",
+      "expected": "首页只取摘要；详情按需分页、可筛选，无重复拉全量日志",
+      "evidence": "IPC载荷与查询计数"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V06",
+      "priority": "P0",
+      "ui": "A06",
+      "pre": "错误包含token和敏感路径",
+      "action": "展开/导出诊断",
+      "expected": "按规则脱敏；不把原始招标文件或模型输入输出外发",
+      "evidence": "脱敏fixture及网络记录"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V07",
+      "priority": "P1",
+      "ui": "A02/A06",
+      "pre": "页面有草稿与滚动位置",
+      "action": "开关查看层",
+      "expected": "恢复焦点、选择和滚动；不把草稿提交",
+      "evidence": "交互测试"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V08",
+      "priority": "P1",
+      "ui": "A01/C01/C27",
+      "pre": "1600x1000、1366x900、1280x800",
+      "action": "逐状态截图及缩放窗口",
+      "expected": "控件可达、无整页横向溢出、正文不缩成小字",
+      "evidence": "真实Electron截图"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V09",
+      "priority": "P1",
+      "ui": "全局",
+      "pre": "Windows显示缩放125%及中文输入法",
+      "action": "实际安装后操作",
+      "expected": "文字与弹窗不裁切；IME组合态Enter不误提交",
+      "evidence": "Windows录屏/截图"
+    },
+    {
+      "group": "管理端统一视觉与审计",
+      "id": "V10",
+      "priority": "P1",
+      "ui": "A08/A11",
+      "pre": "授权、统计、系统设置旧页面",
+      "action": "本轮样式后回归",
+      "expected": "无全局h2/p或!important造成的版式回归",
+      "evidence": "前后同尺寸对照"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P01",
+      "priority": "P0",
+      "ui": "C00/C01",
+      "pre": "PPT首页",
+      "action": "点击开始制作PPT",
+      "expected": "直接进入Agent页；不是长项目表单/独立大纲页",
+      "evidence": "真实路由与录屏"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P02",
+      "priority": "P1",
+      "ui": "C01",
+      "pre": "Agent初始态",
+      "action": "检查布局",
+      "expected": "红标题、充分留白、紧凑输入工具；无四类模式/扳手/模型选择/能力八宫格",
+      "evidence": "目标/实际对照图"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P03",
+      "priority": "P0",
+      "ui": "C01/C05",
+      "pre": "新项目且有内置技能",
+      "action": "未更改技能直接发送",
+      "expected": "默认真实ppt-master；选择不是空文案或默认其他Agent",
+      "evidence": "session技能绑定"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P04",
+      "priority": "P0",
+      "ui": "C01/C47",
+      "pre": "没有合法默认父目录",
+      "action": "首次需要落盘/发送",
+      "expected": "此时才提示简洁位置；建议名称可改，生成独立项目子目录",
+      "evidence": "文件结构、流程录屏"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P05",
+      "priority": "P0",
+      "ui": "C47",
+      "pre": "位置确认层有输入和待加文件",
+      "action": "取消位置选择",
+      "expected": "草稿与待加文件保留；没有模型请求或静默C盘回退",
+      "evidence": "草稿快照/请求计数"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P06",
+      "priority": "P0",
+      "ui": "C48/C49",
+      "pre": "系统卷/软链接实际指向系统卷；不可写目录",
+      "action": "选择目标",
+      "expected": "真实卷判断、允许明确仍然使用；不可写先报错，不误开工",
+      "evidence": "Windows卷/权限测试"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P07",
+      "priority": "P0",
+      "ui": "C02/C03/C04",
+      "pre": "两份支持文档，一份损坏",
+      "action": "上传并处理",
+      "expected": "逐文件状态分离；失败一份不丢另一份；继续使用需基于可用材料",
+      "evidence": "解析和附件引用断言"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P08",
+      "priority": "P0",
+      "ui": "C02",
+      "pre": "已添加外部原文件",
+      "action": "移除附件",
+      "expected": "仅去引用/受管副本，不删除外部源文件",
+      "evidence": "外部文件hash"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P09",
+      "priority": "P0",
+      "ui": "C10/C11",
+      "pre": "整套/单页/个人模板，含4:3和16:9",
+      "action": "搜索筛选、打开大图后取消",
+      "expected": "真实比例完整显示；返回保留条件和输入，不出现资源版本选择",
+      "evidence": "UI/截图/无任务断言"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P10",
+      "priority": "P0",
+      "ui": "C10/C12/C13",
+      "pre": "选了模板候选但尚未确认",
+      "action": "打开、选中、确认及准备",
+      "expected": "候选/下载/校验/应用分离；没有提前替换旧稿；比例冲突明确决定",
+      "evidence": "状态/任务/源文件快照"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P11",
+      "priority": "P0",
+      "ui": "C60",
+      "pre": "缺原文件/预览失败模板",
+      "action": "尝试使用",
+      "expected": "可用能力真实，不用示例图冒充；当前项目不被覆盖",
+      "evidence": "故障fixture"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P12",
+      "priority": "P1",
+      "ui": "C05/C06/C62",
+      "pre": "普通Markdown没有元数据",
+      "action": "整理为技能",
+      "expected": "仅安装副本补充名称用途，再走检查确认；原文件不变",
+      "evidence": "候选内容及源hash"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P13",
+      "priority": "P0",
+      "ui": "C08/C09",
+      "pre": "技能GitHub定位不合法或管理员拒绝",
+      "action": "请求并查看结果",
+      "expected": "正确拒绝/失败/待处理；不绕过管理员，不自动安装",
+      "evidence": "申请流程/网络测试"
+    },
+    {
+      "group": "PPT入口、资料与选择",
+      "id": "P14",
+      "priority": "P0",
+      "ui": "C07/C58",
+      "pre": "依赖缺失/无执行授权/被旧项目锁定技能",
+      "action": "尝试执行或卸载",
+      "expected": "依赖缺失不执行；卸载默认保留旧项目固定版本和原ZIP",
+      "evidence": "权限及项目恢复测试"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D01",
+      "priority": "P0",
+      "ui": "C15/C27",
+      "pre": "一个项目连续3轮材料、需求与回复",
+      "action": "发送、切页再重开",
+      "expected": "完整答复、材料选择和累计要求保留，同一会话不丢历史",
+      "evidence": "Store/session记录"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D02",
+      "priority": "P0",
+      "ui": "C15",
+      "pre": "同时打开/运行两个项目",
+      "action": "交替接收流式事件",
+      "expected": "project/conversation/task隔离，无串台；重复事件去重",
+      "evidence": "并发消息fixture"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D03",
+      "priority": "P0",
+      "ui": "C16/C18",
+      "pre": "Default生成路线",
+      "action": "执行到两阶段确认",
+      "expected": "阶段1和阶段2均在当前聊天内真实等待；三方案意图保留",
+      "evidence": "真实工具调用与确认记录"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D04",
+      "priority": "P0",
+      "ui": "C16",
+      "pre": "尚未收到用户确认",
+      "action": "继续运行Agent或返回普通文本",
+      "expected": "不得伪造confirmed或提前写后阶段产物",
+      "evidence": "候选目录及门禁测试"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D05",
+      "priority": "P0",
+      "ui": "C22",
+      "pre": "运行任务发出ppt_ask且持有写锁",
+      "action": "回答问题",
+      "expected": "回答控件可用，回复匹配questionId并恢复原任务，不新开任务",
+      "evidence": "问答控制通道联调"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D06",
+      "priority": "P0",
+      "ui": "C22",
+      "pre": "旧问题/其他项目问题ID",
+      "action": "提交答案",
+      "expected": "拒绝串用；当前问题不被错误关闭",
+      "evidence": "错误ID测试"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D07",
+      "priority": "P0",
+      "ui": "C16/C18/C22",
+      "pre": "同一确认双击/IPC结果重试",
+      "action": "重复提交",
+      "expected": "只处理一次；确认来自用户操作且绑定阶段与fingerprint",
+      "evidence": "幂等/确认审计"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D08",
+      "priority": "P0",
+      "ui": "C52",
+      "pre": "方案已确认后修改页数/模板/材料范围",
+      "action": "发送新要求",
+      "expected": "只失效受影响确认，保留旧稿；新要求不能沿用旧授权",
+      "evidence": "指纹与范围断言"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D09",
+      "priority": "P0",
+      "ui": "C32/C52",
+      "pre": "已有确认，仅修改讲稿/批注",
+      "action": "保存并继续页级修改",
+      "expected": "不反复强制整稿重新规划；执行baseRevision仍正确",
+      "evidence": "revision与指纹测试"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D10",
+      "priority": "P0",
+      "ui": "C21/C23",
+      "pre": "任务执行中有用户输入草稿",
+      "action": "取消并重新打开",
+      "expected": "原稿和草稿保留；取消不是失败，不自动重发",
+      "evidence": "取消令牌/文件hash"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D11",
+      "priority": "P0",
+      "ui": "C25",
+      "pre": "收费生图请求已发出后超时",
+      "action": "恢复任务",
+      "expected": "先对账已有任务；未知不自动重发；明确提示可能重复费用",
+      "evidence": "requestId/渠道调用计数"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D12",
+      "priority": "P0",
+      "ui": "C51",
+      "pre": "退出时等待用户或制作中",
+      "action": "进程重启",
+      "expected": "会话、未决问题及可核验检查点恢复；不伪造停机运行或丢失token",
+      "evidence": "进程重启联调"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D13",
+      "priority": "P0",
+      "ui": "C50",
+      "pre": "输入、计划、讲稿各自dirty",
+      "action": "离开/切页/关闭",
+      "expected": "保存、放弃、继续编辑明确；失败不清dirty，不混覆盖",
+      "evidence": "三类dirty交叉测试"
+    },
+    {
+      "group": "会话、两阶段确认与恢复",
+      "id": "D14",
+      "priority": "P0",
+      "ui": "C15/C46",
+      "pre": "只给主题且需要可核验外部事实，宿主禁联网",
+      "action": "请求生成",
+      "expected": "不编造数据、不绕过限制；同页请求资料或声明能力缺口",
+      "evidence": "prompt/tool/net记录"
+    },
+    {
+      "group": "单页范围",
+      "id": "S01",
+      "priority": "P0",
+      "ui": "C14/C20/C28",
+      "pre": "选择新建单页，未声明快速",
+      "action": "按Default生成",
+      "expected": "creationScope=single且最终真1页；不是quick；无封面目录结束页",
+      "evidence": "PPTX结构与源清单"
+    },
+    {
+      "group": "单页范围",
+      "id": "S02",
+      "priority": "P0",
+      "ui": "C14/C20",
+      "pre": "需求已足够/部分不足",
+      "action": "沟通确认制作",
+      "expected": "在本页满足所需确认；不跳独立大纲，内部允许单页计划",
+      "evidence": "路由记录及gate记录"
+    },
+    {
+      "group": "单页范围",
+      "id": "S03",
+      "priority": "P0",
+      "ui": "C27/C29",
+      "pre": "整稿4页，仅改第2页",
+      "action": "提交当前页修改",
+      "expected": "只写第2页范围；其他SVG/PPTX对象、讲稿、图片及动画不变",
+      "evidence": "未选页及关联文件hash"
+    },
+    {
+      "group": "单页范围",
+      "id": "S04",
+      "priority": "P0",
+      "ui": "C35",
+      "pre": "整稿4页，在第2页后插入一页",
+      "action": "选择版式并生成新增页",
+      "expected": "旧4页保留，新增稳定ID且位置正确；不是把整稿变1页",
+      "evidence": "roster/关联映射测试"
+    },
+    {
+      "group": "单页范围",
+      "id": "S05",
+      "priority": "P0",
+      "ui": "C14/C52",
+      "pre": "整套已出稿后切换单页",
+      "action": "提交需求",
+      "expected": "先明确新建/改当前页/替换范围，不静默删除已存在页面",
+      "evidence": "影响确认及旧稿保存"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K01",
+      "priority": "P0",
+      "ui": "C05/C21",
+      "pre": "固定6.6.0及指定commit",
+      "action": "启动制作工具",
+      "expected": "读取真实SKILL_DIR，执行完整性门禁和单一正确route",
+      "evidence": "锁文件与工具日志"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K02",
+      "priority": "P0",
+      "ui": "C46",
+      "pre": "缺runtime或hash被修改",
+      "action": "执行制作",
+      "expected": "阻止而非使用系统Python/PATH绕过；保留草稿",
+      "evidence": "组件缺失/篡改测试"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K03",
+      "priority": "P0",
+      "ui": "C21",
+      "pre": "技能要求脚本不在宿主许可表",
+      "action": "尝试调用",
+      "expected": "受控适配或清晰BLOCKED；不开放任意shell/pip",
+      "evidence": "工具参数与拒绝测试"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K04",
+      "priority": "P0",
+      "ui": "C41/C42",
+      "pre": "上传可编辑原生PPT并要求填充",
+      "action": "制作并导出",
+      "expected": "准确路由、对象映射与原文件保护；不冒充参考重制为原生编辑",
+      "evidence": "原生对象/导出验证"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K05",
+      "priority": "P0",
+      "ui": "C43",
+      "pre": "要求保留原文美化",
+      "action": "尝试改原始事实、页数或顺序",
+      "expected": "检测并阻止错误候选提交；保留原稿",
+      "evidence": "原文/页数/顺序断言"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K06",
+      "priority": "P1",
+      "ui": "C44",
+      "pre": "图片作为待重建页面 vs 普通配图",
+      "action": "输入明确/歧义意图",
+      "expected": "按锁定路线选择；视觉能力不足不承诺像素级/全可编辑",
+      "evidence": "能力映射与样例结果"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K07",
+      "priority": "P1",
+      "ui": "C45/C55",
+      "pre": "请求Brand/Style/Layout/Deck模板工作区",
+      "action": "执行能力核对",
+      "expected": "区分创建模板与PPTX副本保存；缺口标BLOCKED而非成功",
+      "evidence": "能力矩阵、产物检查"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K08",
+      "priority": "P0",
+      "ui": "C21",
+      "pre": "页面引用越界路径、符号链接或外部URL",
+      "action": "检查候选并导出",
+      "expected": "路径边界和AppContainer保留，拒绝越界读取/写入",
+      "evidence": "恶意路径fixture"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K09",
+      "priority": "P0",
+      "ui": "C21/C25",
+      "pre": "未授权/超限生图或媒体请求",
+      "action": "Agent请求配图",
+      "expected": "不产生收费调用；限额与去重仍生效",
+      "evidence": "渠道调用计数"
+    },
+    {
+      "group": "ppt-master能力与安全适配",
+      "id": "K10",
+      "priority": "P0",
+      "ui": "C01/C27",
+      "pre": "普通对话session与PPT session",
+      "action": "检查工具与权限",
+      "expected": "普通对话不获得PPT写工具；UI优化不扩大其他session权限",
+      "evidence": "工具注册隔离测试"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W01",
+      "priority": "P0",
+      "ui": "C26/C27",
+      "pre": "模型说完成但没有有效页面",
+      "action": "尝试进入成功状态",
+      "expected": "不显示制作完成/可导出；说明真实缺产物",
+      "evidence": "缺产物fixture"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W02",
+      "priority": "P0",
+      "ui": "C29",
+      "pre": "同一页修改文字/位置/颜色",
+      "action": "保存并导出",
+      "expected": "权威源文件、预览和导出一致，不仅画布看起来改变",
+      "evidence": "源hash/预览/PPTX核对"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W03",
+      "priority": "P0",
+      "ui": "C30",
+      "pre": "原生图表带可支持工作簿",
+      "action": "表格编辑类别和系列",
+      "expected": "数据检查正确；画面与工作簿一起更新；前台无需JSON",
+      "evidence": "图表/工作簿测试"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W04",
+      "priority": "P0",
+      "ui": "C30",
+      "pre": "共享/复杂不可编辑工作簿",
+      "action": "尝试修改",
+      "expected": "明确阻止并保留旧对象，不静默破坏链接",
+      "evidence": "复杂图表fixture"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W05",
+      "priority": "P0",
+      "ui": "C31",
+      "pre": "批注绑定旧页面hash",
+      "action": "页面改动后应用批注",
+      "expected": "要求重新核验或保存；不把旧批注错套新页",
+      "evidence": "批注ID/hash测试"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W06",
+      "priority": "P0",
+      "ui": "C33",
+      "pre": "已有多个历史稿件",
+      "action": "恢复历史",
+      "expected": "产生新修订、当前稿留历史，页面和关联一致；不是资源快照切换",
+      "evidence": "历史目录与索引核验"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W07",
+      "priority": "P0",
+      "ui": "C34",
+      "pre": "在制稿更换模板",
+      "action": "取消/确认替换",
+      "expected": "取消不动稿；确认后新候选与受影响gate重做，旧稿可恢复",
+      "evidence": "影响范围与文件hash"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W08",
+      "priority": "P0",
+      "ui": "C56",
+      "pre": "迁移中复制或校验失败",
+      "action": "迁移项目/缓存",
+      "expected": "旧索引和目录继续有效；成功才切换，原副本保留",
+      "evidence": "故障注入/双目录验证"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W09",
+      "priority": "P0",
+      "ui": "C57/C58",
+      "pre": "项目运行中/技能被项目固定",
+      "action": "删除、卸载、恢复",
+      "expected": "写入项目不能删除；归属/回收站/hash核验；外部原件保留",
+      "evidence": "归属/权限/恢复测试"
+    },
+    {
+      "group": "后续工作区与辅助操作",
+      "id": "W10",
+      "priority": "P1",
+      "ui": "C55/C61",
+      "pre": "项目有中文长名称及个人模板副本",
+      "action": "重命名、保存模板",
+      "expected": "空名/非法字符按真实规则处理；更名不移动目录；模板副本不改公共资源",
+      "evidence": "中文路径与副本测试"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E01",
+      "priority": "P0",
+      "ui": "C36",
+      "pre": "当前稿存在待审事实/未解决批注",
+      "action": "进行审阅",
+      "expected": "审阅确认绑定当前修订且来自真实用户；非默认预勾选",
+      "evidence": "审阅记录/界面测试"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E02",
+      "priority": "P0",
+      "ui": "C37/C38",
+      "pre": "已选格式与页面范围",
+      "action": "实际导出PPTX/PDF/图片/讲稿",
+      "expected": "导出范围正确、文件真实可读且校验通过；讲稿格式按实际Markdown能力",
+      "evidence": "真实产物检查"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E03",
+      "priority": "P0",
+      "ui": "C37",
+      "pre": "打开系统保存对话框",
+      "action": "点击取消",
+      "expected": "记录取消而非失败；不删除文件、不启动转换",
+      "evidence": "文件与任务计数"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E04",
+      "priority": "P0",
+      "ui": "C38/C40",
+      "pre": "同名成品存在且占用/空间不足",
+      "action": "尝试写入新成品",
+      "expected": "旧成品保留；错误按阶段报告，可更换位置重试导出",
+      "evidence": "失败注入与旧hash"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E05",
+      "priority": "P0",
+      "ui": "C39",
+      "pre": "完成当前修订导出",
+      "action": "打开文件/文件夹",
+      "expected": "路径准确，文件可打开；不把其他修订产物标为本次",
+      "evidence": "Windows打开与revision记录"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E06",
+      "priority": "P0",
+      "ui": "C59",
+      "pre": "未启用媒体或旁白音频不合法",
+      "action": "导入/导出媒体",
+      "expected": "未授权不收费；合法本地音频检查后可按实际能力导出静态逐页视频",
+      "evidence": "媒体probe及调用计数"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E07",
+      "priority": "P0",
+      "ui": "C27/C39",
+      "pre": "真实中文内容含表格/图表/原生对象",
+      "action": "在目标PowerPoint/WPS查看成品",
+      "expected": "人工确认换行、字体、画幅和关键对象；结构测试不替代此项",
+      "evidence": "Office/WPS截图或NOT_RUN原因"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E08",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "用户旧版本数据副本、新字段缺失",
+      "action": "安装升级并打开旧项目",
+      "expected": "幂等非破坏迁移；旧资料、历史、技能固定版本可用；不伪造历史聊天",
+      "evidence": "旧库fixture及安装报告"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E09",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "迁移中断/失败",
+      "action": "重启或按方案回退",
+      "expected": "旧数据库和文件仍可恢复；禁止清空userData重建作为修复",
+      "evidence": "迁移故障注入与恢复"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E10",
+      "priority": "P0",
+      "ui": "C00–C39",
+      "pre": "干净Windows用户目录、真实固定组件、管理端",
+      "action": "安装本地测试EXE跑整套与单页闭环",
+      "expected": "无需系统Python/开发目录；真实提问可答、页面生成与导出可用",
+      "evidence": "独立安装录屏与工具日志"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E11",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "只能用浏览器/mock或没有真实模型/Office",
+      "action": "出测试报告",
+      "expected": "按层级写NOT_RUN/BLOCKED；不把mock、静态截图或build当业务PASS",
+      "evidence": "分层报告检查"
+    },
+    {
+      "group": "审阅、导出及安装回归",
+      "id": "E12",
+      "priority": "P0",
+      "ui": "全局",
+      "pre": "两端本地安装并使用测试凭据",
+      "action": "交付文件与报告",
+      "expected": "凭据/API key/字体文件不进交付包；未授权不触发正式发布",
+      "evidence": "包扫描与操作记录"
+    }
+  ]
+}

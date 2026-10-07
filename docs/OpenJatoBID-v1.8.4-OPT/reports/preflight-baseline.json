@@ -1,0 +1,442 @@
+{
+  "branch": "v1.8.4-OPT",
+  "head": "f866acc1d0be33ecbe73f5831bed21771389eaed",
+  "stagedFiles": [
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Acceptance-Test-Cases.md",
+      "sha256": "C1E685F735CC0C4D6529FBDAA5384496B03C1347F9FBBBBB707250EA6E5AB28F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Code-Audit.md",
+      "sha256": "BD736E0B7767D4C61742882B10B48CD008CFED11B0D3FC6314874CBDE2DF4563"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/Codex-Run.md",
+      "sha256": "8FC47AA0704B648E8D99F181272DFFD4706585F2EB23613288023D7427D49882"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/README.md",
+      "sha256": "EFE5E92866C7074756E29279B4460CF9EE6F7035DAF952BFE009DA9072F6B096"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/UI-Handoff.md",
+      "sha256": "642FAFA4C3273DF81924EC997A76810A3C86293E50D866DBE1F535913955993C"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/UI-State-Matrix.md",
+      "sha256": "402CD10F56D6696C764F3BD061B3B685DD059451CE065531E58B6B032D525151"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/delivery-manifest.json",
+      "sha256": "80EBB9E37A9E010847460A552C123E1B532515C74848189B53A657C51D90E6ED"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/references/user-agent-reference.png",
+      "sha256": "50ADE3AAC0E624AE93DACF0282DC2052A41F744500D75F519432FC5EEDBEF3A5"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/delivery-check.json",
+      "sha256": "B79B661E67CE310632EA82E9A8F68EDFE619D11997FBD6EEBBE65C941B27176C"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/design-render-check.json",
+      "sha256": "B0F5F9623FB5B444744393B3CCD5C812A1FC88AD02D338B48AA115E2E6DB3C71"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/reports/test-case-catalog.json",
+      "sha256": "16040CD0527FDA8EA46D806515754FE74507C720D8A1673320B4C850C0221FB6"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/gallery.html",
+      "sha256": "084944AB2F59D639E8A951FF2465DC14BFFF7961D5C911D0C8F0D5E5CB592625"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/prototype.html",
+      "sha256": "4B0A3AFBADCEEB6506E93E10ABA56BD9EF6124233ACA1EDDB9E2969DB3AC5D50"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01-1280x800.png",
+      "sha256": "A6CAE403A8234AB41798ECCD2AAA54E1979240A05D88305F7F748FFABB0BD464"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01-1366x900.png",
+      "sha256": "6039ABE49E515605DD489687F89AE7049F0968A4DDE6B5C95860B50D020B7DA1"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A01.png",
+      "sha256": "8F5AD869A2DA68D3A116B24A46A1BDACF9F33851FBAE1B5F3B59C7FDD85CD5A8"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02-1280x800.png",
+      "sha256": "7A468861BF6C48D3FA75E916896048BAD4A14D073B284C1DA22E1BAD4F095E8C"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02-1366x900.png",
+      "sha256": "1B38E7FE89EFDF788C4B5F8B6E3D483804351BA352FAE44E3362F2202B2F42E9"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A02.png",
+      "sha256": "7DCE9B44FA2A9BC7577C2DAE0975D512320377329C19FD0B65854C6FB1C0B91A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A03.png",
+      "sha256": "A0E5A7A99FD2B714DD21E9A2E3EBA398F119AD33B582F48F009FA92D6E88CD67"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A04.png",
+      "sha256": "D5F289F77C8AAF64CE1B8C409D1BCEB0A08ABEBEB2FBC876D0639CC7D2452B14"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A05.png",
+      "sha256": "584C8FAE950E3621FB824C3365901E8897FF95ED9AA93346659800678C89D78F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06-1280x800.png",
+      "sha256": "A39E3BA9951A8F9F1E27983C2085479E2E6A3093ACACDA8643ED6A6C2D17738E"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06-1366x900.png",
+      "sha256": "0566FB1C492ECB62BC5CAA37C6AFCCD5CBD34F7FFDDCFACF3D6BCA8DE6327AB2"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A06.png",
+      "sha256": "E6EE01FD7FF975EF8BD4A5D38FF37991E250C9376C4777D7CD727C815CE9290E"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A07.png",
+      "sha256": "C10108CF157BF74ABCB46ED585CE7EADC3053236F52E7870847DDF7CDC23721B"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A08.png",
+      "sha256": "DD0F4A90915904C0CD4F289DF9DF572294D906ACE51FD8B38818FD65AC8E65FE"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A09.png",
+      "sha256": "E2F56E3BF2EBA2186FAE8739610DFF06B209776E8D7FB195FA2098A6D4706DB3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A10.png",
+      "sha256": "038751BDC1559557160A00BCCA126F706738AF95D8A4135FF063424B54AC8F74"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A11.png",
+      "sha256": "95C5877660EE075388F165CA8CEE94BC527821C836888CD11EDDE915DD7E88C3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A12.png",
+      "sha256": "446B9A1C1A340AFAC4C6994A928E8A5AD7815B8272D9834F7D3F7B6B6F14AAE1"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/A13.png",
+      "sha256": "5778C14A189446ED307FA682BF04CE3442F528F2B26A1C669F9448139FE6968D"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C00.png",
+      "sha256": "21EE51D53511A44F0C458BE120FEF3F56E4993B807CC82B8EF7E833CF02D2293"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01-1280x800.png",
+      "sha256": "D5AC4BAC30E549A93A1F59C1D8B97EED1C702C46F1A957558B42AA95AB08E4C3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01-1366x900.png",
+      "sha256": "831D594A2F8356E08E874489AD13918214AEEE1801956ECBEC588046CD0A0E4A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C01.png",
+      "sha256": "3EEBE2B92C145C3187EF26C40B0C26D3C47FB86FFF798D564CA15F30DEC85C32"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C02.png",
+      "sha256": "7F5EC419F1F0B731ED7B69E2F28ED1660A8022B0EB6B733E3FDB34FAE33057EC"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C03.png",
+      "sha256": "9CBD2F612564FF3EE8157655C3F771A7577790CF9C989F4D09FB4ADF9913072A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C04.png",
+      "sha256": "3A9BC508ECA5DC3CDB3683D718F4EBE1B313898B18815958BC91F330B1FFE3EE"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C05.png",
+      "sha256": "4F088CA6A60DCCE9A156A9FA68EDD09A4CF4D1E255B6F317E21EE679C3155ECD"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C06.png",
+      "sha256": "29AA092AD4F2F93B32D06A7E027BA67251C974ED99786BF62820C2EDFA6E6DEB"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C07.png",
+      "sha256": "EA4E236E9046379D3B5DE5210506BE1D153F60C48BB5078ED0104DCE81B9C5A5"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C08.png",
+      "sha256": "6EE1E03048C63EFD3D1FB361DDD491AC4073DDE29F9A6B8FBF7A5F1A1467DC3C"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C09.png",
+      "sha256": "2A54077C9E3CD522CEFDB2E379740E3F9E45A39D506621437F899205C3F4EC18"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10-1280x800.png",
+      "sha256": "E0116F470AB893C284502704DAD9BC3E3982EF4DAB67FF5409D94D0B92B6AED3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10-1366x900.png",
+      "sha256": "BD2A6C5E5F30D71A57771C5BC6996E1B65C4C853FA34200BE244E0DA08D3B295"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C10.png",
+      "sha256": "3B249602AE8D1CD0E60B48652CB324E9794E77A7F573550EBE2CF24C05105361"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C11.png",
+      "sha256": "D2AC2F06DF537627000EEE4DAD69F555011BDD19FEAFEAC5E652B2FFCD8C9B0F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C12.png",
+      "sha256": "2D5E203E985ACFD4CF4B4F25B75488F4C95702864B06E05B949A6D859054C0CF"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C13.png",
+      "sha256": "383F4DC7CB8AC1EF57A84CDEC75CEA2EA63314C8B8E996D0997B0B57D76BB416"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C14.png",
+      "sha256": "3D78F21D3BD924DC63E7239988A557881DB848BB94577C12DC62F5E0B533E358"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C15.png",
+      "sha256": "44B034BE7D50C57BBF4E26D3E8456830BA2A9CAAED06D3711C6A0B7A317E1318"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C16.png",
+      "sha256": "1FF24DA06BE8FF3E38C4819F3283A1B7FECACC0B2440B33729FEA994A7C0CF9B"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C17.png",
+      "sha256": "55B0E3F57EAD011A914A5A8A964CF13B5BC215E4298FB837CD05173DC4551215"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18-1280x800.png",
+      "sha256": "4130B44A460AC23F137ED630BDFF5F03BE8A02ACA61FF011FA875038A62372D6"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18-1366x900.png",
+      "sha256": "278058A0B37C1E0ED1A576BC6A7B442B0EC72BA4E0A83EB2CEC5BE7CCB59E28F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C18.png",
+      "sha256": "228F3AC3668695A762A40E513B581261CB4BC7B9158275120DC96CFFE903E857"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C19.png",
+      "sha256": "DE8E9AB266099F83982A72F26C592357B2A9954B6FAD09F591B65F2B9CA32599"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C20.png",
+      "sha256": "C4383AB68E68E4355C406DB1100BD6EB435B02A817D3C780688F9928729AEF82"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C21.png",
+      "sha256": "DD3D4C543DFE56C06E78C07C6BEA9A53D78CED6B8EFB124A7AADFF6D15EB8557"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C22.png",
+      "sha256": "4523DAA591E58FDF0820F5B25D690CA71E19F7EB356873DC192F8A15A7BA060F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C23.png",
+      "sha256": "B92A0ED662C3B37D4D6EB1F185485C6B3EE4B0386445A7133B572BD6F4475142"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C24.png",
+      "sha256": "8A57C77BCEF881E8D6EDE0486E44F1728F5ABE60C44A272B1BDF083B90AF2C11"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C25.png",
+      "sha256": "038EBEC1D7896474A1B909BEC30DE9BEB2A7C57B2D154B70AD7F4D227200EEA6"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C26.png",
+      "sha256": "AD8122A72FA73200BB626D61ACB3A5891A518B4FE4D3785E1B90BE4ED9F0A81A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27-1280x800.png",
+      "sha256": "264F007F01CB4AFE8CCA4F3A42B6A90EF2C9F7C92DBB830495D01B78753610D1"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27-1366x900.png",
+      "sha256": "913EDC5010A03B4A7B3C715B64FC8FDD161472C750A1C7C3573FA8B54731D3CE"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C27.png",
+      "sha256": "931E0EA395D75BB0AEADAAD3FB6FD498813C1AC7937B52847E5C742CCCFEFB9F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C28.png",
+      "sha256": "0CFE0669936C46542E865AA92B40229BAD4E072C99D7BB0513F3420C7072F4C1"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C29.png",
+      "sha256": "915220E2BBD3CCFDC4BDDE11506D8C9A384F4416AEBFFB24FF2FAA0DDB75DD98"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C30.png",
+      "sha256": "B459526E4AB7C08BD45394EF2B8BB662494A706FCDF8A9E23147DDB4C904EC64"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C31.png",
+      "sha256": "00DD370C516C7330FA19545A2276895E006D671B5333BB298D9E9A8EA74E4159"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C32.png",
+      "sha256": "0B4E845F58DB06E31364AA1AF2294AE57D68342494CE91A65ED3784645A6548D"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C33.png",
+      "sha256": "7F928BB67B5D7F8130F2E4BE9D0593D7E84BAA572BEBBA2CADF8F5BFC784B54A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C34.png",
+      "sha256": "9BD38BBB440B15CFB278E03F66C8358A42A1856C8327CE31634ED38FFEE10649"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C35.png",
+      "sha256": "6C9C8BFB71749445D8F720BFCC1D7CE5BCE2EF8CC7CEDB34193FD2D98792DCCB"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C36.png",
+      "sha256": "5BE94006C8AE0B2CB4DC80F70C0B7614C69CFF2328F2B4802F56EAD787941B9A"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37-1280x800.png",
+      "sha256": "CCA5FA72BF2CA5FA3448EDD9E5CAE45BE7DE6BC9B3BD34009B9719513BE72EBB"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37-1366x900.png",
+      "sha256": "4AE6F083FCEE48FE06479E215EAC9ED89C90F3B3913DF09D6BF360C57EC20A5D"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C37.png",
+      "sha256": "8C8F67CF0C3DF37AA5CC949AA77CD9940F37E22B31181B0DD7DEA9CD96324F2B"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C38.png",
+      "sha256": "0265E2328A69E9E3DD9B469C969EFAF7B31F0AECEA5D340A5EAF8D24DD5991BD"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C39.png",
+      "sha256": "19BB0D4CDAD482BC345D7A122BB43A842C0740D612E323CB327749AD16DC5D7C"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C40.png",
+      "sha256": "5E3613DD4F107999DC94F74E61560C0A4E9495F6F9E9E752D5C709EC4F81F9DF"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C41.png",
+      "sha256": "49FA16DB171D3CEE4473E927CAF71F9BAFF2E7761CC3525E1C4958CEDB0D85AA"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C42.png",
+      "sha256": "C7D34C767D7CFAB3DBBB57543827DA535269789482746B5B5905D7DEBE31B6B6"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C43.png",
+      "sha256": "ECC311124FE94C77FA8966E2BEE9B9A029412ABD570E26BB56946F2B262C96E2"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C44.png",
+      "sha256": "0F8263BAEBE2797488FD7DD6BFC53B74A6D33AF875D6E038F4DE17835E35F350"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C45.png",
+      "sha256": "E4F8CE85AFCD387152C75ED9B2A4819FDCBC0C991E0DC48EA05181D7026217C3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C46.png",
+      "sha256": "94ED3198DC74D4670031F54B8143CFA2941E511962785722E7A204E8B922267F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C47.png",
+      "sha256": "0E1F4F822864AAF6A8476EC61CD0D98FD8E1A5BB4212232EDFE00D4C272B085E"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C48.png",
+      "sha256": "41B24253E677D889D230DA5BB575A9719EB4B0A566A8F0873A19654785DC5778"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C49.png",
+      "sha256": "FD9E0A25148DA1D837829471DB242574DAB04BED3F662DE350F4D70D8B8776B3"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C50.png",
+      "sha256": "A20B8F82B965A30DE44B3A63BC1AD572629013E8C252136AB2BCB85A0BCCF341"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C51.png",
+      "sha256": "223DB687803BD142A84D490A8412CDA7B3184A169B1848670AD55E7C56B16C84"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C52.png",
+      "sha256": "43BC7F05EE922788D1DE9F5FCDE764D7F8337862D7C9E6E2C8EDB8CE256514C4"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C53.png",
+      "sha256": "5814498CFA342027AB1B9BAD36B423AD206CB202B703E0034D3EC5B6513A6648"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C54.png",
+      "sha256": "19BBA2AD1D791F115814AD1F12050C22307A4C2EC4215BF78A951E2ABD486BE2"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C55.png",
+      "sha256": "2A0F3001EEFCA787A9FA770B65284C3F87291D8EB6FD3A57F0D9C27E000BAE56"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C56.png",
+      "sha256": "7F99644000CE2DA05F0BE80EB0E05F70FF72F08988FA03BC835B94877DA31194"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C57.png",
+      "sha256": "D7DA202476EAEAD1441D2AE6A7F6DE5CAF643D403A52CFA9E7F5B4F0F26F2E0F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C58.png",
+      "sha256": "3F213811600941209A41929FF7D339CA9E693994C5CFAABC9BB1152841E973E7"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C59.png",
+      "sha256": "82FCCCB0C2E89728B65E5268054439E4F4424CEEC93B790C28437A92A4817D72"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C60.png",
+      "sha256": "DD69D4C35BEFFF83A03963DA4945DD8543EEF3FABC33FCA3DB58730EFAD9EE33"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C61.png",
+      "sha256": "024AE8B85EA8282BD4F932D1C196F8299E8FBB9A92776F9EE9C64E03725DD12F"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/screens/C62.png",
+      "sha256": "9100C525C532BA0977B7166FE33F4FC9D21D4B3BEBBD69217DD7F1499AAD8B81"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/ui/state-data.json",
+      "sha256": "5AFC4706EF292998B76EABBF5C4DFBC8E75FB7E0A4CE81B08D65BD27A81C3949"
+    },
+    {
+      "path": "docs/OpenJatoBID-v1.8.4-OPT/v1.8.4-OPT-spec.md",
+      "sha256": "FD06620D7CCE9353784F02F0F7F31D7225DFAB9C10BC73CA8C34EFD92876F6CC"
+    }
+  ],
+  "indexSha256": "6286516613D2251A964832A6C31C570D829F9EB6A18EF371FA2B369032B226B5",
+  "versions": {
+    "management/package.json": "FF40D4F9C3600AB95030A2733EA39842CB6660D6542B6AA012A3EADB281FF31E",
+    "client/package.json": "2FED807147F203DBB013EA37D9305F27377F1733C52CA105EBEA6423A41A1BCD",
+    "client/package-lock.json": "B4EB13A0A882CA9497F0AC11058DA9FBABDC0E327569F12E734F57C94F765F06",
+    "management/package-lock.json": "03739F3F16E26909B7EA48472957E364CFC017919E77A0E595CAC0AA4EBD5E84",
+    "client/electron/services/ppt-runtime-lock.json": "54C81EE6946B6E7FE0AAFDA50FCB159F56A4EB8F14595A751C142325E747E82E"
+  }
+}

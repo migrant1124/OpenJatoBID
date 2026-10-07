@@ -48,6 +48,8 @@ test('普通原生图表 XML 缓存与真实 XLSX 同时替换，其他成员保
   zip.addFile('ppt/embeddings/data.xlsx', XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
   const source = path.join(root, 'source.pptx'), target = path.join(root, 'target.pptx'); zip.writeZip(source);
   const result = replaceNativeChartData({ source, target, sourceHash: inspectPptx(source).hash, page: 0, elementId: '2', categories: ['真实类别甲','真实类别乙'], series: [{ name: '合成新系列', values: [12,34] }] });
+  const {auditContentFacts}=require('../electron/services/pptTemplateService.cjs');assert.equal(auditContentFacts(target,target).charts,1);
+  const wrong=new AdmZip(target),altered=path.join(root,'只改数值.pptx');wrong.updateFile('ppt/charts/chart1.xml',Buffer.from(wrong.readAsText('ppt/charts/chart1.xml').replace('<c:v>12</c:v>','<c:v>120</c:v>')));wrong.writeZip(altered);assert.throws(()=>auditContentFacts(target,altered),/图表数值/);
   const output = new AdmZip(target), chart = output.readAsText('ppt/charts/chart1.xml');
   const parsed = require('cheerio').load(chart, { xml: true }), values = parsed('c\\:v').toArray().map((node) => parsed(node).text());
   assert.deepEqual(values, ['合成新系列', '真实类别甲', '真实类别乙', '12', '34']); assert.ok(!chart.includes('999'));

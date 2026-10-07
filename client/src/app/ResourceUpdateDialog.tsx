@@ -7,7 +7,7 @@ import { useToast } from '../shared/ui';
 export default function ResourceUpdateDialog({ onView }: { onView: (center: 'prompts' | 'templates', ids: string[]) => Promise<boolean> }) {
   const { showToast } = useToast();
   const [digest, setDigest] = useState<ResourceDigest | null>(null);
-  const [history, setHistory] = useState<Array<{ version: number; createdAt: string }> | null>(null);
+  const [history, setHistory] = useState<Array<{ version: number; createdAt: string; summary?: string }> | null>(null);
   const shown = useRef(false), active = useRef(true), checking = useRef(false);
   useEffect(() => {
     active.current = true;
@@ -46,7 +46,7 @@ export default function ResourceUpdateDialog({ onView }: { onView: (center: 'pro
     const rendered = requestAnimationFrame(() => { void window.yibiao!.resources.shown({ scope: digest.scope, version: digest.version }).catch((error) => showToast(`更新概括已展示，记录保存失败：${String(error)}`, 'error')); });
     return () => cancelAnimationFrame(rendered);
   }, [digest, showToast]);
-  return <><Dialog.Root open={Boolean(history)} onOpenChange={(open) => { if (!open) setHistory(null); }}><Dialog.Portal><Dialog.Overlay className="resource-preview-overlay" /><Dialog.Content className="resource-update-dialog"><header><Dialog.Title>公共资源更新记录</Dialog.Title><Dialog.Close aria-label="关闭更新记录">×</Dialog.Close></header><Dialog.Description>按当前管理端、员工和设备范围查看；记录不足时不推算新增数量。</Dialog.Description>{history?.length ? history.map((item, index) => <p key={item.version}><button onClick={() => { void window.yibiao!.resources.digest({ version: item.version, fromVersion: history[index + 1]?.version ?? item.version }).then((result) => { setHistory(null); setDigest(result); }).catch((error) => showToast(String(error), 'error')); }}>版本 {item.version} · {new Date(item.createdAt).toLocaleString('zh-CN')}</button></p>) : <p>当前范围尚无已应用记录。</p>}</Dialog.Content></Dialog.Portal></Dialog.Root><Dialog.Root open={Boolean(digest)} onOpenChange={(open) => { if (!open) setDigest(null); }}><Dialog.Portal>
+  return <><Dialog.Root open={Boolean(history)} onOpenChange={(open) => { if (!open) setHistory(null); }}><Dialog.Portal><Dialog.Overlay className="resource-preview-overlay" /><Dialog.Content className="resource-update-dialog"><header><Dialog.Title>公共资源更新记录</Dialog.Title><Dialog.Close aria-label="关闭更新记录">×</Dialog.Close></header><Dialog.Description>按当前管理端、员工和设备范围查看；记录不足时不推算新增数量。</Dialog.Description>{history?.length ? history.map((item) => <p key={item.version}>{new Date(item.createdAt).toLocaleString('zh-CN')} · {item.summary || '已应用资源更新'}</p>) : <p>当前范围尚无已应用记录。</p>}</Dialog.Content></Dialog.Portal></Dialog.Root><Dialog.Root open={Boolean(digest)} onOpenChange={(open) => { if (!open) setDigest(null); }}><Dialog.Portal>
     <Dialog.Overlay className="resource-preview-overlay" /><Dialog.Content className="resource-update-dialog">
       <header><Dialog.Title>公共资源更新</Dialog.Title><Dialog.Close aria-label="关闭更新概括">×</Dialog.Close></header>
       <Dialog.Description>目录与公共提示词已应用。模板和图片按使用获取，下载、预览及套用验证状态分别记录。</Dialog.Description>
@@ -54,7 +54,7 @@ export default function ResourceUpdateDialog({ onView }: { onView: (center: 'pro
         const items = digest.changes.filter((item) => item.center === center);
         const count = (action: string, kind?: string) => items.filter((item) => item.action === action && (!kind || item.kind === kind)).length;
         return <section key={center}><h3>{center === 'prompts' ? '生图提示词中心' : 'PPT 模板中心'}</h3>
-          <p>{!digest.comparable ? '资源库已更新至最新可用版本，历史不足以准确计算累计变化' : !items.length ? '本次暂无更新'
+          <p>{!digest.comparable ? '资源库已更新，历史不足以准确计算累计变化' : !items.length ? '本次暂无更新'
             : center === 'prompts' ? `新增 ${count('added')} 条 · 更新 ${count('updated')} 条 · 下架 ${count('removed')} 条`
               : `整套新增 ${count('added', 'deck')} 套 · 单页新增 ${count('added', 'layout')} 个 · 更新 ${count('updated')} 项 · 下架 ${count('removed')} 项`}</p>
           <div className="resource-featured">{items.filter((item) => item.action !== 'removed').slice(0, 3).map((item) => <article key={item.resourceId}>

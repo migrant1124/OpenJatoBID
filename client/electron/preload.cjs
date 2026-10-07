@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const bridge = {
   ppt: {
+    conversation: (input) => ipcRenderer.invoke('ppt:conversation', input), saveConversation: (input) => ipcRenderer.invoke('ppt:save-conversation', input), attachConversation: (input) => ipcRenderer.invoke('ppt:attach-conversation', input), answer: (input) => ipcRenderer.invoke('ppt:answer', input),
+    onEvent: (conversationId, listener) => { const receive = (_event, value) => { if (value.conversationId === conversationId) listener(value); }; ipcRenderer.on('ppt:event', receive); void ipcRenderer.invoke('ppt:subscribe', conversationId); return () => { ipcRenderer.removeListener('ppt:event', receive); void ipcRenderer.invoke('ppt:unsubscribe', conversationId); }; },
     preferences: () => ipcRenderer.invoke('ppt:preferences'), setPreferences: (input) => ipcRenderer.invoke('ppt:set-preferences', input),
     annotations: (input) => ipcRenderer.invoke('ppt:annotations', input), saveAnnotation: (input) => ipcRenderer.invoke('ppt:save-annotation', input), applyAnnotations: (input) => ipcRenderer.invoke('ppt:apply-annotations', input),
     notes: (input) => ipcRenderer.invoke('ppt:notes', input), saveNotes: (input) => ipcRenderer.invoke('ppt:save-notes', input), importNarration: (input) => ipcRenderer.invoke('ppt:import-narration', input),

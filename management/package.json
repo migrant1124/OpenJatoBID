@@ -6,6 +6,7 @@
   "description": "Jato AI BID 局域网授权与运维统计管理端",
   "main": "electron/main.cjs",
   "scripts": {
+    "start": "electron-rebuild -f -w better-sqlite3 && npm run dev",
     "prepare:initial-admin": "node scripts/prepare-initial-admin-credential.cjs",
     "dev": "npm run prepare:initial-admin && concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --port 5174 --strictPort\" \"wait-on http://127.0.0.1:5174 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5174 electron .\"",
     "dev:browser": "vite --host 127.0.0.1 --port 5174 --strictPort",

@@ -1,0 +1,958 @@
+{
+  "kind": "standalone_design_reference_only",
+  "production_business_tests": "NOT_RUN",
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900,
+      "checks": [
+        {
+          "id": "A01",
+          "file": "ui/screens/A01-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "A02",
+          "file": "ui/screens/A02-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "A06",
+          "file": "ui/screens/A06-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 706.4375
+        },
+        {
+          "id": "C01",
+          "file": "ui/screens/C01-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C10",
+          "file": "ui/screens/C10-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 812.296875
+        },
+        {
+          "id": "C18",
+          "file": "ui/screens/C18-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C27",
+          "file": "ui/screens/C27-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C37",
+          "file": "ui/screens/C37-1366x900.png",
+          "overflow_x": false,
+          "modal_bottom": 713.5
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "checks": [
+        {
+          "id": "A01",
+          "file": "ui/screens/A01-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "A02",
+          "file": "ui/screens/A02-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "A06",
+          "file": "ui/screens/A06-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 656.4375
+        },
+        {
+          "id": "C01",
+          "file": "ui/screens/C01-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C10",
+          "file": "ui/screens/C10-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 730
+        },
+        {
+          "id": "C18",
+          "file": "ui/screens/C18-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C27",
+          "file": "ui/screens/C27-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 0
+        },
+        {
+          "id": "C37",
+          "file": "ui/screens/C37-1280x800.png",
+          "overflow_x": false,
+          "modal_bottom": 663.5
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "A01",
+      "file": "ui/screens/A01.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A02",
+      "file": "ui/screens/A02.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A03",
+      "file": "ui/screens/A03.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A04",
+      "file": "ui/screens/A04.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A05",
+      "file": "ui/screens/A05.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A06",
+      "file": "ui/screens/A06.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A07",
+      "file": "ui/screens/A07.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A08",
+      "file": "ui/screens/A08.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A09",
+      "file": "ui/screens/A09.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A10",
+      "file": "ui/screens/A10.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A11",
+      "file": "ui/screens/A11.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A12",
+      "file": "ui/screens/A12.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "A13",
+      "file": "ui/screens/A13.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C00",
+      "file": "ui/screens/C00.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C01",
+      "file": "ui/screens/C01.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C02",
+      "file": "ui/screens/C02.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C03",
+      "file": "ui/screens/C03.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C04",
+      "file": "ui/screens/C04.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C05",
+      "file": "ui/screens/C05.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C06",
+      "file": "ui/screens/C06.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C07",
+      "file": "ui/screens/C07.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C08",
+      "file": "ui/screens/C08.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C09",
+      "file": "ui/screens/C09.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C10",
+      "file": "ui/screens/C10.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C11",
+      "file": "ui/screens/C11.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C12",
+      "file": "ui/screens/C12.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C13",
+      "file": "ui/screens/C13.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C14",
+      "file": "ui/screens/C14.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C15",
+      "file": "ui/screens/C15.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C16",
+      "file": "ui/screens/C16.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C17",
+      "file": "ui/screens/C17.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C18",
+      "file": "ui/screens/C18.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C19",
+      "file": "ui/screens/C19.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C20",
+      "file": "ui/screens/C20.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C21",
+      "file": "ui/screens/C21.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C22",
+      "file": "ui/screens/C22.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C23",
+      "file": "ui/screens/C23.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C24",
+      "file": "ui/screens/C24.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C25",
+      "file": "ui/screens/C25.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C26",
+      "file": "ui/screens/C26.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C27",
+      "file": "ui/screens/C27.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C28",
+      "file": "ui/screens/C28.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C29",
+      "file": "ui/screens/C29.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C30",
+      "file": "ui/screens/C30.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C31",
+      "file": "ui/screens/C31.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C32",
+      "file": "ui/screens/C32.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C33",
+      "file": "ui/screens/C33.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C34",
+      "file": "ui/screens/C34.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C35",
+      "file": "ui/screens/C35.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C36",
+      "file": "ui/screens/C36.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C37",
+      "file": "ui/screens/C37.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C38",
+      "file": "ui/screens/C38.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C39",
+      "file": "ui/screens/C39.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C40",
+      "file": "ui/screens/C40.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C41",
+      "file": "ui/screens/C41.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C42",
+      "file": "ui/screens/C42.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C43",
+      "file": "ui/screens/C43.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C44",
+      "file": "ui/screens/C44.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C45",
+      "file": "ui/screens/C45.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C46",
+      "file": "ui/screens/C46.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C47",
+      "file": "ui/screens/C47.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C48",
+      "file": "ui/screens/C48.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C49",
+      "file": "ui/screens/C49.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C50",
+      "file": "ui/screens/C50.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C51",
+      "file": "ui/screens/C51.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C52",
+      "file": "ui/screens/C52.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C53",
+      "file": "ui/screens/C53.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C54",
+      "file": "ui/screens/C54.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C55",
+      "file": "ui/screens/C55.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C56",
+      "file": "ui/screens/C56.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C57",
+      "file": "ui/screens/C57.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C58",
+      "file": "ui/screens/C58.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C59",
+      "file": "ui/screens/C59.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C60",
+      "file": "ui/screens/C60.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C61",
+      "file": "ui/screens/C61.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    },
+    {
+      "id": "C62",
+      "file": "ui/screens/C62.png",
+      "dimensions": [
+        1600,
+        1000
+      ],
+      "overflow_x": false,
+      "overflow_y": false,
+      "modal_within_viewport": true
+    }
+  ],
+  "errors": [],
+  "prototype_navigation_checks": [
+    "C01→C14→C20",
+    "A02→A03→A04"
+  ],
+  "html_links_valid": true
+}

@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 const lock = require('./ppt-runtime-lock.json');
 const hash = (value) => require('node:crypto').createHash('sha256').update(value).digest('hex');
 
-const SCRIPTS = new Set(['attribution_guard.py', 'pptx_to_svg.py', 'svg_quality_checker.py', 'finalize_svg.py', 'svg_to_pptx.py', 'project_manager.py', 'register_template.py']);
+const SCRIPTS = new Set(['attribution_guard.py', 'pptx_to_svg.py', 'svg_quality_checker.py', 'finalize_svg.py', 'svg_to_pptx.py', 'project_manager.py', 'register_template.py', 'text_measure.py', 'analyze_images.py', 'total_md_split.py', 'apply_template.py', 'pptx_intake.py', 'beautify_inventory.py', 'pptx_template_import.py', 'mirror_template_materialize.py', 'template_preview_pptx.py', 'source_to_md/ppt_to_md.py']);
 function createPptRuntimeService({ app, rootOverride }) {
   const root = rootOverride || (app.isPackaged ? path.join(process.resourcesPath, 'ppt-runtime/win32-x64') : path.resolve(__dirname, '../../vendor/ppt-runtime/win32-x64'));
   const skillRoot = path.join(root, 'ppt-master'), python = path.join(root, 'python/python.exe');
