@@ -486,8 +486,8 @@ const initialState: SettingsPageState = {
     html_concurrency_limit: 5,
   },
   projectResearch: {
-    provider: 'brave',
-    api_key: '',
+    provider: 'baidu',
+    baidu_api_key: '',
     max_results_per_topic: 5,
     max_sources: 8,
     timeout_ms: 20000,
@@ -1874,11 +1874,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
           <h3 className="settings-subsection-title">公开资料检索</h3>
           <div className="settings-list">
             <label className="settings-row">
-              <div className="settings-row-copy"><strong>Brave Search API Key</strong><span>仅供 Main 侧项目理解资料检索使用，不解禁 Agent 联网</span></div>
-              <input type="password" value={state.projectResearch.api_key} placeholder="请输入 Brave Search API Key" onChange={(event) => setState((prev) => ({ ...prev, projectResearch: { ...prev.projectResearch, api_key: event.target.value } }))} />
+              <div className="settings-row-copy"><strong>百度 AI 搜索 API Key</strong><span>获取方法：登录百度智能云 → API Key 管理 → 创建 API Key → 服务选择“千帆 AppBuilder”；在资源额度中确认已开通“百度 AI 搜索”，复制 Key 后填写并保存。</span></div>
+              <input type="password" autoComplete="off" value={state.projectResearch.baidu_api_key || ''} placeholder="请输入 bce-v3/ 开头的 AppBuilder API Key" onChange={(event) => setState((prev) => ({ ...prev, projectResearch: { ...prev.projectResearch, baidu_api_key: event.target.value } }))} />
             </label>
             {([
-              ['max_results_per_topic', '每主题候选数', '每个公开主题从 Brave 取回的候选链接数'],
+              ['max_results_per_topic', '每主题候选数', '每个公开主题从所选搜索服务取回的候选链接数'],
               ['max_sources', '最多来源数', '单次研究最多抓取并核验的正文数'],
               ['timeout_ms', '单次超时（毫秒）', '搜索或来源正文请求的超时时间'],
               ['overall_timeout_ms', '整体任务预算（毫秒）', '单次研究的总时间上限'],
@@ -1889,6 +1889,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
               </label>
             ))}
           </div>
+          <div className="parser-note">生成正文时缺少项目理解证据会自动研究政府官网。百度每个账号每天提供 100 次免费搜索额度，与智能搜索生成共享。请保持后付费未开通，免费额度用尽后停止检索，程序不会切换付费搜索源；已开通后付费的账号可能被服务商计费。搜索免费额度不包含文本模型的主题规划和证据核验费用。Key 仅在本机配置中保存，不内置于安装包。</div>
         </section>
       )}
 
