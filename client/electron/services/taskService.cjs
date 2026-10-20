@@ -5,6 +5,7 @@ const { runContentGenerationTask } = require('./contentGenerationTask.cjs');
 const { runGlobalFactsTask } = require('./globalFactsTask.cjs');
 const { runOutlineGenerationTask } = require('./outlineGenerationTask.cjs');
 const { runProjectUnderstandingResearchTask } = require('./projectUnderstandingResearch.cjs');
+const { prepareContentProjectResearch } = require('./contentResearchPreparation.cjs');
 const { runRejectionCheckTask, runRejectionItemsExtractionTask } = require('./rejectionCheckTask.cjs');
 
 const taskDefinitions = {
@@ -193,10 +194,10 @@ function inferContentGenerationPhase(technicalPlan) {
   const taskContent = technicalPlan?.contentGenerationTask?.stats?.content || {};
   const taskPhase = taskContent.phase;
   const runtimePhase = technicalPlan?.contentGenerationRuntime?.phase;
-  if (['restoring', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(taskPhase)) {
+  if (['researching', 'restoring', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(taskPhase)) {
     return taskPhase;
   }
-  if (['planning', 'restoring', 'generating', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(runtimePhase)) {
+  if (['researching', 'planning', 'restoring', 'generating', 'outline-expanding', 'expanding', 'original-auditing', 'auditing', 'table-cleaning', 'illustration-planning', 'illustration-confirmation', 'illustration-generating'].includes(runtimePhase)) {
     return runtimePhase;
   }
 
@@ -836,7 +837,7 @@ function createTaskService({ app, configStore, aiService, agentService, technica
   }
 
   function recoverInterruptedProjectUnderstandingTask() {
-    if (activeTasks.has('project-understanding-research')) return;
+    if (activeTasks.has('project-understanding-research') || activeTaskControls.get('content-generation')?.cancel) return;
     const technicalPlan = technicalPlanStore.loadTechnicalPlan() || {};
     const task = technicalPlan.projectUnderstandingTask;
     if (!isActiveTaskStatus(task?.status)) return;
@@ -981,14 +982,19 @@ function createTaskService({ app, configStore, aiService, agentService, technica
       });
     },
     startContentGeneration(payload) {
-      return startManagedTask('content-generation', payload, runContentGenerationTask);
+      return startManagedTask('content-generation', payload, async (options) => {
+        const preparation = await prepareContentProjectResearch(options);
+        if (!preparation.paused) await runContentGenerationTask({ ...options, ...preparation });
+      });
     },
     startProjectUnderstandingResearch(payload) {
       return startManagedTask('project-understanding-research', payload, runProjectUnderstandingResearchTask);
     },
     cancelProjectUnderstandingResearch() {
-      const task = activeTasks.get('project-understanding-research');
-      const control = activeTaskControls.get('project-understanding-research');
+      const inlineResearch = activeTaskControls.get('content-generation')?.cancel;
+      const type = inlineResearch ? 'content-generation' : 'project-understanding-research';
+      const task = activeTasks.get(type);
+      const control = activeTaskControls.get(type);
       if (!task || !isActiveTaskStatus(task.status) || !control) throw new Error('当前没有正在获取的项目理解资料。');
       control.cancel?.();
       return control.requestPause();
@@ -997,6 +1003,7 @@ function createTaskService({ app, configStore, aiService, agentService, technica
       const task = activeTasks.get('content-generation');
       const control = activeTaskControls.get('content-generation');
       if (task && isActiveTaskStatus(task.status) && control?.requestPause) {
+        control.cancel?.();
         if (control.queueScopeId && aiService?.pauseQueueScope) {
           aiService.pauseQueueScope(control.queueScopeId);
         }

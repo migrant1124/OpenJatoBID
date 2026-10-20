@@ -243,8 +243,8 @@ const defaultConfig = {
     html_concurrency_limit: 5,
   },
   project_research: {
-    provider: 'brave',
-    api_key: '',
+    provider: 'baidu',
+    baidu_api_key: '',
     max_results_per_topic: 5,
     max_sources: 8,
     timeout_ms: 20000,
@@ -687,8 +687,8 @@ function normalizeConfig(config) {
       ),
     },
     project_research: {
-      provider: 'brave',
-      api_key: String(projectResearch.api_key || ''),
+      provider: 'baidu',
+      baidu_api_key: String(projectResearch.baidu_api_key || ''),
       max_results_per_topic: Math.max(1, Math.min(20, Number(projectResearch.max_results_per_topic || 5))),
       max_sources: Math.max(1, Math.min(20, Number(projectResearch.max_sources || 8))),
       timeout_ms: Math.max(5000, Math.min(60000, Number(projectResearch.timeout_ms || 20000))),

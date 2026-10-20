@@ -682,6 +682,7 @@ function TechnicalPlanHome({ workflowKind, registerLeaveGuard, onSectionChange }
             contentIllustrationPlan: hasOwnField(technicalPlan, 'contentIllustrationPlan') ? technicalPlan.contentIllustrationPlan : prev.contentIllustrationPlan,
             contentGenerationRuntime: hasOwnField(technicalPlan, 'contentGenerationRuntime') ? technicalPlan.contentGenerationRuntime : prev.contentGenerationRuntime,
             projectUnderstanding: hasOwnField(technicalPlan, 'projectUnderstanding') ? technicalPlan.projectUnderstanding : prev.projectUnderstanding,
+            projectUnderstandingTask: hasOwnField(technicalPlan, 'projectUnderstandingTask') ? trimTaskLogs(technicalPlan.projectUnderstandingTask) : prev.projectUnderstandingTask,
             outlineData: nextOutlineData,
           };
         }

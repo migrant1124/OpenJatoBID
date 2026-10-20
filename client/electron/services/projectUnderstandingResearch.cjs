@@ -11,7 +11,7 @@ const { parseDocumentWithConfig } = require('./fileService.cjs');
 const { buildProjectUnderstandingSubtree, normalizeProjectUnderstanding, stableHash } = require('./projectUnderstanding.cjs');
 const { NATURAL_OUTLINE_GROUPING_RULES } = require('./outlineNaturalGrouping.cjs');
 
-const BRAVE_ENDPOINT = 'https://api.search.brave.com/res/v1/web/search';
+const BAIDU_ENDPOINT = 'https://qianfan.baidubce.com/v2/ai_search/web_search';
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const RESEARCH_PROMPT_VERSION = 'project-understanding-v1.7.4-1';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -23,7 +23,10 @@ function canceledError() {
 }
 
 function waitForResearchOperation(operation, deadline, signal, onStop) {
-  if (signal?.aborted) return Promise.reject(canceledError());
+  if (signal?.aborted) {
+    Promise.resolve(operation).catch(() => {});
+    return Promise.reject(canceledError());
+  }
   return new Promise((resolve, reject) => {
     const timeoutMs = Math.max(1, deadline - Date.now());
     const finish = (callback, value) => {
@@ -93,7 +96,14 @@ async function resolvePublicHttpsUrl(rawUrl) {
   if (url.protocol !== 'https:') throw new Error('仅允许访问 HTTPS 公开资料');
   if (url.username || url.password) throw new Error('公开资料地址不得包含凭据');
   if (['localhost', 'metadata.google.internal'].includes(url.hostname.toLowerCase())) throw new Error('拒绝访问本地或元数据地址');
-  const addresses = await dns.lookup(url.hostname, { all: true });
+  let addresses = await dns.lookup(url.hostname, { all: true });
+  if (!net.isIP(url.hostname) && addresses.length && addresses.every(({ address }) => /^198\.(?:18|19)\./.test(address))) {
+    // 代理的虚拟 DNS 地址不作为公网凭据，独立解析后仍逐项校验并固定连接地址。
+    const response = await fetch(`https://dns.alidns.com/resolve?name=${encodeURIComponent(url.hostname)}&type=A`, { redirect: 'error', signal: AbortSignal.timeout(5000) });
+    if (!response.ok) { await response.body?.cancel(); throw new Error('代理 DNS 地址的公网解析核验失败'); }
+    const resolved = JSON.parse((await readLimitedBody(response.body)).toString('utf8'));
+    addresses = (resolved.Answer || []).filter((item) => item.type === 1 && net.isIPv4(item.data)).map((item) => ({ address: item.data, family: 4 }));
+  }
   if (!addresses.length || addresses.some(({ address }) => isPrivateAddress(address))) throw new Error('拒绝访问内网、回环或链路本地地址');
   return { url, addresses };
 }
@@ -106,7 +116,9 @@ function createPinnedDispatcher(addresses) {
   const selected = addresses[0];
   return new Agent({
     connect: {
-      lookup: (_hostname, _options, callback) => callback(null, selected.address, selected.family),
+      lookup: (_hostname, options, callback) => options?.all
+        ? callback(null, [selected])
+        : callback(null, selected.address, selected.family),
     },
   });
 }
@@ -123,29 +135,35 @@ async function readLimitedBody(body) {
   return Buffer.concat(chunks, size);
 }
 
-async function fetchWithPolicy(rawUrl, { headers = {}, timeoutMs = 20000, signal, retries = 2 } = {}) {
+async function fetchWithPolicy(rawUrl, { headers = {}, method = 'GET', body, timeoutMs = 20000, signal, retries = 2, allowHttpErrors = false } = {}) {
+  if (signal?.aborted) throw canceledError();
   let target = await resolvePublicHttpsUrl(rawUrl);
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) controller.abort();
     try {
       let redirects = 0;
       while (true) {
         const dispatcher = createPinnedDispatcher(target.addresses);
         try {
-          const response = await fetch(target.url, { headers, redirect: 'manual', signal: controller.signal, dispatcher });
+          const response = await fetch(target.url, { headers, method, body, redirect: 'manual', signal: controller.signal, dispatcher });
           if ([301, 302, 303, 307, 308].includes(response.status)) {
             if (redirects >= 5) throw new Error('来源重定向次数过多');
             const location = response.headers.get('location');
             if (!location) throw new Error('来源重定向缺少目标');
             await response.body?.cancel();
-            target = await resolvePublicHttpsUrl(new URL(location, target.url).toString());
+            const nextUrl = new URL(location, target.url);
+            if (nextUrl.origin !== new URL(rawUrl).origin && Object.keys(headers).some((key) => /^(?:authorization|x-appbuilder-authorization)$/i.test(key))) {
+              throw new Error('检索接口重定向到其他来源，已拒绝传递凭据');
+            }
+            target = await resolvePublicHttpsUrl(nextUrl.toString());
             redirects += 1;
             continue;
           }
-          if (!response.ok) {
+          if (!response.ok && !allowHttpErrors) {
             const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
             await response.body?.cancel();
             if (retryable && attempt < retries) break;
@@ -154,7 +172,7 @@ async function fetchWithPolicy(rawUrl, { headers = {}, timeoutMs = 20000, signal
           const declared = Number(response.headers.get('content-length') || 0);
           if (declared > MAX_SOURCE_BYTES) throw new Error('公开资料超过 2MB 限制');
           const bytes = await readLimitedBody(response.body);
-          return { bytes, contentType: response.headers.get('content-type') || '', url: target.url.toString() };
+          return { bytes, status: response.status, contentType: response.headers.get('content-type') || '', url: target.url.toString() };
         } finally {
           await dispatcher.close();
         }
@@ -170,20 +188,42 @@ async function fetchWithPolicy(rawUrl, { headers = {}, timeoutMs = 20000, signal
   throw new Error('公开资料请求失败');
 }
 
-async function searchBrave(topic, config, signal) {
-  const apiKey = String(config.api_key || '').trim();
-  if (!apiKey) throw new Error('未配置 Brave Search API Key，请在“设置 > 组件设置 > 公开资料检索”中填写');
-  const url = new URL(BRAVE_ENDPOINT);
-  url.searchParams.set('q', topic);
-  url.searchParams.set('count', String(Math.max(1, Math.min(20, Number(config.max_results_per_topic || 5)))));
-  url.searchParams.set('country', 'CN');
-  const response = await fetchWithPolicy(url.toString(), {
-    headers: { Accept: 'application/json', 'X-Subscription-Token': apiKey },
+function getProjectSearchProvider(config = {}) {
+  return { id: 'baidu', name: '百度 AI 搜索', apiKey: String(config.baidu_api_key || '').trim() };
+}
+
+async function searchBaidu(topic, config, signal) {
+  const apiKey = String(config.baidu_api_key || '').trim();
+  if (!apiKey) throw new Error('未配置百度 AI 搜索 API Key，请在“设置 > 组件设置 > 公开资料检索”中填写');
+  const response = await fetchWithPolicy(BAIDU_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Appbuilder-Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ messages: [{ content: topic, role: 'user' }], search_source: 'baidu_search_v2', resource_type_filter: [{ type: 'web', top_k: Math.max(1, Math.min(20, Number(config.max_results_per_topic || 5))) }] }),
     timeoutMs: Number(config.timeout_ms || 20000),
     signal,
+    retries: 0,
+    allowHttpErrors: true,
   });
-  const json = JSON.parse(response.bytes.toString('utf8'));
-  return (json?.web?.results || []).map((item) => ({ title: item.title || '', url: item.url || '' })).filter((item) => item.url);
+  let json;
+  try { json = JSON.parse(response.bytes.toString('utf8')); }
+  catch { throw new Error(`百度 AI 搜索返回格式无效（HTTP ${response.status}）`); }
+  if (json.code || response.status >= 400) {
+    const code = String(json.code || '');
+    const messages = {
+      216003: '百度 AI 搜索 Key 无效或权限不足，请检查千帆 AppBuilder API Key 和搜索服务权限',
+      QUOTA_USER_DAILY_FREE: '百度 AI 搜索每日免费额度已用尽，已停止检索，不转付费、不切换其他搜索源',
+      QUOTA_USER_DAILY_REQUEST: '百度 AI 搜索每日调用额度已用尽，已停止检索',
+      BILLING_INSUFFICIENT_BALANCE: '百度 AI 搜索账号额度不足，已停止检索，不自动充值或开通付费',
+      RATE_LIMIT_TOTAL_QPS: '百度 AI 搜索请求过于频繁，请稍后重试',
+      RATE_LIMIT_SEARCH_TOTAL_QPS: '百度 AI 搜索请求过于频繁，请稍后重试',
+      RATE_LIMIT_SEARCH_QPS: '百度 AI 搜索请求过于频繁，请稍后重试',
+    };
+    const error = new Error(messages[code] || ([401, 403].includes(response.status) ? '百度 AI 搜索鉴权失败，请检查千帆 AppBuilder API Key、权限和搜索服务是否开通' : `百度 AI 搜索请求失败（HTTP ${response.status}），请检查搜索服务状态`));
+    error.code = code === 'QUOTA_USER_DAILY_FREE' ? 'SEARCH_FREE_QUOTA_EXHAUSTED' : 'SEARCH_API_ERROR';
+    throw error;
+  }
+  if (!Array.isArray(json.references)) throw new Error('百度 AI 搜索返回格式无效，未获得网页结果列表');
+  return json.references.filter((item) => !item.type || item.type === 'web').map((item) => ({ title: item.title || '', url: item.url || '' })).filter((item) => item.url);
 }
 
 function htmlToText(bytes, contentType = '') {
@@ -306,7 +346,7 @@ function loadInternalSources(knowledgeBaseService, documentIds, maxSources) {
 }
 
 function getInternalSourceLimit(maxSources, researchConfig) {
-  return Math.max(0, maxSources - (String(researchConfig?.api_key || '').trim() ? 1 : 0));
+  return Math.max(0, maxSources - (getProjectSearchProvider(researchConfig).apiKey ? 1 : 0));
 }
 
 async function extractEvidence(aiService, sources, context) {
@@ -467,6 +507,7 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
   if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) throw new Error('请选择有效的研究截止日期');
   const appConfig = configStore.load() || {};
   const config = appConfig.project_research || {};
+  const searchProvider = getProjectSearchProvider(config);
   const plan = workspaceStore.loadTechnicalPlan() || {};
   const state = normalizeProjectUnderstanding(plan.projectUnderstanding);
   const maxSources = Math.max(1, Math.min(20, Number(config.max_sources || 8)));
@@ -474,7 +515,7 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
   const internal = loadInternalSources(knowledgeBaseService, knowledgeDocumentIds, getInternalSourceLimit(maxSources, config));
   const outlineRevision = stableHash(JSON.stringify(plan.outlineData || {}));
   const scopeHash = buildResearchScopeHash(plan);
-  const inputHash = stableHash(JSON.stringify({ topics, referenceDate, outlineRevision, scopeHash, promptVersion: RESEARCH_PROMPT_VERSION, provider: 'brave', internal: internal.sources.map((source) => [source.source_id, source.content_hash]) }));
+  const inputHash = stableHash(JSON.stringify({ topics, referenceDate, outlineRevision, scopeHash, promptVersion: RESEARCH_PROMPT_VERSION, provider: searchProvider.id, internal: internal.sources.map((source) => [source.source_id, source.content_hash]), ...(payload?.official_only ? { source_policy: 'government-official' } : {}) }));
   const cached = state.versions.find((version) => version.input_hash === inputHash
     && ['complete', 'partial'].includes(version.status)
     && Date.now() - Date.parse(version.completed_at || '') <= CACHE_MAX_AGE_MS);
@@ -488,7 +529,7 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
   }
 
   const abortController = new AbortController();
-  const deadline = Date.now() + Math.max(60000, Number(config.overall_timeout_ms || 300000));
+  const deadline = Math.min(Date.now() + Math.max(60000, Number(config.overall_timeout_ms || 300000)), Number(payload?.overall_deadline || Infinity));
   const assertWithinBudget = () => {
     if (Date.now() > deadline) throw new Error('项目理解资料获取超过整体任务预算');
   };
@@ -501,15 +542,17 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
     abortController.abort();
     taskControl.pauseAiQueue?.();
   };
-  update('正在调用 Brave Search API。', 10);
+  update(`正在调用${searchProvider.name} API。`, 10);
   const candidates = [];
   let searchError;
-  for (const topic of topics) {
+  for (const [index, topic] of topics.entries()) {
     assertWithinBudget();
     if (taskControl.isPauseRequested()) abortController.abort();
     try {
+      // 百度免费账号默认 1 QPS，多个主题间隔一秒，避免正常自动研究触发限流。
+      if (index > 0) await waitForResearchOperation(new Promise((resolve) => setTimeout(resolve, 1000)), deadline, abortController.signal);
       candidates.push(...await waitForResearchOperation(
-        searchBrave(topic, config, abortController.signal),
+        searchBaidu(topic, config, abortController.signal),
         deadline,
         abortController.signal,
         () => abortController.abort(),
@@ -517,12 +560,14 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
     } catch (error) {
       if (error?.code === 'TASK_CANCELED' || /整体任务预算/.test(String(error?.message || ''))) throw error;
       searchError = error;
+      if (error?.code === 'SEARCH_FREE_QUOTA_EXHAUSTED') throw error;
       if (!internal.sources.length) throw error;
       internal.gaps.push(`公开检索未完成：${error.message || String(error)}`);
       break;
     }
   }
   const unique = [...new Map(candidates.map((item) => [item.url, item])).values()]
+    .filter((item) => !payload?.official_only || authorityStatus(item.url) === 'official')
     .sort((left, right) => Number(authorityStatus(left.url) !== 'official') - Number(authorityStatus(right.url) !== 'official'))
     .slice(0, Math.max(0, maxSources - internal.sources.length));
   const sources = [...internal.sources];
@@ -542,6 +587,10 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
         gaps.push(`${source.title}：发布日期 ${publishedDate} 超过研究截止日期，已排除`);
       } else {
         source.authority_status = authorityStatus(source.url);
+        if (payload?.official_only && source.authority_status !== 'official') {
+          gaps.push(`${source.title}：重定向后的来源不是政府官网，已排除`);
+          continue;
+        }
         if (source.authority_status !== 'official') gaps.push(`[可人工确认]${source.title}：非政府官方域名，来源权威性待人工复核`);
         if (!publishedDate) gaps.push(`${source.title}：发布日期未知，无法核定适用时点`);
         sources.push(source);
@@ -582,6 +631,7 @@ async function runProjectUnderstandingResearchTask({ app, configStore, aiService
     input_hash: inputHash,
     scope_hash: scopeHash,
     prompt_version: RESEARCH_PROMPT_VERSION,
+    search_provider: searchProvider.id,
     outline_revision: outlineRevision,
     started_at: startedAt,
     completed_at: new Date().toISOString(),
@@ -611,12 +661,13 @@ module.exports = {
   commitResearchVersionState,
   extractEvidence,
   getInternalSourceLimit,
+  getProjectSearchProvider,
   fetchWithPolicy,
   htmlToText,
   isPrivateAddress,
   loadInternalSources,
   readLimitedBody,
   runProjectUnderstandingResearchTask,
-  searchBrave,
+  searchBaidu,
   waitForResearchOperation,
 };

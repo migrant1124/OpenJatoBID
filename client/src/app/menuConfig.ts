@@ -2,8 +2,26 @@ import type { AppMenuItem, SectionId } from '../shared/types/navigation';
 
 export const appMenuItems: AppMenuItem[] = [
   {
+    id: 'conversation',
+    label: '智能对话',
+    description: '实时对话生成方案或优化',
+  },
+  {
+    id: 'image-studio',
+    label: '视觉创作',
+    description: '图片创作与作品管理',
+    children: [
+      { id: 'image-studio-create', label: 'AI 生图', description: '根据中文需求创作图片' },
+      { id: 'image-studio-prompts', label: '提示词中心', description: '管理个人提示词' },
+      { id: 'image-studio-works', label: '我的作品', description: '查看和导出图片' },
+    ],
+  },
+  {
+    id: 'ppt', label: 'PPT 制作', description: '项目制作、模板与技能管理',
+  },
+  {
     id: 'bid-generation',
-    label: '标书生成',
+    label: '文件管理',
     description: '技术方案编制与已有方案扩写',
     children: [
       {
@@ -21,26 +39,21 @@ export const appMenuItems: AppMenuItem[] = [
     ],
   },
   {
-    id: 'conversation',
-    label: '对话模式',
-    description: '实时对话生成方案或优化',
-  },
-  {
-    id: 'image-studio',
-    label: '生图模式',
-    description: '图片创作与作品管理',
+    id: 'knowledge-base',
+    label: '知识库',
+    description: '素材、模板和案例资产',
     children: [
-      { id: 'image-studio-create', label: 'AI 生图', description: '根据中文需求创作图片' },
-      { id: 'image-studio-prompts', label: '提示词中心', description: '管理个人提示词' },
-      { id: 'image-studio-works', label: '我的作品', description: '查看和导出图片' },
+      {
+        id: 'document-knowledge-base',
+        label: '文档知识库',
+        description: '管理文档资料、案例素材和可复用知识条目',
+        icon: 'document',
+      },
     ],
   },
   {
-    id: 'ppt', label: 'PPT 模式', description: '项目制作、模板与技能管理',
-  },
-  {
     id: 'template-settings',
-    label: '模板设置',
+    label: 'Word 模板',
     description: '标书导出模板与排版配置',
     children: [
       {
@@ -54,19 +67,6 @@ export const appMenuItems: AppMenuItem[] = [
         label: '新建模板',
         description: '配置 Word 文档排版与编号格式',
         icon: 'export',
-      },
-    ],
-  },
-  {
-    id: 'knowledge-base',
-    label: '知识库',
-    description: '素材、模板和案例资产',
-    children: [
-      {
-        id: 'document-knowledge-base',
-        label: '文档知识库',
-        description: '管理文档资料、案例素材和可复用知识条目',
-        icon: 'document',
       },
     ],
   },

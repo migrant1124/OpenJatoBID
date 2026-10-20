@@ -73,8 +73,8 @@ export interface LocalRenderingConfig {
 }
 
 export interface ProjectResearchConfig {
-  provider: 'brave';
-  api_key: string;
+  provider: 'baidu';
+  baidu_api_key: string;
   max_results_per_topic: number;
   max_sources: number;
   timeout_ms: number;

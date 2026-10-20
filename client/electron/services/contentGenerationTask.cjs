@@ -3697,8 +3697,6 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
       throw new Error('未找到要重新生成的正文小节');
     }
   }
-  if (skippedProjectUnderstandingCount) logs = [...logs, `项目理解资料尚未齐备，已跳过 ${skippedProjectUnderstandingCount} 个相关小节并继续其他正文。`];
-
   if (retryContentCorrection) {
     const successfulIds = leaves
       .filter(({ item }) => {
@@ -3755,6 +3753,7 @@ async function runContentGenerationTask({ aiService, agentService, workspaceStor
   if (targetItemId) {
     logs = [`准备重新生成正文小节：${targetItemId}。`];
   }
+  if (skippedProjectUnderstandingCount) logs = [...logs, `项目理解资料尚未齐备，已跳过 ${skippedProjectUnderstandingCount} 个相关小节并继续其他正文。`];
   logs = [...logs, `文本模型并发上限：${contentConcurrency}。`];
   logs = [...logs, tableRequirement === 'heavy'
     ? '表格需求：大量，保持现有表格编排逻辑。'

@@ -136,7 +136,7 @@ function App() {
       <aside className="management-sidebar">
         <img className="management-brand-mark" src={companyLogoUrl} alt="" aria-hidden="true" />
         <div>
-          <strong>Jato AI BID</strong>
+          <strong>Jato AI</strong>
           <span>管理端</span>
         </div>
         <nav aria-label="管理端主菜单">

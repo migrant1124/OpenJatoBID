@@ -125,7 +125,7 @@ test('相同输入缓存命中会落盘成功任务，强制刷新会绕过缓�
   const topics = ['行业政策'];
   const referenceDate = '2026-09-25';
   const scopeHash = buildResearchScopeHash({ outlineData });
-  const inputHash = stableHash(JSON.stringify({ topics, referenceDate, outlineRevision: stableHash(JSON.stringify(outlineData)), scopeHash, promptVersion: 'project-understanding-v1.7.4-1', provider: 'brave', internal: [] }));
+  const inputHash = stableHash(JSON.stringify({ topics, referenceDate, outlineRevision: stableHash(JSON.stringify(outlineData)), scopeHash, promptVersion: 'project-understanding-v1.7.4-1', provider: 'baidu', internal: [] }));
   let plan = {
     outlineData,
     projectUnderstanding: {
@@ -153,7 +153,7 @@ test('相同输入缓存命中会落盘成功任务，强制刷新会绕过缓�
   };
   await runProjectUnderstandingResearchTask(base);
   assert.equal(plan.projectUnderstandingTask.status, 'success');
-  await assert.rejects(runProjectUnderstandingResearchTask({ ...base, payload: { ...base.payload, force_refresh: true } }), /未配置 Brave Search API Key/);
+  await assert.rejects(runProjectUnderstandingResearchTask({ ...base, payload: { ...base.payload, force_refresh: true } }), /未配置百度 AI 搜索 API Key/);
 });
 
 test('授权知识库条目转为内部来源时不泄漏本地路径', () => {
@@ -167,9 +167,9 @@ test('授权知识库条目转为内部来源时不泄漏本地路径', () => {
 });
 
 test('配置公开检索时为公开来源保留至少一个预算槽位', () => {
-  assert.equal(getInternalSourceLimit(8, { api_key: 'configured' }), 7);
-  assert.equal(getInternalSourceLimit(8, { api_key: '' }), 8);
-  assert.equal(getInternalSourceLimit(1, { api_key: 'configured' }), 0);
+  assert.equal(getInternalSourceLimit(8, { baidu_api_key: 'configured' }), 7);
+  assert.equal(getInternalSourceLimit(8, { baidu_api_key: '' }), 8);
+  assert.equal(getInternalSourceLimit(1, { baidu_api_key: 'configured' }), 0);
 });
 
 test('讲话与适用性属性只有逐字存在于来源时才保留', async () => {
@@ -342,6 +342,13 @@ test('研究入口拒绝密钥、本地路径和过长查询', () => {
   assert.throws(() => assertPublicTopics('x'.repeat(181)));
 });
 
+test('已取消的研究等待会处理传入操作的拒绝，不留下未处理异常', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(waitForResearchOperation(Promise.reject(new Error('操作也已取消')), Date.now() + 1000, controller.signal), (error) => error.code === 'TASK_CANCELED');
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
 test('SSRF 地址检查覆盖 IPv4 映射 IPv6 与本地网段', () => {
   assert.equal(isPrivateAddress('::ffff:127.0.0.1'), true);
   assert.equal(isPrivateAddress('192.168.1.2'), true);
@@ -413,13 +420,13 @@ test('HTML 正文提取支持政府站常见 GBK 编码', () => {
   assert.match(parsed.text, /政府公开正文/u);
 });
 
-test('Brave 检索配置保存在本地配置并限制预算范围', () => {
+test('百度检索配置保存在本地配置并限制预算范围', () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'jatobid-project-research-config-'));
   const store = createConfigStore({ getPath: () => userData });
   try {
-    store.save({ project_research: { api_key: 'local-test-key', max_results_per_topic: 99, max_sources: 0, timeout_ms: 1000, overall_timeout_ms: 9999999 } });
+    store.save({ project_research: { baidu_api_key: 'local-test-key', max_results_per_topic: 99, max_sources: 0, timeout_ms: 1000, overall_timeout_ms: 9999999 } });
     const config = store.load().project_research;
-    assert.equal(config.api_key, 'local-test-key');
+    assert.equal(config.baidu_api_key, 'local-test-key');
     assert.equal(config.max_results_per_topic, 20);
     assert.equal(config.max_sources, 8);
     assert.equal(config.timeout_ms, 5000);

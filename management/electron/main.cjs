@@ -21,7 +21,7 @@ const { createSigningService } = require('./services/signingService.cjs');
 const { createWindowCloseHandler } = require('./services/windowLifecycle.cjs');
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
-const MANAGEMENT_WINDOW_TITLE = '佳图智能投标管理台';
+const MANAGEMENT_WINDOW_TITLE = '佳图智能助手管理台';
 const managementIconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
 let mainWindow = null;
 let tray = null;
@@ -121,7 +121,7 @@ function createMainWindow() {
 
 function createTray() {
   tray = new Tray(createTrayImage());
-  tray.setToolTip('佳图智能投标管理台');
+  tray.setToolTip('佳图智能助手管理台');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开管理界面', click: showMainWindow },
     { type: 'separator' },

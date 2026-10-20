@@ -805,3 +805,27 @@ CI184-02实际完成：固定公开样本新目录下载/hash通过；最终发�
 - [x] PPT-TITLE-01 按用户截图将红色标题改为 `Jato PPT`，保留副标题和样式；同步既有 UI 脚本的两个标题定位。`cd client; npm.cmd run build`、`node --check client/scripts/opt-ui-electron.cjs` 与 `git diff --check` 均退出 0；完整 Electron UI 回归 NOT_RUN。分支 v1.8.4-OPT、应用版本 1.8.4 保持，未提交。
 
 - [x] PPT-INPUT-01 按用户截图将 PPT 会话输入框默认高度由 110px 调整为 165px（1.5 倍）；保留既有标题修改。`cd client; npm.cmd run build` 与 `git diff --check` 均退出 0；真实 Electron 界面对照 NOT_RUN，未提交或发布。
+
+## v1.8.5 项目理解缺证据时正文启动失败（2026-10-19）
+
+- [x] CG185-01 通过真实正文任务入口复现 `Cannot access 'logs' before initialization`：缺少项目理解证据时，在 `let logs` 初始化前追加跳过提示；本地 v1.8.4/v1.8.5 标签均包含此错误。
+- [x] CG185-02 仅将跳过提示移至日志初始化之后，保留资料校验和跳过行为。新增首次生成、继续生成、全文重新生成 3 条回归先失败后通过；正文合同与启动测试 22/22、CJS 语法、客户端构建均退出 0。系统 Node 的项目理解测试 24 通过/1 ABI 跳过，随后使用 Electron 内置 Node 复验项目理解与启动测试 28/28，无跳过；未重建依赖。
+- [x] CG185-03 真实 Electron 41.5.0 Main、guardedTaskService 与隔离 SQLite 启动烟测 3/3：三种入口均保留跳过提示，并在模拟模型暂停后落盘 paused；未调用外部模型或使用正式数据。证据 `client/.tmp/content-startup-20261019/result.json`；未进行 npm run dev GUI、员工安装包或完整正文生成验收，未提交或发布。
+- [x] CG185-04 研究证据与联网链路已核对并转入 CNSEARCH 实施；后续按用户要求删除 Brave，仅保留火山。当前开发机 DNS 返回 198.18.*，现有客户端抓取策略拒绝该地址，不能当作国内无代理直连或有效 Key 搜索验收。
+- [x] CG185-05 用户再次要求修复日志顺序；核对当前共享正文入口，logs 在3748行初始化、缺证据提示在3756行追加，原错误位置已删除。本次重新运行启动/正文合同22/22和真实Electron Main/guardedTaskService/隔离SQLite三入口3/3，均无初始化异常并保留跳过提示；模型在首个请求模拟暂停，外部请求0。CJS语法和diff检查退出0；没有重复改写已正确的生产源码。证据client/.tmp/cn-search-20261019/log-order-{recheck,main-recheck}.log；此前最终build仍适用，未新增源码变更。完整模型正文/员工安装包未验，未提交或发布。
+
+## 国内免费额度搜索接入（2026-10-19）
+
+- [x] CNSEARCH-01 用户确认火山引擎每账号每月 500 次免费额度、Key 自配、耗尽停止，不转付费；技术范围与证据边界见 plan 第 32 节。
+- [x] CNSEARCH-02 配置/类型/设置页和 Main 搜索仅保留火山；删除 Brave 实现、入口和专用配置，旧 Key 不转作火山 Key；官方协议、凭据重定向与额度耗尽单次停止测试通过。
+- [x] CNSEARCH-03 缺证据时自动规划最多三个公开主题并研究政府官网，复用正文任务互斥、暂停/恢复、逐字核验和资料版本；研究失败保留其他正文并继续原跳过流程。
+- [-] CNSEARCH-04 Electron 内置 Node 定向 63/63（无跳过）、9 个 CJS 语法、客户端构建、diff 检查通过；真实 Electron 41.5.0/guardedTaskService/研究服务/隔离 SQLite 成功取证、10406 单次停止、研究中查询并暂停 3/3，HTTP 与模型均为桩，零外部请求。独立只读复核无新增确定 P0/P1/P2；证据 `client/.tmp/cn-search-20261019/{tests.log,main-result.json}`。完整 UI 调试连接超时；改用真实 Main 自检仍在 40 秒内未完成导航（窗口 URL 为空），不可认定 UI/配置 IPC 验收通过。真实 Key、员工网络、完整正文、关闭后实际恢复与发布未验；没有提交或发布。
+- [x] CNSEARCH-05 按 plan 32.1 仅百度替换火山搜索；输入处显示 Key 获取方法，默认 Key 空、旧搜索 Key 不迁用，文本/生图火山保留。最终69/69无跳过、CJS语法、build、diff检查通过；真实Key生产搜索返回3条政府官网链接并取回2267字原文；隔离Main/SQLite三项、生产设置组件/preload/配置IPC独立挂载六项通过。修复真实发现的代理FakeIP核验与lookup all回调，1QPS多主题间隔回归先红后绿。独立只读审查无新增确定P0/P1/P2；源码/构建/本轮测试目录未检测到真实Key形态，Key仅进程内存使用。证据client/.tmp/cn-search-20261019/baidu-*，测试/审查报告见docs/secondary-development。完整启动、实际关闭恢复、完整模型正文、其他员工网络和安装仍未验；无提交、打包或发布。
+
+
+## v1.8.6 UI 名称与导航显示调整（2026-10-19）
+
+- [x] BRAND186-01 读取四份指定文件、项目Skill和相关规则；核对v1.8.6-OPT/79b9a1a，起点只有两份用户规格未跟踪；1574文件hash与原件保护完成。
+- [x] BRAND186-02 13个指定UI文件的文案与七菜单顺序调整完成，默认bid-generation/文件管理保持；无CSS、业务、身份或版本改动，原有优化保留。
+- [x] BRAND186-03 两端Main语法/build与diff检查通过；导航10/10；管理npm test原生ABI145/147导致25通过69失败，现有Electron同一完整测试94/94无跳过，未重建依赖。真实Electron内生产App/组件+隔离桥接UI12项通过，六张最终截图；ChromeDevTools导航超时、真实标题栏/托盘/完整授权仍未验。1558冻结文件、两规格hash和任务原字节前缀保持，证据client/.tmp/ui-branding-20261019。
+- [x] BRAND186-04 独立只读复核无确定P0/P1/P2阻断问题，报告两处P3记录精度已修正；交付docs/secondary-development/test-reports/v1.8.6-ui-branding-test-report.md，列明13个UI文件、既有测试与任务记录、通过/失败和NOT_RUN。本轮预览服务已关闭；原生标题栏/托盘/真实授权仍待人工验证。保持v1.8.6-OPT/79b9a1a、原有优化及任务原文，未提交、未推送、未发布，停在本地供用户检查。

@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const retired = ['bid-opportunity', 'resources', 'business-bid', 'image-knowledge-base', 'ai-evaluation',
   'developer-prompt-lab', 'developer-parser-sandbox', 'developer-export-preview'];
-const primary = ['bid-generation', 'conversation', 'image-studio', 'template-settings', 'knowledge-base', 'bid-check'];
+const primary = ['conversation', 'image-studio', 'ppt', 'bid-generation', 'knowledge-base', 'template-settings', 'bid-check'];
 const developers = ['developer-json-test', 'developer-expansion-replace-test', 'developer-pi-agent-monitor', 'developer-system-diagnostics'];
 const children = {
   'bid-generation': ['technical-plan', 'existing-plan-expansion'],
@@ -31,7 +31,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test('普通菜单和子菜单保持名称、顺序与归属', () => {
   const items = plain(menu.getAppMenuItems(false));
   assert.deepEqual(items.map((item) => item.id), primary);
-  assert.deepEqual(items.map((item) => item.label), ['标书生成', '对话模式', '生图模式', '模板设置', '知识库', '标书检查']);
+  assert.deepEqual(items.map((item) => item.label), ['智能对话', '视觉创作', 'PPT 制作', '文件管理', '知识库', 'Word 模板', '标书检查']);
   for (const item of items) assert.deepEqual(item.children?.map((child) => child.id) || [], children[item.id] || []);
 });
 

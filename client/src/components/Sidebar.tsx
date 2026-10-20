@@ -71,7 +71,7 @@ function Sidebar({ activeSection, developerMode, onSectionChange }: SidebarProps
           <img src={logoUrl} alt="" />
         </div>
         <div className="brand-copy">
-          <strong>Jato AI BID</strong>
+          <strong>Jato AI</strong>
         </div>
       </div>
 

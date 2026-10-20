@@ -14,7 +14,7 @@ export type BidSectionExtractionStatus = 'idle' | 'running' | 'success' | 'error
 export type BackgroundTaskType = 'bid-section-extraction' | 'bid-analysis' | 'outline-generation' | 'global-facts-generation' | 'content-generation' | 'project-understanding-research';
 export type BackgroundTaskStatus = 'running' | 'pausing' | 'paused' | 'success' | 'error' | 'canceled';
 export type ContentGenerationSectionStatus = 'idle' | 'running' | 'success' | 'error';
-export type ContentGenerationPhase = 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-confirmation' | 'illustration-generating' | 'done';
+export type ContentGenerationPhase = 'researching' | 'planning' | 'restoring' | 'generating' | 'outline-expanding' | 'expanding' | 'original-auditing' | 'auditing' | 'table-cleaning' | 'illustration-planning' | 'illustration-confirmation' | 'illustration-generating' | 'done';
 export type ContentTableRequirement = 'none' | 'light' | 'moderate' | 'heavy';
 export type ConsistencyRepairMode = 'agent' | 'normal';
 export type OriginalPlanCoverageRepairMode = 'agent' | 'normal';
@@ -411,6 +411,8 @@ export interface ContentIllustrationPlanState {
 
 export interface ContentGenerationRuntimeState {
   phase?: string;
+  research_request?: Record<string, unknown>;
+  research_previous_phase?: string;
   touched_item_ids?: string[];
   outline_expansion_completed?: number;
   expansion_cycle_item_ids?: string[];
