@@ -1,12 +1,12 @@
 {
   "code": 0,
   "notice": {
-    "id": "release-v1.8.5",
+    "id": "release-v1.8.6",
     "projectName": "yibiao-client",
     "enabled": true,
-    "title": "Jato AI BID v1.8.5 正式发布",
-    "content": "## 更新内容\n\n- 将 PPT 会话页标题修改为 \"Jato PPT\" 并调整输入框高度\n- 增强管理功能并改进用户界面 - 更新了 browserDebugBridge，使其包含新的资源管理功能以及针对浏览器预览限制的错误消息。 - 扩展了 ipc.ts 中的 JatoManagementApi 接口，以支持新的资源操作，包括 applySelection、enqueueChecks、audits、history 和 repositoryRequests。 - 重新设计了 app.css，使其用户界面更加现代化，并改进了资源卡片、表格和对话框的布局和样式。 - 为 ppt_conversations、ppt_messages 和 ppt_questions 引入了新的 SQL 表，以支持 PPT 会话的增量数据处理。 - 编写了 v1.8.4-OPT 的计划文档，概述了持续实施的优化步骤和用户授权流程。 - 更新了 todo.md，以反映与 v1.8.4-OPT 版本相关的任务的进展和验证情况，包括详细的验收标准和测试结果。\n",
-    "createdAt": "2026-10-07 11:13:14",
-    "updatedAt": "2026-10-07 11:13:14"
+    "title": "Jato AI BID v1.8.6 正式发布",
+    "content": "## 更新内容\n\n- 新增：引入 v1.8.6 版本 UI 品牌化规范及执行指南\n- 修复日志初始化顺序并验证相关测试\n- 实现内容生成任务优化并集成百度搜索\n",
+    "createdAt": "2026-10-20 10:10:52",
+    "updatedAt": "2026-10-20 10:10:52"
   }
 }
