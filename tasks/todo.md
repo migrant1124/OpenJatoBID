@@ -821,3 +821,11 @@ CI184-02实际完成：固定公开样本新目录下载/hash通过；最终发�
 - [x] CNSEARCH-03 缺证据时自动规划最多三个公开主题并研究政府官网，复用正文任务互斥、暂停/恢复、逐字核验和资料版本；研究失败保留其他正文并继续原跳过流程。
 - [-] CNSEARCH-04 Electron 内置 Node 定向 63/63（无跳过）、9 个 CJS 语法、客户端构建、diff 检查通过；真实 Electron 41.5.0/guardedTaskService/研究服务/隔离 SQLite 成功取证、10406 单次停止、研究中查询并暂停 3/3，HTTP 与模型均为桩，零外部请求。独立只读复核无新增确定 P0/P1/P2；证据 `client/.tmp/cn-search-20261019/{tests.log,main-result.json}`。完整 UI 调试连接超时；改用真实 Main 自检仍在 40 秒内未完成导航（窗口 URL 为空），不可认定 UI/配置 IPC 验收通过。真实 Key、员工网络、完整正文、关闭后实际恢复与发布未验；没有提交或发布。
 - [x] CNSEARCH-05 按 plan 32.1 仅百度替换火山搜索；输入处显示 Key 获取方法，默认 Key 空、旧搜索 Key 不迁用，文本/生图火山保留。最终69/69无跳过、CJS语法、build、diff检查通过；真实Key生产搜索返回3条政府官网链接并取回2267字原文；隔离Main/SQLite三项、生产设置组件/preload/配置IPC独立挂载六项通过。修复真实发现的代理FakeIP核验与lookup all回调，1QPS多主题间隔回归先红后绿。独立只读审查无新增确定P0/P1/P2；源码/构建/本轮测试目录未检测到真实Key形态，Key仅进程内存使用。证据client/.tmp/cn-search-20261019/baidu-*，测试/审查报告见docs/secondary-development。完整启动、实际关闭恢复、完整模型正文、其他员工网络和安装仍未验；无提交、打包或发布。
+
+
+## v1.8.6 UI 名称与导航显示调整（2026-10-19）
+
+- [x] BRAND186-01 读取四份指定文件、项目Skill和相关规则；核对v1.8.6-OPT/79b9a1a，起点只有两份用户规格未跟踪；1574文件hash与原件保护完成。
+- [x] BRAND186-02 13个指定UI文件的文案与七菜单顺序调整完成，默认bid-generation/文件管理保持；无CSS、业务、身份或版本改动，原有优化保留。
+- [x] BRAND186-03 两端Main语法/build与diff检查通过；导航10/10；管理npm test原生ABI145/147导致25通过69失败，现有Electron同一完整测试94/94无跳过，未重建依赖。真实Electron内生产App/组件+隔离桥接UI12项通过，六张最终截图；ChromeDevTools导航超时、真实标题栏/托盘/完整授权仍未验。1558冻结文件、两规格hash和任务原字节前缀保持，证据client/.tmp/ui-branding-20261019。
+- [x] BRAND186-04 独立只读复核无确定P0/P1/P2阻断问题，报告两处P3记录精度已修正；交付docs/secondary-development/test-reports/v1.8.6-ui-branding-test-report.md，列明13个UI文件、既有测试与任务记录、通过/失败和NOT_RUN。本轮预览服务已关闭；原生标题栏/托盘/真实授权仍待人工验证。保持v1.8.6-OPT/79b9a1a、原有优化及任务原文，未提交、未推送、未发布，停在本地供用户检查。

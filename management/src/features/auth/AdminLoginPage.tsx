@@ -45,8 +45,8 @@ function AdminLoginPage({ mustChangePassword, onLogin, onCompleteInitialPassword
     <main className="auth-layout login-layout">
       <div className="login-content">
         <header className="login-product">
-          <img src={logoUrl} alt="佳图数科" />
-          <h1>佳图智能投标管理台</h1>
+          <img src={logoUrl} alt="佛山市佳图文化科技有限公司" />
+          <h1>佳图智能助手管理台</h1>
           <p>管理后台与配置控制中心</p>
         </header>
         <form className="auth-card login-card" onSubmit={submit}>

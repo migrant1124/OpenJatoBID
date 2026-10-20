@@ -246,13 +246,13 @@ function ConversationPage() {
 
   return (
     <main className="conversation-page">
-      <section className="conversation-title-card"><div><h1>对话智能体工作台</h1><p>通过多轮对话生成内容、整理方案并导出 Word</p></div></section>
+      <section className="conversation-title-card"><div><h1>智能对话</h1><p>通过多轮对话生成内容、整理方案并导出 Word</p></div></section>
       <section className="conversation-workspace">
         <div className="conversation-desktop-thread-panel">{threadPanel}</div>
         <section className="conversation-chat-panel">
           <header className="conversation-chat-header">
             <button className="conversation-thread-toggle" type="button" aria-label="打开会话列表" onClick={() => setThreadPanelOpen(true)}>☰</button>
-            <div><h2>{currentThread?.title || '对话模式'}</h2><span>{activeGeneration ? 'Jato Agent 正在生成' : 'Jato Agent'}</span></div>
+            <div><h2>{currentThread?.title || '智能对话'}</h2><span>{activeGeneration ? 'Jato Agent 正在生成' : 'Jato Agent'}</span></div>
             <details className="conversation-header-menu"><summary aria-label="当前会话操作">•••</summary><div>
               <button type="button" onClick={() => setAttachmentsOpen(true)}>查看本会话附件</button>
               <button type="button" onClick={() => openRename()}>重命名</button>

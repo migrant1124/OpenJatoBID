@@ -77,9 +77,9 @@ function StartupAuthPage({ initialStatus, onAuthorized }: StartupAuthPageProps) 
     <main className="startup-auth-page">
       <div className="startup-auth-content">
         <header className="startup-auth-product">
-          <img src={logoUrl} alt="佳图数科" />
-          <h1>佳图智能投标助手</h1>
-          <p>内部投标业务辅助工具</p>
+          <img src={logoUrl} alt="佛山市佳图文化科技有限公司" />
+          <h1>佳图智能助手</h1>
+          <p>公司内部 AI 工作助手</p>
         </header>
         <form className="startup-auth-card" onSubmit={login}>
           <header><span>EMPLOYEE ACCESS</span><h2>员工登录</h2><p>请输入姓名和手机号完成身份验证</p></header>

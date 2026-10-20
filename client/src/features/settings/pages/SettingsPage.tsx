@@ -2082,13 +2082,13 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
             </article>
             <article className="about-info-card about-links-card">
               <div className="about-brand-head">
-                <img src={logoUrl} alt="Jato AI BID Logo" />
+                <img src={logoUrl} alt="Jato AI Logo" />
                 <div>
-                  <span>Jato AI BID</span>
-                  <strong>佳图智能投标助手</strong>
+                  <span>Jato AI</span>
+                  <strong>佳图智能助手</strong>
                 </div>
               </div>
-              <p>本软件用于公司内部投标文件制作、资料复用、文档生成与导出管理。</p>
+              <p>本软件用于公司内部的内容生成、图片创作、PPT 制作、资料复用与文档导出。</p>
               <ul className="about-links-list">
                 <li className="about-links-item">
                   <span className="about-links-label">版本号</span>
@@ -2096,11 +2096,11 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
                 </li>
                 <li className="about-links-item">
                   <span className="about-links-label">版权所有</span>
-                  <span className="about-links-value">佳图数字科技有限公司</span>
+                  <span className="about-links-value">佛山市佳图文化科技有限公司</span>
                 </li>
                 <li className="about-links-item">
                   <span className="about-links-label">Company</span>
-                  <span className="about-links-value">Jato Digital Technology Co., Ltd.</span>
+                  <span className="about-links-value">Foshan Jato Cultural Technology Co., Ltd.</span>
                 </li>
                 <li className="about-links-item">
                   <span className="about-links-label">客户端授权状态</span>
@@ -2142,23 +2142,23 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
               <span>PRIVACY</span>
               <strong>隐私声明</strong>
               <p>
-                本软件为佳图数科<strong>内部专属工具，仅限公司内部员工使用，禁止对外分发、外传、商用</strong>。软件尽可能将业务数据处理留存于本地设备，仅采集运营运维必需的最小范围信息，严格区分业务涉密数据与后台运维统计数据。
+                本软件为本公司<strong>内部专属工具，仅限公司内部员工使用，禁止对外分发、外传、商用</strong>。软件尽可能将业务数据处理留存于本地设备，仅采集运营运维必需的最小范围信息，严格区分业务涉密数据与后台运维统计数据。
               </p>
             </div>
             <div className="privacy-list">
               <article className="privacy-item">
                 <span>01</span>
                 <strong>业务涉密数据零集中收集</strong>
-                <p>应用<strong>不会向佳图数科局域网管理端上传、集中收集或存储</strong>任何业务涉密信息，包含但不限于：</p>
+                <p>应用<strong>不会向公司局域网管理端上传、集中收集或存储</strong>任何业务涉密信息，包含但不限于：</p>
                 <p>你自行配置的 API Key、本地导入的招标文件、解析后的全文文档、AI 生成的投标方案正文、本地导出文件、项目业务资料及所有业务产出结果；</p>
-                <p>全部业务文件、密钥、项目内容仅保存在员工本地设备；调用员工自行配置的第三方 AI 服务时，仅将完成当前任务所必需的内容直接发送给该服务商，不发送到佳图数科局域网管理端。</p>
+                <p>全部业务文件、密钥、项目内容仅保存在员工本地设备；调用员工自行配置的第三方 AI 服务时，仅将完成当前任务所必需的内容直接发送给该服务商，不发送到公司局域网管理端。</p>
               </article>
               <article className="privacy-item">
                 <span>02</span>
                 <strong>AI 请求直连服务商，无中间中转留存</strong>
                 <p>使用 OpenAI 兼容接口、MinerU 或其他自行配置的线上 API 时：</p>
                 <p>完成文档解析、内容生成、模型调用所需的业务内容，仅从员工本地设备直接发送至员工自行配置的大模型服务商；</p>
-                <p>API 密钥仅在员工本地设备持久化保存，调用时作为鉴权信息直接发送给员工配置的第三方服务商；项目文档、方案文本除完成当前 AI/MinerU 任务所必需的直连传输外，不经过佳图数科局域网管理端，公司管理端不会截留、缓存或留存请求原文和模型返回内容。</p>
+                <p>API 密钥仅在员工本地设备持久化保存，调用时作为鉴权信息直接发送给员工配置的第三方服务商；项目文档、方案文本除完成当前 AI/MinerU 任务所必需的直连传输外，不经过公司局域网管理端，公司管理端不会截留、缓存或留存请求原文和模型返回内容。</p>
               </article>
               <article className="privacy-item">
                 <span>03</span>
@@ -2174,7 +2174,7 @@ function SettingsPage({ onDeveloperModeChange, onLogout, initialTab = 'general',
               <article className="privacy-item">
                 <span>04</span>
                 <strong>个人信息说明</strong>
-                <p>为方便软件使用和执行内部授权管理，软件登录使用员工真实姓名、手机号码和当前设备指纹。上述信息仅发送至佳图数科局域网管理端，用于身份识别、设备绑定、授权审批、授权校验和设备数量控制，不会发送给大模型或其他第三方，也不会附带任何投标业务内容。</p>
+                <p>为方便软件使用和执行内部授权管理，软件登录使用员工真实姓名、手机号码和当前设备指纹。上述信息仅发送至公司局域网管理端，用于身份识别、设备绑定、授权审批、授权校验和设备数量控制，不会发送给大模型或其他第三方，也不会附带任何投标业务内容。</p>
               </article>
             </div>
           </div>
